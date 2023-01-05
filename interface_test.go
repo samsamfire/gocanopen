@@ -35,8 +35,8 @@ func TestFind(t *testing.T) {
 	}
 
 	entry = od.Find(0x1016)
-	if entry.index != 0x1016 {
-		t.Errorf("Wrong index %x", entry.index)
+	if entry.Index != 0x1016 {
+		t.Errorf("Wrong index %x", entry.Index)
 	}
 
 }
