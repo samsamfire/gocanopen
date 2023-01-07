@@ -132,6 +132,35 @@ const (
 	ODT_TYPE_MASK = 0x0F
 )
 
+type ObjectType uint8
+
+const (
+	OBJ_DOMAIN ObjectType = 2
+	OBJ_VAR    ObjectType = 7
+	OBJ_ARR    ObjectType = 8
+	OBJ_RECORD ObjectType = 9
+)
+
+type DataType uint8
+
+const (
+	BOOLEAN        = 0x1
+	INTEGER8       = 0x2
+	INTEGER16      = 0x3
+	INTEGER32      = 0x4
+	UNSIGNED8      = 0x5
+	UNSIGNED16     = 0x6
+	UNSIGNED32     = 0x7
+	REAL32         = 0x8
+	VISIBLE_STRING = 0x9
+	OCTET_STRING   = 0xA
+	UNICODE_STRING = 0xB
+	DOMAIN         = 0xF
+	REAL64         = 0x11
+	INTEGER64      = 0x15
+	UNSIGNED64     = 0x1B
+)
+
 /**
  * Attributes (bit masks) for OD sub-object.
  */
@@ -196,19 +225,50 @@ type OD_io struct {
 }
 
 type Entry struct {
-	index     uint16
-	odObject  interface{}
-	extension *Extension
+	Index      uint16
+	ObjectType uint8
+	odObject   interface{}
+	extension  *Extension
+}
+
+type FileInfo struct {
+	FileName         string
+	FileVersion      string
+	FileRevision     string
+	LastEDS          string
+	EDSVersion       string
+	Description      string
+	CreationTime     string
+	CreationDate     string
+	CreatedBy        string
+	ModificationTime string
+	ModificationDate string
+	ModifiedBy       string
 }
 
 type ObjectDictionary struct {
 	list []Entry
 }
 
+// ParameterName=Device type
+// ObjectType=0x7
+// ;StorageLocation=PERSIST_COMM
+// DataType=0x0007
+// AccessType=ro
+// DefaultValue=0x00000000
+// PDOMapping=0
+
 /*basic OD variable */
 type Variable struct {
-	Data      []byte
-	Attribute ODA
+	Data []byte
+	DataType
+	Attribute       ODA // Attribute contains the access type and pdo mapping info
+	ParameterName   string
+	ParameterValue  string
+	DefaultValue    string
+	StorageLocation string
+	LowLimit        int
+	HighLimit       int
 }
 
 /**
@@ -354,11 +414,11 @@ func (od *ObjectDictionary) Find(index uint16) (entry *Entry) {
 		cur := (min + max) >> 1
 		entry = &od.list[cur]
 
-		if index == entry.index {
+		if index == entry.Index {
 			return entry
 		}
 
-		if index < entry.index {
+		if index < entry.Index {
 			if cur > 0 {
 				max = cur - 1
 			} else {
@@ -371,7 +431,7 @@ func (od *ObjectDictionary) Find(index uint16) (entry *Entry) {
 
 	if min == max {
 		entry = &od.list[min]
-		if index == entry.index {
+		if index == entry.Index {
 			return entry
 		}
 	}
@@ -476,16 +536,16 @@ func (entry *Entry) Sub(subindex uint8, origin bool) (result ODR, io *OD_io) {
 /* Create a new Object dictionary Entry of Variable type */
 func NewVariableEntry(index uint16, data []byte, attribute ODA) Entry {
 	odObject := Variable{Data: data, Attribute: attribute}
-	return Entry{index: index, odObject: odObject, extension: nil}
+	return Entry{Index: index, odObject: odObject, extension: nil}
 }
 
 /* Create a new Object dictionary Entry of Record type, odObject is an empty slice of Record elements */
 func NewRecordEntry(index uint16, records []Record) Entry {
-	return Entry{index: index, odObject: records, extension: nil}
+	return Entry{Index: index, odObject: records, extension: nil}
 }
 
 /* Create a new Object dictionary Entry of Array type*/
 func NewArrayEntry(index uint16, data0 []byte, data []byte, attribute0 ODA, attribute ODA, element_length_bytes uint32) Entry {
 	odObject := Array{Data0: data0, Data: data, Attribute0: attribute0, Attribute: attribute, DataElementLength: element_length_bytes}
-	return Entry{index: index, odObject: odObject, extension: nil}
+	return Entry{Index: index, odObject: odObject, extension: nil}
 }
