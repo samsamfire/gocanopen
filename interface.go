@@ -1,5 +1,11 @@
 package canopen
 
+import (
+	"fmt"
+
+	"gopkg.in/ini.v1"
+)
+
 /**
  * Return codes from OD access functions.
  *
@@ -99,7 +105,7 @@ var SDO_ABORT_MAP = map[ODR]uint32{
 	25: 0x08000024, /* No data available */
 }
 
-//Get the associated abort code, if the code is not present in map, return ODR_DEV_INCOMPAT
+// Get the associated abort code, if the code is not present in map, return ODR_DEV_INCOMPAT
 func (result ODR) GetSDOAbordCode() uint32 {
 	abort_code, ok := SDO_ABORT_MAP[result]
 	if ok {
@@ -132,30 +138,26 @@ const (
 	ODT_TYPE_MASK = 0x0F
 )
 
-type ObjectType uint8
-
 const (
-	OBJ_DOMAIN ObjectType = 2
-	OBJ_VAR    ObjectType = 7
-	OBJ_ARR    ObjectType = 8
-	OBJ_RECORD ObjectType = 9
+	OBJ_DOMAIN byte = 2
+	OBJ_VAR    byte = 7
+	OBJ_ARR    byte = 8
+	OBJ_RECORD byte = 9
 )
 
-type DataType uint8
-
 const (
-	BOOLEAN        = 0x1
-	INTEGER8       = 0x2
-	INTEGER16      = 0x3
-	INTEGER32      = 0x4
-	UNSIGNED8      = 0x5
-	UNSIGNED16     = 0x6
-	UNSIGNED32     = 0x7
-	REAL32         = 0x8
-	VISIBLE_STRING = 0x9
-	OCTET_STRING   = 0xA
-	UNICODE_STRING = 0xB
-	DOMAIN         = 0xF
+	BOOLEAN        = 0x01
+	INTEGER8       = 0x02
+	INTEGER16      = 0x03
+	INTEGER32      = 0x04
+	UNSIGNED8      = 0x05
+	UNSIGNED16     = 0x06
+	UNSIGNED32     = 0x07
+	REAL32         = 0x08
+	VISIBLE_STRING = 0x09
+	OCTET_STRING   = 0x0A
+	UNICODE_STRING = 0x0B
+	DOMAIN         = 0x0F
 	REAL64         = 0x11
 	INTEGER64      = 0x15
 	UNSIGNED64     = 0x1B
@@ -188,8 +190,8 @@ type ODStream struct {
 	 * specified by Object Dictionary, then dataOrig is NULL.
 	 */
 	dataOrig []byte
-	/** Pointer to object, passed by @ref OD_extension_init(). Can be used
-	 * inside read / write functions from IO extension.
+	/** Pointer to object, passed by @ref OD_Extension_init(). Can be used
+	 * inside read / write functions from IO Extension.
 	 */
 	object interface{}
 	/** In case of large data, dataOffset indicates position of already
@@ -207,7 +209,7 @@ func NewODStream() ODStream {
 
 /**
  * Extension of OD object, which can optionally be specified by application in
- * initialization phase with @ref OD_extension_init() function.
+ * initialization phase with @ref OD_Extension_init() function.
  */
 type Extension struct {
 	/** Object on which read and write will operate, part of @ref ODStream */
@@ -225,10 +227,37 @@ type OD_io struct {
 }
 
 type Entry struct {
-	Index      uint16
-	ObjectType uint8
-	odObject   interface{}
-	extension  *Extension
+	Index     uint16
+	Name      string
+	Object    interface{}
+	Extension *Extension
+}
+
+// Add a member to an Entry object, this is only possible for Array or Record objects
+func (entry *Entry) AddMember(section *ini.Section, name string, subindex uint8) error {
+	switch object := entry.Object.(type) {
+	case Variable:
+		return fmt.Errorf("Cannot add member to variable type")
+	case Array:
+		variable, err := buildVariable(section, name, entry.Index, subindex)
+		if err != nil {
+			return err
+		}
+		object.Variables[subindex] = *variable
+		entry.Object = object
+		return nil
+
+	case []Record:
+		variable, err := buildVariable(section, name, entry.Index, subindex)
+		if err != nil {
+			return err
+		}
+		record := Record{Subindex: subindex, Variable: *variable}
+		entry.Object = append(object, record)
+		return nil
+	default:
+		return fmt.Errorf("Add member not supported for %T", object)
+	}
 }
 
 type FileInfo struct {
@@ -247,25 +276,33 @@ type FileInfo struct {
 }
 
 type ObjectDictionary struct {
-	list []Entry
+	entries map[uint16]Entry
 }
 
-// ParameterName=Device type
-// ObjectType=0x7
-// ;StorageLocation=PERSIST_COMM
-// DataType=0x0007
-// AccessType=ro
-// DefaultValue=0x00000000
-// PDOMapping=0
+// Add a new entry to OD
+func (od *ObjectDictionary) AddEntry(entry Entry) {
+	od.entries[entry.Index] = entry
+}
+
+// String representation of object dictionary
+func (od *ObjectDictionary) Print() {
+	for k, v := range od.entries {
+		fmt.Printf("key[%d] value[%+v]\n", k, v)
+	}
+}
+
+func NewOD() ObjectDictionary {
+	return ObjectDictionary{entries: make(map[uint16]Entry)}
+}
 
 /*basic OD variable */
 type Variable struct {
-	Data []byte
-	DataType
+	Data            []byte
+	Name            string
+	DataType        byte
 	Attribute       ODA // Attribute contains the access type and pdo mapping info
-	ParameterName   string
 	ParameterValue  string
-	DefaultValue    string
+	DefaultValue    []byte
 	StorageLocation string
 	LowLimit        int
 	HighLimit       int
@@ -275,28 +312,25 @@ type Variable struct {
  * Object for OD array of variables, used for "ARRAY" type OD objects
  */
 type Array struct {
-	Data0             []byte /**< Pointer to data for sub-index 0 */
-	Data              []byte /**< Pointer to array of data */
-	Attribute0        ODA
-	Attribute         ODA /**< Attribute bitfield for array elements */
-	DataElementLength uint32
+	Variables []Variable
 }
 
-/**
- * Object for OD sub-elements, used in "RECORD" type OD objects
- */
+/*
+*
+  - Object for OD sub-elements, used in "RECORD" type OD objects
+    Basically a Variable object but also has a subindex
+*/
 type Record struct {
-	Data      []byte
-	Subindex  uint8
-	Attribute ODA
+	Variable Variable
+	Subindex uint8
 }
 
 /**
  * Read value from original OD location
  *
  * This function can be used inside read / write functions, specified by
- * @ref OD_extension_init(). It reads data directly from memory location
- * specified by Object dictionary. If no IO extension is used on OD entry, then
+ * @ref OD_Extension_init(). It reads data directly from memory location
+ * specified by Object dictionary. If no IO Extension is used on OD entry, then
  * io->read returned by @ref OD_getSub() equals to this function. See
  * also @ref OD_IO_t.
  */
@@ -390,53 +424,15 @@ func (stream ODStream) ReadDisabled(data []byte) (result ODR, n uint32) {
 	return ODR_UNSUPP_ACCESS, 0
 }
 
-/**
- * Find OD entry in Object Dictionary
- *
- * @param od Object Dictionary
- * @param index CANopen Object Dictionary index of object in Object Dictionary
- *
- * @return Pointer to OD entry or NULL if not found
- */
+// Fin entry inside object dictionary, returns nil if not found
+func (od *ObjectDictionary) Find(index uint16) *Entry {
 
-func (od *ObjectDictionary) Find(index uint16) (entry *Entry) {
-	if od == nil || len(od.list) == 0 {
+	entry, ok := od.entries[index]
+	if ok {
+		return &entry
+	} else {
 		return nil
 	}
-	min := 0
-	max := len(od.list) - 1
-
-	/* Fast search (binary search) in ordered Object Dictionary. If indexes are mixed,
-	 * this won't work. If Object Dictionary has up to N entries, then the
-	 * max number of loop passes is log2(N) */
-	for min < max {
-		/* get entry between min and max */
-		cur := (min + max) >> 1
-		entry = &od.list[cur]
-
-		if index == entry.Index {
-			return entry
-		}
-
-		if index < entry.Index {
-			if cur > 0 {
-				max = cur - 1
-			} else {
-				max = cur
-			}
-		} else {
-			min = cur + 1
-		}
-	}
-
-	if min == max {
-		entry = &od.list[min]
-		if index == entry.Index {
-			return entry
-		}
-	}
-
-	return nil /* entry does not exist in OD */
 }
 
 /**
@@ -450,7 +446,7 @@ func (od *ObjectDictionary) Find(index uint16) (entry *Entry) {
  * @param entry OD entry returned by @ref OD_find().
  * @param subIndex Sub-index of the variable from the OD object.
  * @param [out] io Structure will be populated on success.
- * @param odOrig If true, then potential IO extension on entry will be
+ * @param odOrig If true, then potential IO Extension on entry will be
  * ignored and access to data entry in the original OD location will be returned
  *
  * @return Value from @ref ODR_t, "ODR_OK" in case of success.
@@ -458,13 +454,13 @@ func (od *ObjectDictionary) Find(index uint16) (entry *Entry) {
 
 func (entry *Entry) Sub(subindex uint8, origin bool) (result ODR, io *OD_io) {
 
-	if entry == nil || entry.odObject == nil {
+	if entry == nil || entry.Object == nil {
 		return ODR_IDX_NOT_EXIST, nil
 	}
 
 	io = &OD_io{stream: NewODStream(), Read: nil, Write: nil}
 	stream := io.stream
-	object := entry.odObject
+	object := entry.Object
 	/* attribute, dataOrig and dataLength, depends on object type */
 	switch object := object.(type) {
 	case Variable:
@@ -475,19 +471,12 @@ func (entry *Entry) Sub(subindex uint8, origin bool) (result ODR, io *OD_io) {
 		stream.dataOrig = object.Data
 
 	case Array:
-		subEntriesCount := 1 + len(object.Data)/int(object.DataElementLength)
+		subEntriesCount := len(object.Variables)
 		if subindex >= uint8(subEntriesCount) {
 			return ODR_SUB_NOT_EXIST, nil
 		}
-		if subindex == 0 {
-			stream.attribute = object.Attribute0
-			stream.dataOrig = object.Data0
-			// datalength is 0
-		} else {
-			stream.attribute = object.Attribute
-			// Get the according bytes
-			stream.dataOrig = object.Data[object.DataElementLength*uint32(subindex-1) : object.DataElementLength*uint32(subindex)]
-		}
+		stream.attribute = object.Variables[subindex].Attribute
+		stream.dataOrig = object.Variables[subindex].Data
 
 	case []Record:
 		records := object
@@ -495,35 +484,36 @@ func (entry *Entry) Sub(subindex uint8, origin bool) (result ODR, io *OD_io) {
 		for i := range records {
 			if records[i].Subindex == subindex {
 				record = &records[i]
+				break
 			}
 		}
 		if record == nil {
 			return ODR_SUB_NOT_EXIST, nil
 		}
-		stream.attribute = record.Attribute
-		stream.dataOrig = record.Data
+		stream.attribute = record.Variable.Attribute
+		stream.dataOrig = record.Variable.Data
 
 	default:
 		return ODR_DEV_INCOMPAT, nil
 	}
 
-	/*Populate read/write function pointers either with default or extension provided*/
-	if entry.extension == nil || origin {
+	/*Populate read/write function pointers either with default or Extension provided*/
+	if entry.Extension == nil || origin {
 		io.Read = stream.ReadOriginal
 		io.Write = stream.WriteOriginal
 		stream.object = nil
 	} else {
-		if entry.extension.Read == nil {
+		if entry.Extension.Read == nil {
 			io.Read = stream.ReadDisabled
 		} else {
-			io.Read = entry.extension.Read
+			io.Read = entry.Extension.Read
 		}
-		if entry.extension.Write == nil {
+		if entry.Extension.Write == nil {
 			io.Write = stream.WriteDisabled
 		} else {
-			io.Write = entry.extension.Write
+			io.Write = entry.Extension.Write
 		}
-		stream.object = entry.extension.object
+		stream.object = entry.Extension.object
 	}
 
 	/* Reset stream data offset */
@@ -535,17 +525,17 @@ func (entry *Entry) Sub(subindex uint8, origin bool) (result ODR, io *OD_io) {
 
 /* Create a new Object dictionary Entry of Variable type */
 func NewVariableEntry(index uint16, data []byte, attribute ODA) Entry {
-	odObject := Variable{Data: data, Attribute: attribute}
-	return Entry{Index: index, odObject: odObject, extension: nil}
+	Object := Variable{Data: data, Attribute: attribute}
+	return Entry{Index: index, Object: Object, Extension: nil}
 }
 
-/* Create a new Object dictionary Entry of Record type, odObject is an empty slice of Record elements */
+/* Create a new Object dictionary Entry of Record type, Object is an empty slice of Record elements */
 func NewRecordEntry(index uint16, records []Record) Entry {
-	return Entry{Index: index, odObject: records, extension: nil}
+	return Entry{Index: index, Object: records, Extension: nil}
 }
 
 /* Create a new Object dictionary Entry of Array type*/
-func NewArrayEntry(index uint16, data0 []byte, data []byte, attribute0 ODA, attribute ODA, element_length_bytes uint32) Entry {
-	odObject := Array{Data0: data0, Data: data, Attribute0: attribute0, Attribute: attribute, DataElementLength: element_length_bytes}
-	return Entry{Index: index, odObject: odObject, extension: nil}
-}
+// func NewArrayEntry(index uint16, data0 []byte, data []byte, attribute0 ODA, attribute ODA, element_length_bytes uint32) Entry {
+// 	Object := Array{Data0: data0, Data: data, Attribute0: attribute0, Attribute: attribute, DataElementLength: element_length_bytes}
+// 	return Entry{Index: index, Object: Object, Extension: nil}
+// }
