@@ -6,5 +6,10 @@ import (
 
 func TestParseEDS(t *testing.T) {
 
-	ParseEDS("base.eds")
+	od, err := ParseEDS("base.eds")
+	od.Print()
+
+	if err != nil {
+		t.Errorf("Error %s", err)
+	}
 }
