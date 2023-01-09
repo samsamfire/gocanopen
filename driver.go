@@ -6,43 +6,69 @@ const CAN_RTR_FLAG uint32 = 0x40000000
 const CAN_SFF_MASK uint32 = 0x000007FF
 const CAN_EFF_FLAG uint32 = 0x80000000
 
+type CANopenError int8
+
+func (error CANopenError) Error() string {
+	error_str, ok := CANOPEN_ERRORS[int8(error)]
+	if ok {
+		return error_str
+	}
+	return "Unknown error"
+}
+
 const (
-	CO_ERROR_NO               COResult = 0  /**< Operation completed successfully */
-	CO_ERROR_ILLEGAL_ARGUMENT COResult = -1 /**< Error in function arguments */
-	CO_ERROR_OUT_OF_MEMORY    COResult = -2 /**< Memory allocation failed */
-	CO_ERROR_TIMEOUT          COResult = -3 /**< Function timeout */
-	CO_ERROR_ILLEGAL_BAUDRATE COResult = -4 /**< Illegal baudrate passed to function
-	  CO_CANmodule_init() */
-	CO_ERROR_RX_OVERFLOW COResult = -5 /**< Previous message was not processed
-	  yet */
-	CO_ERROR_RX_PDO_OVERFLOW COResult = -6 /**< previous PDO was not processed yet */
-	CO_ERROR_RX_MSG_LENGTH   COResult = -7 /**< Wrong receive message length */
-	CO_ERROR_RX_PDO_LENGTH   COResult = -8 /**< Wrong receive PDO length */
-	CO_ERROR_TX_OVERFLOW     COResult = -9 /**< Previous message is still waiting,
-	  buffer full */
-	CO_ERROR_TX_PDO_WINDOW   COResult = -10 /**< Synchronous TPDO is outside window */
-	CO_ERROR_TX_UNCONFIGURED COResult = -11 /**< Transmit buffer was not configured
-	  properly */
-	CO_ERROR_OD_PARAMETERS COResult = -12 /**< Error in Object Dictionary parameters*/
-	CO_ERROR_DATA_CORRUPT  COResult = -13 /**< Stored data are corrupt */
-	CO_ERROR_CRC           COResult = -14 /**< CRC does not match */
-	CO_ERROR_TX_BUSY       COResult = -15 /**< Sending rejected because driver is
-	  busy. Try again */
-	CO_ERROR_WRONG_NMT_STATE COResult = -16 /**< Command can't be processed in current
-	  state */
-	CO_ERROR_SYSCALL                  COResult = -17 /**< Syscall failed */
-	CO_ERROR_INVALID_STATE            COResult = -18 /**< Driver not ready */
-	CO_ERROR_NODE_ID_UNCONFIGURED_LSS COResult = -19 /**< Node-id is in LSS unconfigured
-	  state. If objects are handled properly,
-	  this may not be an error. */
+	CO_ERROR_NO                       = 0
+	CO_ERROR_ILLEGAL_ARGUMENT         = -1
+	CO_ERROR_OUT_OF_MEMORY            = -2
+	CO_ERROR_TIMEOUT                  = -3
+	CO_ERROR_ILLEGAL_BAUDRATE         = -4
+	CO_ERROR_RX_OVERFLOW              = -5
+	CO_ERROR_RX_PDO_OVERFLOW          = -6
+	CO_ERROR_RX_MSG_LENGTH            = -7
+	CO_ERROR_RX_PDO_LENGTH            = -8
+	CO_ERROR_TX_OVERFLOW              = -9
+	CO_ERROR_TX_PDO_WINDOW            = -10
+	CO_ERROR_TX_UNCONFIGURED          = -11
+	CO_ERROR_OD_PARAMETERS            = -12
+	CO_ERROR_DATA_CORRUPT             = -13
+	CO_ERROR_CRC                      = -14
+	CO_ERROR_TX_BUSY                  = -15
+	CO_ERROR_WRONG_NMT_STATE          = -16
+	CO_ERROR_SYSCALL                  = -17
+	CO_ERROR_INVALID_STATE            = -18
+	CO_ERROR_NODE_ID_UNCONFIGURED_LSS = -19
 )
+
+// A map between the errors and the description
+var CANOPEN_ERRORS = map[int8]string{
+	CO_ERROR_NO:                       "Operation completed successfully",
+	CO_ERROR_ILLEGAL_ARGUMENT:         "Error in function arguments",
+	CO_ERROR_OUT_OF_MEMORY:            "Memory allocation failed",
+	CO_ERROR_TIMEOUT:                  "Function timeout",
+	CO_ERROR_ILLEGAL_BAUDRATE:         "Illegal baudrate passed to function",
+	CO_ERROR_RX_OVERFLOW:              "Previous message was not processed yet",
+	CO_ERROR_RX_PDO_OVERFLOW:          "Previous PDO was not processed yet",
+	CO_ERROR_RX_MSG_LENGTH:            "Wrong receive message length",
+	CO_ERROR_RX_PDO_LENGTH:            "Wrong receive PDO length",
+	CO_ERROR_TX_OVERFLOW:              "Previous message is still waiting, buffer full",
+	CO_ERROR_TX_PDO_WINDOW:            "Synchronous TPDO is outside window",
+	CO_ERROR_TX_UNCONFIGURED:          "Transmit buffer was not configured properly",
+	CO_ERROR_OD_PARAMETERS:            "Error in Object Dictionary parameters",
+	CO_ERROR_DATA_CORRUPT:             "Stored data are corrupt",
+	CO_ERROR_CRC:                      "CRC does not match",
+	CO_ERROR_TX_BUSY:                  "Sending rejected because driver is busy. Try again",
+	CO_ERROR_WRONG_NMT_STATE:          "Command can't be processed in current state",
+	CO_ERROR_SYSCALL:                  "Syscall failed",
+	CO_ERROR_INVALID_STATE:            "Driver not ready",
+	CO_ERROR_NODE_ID_UNCONFIGURED_LSS: "Node-id is in LSS unconfigured state. If objects are handled properly,this may not be an error.",
+}
 
 /* Received message object */
 type CANrxMsg struct {
 	Ident      uint32
 	Mask       uint32
-	Object     interface{}
-	Callback   func(object interface{}, message interface{})
+	Object     any
+	Callback   func(object any, message any)
 	CANifindex int
 }
 
@@ -50,7 +76,7 @@ type CANrxMsg struct {
 type CANtxMsg struct {
 	Ident      uint32
 	DLC        uint8
-	Data       []byte
+	Data       [8]byte
 	BufferFull bool
 	SyncFlag   bool
 	CANifindex int
@@ -58,7 +84,7 @@ type CANtxMsg struct {
 
 /* CANModule */
 type CANModule struct {
-	CAN               interface{}
+	Bus               Bus
 	RxArray           []CANrxMsg
 	TxArray           []CANtxMsg
 	CANerrorstatus    uint16
@@ -71,9 +97,9 @@ type CANModule struct {
 }
 
 /* Create a New CANModule object */
-func NewCANModule(can interface{}, rxArray []CANrxMsg, txArray []CANtxMsg) *CANModule {
+func NewCANModule(bus Bus, rxArray []CANrxMsg, txArray []CANtxMsg) *CANModule {
 	canmodule := &CANModule{
-		CAN:               can,
+		Bus:               bus,
 		RxArray:           rxArray,
 		TxArray:           txArray,
 		CANerrorstatus:    0,
@@ -84,8 +110,24 @@ func NewCANModule(can interface{}, rxArray []CANrxMsg, txArray []CANtxMsg) *CANM
 		CANtxCount:        0,
 		ErrOld:            0,
 	}
+
+	return canmodule
+}
+
+func (canmodule *CANModule) Init(bus Bus, rxArray []CANrxMsg, txArray []CANtxMsg) {
+	canmodule.Bus = bus
+	canmodule.RxArray = rxArray
+	canmodule.TxArray = txArray
+	canmodule.CANerrorstatus = 0
+	canmodule.CANnormal = false
+	canmodule.UseCANrxFilters = false
+	canmodule.BufferInhibitFlag = false
+	canmodule.FirstCANtxMessage = false
+	canmodule.CANtxCount = 0
+	canmodule.ErrOld = 0
+
 	// For now ignore rx filters but initialize everything inside rxBuffer
-	for _, rxBuffer := range rxArray {
+	for _, rxBuffer := range canmodule.RxArray {
 		rxBuffer.Ident = 0
 		rxBuffer.Mask = 0xFFFFFFFF
 		rxBuffer.Object = nil
@@ -93,7 +135,6 @@ func NewCANModule(can interface{}, rxArray []CANrxMsg, txArray []CANtxMsg) *CANM
 		rxBuffer.CANifindex = 0
 	}
 
-	return canmodule
 }
 
 /* Update rx filters in buffer */
@@ -102,9 +143,11 @@ func (canmodule *CANModule) SetRxFilters() {
 }
 
 /* Send CAN messages in buffer */
-func (canmodule *CANModule) Send(buffer []CANtxMsg) (result COResult) {
-	// TODO
-	return 0
+// Error handling is very limited right now
+
+func (canmodule *CANModule) Send(buf CANtxMsg) error {
+
+	return canmodule.Bus.Send(buf)
 }
 
 func (canmodule *CANModule) ClearSyncPDOs() (result COResult) {
@@ -139,7 +182,7 @@ func (canmodule *CANModule) TxBufferInit(index uint32, ident uint32, rtr bool, l
 }
 
 /* Initialize one receive buffer element in rx array with function callback*/
-func (canmodule *CANModule) RxBufferInit(index uint32, ident uint32, mask uint32, rtr bool, object interface{}, callback func(object interface{}, message interface{})) (result COResult) {
+func (canmodule *CANModule) RxBufferInit(index uint32, ident uint32, mask uint32, rtr bool, object interface{}, callback func(object interface{}, message interface{})) CANopenError {
 
 	ret := CO_ERROR_NO
 	if canmodule == nil || object == nil || callback == nil || index >= uint32(len(canmodule.RxArray)) {
@@ -166,5 +209,5 @@ func (canmodule *CANModule) RxBufferInit(index uint32, ident uint32, mask uint32
 		ret = CO_ERROR_ILLEGAL_ARGUMENT
 	}
 
-	return ret
+	return CANopenError(ret)
 }
