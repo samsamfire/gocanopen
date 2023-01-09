@@ -54,7 +54,7 @@ func (manager *Manager) Init(
 	nmt *NMT,
 	emergency *EM, od *ObjectDictionary,
 	status_bits *Entry,
-	nmt_control NMT_Control,
+	nmt_control uint16,
 	first_hb_time_ms uint16,
 	sdo_server_timeout_ms uint16,
 	sdo_client_timeout_ms uint16,
