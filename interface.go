@@ -260,6 +260,9 @@ func (entry *Entry) AddMember(section *ini.Section, name string, subindex uint8)
 	}
 }
 
+//Methods for reading particular data
+// func (entry *Entry)
+
 type FileInfo struct {
 	FileName         string
 	FileVersion      string
@@ -522,6 +525,8 @@ func (entry *Entry) Sub(subindex uint8, origin bool) (result ODR, io *OD_io) {
 
 	return ODR_OK, io
 }
+
+func (entry *Entry)
 
 /* Create a new Object dictionary Entry of Variable type */
 func NewVariableEntry(index uint16, data []byte, attribute ODA) Entry {
