@@ -1,6 +1,8 @@
 package canopen
 
-import "testing"
+import (
+	"testing"
+)
 
 func createOD() ObjectDictionary {
 	od := NewOD()
@@ -38,29 +40,48 @@ func TestSub(t *testing.T) {
 	if entry == nil {
 		t.Errorf("Entry %d should exist", 0x1018)
 	}
+	streamer := &ObjectStreamer{}
 	// Test access to subindex > 1 for variable
-	result, _ := entry.Sub(1, true)
-	if result != ODR_SUB_NOT_EXIST {
-		t.Errorf("%d", result)
+	err := entry.Sub(1, true, streamer)
+	if err != ODR_SUB_NOT_EXIST {
+		t.Errorf("%d", err)
 	}
 	// Test that subindex 0 returns ODR_OK
-	result, _ = entry.Sub(0, true)
-	if result != ODR_OK {
-		t.Error()
+	err = entry.Sub(0, true, streamer)
+	if err != nil {
+		t.Error(err)
 	}
 	// Test access to subindex 0 of Record should return ODR_OK
 	entry = od.Find(0x1030)
-	result, _ = entry.Sub(0, true)
-	if result != ODR_OK {
+	err = entry.Sub(0, true, streamer)
+	if err != nil {
 		t.Error()
 	}
 	// Test access to out of range subindex
-	result, _ = entry.Sub(10, true)
-	if result != ODR_SUB_NOT_EXIST {
+	err = entry.Sub(10, true, streamer)
+	if err != ODR_SUB_NOT_EXIST {
 		t.Error()
 	}
 
-	// if result != 0 {
-	// 	t.Errorf("ODR is not 0 %d", result)
-	// }
+}
+
+// Test reading OD variables
+func TestRead(t *testing.T) {
+	od, err := ParseEDS("base.eds", 0x10)
+	if err != nil {
+		t.Error(err)
+	}
+	entry := od.Find(0x2001)
+	if entry == nil {
+		t.Error()
+	}
+	var streamer ObjectStreamer
+	err = entry.Sub(0, true, &streamer)
+
+	var data uint16
+	entry.ReadUint16(0, &data)
+	if data != 0x1555 {
+		t.Errorf("Wrong value : %x", data)
+	}
+
 }

@@ -2,18 +2,36 @@ package canopen
 
 import (
 	"fmt"
-	"log"
 	"regexp"
 	"strconv"
 
 	"gopkg.in/ini.v1"
 )
 
-/* TODOS:
+/*
+	TODOS:
+
 - What to do for ParmaterValue
 - Properly handle $NODEID stuff
-
 */
+
+const (
+	BOOLEAN        uint8 = 0x01
+	INTEGER8       uint8 = 0x02
+	INTEGER16      uint8 = 0x03
+	INTEGER32      uint8 = 0x04
+	UNSIGNED8      uint8 = 0x05
+	UNSIGNED16     uint8 = 0x06
+	UNSIGNED32     uint8 = 0x07
+	REAL32         uint8 = 0x08
+	VISIBLE_STRING uint8 = 0x09
+	OCTET_STRING   uint8 = 0x0A
+	UNICODE_STRING uint8 = 0x0B
+	DOMAIN         uint8 = 0x0F
+	REAL64         uint8 = 0x11
+	INTEGER64      uint8 = 0x15
+	UNSIGNED64     uint8 = 0x1B
+)
 
 // Calculate the corresponding OD attribute
 func calculateAttribute(access_type string, pdo_mapping bool) ODA {
@@ -42,80 +60,15 @@ func calculateAttribute(access_type string, pdo_mapping bool) ODA {
 
 }
 
-// Create variable from section entry
-func buildVariable(
-	section *ini.Section,
-	name string,
-	index uint16,
-	subindex uint8,
-) (*Variable, error) {
-
-	// Prepare with known values
-	variable := &Variable{
-		Name: name,
-	}
-
-	// Get AccessType
-	accessType, err := section.GetKey("AccessType")
-	if err != nil {
-		return nil, err
-	}
-
-	// Get PDOMapping to know if pdo mappable
-	var pdoMapping bool
-	if pM, err := section.GetKey("PDOMapping"); err == nil {
-		pdoMapping, err = pM.Bool()
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		pdoMapping = true
-	}
-	//Determine variable attribute
-	variable.Attribute = calculateAttribute(accessType.String(), pdoMapping)
-
-	// TODO maybe add support for datatype particularities (>1B)
-	dataType, err := strconv.ParseInt(section.Key("DataType").Value(), 0, 8)
-	if err != nil {
-		return nil, err
-	}
-
-	variable.DataType = byte(dataType)
-
-	// All the parameters aftewards are optional elements that can be used in EDS
-	if highLimit, err := section.GetKey("HighLimit"); err == nil {
-		variable.HighLimit, err = highLimit.Int()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if lowLimit, err := section.GetKey("LowLimit"); err == nil {
-		variable.LowLimit, err = lowLimit.Int()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if defaultValue, err := section.GetKey("DefaultValue"); err == nil {
-		variable.DefaultValue = []byte(defaultValue.Value())
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return variable, nil
-}
-
 /*Parse an EDS and file and create an ObjectDictionary*/
-func ParseEDS(file_path string) (*ObjectDictionary, error) {
+func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 
 	od := NewOD()
 
 	// Open the EDS file
-	edsFile, err := ini.Load(file_path)
+	edsFile, err := ini.Load(filePath)
 	if err != nil {
-		log.Fatal(err)
+		//
 	}
 
 	// Get all the sections in the file
@@ -152,19 +105,19 @@ func ParseEDS(file_path string) (*ObjectDictionary, error) {
 			switch objectType {
 			case OBJ_VAR:
 				// Build en entry for Variable type
-				variable, err := buildVariable(section, name, index, 0)
+				variable, err := buildVariable(section, name, nodeId, index, 0)
 				if err != nil {
 					return nil, err
 				}
-				od.AddEntry(Entry{Index: index, Object: variable, Extension: nil})
+				od.AddEntry(Entry{Index: index, Object: *variable, Extension: nil})
 
 			case OBJ_DOMAIN:
 				// Build en entry for Domain type
-				variable, err := buildVariable(section, name, index, 0)
+				variable, err := buildVariable(section, name, nodeId, index, 0)
 				if err != nil {
 					return nil, err
 				}
-				od.AddEntry(Entry{Index: index, Object: variable, Extension: nil})
+				od.AddEntry(Entry{Index: index, Object: *variable, Extension: nil})
 
 			case OBJ_ARR:
 				// Get number of elements inside array
@@ -208,7 +161,7 @@ func ParseEDS(file_path string) (*ObjectDictionary, error) {
 				return nil, fmt.Errorf("index with id %d not found", index)
 			}
 			// Add new subindex entry member
-			err = entry.AddMember(section, name, subIndex)
+			err = entry.AddMember(section, name, nodeId, subIndex)
 			if err != nil {
 				return nil, err
 			}
