@@ -4,6 +4,8 @@ import (
 	"testing"
 )
 
+var BaseObjectDictionaryParsed ObjectDictionary
+
 func createOD() ObjectDictionary {
 	od := NewOD()
 	od.entries[0x1016] = NewVariableEntry(0x1016, []byte{0x10, 0x20, 0x10, 0x20}, ODA_SDO_R|ODA_SDO_W)
@@ -67,11 +69,11 @@ func TestSub(t *testing.T) {
 
 // Test reading OD variables
 func TestRead(t *testing.T) {
-	od, err := ParseEDS("base.eds", 0x10)
+	BaseObjectDictionaryParsed, err := ParseEDS("base.eds", 0x10)
 	if err != nil {
 		t.Error(err)
 	}
-	entry := od.Find(0x2001)
+	entry := BaseObjectDictionaryParsed.Find(0x2001)
 	if entry == nil {
 		t.Error()
 	}
@@ -84,4 +86,29 @@ func TestRead(t *testing.T) {
 		t.Errorf("Wrong value : %x", data)
 	}
 
+}
+
+// Test reader writer disabled
+func TestReadWriteDisabled(t *testing.T) {
+	//var streamer ObjectStreamer
+	BaseObjectDictionaryParsed, _ := ParseEDS("base.eds", 0x10)
+	entry := BaseObjectDictionaryParsed.Find(0x2001)
+	if entry == nil {
+		t.Error("Empty entry")
+	}
+	extension := Extension{Object: nil, Reader: &DisabledReader{}, Writer: &DisabledWriter{}, flagsPDO: [4]uint8{0, 0, 0, 0}}
+	entry.Extension = &extension
+	streamer := ObjectStreamer{}
+	err := entry.Sub(0, false, &streamer)
+	if err != nil {
+		t.Error()
+	}
+	_, err = streamer.Reader.Read([]byte{0})
+	if err != ODR_UNSUPP_ACCESS {
+		t.Error(err)
+	}
+	_, err = streamer.Writer.Write([]byte{0})
+	if err != ODR_UNSUPP_ACCESS {
+		t.Error(err)
+	}
 }

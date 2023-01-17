@@ -143,3 +143,24 @@ func encode(variable string, datatype uint8, nodeId uint8) ([]byte, error) {
 	}
 	return data, nil
 }
+
+// Calculate the attribute in function of the of attribute type and pdo mapping for EDS entry
+func calculateAttribute(access_type string, pdo_mapping bool) ODA {
+	var attribute ODA
+	switch access_type {
+	case "rw":
+		attribute = ODA_SDO_RW
+	case "ro":
+		attribute = ODA_SDO_R
+	case "wo":
+		attribute = ODA_SDO_W
+	case "const":
+		attribute = 0
+	default:
+		attribute = ODA_SDO_RW
+	}
+	if pdo_mapping {
+		attribute |= ODA_TRPDO
+	}
+	return attribute
+}

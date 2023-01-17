@@ -33,34 +33,7 @@ const (
 	UNSIGNED64     uint8 = 0x1B
 )
 
-// Calculate the corresponding OD attribute
-func calculateAttribute(access_type string, pdo_mapping bool) ODA {
-
-	var attribute ODA
-
-	switch access_type {
-	case "rw":
-		attribute = ODA_SDO_RW
-	case "ro":
-		attribute = ODA_SDO_R
-	case "wo":
-		attribute = ODA_SDO_W
-	case "const":
-		attribute = 0
-
-	default:
-		attribute = ODA_SDO_RW
-	}
-
-	if pdo_mapping {
-		attribute |= ODA_TRPDO
-	}
-
-	return attribute
-
-}
-
-/*Parse an EDS and file and create an ObjectDictionary*/
+// Parse an EDS and file and create an ObjectDictionary
 func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 
 	od := NewOD()

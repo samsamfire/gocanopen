@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 
 	log "github.com/sirupsen/logrus"
 
@@ -226,25 +227,21 @@ type Stream struct {
 // 	return ODStream{Data: bytes.Buffer{}, Object: nil, DataOffset: 0, Attribute: 0, Subindex: 0}
 // }
 
-/**
- * Extension of OD object, which can optionally be specified by application in
- * initialization phase with @ref OD_Extension_init() function.
- */
+// Extension object, is used for extending some functionnality to some OD entries
+// Reader must be a custom reader for object
+// Writer must be a custom reader for object
 type Extension struct {
-	/** Object on which read and write will operate, part of @ref ODStream */
-	object   *interface{}
-	Read     func(buffer []byte) (result ODR, n uint32)
-	Write    func(buffer []byte) (result ODR, n uint32)
+	Object   *any
+	Reader   io.Reader
+	Writer   io.Writer
 	flagsPDO [4]uint8
 }
 
+// i.e this is some sort of reader writer
 type ObjectStreamer struct {
-	// Object dictionary stream
-	stream *Stream
-	reader bufio.Reader
-	writer bufio.Writer
-	// Read   func(buffer []byte) (result ODR, n uint32)
-	// Write  func(buffer []byte) (result ODR, n uint32)
+	Stream *Stream
+	Reader io.Reader
+	Writer io.Writer
 }
 
 type Entry struct {
@@ -410,6 +407,17 @@ data can be of any type
 // 	return returnCode, dataLenToCopy
 // }
 
+type DisabledReader struct{}
+type DisabledWriter struct{}
+
+func (reader *DisabledReader) Read(b []byte) (n int, err error) {
+	return 0, ODR_UNSUPP_ACCESS
+}
+
+func (writer *DisabledWriter) Write(b []byte) (n int, err error) {
+	return 0, ODR_UNSUPP_ACCESS
+}
+
 /* Write value to variable from Object Dictionary disabled, see OD_IO_t */
 // func (stream ODStream) WriteDisabled(data []byte) (result ODR, n uint32) {
 // 	return ODR_UNSUPP_ACCESS, 0
@@ -428,7 +436,7 @@ func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) e
 	}
 
 	stream := Stream{}
-	streamer.stream = &stream
+	streamer.Stream = &stream
 	object := entry.Object
 	/* attribute, dataOrig and dataLength, depends on object type */
 	switch object := object.(type) {
@@ -466,33 +474,31 @@ func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) e
 		log.Errorf("Error, unknown type : %+v", object)
 		return ODR_DEV_INCOMPAT
 	}
-
-	//log.Infof("Created stream object at %x|%x, %v", entry.Index, subindex, stream.Data)
-	log.Infof("Created stream object at %x|%x, %v", entry.Index, subindex, streamer.stream)
-	/*Populate read/write function pointers either with default or Extension provided*/
+	log.Infof("Created stream object at %x|%x, %v", entry.Index, subindex, streamer.Stream)
+	// Populate the used readers or writers if an extension is used
 	if entry.Extension == nil || origin {
-		streamer.reader = *bufio.NewReader(&stream.Data)
-		streamer.writer = *bufio.NewWriter(&stream.Data)
+		streamer.Reader = bufio.NewReader(&stream.Data)
+		streamer.Writer = bufio.NewWriter(&stream.Data)
 		stream.Object = nil
 	} else {
-		// TODO add extension management
-		// if entry.Extension.Read == nil {
-		// 	io.Read = stream.ReadDisabled
-		// } else {
-		// 	io.Read = entry.Extension.Read
-		// }
-		// if entry.Extension.Write == nil {
-		// 	io.Write = stream.WriteDisabled
-		// } else {
-		// 	io.Write = entry.Extension.Write
-		// }
-		// stream.object = entry.Extension.object
+		log.Infof("Special object extension at %x|%x, %v", entry.Index, subindex, streamer.Stream)
+		if entry.Extension.Reader == nil {
+			streamer.Reader = &DisabledReader{}
+		} else {
+			streamer.Reader = entry.Extension.Reader
+		}
+		if entry.Extension.Writer == nil {
+			streamer.Writer = &DisabledWriter{}
+		} else {
+			streamer.Writer = entry.Extension.Writer
+		}
+		stream.Object = entry.Extension.Object
 	}
 
 	/* Reset stream data offset */
 	// stream.dataOffset = 0
 	stream.Subindex = subindex
-	log.Infof("Created stream object at %x|%x, %v", entry.Index, subindex, streamer.stream.Data)
+	log.Infof("Created stream object at %x|%x, %v", entry.Index, subindex, streamer.Stream.Data)
 	return nil
 }
 
@@ -506,7 +512,7 @@ func (entry *Entry) ReadUint8(subindex uint8, data *uint8) error {
 	if err != nil {
 		return err
 	}
-	return binary.Read(&streamer.reader, binary.LittleEndian, data)
+	return binary.Read(streamer.Reader, binary.LittleEndian, data)
 }
 
 // Read Uint16 inside object dictionary
@@ -517,7 +523,7 @@ func (entry *Entry) ReadUint16(subindex uint8, data *uint16) error {
 	if err != nil {
 		return err
 	}
-	return binary.Read(&streamer.reader, binary.LittleEndian, data)
+	return binary.Read(streamer.Reader, binary.LittleEndian, data)
 }
 
 // Read Uint32 inside object dictionary
@@ -528,7 +534,7 @@ func (entry *Entry) ReadUint32(subindex uint8, data *uint32) error {
 	if err != nil {
 		return err
 	}
-	return binary.Read(&streamer.reader, binary.LittleEndian, data)
+	return binary.Read(streamer.Reader, binary.LittleEndian, data)
 }
 
 func NewOD() ObjectDictionary {
