@@ -1,11 +1,8 @@
 package canopen
 
 import (
-	"bufio"
-	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io"
 
 	log "github.com/sirupsen/logrus"
 
@@ -212,36 +209,28 @@ It creates a buffer from OD Data []byte slice and provides a default reader
 and a default writer using bufio
 */
 type Stream struct {
-	Data   bytes.Buffer // Buffer created from []byte slice
-	Object *any         // Object can be used in case an extension is used
-	/** In case of large data, dataOffset indicates position of already
-	 * transferred data */
-	// DataOffset uint32 Should not be necessary because this information is already contained
-	/** Attribute bit-field of the OD sub-object, see @ref OD_attributes_t */
-	Attribute ODA
-	/** Sub index of the OD sub-object, informative */
-	Subindex uint8
+	Data       []byte
+	Object     any // Object can be used in case an extension is used
+	DataOffset uint32
+	Attribute  ODA
+	Subindex   uint8
 }
-
-// func NewODStream() ODStream {
-// 	return ODStream{Data: bytes.Buffer{}, Object: nil, DataOffset: 0, Attribute: 0, Subindex: 0}
-// }
 
 // Extension object, is used for extending some functionnality to some OD entries
 // Reader must be a custom reader for object
 // Writer must be a custom reader for object
 type Extension struct {
-	Object   *any
-	Reader   io.Reader
-	Writer   io.Writer
+	Object   any
+	Read     func(stream *Stream, buffer []byte, countRead *uint16) error
+	Write    func(stream *Stream, buffer []byte, countWritten *uint16) error
 	flagsPDO [4]uint8
 }
 
 // i.e this is some sort of reader writer
 type ObjectStreamer struct {
 	Stream *Stream
-	Reader io.Reader
-	Writer io.Writer
+	Read   func(stream *Stream, buffer []byte, countRead *uint16) error
+	Write  func(stream *Stream, buffer []byte, countWritten *uint16) error
 }
 
 type Entry struct {
@@ -276,6 +265,12 @@ func (entry *Entry) AddMember(section *ini.Section, name string, nodeId uint8, s
 	default:
 		return fmt.Errorf("Add member not supported for %T", object)
 	}
+}
+
+// Add or replace an extension to the Entry
+func (entry *Entry) AddExtension(extension *Extension) error {
+	entry.Extension = extension
+	return nil
 }
 
 type FileInfo struct {
@@ -323,110 +318,99 @@ type Record struct {
 	Subindex uint8
 }
 
-/**
-* Read value from original OD location into data
-data can be of any type
-*/
+// Read value from original OD location and transfer it into a new byte slice
+func ReadEntryOriginal(stream *Stream, data []byte, countRead *uint16) error {
 
-// func (stream *ODStream) ReadOriginal(data []byte) error {
-// 	dataLenToCopy := uint32(len(stream.dataOrig)) /* length of OD variable */
-// 	count := uint32(len(data))
-// 	dataOrig := stream.dataOrig
-// 	if dataOrig == nil {
-// 		return ODR_SUB_NOT_EXIST, 0
-// 	}
+	if stream == nil || data == nil || countRead == nil {
+		return ODR_DEV_INCOMPAT
+	}
 
-// 	var returnCode ODR
-// 	returnCode = ODR_OK
+	if stream.Data == nil {
+		return ODR_SUB_NOT_EXIST
+	}
 
-// 	/* If previous read was partial or OD variable length is larger than
-// 	 * current buffer size, then data was (will be) read in several segments */
+	dataLenToCopy := len(stream.Data)
+	count := len(data)
+	var err error
 
-// 	if stream.dataOffset > 0 || dataLenToCopy > count {
-// 		if stream.dataOffset >= dataLenToCopy {
-// 			return ODR_DEV_INCOMPAT, 0
-// 		}
-// 		/* Reduce for already copied data */
-// 		dataLenToCopy -= stream.dataOffset
+	// If reading already started or the not enough space in buffer, read
+	// in several calls
+	if stream.DataOffset > 0 || dataLenToCopy > count {
+		if stream.DataOffset >= uint32(dataLenToCopy) {
+			return ODR_DEV_INCOMPAT
+		}
+		dataLenToCopy -= int(stream.DataOffset)
+		if dataLenToCopy > count {
+			// Partial read
+			dataLenToCopy = count
+			stream.DataOffset += uint32(dataLenToCopy)
+			err = ODR_PARTIAL
+		} else {
+			stream.DataOffset = 0
+		}
+	}
+	// Copy from offset position to dataLenToCopy inside read buffer
 
-// 		if dataLenToCopy > count {
-// 			/* Not enough space in destination buffer */
-// 			dataLenToCopy = count
-// 			stream.dataOffset += dataLenToCopy
-// 			returnCode = ODR_PARTIAL
-// 		} else {
-// 			stream.dataOffset = 0 /* copy finished, reset offset */
-// 		}
-// 	}
-// 	copy(data, stream.dataOrig[stream.dataOffset:stream.dataOffset+dataLenToCopy])
-// 	return returnCode, dataLenToCopy
-// }
+	copy(data, stream.Data[stream.DataOffset:stream.DataOffset+uint32(dataLenToCopy)])
+	*countRead = uint16(dataLenToCopy)
+	return err
 
-// func (stream ODStream) WriteOriginal(data []byte) (result ODR, n uint32) {
-// 	if data == nil {
-// 		return ODR_DEV_INCOMPAT, 0
-// 	}
-// 	dataLenToCopy := uint32(len(stream.dataOrig)) /* length of OD variable */
-// 	dataOrig := stream.dataOrig
-// 	count := uint32(len(data))
-
-// 	if dataOrig == nil {
-// 		return ODR_SUB_NOT_EXIST, 0
-// 	}
-
-// 	var returnCode ODR
-// 	returnCode = ODR_OK
-
-// 	/* If previous write was partial or OD variable length is larger than
-// 	 * current buffer size, then data was (will be) written in several
-// 	 * segments */
-
-// 	if stream.dataOffset > 0 || dataLenToCopy > count {
-// 		if stream.dataOffset >= dataLenToCopy {
-// 			return ODR_DEV_INCOMPAT, 0
-// 		}
-// 		/* reduce for already copied data */
-// 		dataLenToCopy -= stream.dataOffset
-
-// 		if dataLenToCopy > count {
-// 			/* Remaining data space in OD variable is larger than current count
-// 			 * of data, so only current count of data will be copied */
-// 			dataLenToCopy = count
-// 			stream.dataOffset += dataLenToCopy
-// 			returnCode = ODR_PARTIAL
-// 		} else {
-// 			stream.dataOffset = 0 /* copy finished, reset offset */
-// 		}
-// 	}
-
-// 	if dataLenToCopy < count {
-// 		/* OD variable is smaller than current amount of data */
-// 		return ODR_DATA_LONG, 0
-// 	}
-// 	copy(stream.dataOrig[stream.dataOffset:stream.dataOffset+dataLenToCopy], data)
-// 	return returnCode, dataLenToCopy
-// }
-
-type DisabledReader struct{}
-type DisabledWriter struct{}
-
-func (reader *DisabledReader) Read(b []byte) (n int, err error) {
-	return 0, ODR_UNSUPP_ACCESS
 }
 
-func (writer *DisabledWriter) Write(b []byte) (n int, err error) {
-	return 0, ODR_UNSUPP_ACCESS
+// Write value from byte slice to original OD location
+func WriteEntryOriginal(stream *Stream, data []byte, countWritten *uint16) error {
+
+	if stream == nil || data == nil || countWritten == nil {
+		return ODR_DEV_INCOMPAT
+	}
+	if stream.Data == nil {
+		return ODR_DEV_INCOMPAT
+	}
+
+	dataLenToCopy := len(stream.Data)
+	count := len(data)
+	var err error
+
+	/* If previous write was partial or OD variable length is larger than
+	 * current buffer size, then data was (will be) written in several
+	 * segments */
+
+	if stream.DataOffset > 0 || dataLenToCopy > count {
+		if stream.DataOffset >= uint32(dataLenToCopy) {
+			return ODR_DEV_INCOMPAT
+		}
+		/* reduce for already copied data */
+		dataLenToCopy -= int(stream.DataOffset)
+
+		if dataLenToCopy > count {
+			// Partial write
+			dataLenToCopy = count
+			stream.DataOffset += uint32(dataLenToCopy)
+			err = ODR_PARTIAL
+		} else {
+			stream.DataOffset = 0
+		}
+	}
+
+	// OD variable is smaller than the provided buffer
+	if dataLenToCopy < count {
+		return ODR_DATA_LONG
+	}
+
+	copy(stream.Data[stream.DataOffset:stream.DataOffset+uint32(dataLenToCopy)], data)
+	*countWritten = uint16(dataLenToCopy)
+	return err
 }
 
-/* Write value to variable from Object Dictionary disabled, see OD_IO_t */
-// func (stream ODStream) WriteDisabled(data []byte) (result ODR, n uint32) {
-// 	return ODR_UNSUPP_ACCESS, 0
-// }
+// Read value from variable from Object Dictionary disabled
+func ReadEntryDisabled(stream *Stream, data []byte, countRead *uint16) error {
+	return ODR_UNSUPP_ACCESS
+}
 
-// /* Read value from variable from Object Dictionary disabled, see OD_IO_t*/
-// func (stream ODStream) ReadDisabled(data []byte) (result ODR, n uint32) {
-// 	return ODR_UNSUPP_ACCESS, 0
-// }
+// Write value to variable from Object Dictionary disabled
+func WriteEntryDisabled(stream *Stream, data []byte, countWritten *uint16) error {
+	return ODR_UNSUPP_ACCESS
+}
 
 /*Get SubObject and create an object streamer */
 func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) error {
@@ -445,7 +429,7 @@ func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) e
 			return ODR_SUB_NOT_EXIST
 		}
 		stream.Attribute = object.Attribute
-		stream.Data = *bytes.NewBuffer(object.Data)
+		stream.Data = object.Data
 
 	case Array:
 		subEntriesCount := len(object.Variables)
@@ -453,7 +437,7 @@ func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) e
 			return ODR_SUB_NOT_EXIST
 		}
 		stream.Attribute = object.Variables[subindex].Attribute
-		stream.Data = *bytes.NewBuffer(object.Variables[subindex].Data)
+		stream.Data = object.Variables[subindex].Data
 
 	case []Record:
 		records := object
@@ -468,73 +452,152 @@ func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) e
 			return ODR_SUB_NOT_EXIST
 		}
 		stream.Attribute = record.Variable.Attribute
-		stream.Data = *bytes.NewBuffer(record.Variable.Data)
+		stream.Data = record.Variable.Data
 
 	default:
 		log.Errorf("Error, unknown type : %+v", object)
 		return ODR_DEV_INCOMPAT
 	}
-	log.Infof("Created stream object at %x|%x, %v", entry.Index, subindex, streamer.Stream)
+
 	// Populate the used readers or writers if an extension is used
 	if entry.Extension == nil || origin {
-		streamer.Reader = bufio.NewReader(&stream.Data)
-		streamer.Writer = bufio.NewWriter(&stream.Data)
+		log.Infof("Created stream object with default read/write for %x|%x, %v", entry.Index, subindex, streamer.Stream)
+		streamer.Read = ReadEntryOriginal
+		streamer.Write = WriteEntryOriginal
 		stream.Object = nil
 	} else {
-		log.Infof("Special object extension at %x|%x, %v", entry.Index, subindex, streamer.Stream)
-		if entry.Extension.Reader == nil {
-			streamer.Reader = &DisabledReader{}
+		log.Infof("Created stream object with extension for %x|%x, %v", entry.Index, subindex, streamer.Stream)
+		if entry.Extension.Read == nil {
+			streamer.Read = ReadEntryDisabled
 		} else {
-			streamer.Reader = entry.Extension.Reader
+			streamer.Read = entry.Extension.Read
 		}
-		if entry.Extension.Writer == nil {
-			streamer.Writer = &DisabledWriter{}
+		if entry.Extension.Write == nil {
+			streamer.Write = WriteEntryDisabled
 		} else {
-			streamer.Writer = entry.Extension.Writer
+			streamer.Write = entry.Extension.Write
 		}
 		stream.Object = entry.Extension.Object
 	}
 
-	/* Reset stream data offset */
-	// stream.dataOffset = 0
+	// Reset the stream DataOffset as if it were not read/written before
 	stream.Subindex = subindex
-	log.Infof("Created stream object at %x|%x, %v", entry.Index, subindex, streamer.Stream.Data)
 	return nil
 }
 
-// TODO check also that the length is correct
-
-// Read Uint8 inside object dictionary
-func (entry *Entry) ReadUint8(subindex uint8, data *uint8) error {
+// Get value inside OD and read it into data
+func (entry *Entry) Get(subIndex uint8, buffer []byte, length uint16, origin bool) error {
 	streamer := &ObjectStreamer{}
-	// Create and populate the streamer object
-	err := entry.Sub(subindex, true, streamer)
+	var countRead uint16 = 0
+	err := entry.Sub(subIndex, origin, streamer)
 	if err != nil {
 		return err
 	}
-	return binary.Read(streamer.Reader, binary.LittleEndian, data)
+	if len(streamer.Stream.Data) != int(length) {
+		return ODR_TYPE_MISMATCH
+	}
+	return streamer.Read(streamer.Stream, buffer, &countRead)
+}
+
+// Set value inside OD and write it into data
+func (entry *Entry) Set(subIndex uint8, buffer []byte, length uint16, origin bool) error {
+	streamer := &ObjectStreamer{}
+	var countWritten uint16 = 0
+	err := entry.Sub(subIndex, origin, streamer)
+	if err != nil {
+		return err
+	}
+	if len(streamer.Stream.Data) != int(length) {
+		return ODR_TYPE_MISMATCH
+	}
+	return streamer.Write(streamer.Stream, buffer, &countWritten)
+
+}
+
+// Read Uint8 inside object dictionary
+func (entry *Entry) GetUint8(subIndex uint8, data *uint8) error {
+	buffer := make([]byte, 1)
+	err := entry.Get(subIndex, buffer, 1, true)
+	if err != nil {
+		return err
+	}
+	*data = buffer[0]
+	return nil
 }
 
 // Read Uint16 inside object dictionary
-func (entry *Entry) ReadUint16(subindex uint8, data *uint16) error {
-	streamer := &ObjectStreamer{}
-	// Create and populate the streamer object
-	err := entry.Sub(subindex, true, streamer)
+func (entry *Entry) GetUint16(subIndex uint8, data *uint16) error {
+	buffer := make([]byte, 2)
+	err := entry.Get(subIndex, buffer, 2, true)
 	if err != nil {
+		log.Errorf("Error %v", err)
 		return err
 	}
-	return binary.Read(streamer.Reader, binary.LittleEndian, data)
+	*data = binary.LittleEndian.Uint16(buffer)
+	fmt.Printf("Data value is %v", *data)
+	return nil
 }
 
 // Read Uint32 inside object dictionary
-func (entry *Entry) ReadUint32(subindex uint8, data *uint32) error {
-	streamer := &ObjectStreamer{}
-	// Create and populate the streamer object
-	err := entry.Sub(subindex, true, streamer)
+func (entry *Entry) GetUint32(subIndex uint8, data *uint32) error {
+	buffer := make([]byte, 4)
+	err := entry.Get(subIndex, buffer, 4, true)
 	if err != nil {
 		return err
 	}
-	return binary.Read(streamer.Reader, binary.LittleEndian, data)
+	*data = binary.LittleEndian.Uint32(buffer)
+	return nil
+}
+
+// Read Uint64 inside object dictionary
+func (entry *Entry) GetUint64(subIndex uint8, data *uint64) error {
+	buffer := make([]byte, 8)
+	err := entry.Get(subIndex, buffer, 8, true)
+	if err != nil {
+		return err
+	}
+	*data = binary.LittleEndian.Uint64(buffer)
+	return nil
+}
+
+// Set Uint8, 16 , 32 , 64
+func (entry *Entry) SetUint8(subIndex uint8, data uint8) error {
+	buffer := []byte{data}
+	err := entry.Set(subIndex, buffer, 1, true)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (entry *Entry) SetUint16(subIndex uint8, data uint16) error {
+	buffer := make([]byte, 2)
+	binary.LittleEndian.PutUint16(buffer, data)
+	err := entry.Set(subIndex, buffer, 2, true)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (entry *Entry) SetUint32(subIndex uint8, data uint32) error {
+	buffer := make([]byte, 4)
+	binary.LittleEndian.PutUint32(buffer, data)
+	err := entry.Set(subIndex, buffer, 4, true)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (entry *Entry) SetUint64(subIndex uint8, data uint64) error {
+	buffer := make([]byte, 8)
+	binary.LittleEndian.PutUint64(buffer, data)
+	err := entry.Set(subIndex, buffer, 8, true)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func NewOD() ObjectDictionary {
