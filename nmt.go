@@ -1,6 +1,20 @@
 package canopen
 
-import "fmt"
+import (
+	"encoding/binary"
+	"fmt"
+
+	"github.com/brutella/can"
+	log "github.com/sirupsen/logrus"
+)
+
+/* TODOs
+- Maybe implement callbacks on change etc
+- Has not been tested at all
+- Missing nmt state on error transitions because don't have Emergency yet
+- Finish CANModule sending
+
+*/
 
 const (
 	CO_NMT_ERR_REG_MASK            uint16 = 0x00FF
@@ -44,13 +58,28 @@ type NMT struct {
 	Control                uint16
 	HearbeatProducerTimeUs uint32
 	HearbeatProducerTimer  uint32
-	Entry1017              Extension
+	ExtensionEntry1017     Extension
 	Emergency              *EM
 	CANModule              *CANModule
 	NMTTxBuff              *BufferTxFrame
 	HBTxBuff               *BufferTxFrame
 	Callback               func(nmtState uint8)
-	// Optionally add callback functions
+}
+
+// NMT RX buffer handle (called when node receives an nmt message)
+// Implements FrameHandler
+func (nmt *NMT) Handle(frame can.Frame) {
+	dlc := frame.Length
+	data := frame.Data
+	if dlc != 2 {
+		log.Warnf("Received an NMT message but the length is not correct : %v", dlc)
+	}
+	command := data[0]
+	nodeId := data[1]
+
+	if dlc == 2 && (nodeId == 0 || nodeId == nmt.NodeId) {
+		nmt.InternalCommand = command
+	}
 }
 
 func (nmt *NMT) Init(
@@ -60,14 +89,14 @@ func (nmt *NMT) Init(
 	control uint16,
 	first_hb_time_ms uint16,
 	can_module *CANModule,
-	nmt_tx_index uint16,
-	nmt_rx_index uint16,
-	hb_tx_index uint16,
+	nmt_tx_index uint32,
+	nmt_rx_index uint32,
+	hb_tx_index uint32,
 	can_id_nmt_tx uint16,
 	can_id_nmt_rx uint16,
 	can_id_hb_tx uint16,
 ) error {
-	if OD_1017_ProducerHbTime == nil || em == nil || can_module == nil {
+	if OD_1017_ProducerHbTime == nil || emergency == nil || can_module == nil {
 		return CANopenError(CO_ERROR_ILLEGAL_ARGUMENT)
 	}
 
@@ -80,17 +109,50 @@ func (nmt *NMT) Init(
 
 	/* get and verify required "Producer heartbeat time" from Object Dict. */
 
+	var HBprodTime_ms uint16
+	err := OD_1017_ProducerHbTime.GetUint16(0, &HBprodTime_ms)
+	if err != nil {
+		log.Errorf("Error when reading entry for producer hearbeat at 0x1017 : %v", err)
+		return CO_ERROR_OD_PARAMETERS
+	}
+	nmt.HearbeatProducerTimeUs = uint32(HBprodTime_ms) * 1000
+	// Extension needs to be initialized
+	nmt.ExtensionEntry1017.Object = nmt
+	nmt.ExtensionEntry1017.Read = ReadEntryOriginal
+	nmt.ExtensionEntry1017.Write = writeEntry1017
+	// And added to the entry
+	OD_1017_ProducerHbTime.AddExtension(&nmt.ExtensionEntry1017)
+
+	if nmt.HearbeatProducerTimer > nmt.HearbeatProducerTimeUs {
+		nmt.HearbeatProducerTimer = nmt.HearbeatProducerTimeUs
+	}
+
+	// Configure CAN TX/RX buffers
+	nmt.CANModule = can_module
+	// NMT RX buffer
+	err = can_module.RxBufferInit(nmt_rx_index, uint32(can_id_nmt_rx), 0x7FF, false, nmt)
+	if err != nil {
+		return err
+	}
+	// NMT TX buffer
+	err, nmt.NMTTxBuff = can_module.TxBufferInit(nmt_tx_index, uint32(can_id_nmt_tx), false, 2, false)
+	if err != nil {
+		return err
+	}
+	if nmt.NMTTxBuff == nil {
+		return CO_ERROR_ILLEGAL_ARGUMENT
+	}
+	// NMT HB TX buffer
+	err, nmt.HBTxBuff = can_module.TxBufferInit(hb_tx_index, uint32(can_id_hb_tx), false, 1, false)
+	if err != nil {
+		return err
+	}
+	if nmt.HBTxBuff == nil {
+		return CO_ERROR_ILLEGAL_ARGUMENT
+	}
 	return nil
 
 }
-
-// void CO_NMT_initCallbackPre(CO_NMT_t *NMT,
-//    void *object,
-//    void (*pFunctSignal)(void *object));
-
-// void CO_NMT_initCallbackChanged(CO_NMT_t *NMT,
-// 	   void (*pFunctNMT)(CO_NMT_internalState_t state));
-// #endif
 
 // Called cyclically
 func (nmt *NMT) Process(internal_state *uint8, time_difference_us uint32, timer_next_us *uint32) uint8 {
@@ -178,46 +240,12 @@ func (nmt *NMT) Process(internal_state *uint8, time_difference_us uint32, timer_
 
 }
 
-/**
-* Query current NMT state
-*
-* @param NMT This object.
-*
-* @return @ref CO_NMT_internalState_t
- */
-// static inline CO_NMT_internalState_t CO_NMT_getInternalState(CO_NMT_t *NMT) {
-// return (NMT == NULL) ? CO_NMT_INITIALIZING : NMT->operatingState;
-// }
-
-/**
-* Send NMT command to self, without sending NMT message
-*
-* Internal NMT state will be verified and switched inside @ref CO_NMT_process()
-*
-* @param NMT This object.
-* @param command NMT command
- */
-
+// Send NMT command to self, don't send on network
 func (nmt *NMT) SendInternalCommand(command uint16) {
 	// TODOs
 }
 
-/**
-* Send NMT master command.
-*
-* This functionality may only be used from NMT master, as specified by
-* standard CiA302-2. Standard provides one exception, where application from
-* slave node may send NMT master command: "If CANopen object 0x1F80 has value
-* of **0x2**, then NMT slave shall execute the NMT service start remote node
-* (CO_NMT_ENTER_OPERATIONAL) with nodeID set to 0."
-*
-* @param NMT This object.
-* @param command NMT command from CO_NMT_command_t.
-* @param nodeID Node ID of the remote node. 0 for all nodes including self.
-*
-* @return CO_ERROR_NO on success or CO_ReturnError_t from CO_CANsend().
- */
-
+// Send an NMT command to the network
 func (nmt *NMT) SendCommand(command uint8, node_id uint8) error {
 
 	if nmt == nil {
@@ -233,8 +261,23 @@ func (nmt *NMT) SendCommand(command uint8, node_id uint8) error {
 	nmt.NMTTxBuff.Data[0] = command
 	nmt.NMTTxBuff.Data[1] = node_id
 
-	//TODO finish this
 	nmt.CANModule.Send((*nmt.NMTTxBuff))
 	return nil
 
+}
+
+// Extension for entry 0x1017
+func writeEntry1017(stream *Stream, data []byte, countWritten *uint16) error {
+	if stream.Subindex != 0 || data == nil || len(data) != 2 || countWritten == nil || stream == nil {
+		return ODR_DEV_INCOMPAT
+	}
+	nmt, ok := stream.Object.(NMT)
+	if !ok {
+		log.Error("Invalid type for object 1017 : %v", nmt)
+		return ODR_GENERAL
+	}
+	nmt.HearbeatProducerTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 1000
+	nmt.HearbeatProducerTimer = 0
+	// Also update the original OD location
+	return WriteEntryOriginal(stream, data, countWritten)
 }
