@@ -6,25 +6,24 @@ import (
 
 // The Bus interface should implement the following methods
 type Bus interface {
-	Send(frame CANtxMsg) error
-	Receive(frame *CANrxMsg) error
+	Send(frame BufferTxFrame) error
+	Receive(frame *BufferRxFrame) error
 }
 
 // SocketCANBus implements the above interface
 
 type SocketCANBus struct {
-	bus can.Bus
+	Bus *can.Bus
 }
 
 // Send a frame on the bus
-func (sbus *SocketCANBus) Send(frame CANtxMsg) error {
+func (sbus *SocketCANBus) Send(frame BufferTxFrame) error {
 	// Convert frame to brutella struct, TODO change this in the future, rather unnecessary
 	new_frame := can.Frame{ID: frame.Ident, Length: frame.DLC, Flags: 0, Res0: 0, Res1: 0, Data: frame.Data}
-	return sbus.bus.Publish(new_frame)
+	return sbus.Bus.Publish(new_frame)
 
 }
 
-// Receive a frame on the bus
-func (sbus *SocketCANBus) Receive(frame *CANrxMsg) error {
+func (sbus *SocketCANBus) Receive(frame *BufferRxFrame) error {
 	return nil
 }

@@ -2,7 +2,6 @@ package canopen
 
 import (
 	"encoding/binary"
-	"fmt"
 
 	"github.com/brutella/can"
 	log "github.com/sirupsen/logrus"
@@ -96,8 +95,9 @@ func (nmt *NMT) Init(
 	can_id_nmt_rx uint16,
 	can_id_hb_tx uint16,
 ) error {
-	if OD_1017_ProducerHbTime == nil || emergency == nil || can_module == nil {
-		return CANopenError(CO_ERROR_ILLEGAL_ARGUMENT)
+	if OD_1017_ProducerHbTime == nil || can_module == nil {
+		log.Errorf("Entry 1017, Emergency object or CANModule is nil")
+		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 
 	nmt.OperatingState = CO_NMT_INITIALIZING
@@ -132,11 +132,13 @@ func (nmt *NMT) Init(
 	// NMT RX buffer
 	err = can_module.RxBufferInit(nmt_rx_index, uint32(can_id_nmt_rx), 0x7FF, false, nmt)
 	if err != nil {
+		log.Error("Failed to Initialize NMT rx buffer")
 		return err
 	}
 	// NMT TX buffer
 	err, nmt.NMTTxBuff = can_module.TxBufferInit(nmt_tx_index, uint32(can_id_nmt_tx), false, 2, false)
 	if err != nil {
+		log.Error("Failed to Initialize NMT tx buffer")
 		return err
 	}
 	if nmt.NMTTxBuff == nil {
@@ -145,6 +147,7 @@ func (nmt *NMT) Init(
 	// NMT HB TX buffer
 	err, nmt.HBTxBuff = can_module.TxBufferInit(hb_tx_index, uint32(can_id_hb_tx), false, 1, false)
 	if err != nil {
+		log.Error("Failed to Initialize HB tx buffer")
 		return err
 	}
 	if nmt.HBTxBuff == nil {
@@ -192,7 +195,6 @@ func (nmt *NMT) Process(internal_state *uint8, time_difference_us uint32, timer_
 	/* Process internal NMT commands either from RX buffer or nmt Send COmmand */
 	if nmt.InternalCommand != CO_NMT_NO_COMMAND {
 		switch nmt.InternalCommand {
-
 		case CO_NMT_ENTER_OPERATIONAL:
 			nmtStateCopy = CO_NMT_OPERATIONAL
 
@@ -207,8 +209,6 @@ func (nmt *NMT) Process(internal_state *uint8, time_difference_us uint32, timer_
 
 		case CO_NMT_RESET_COMMUNICATION:
 			resetCommand = CO_RESET_COMM
-
-		default:
 
 		}
 		nmt.InternalCommand = CO_NMT_NO_COMMAND
@@ -240,16 +240,24 @@ func (nmt *NMT) Process(internal_state *uint8, time_difference_us uint32, timer_
 
 }
 
+func (nmt *NMT) GetInternalState() uint8 {
+	if nmt == nil {
+		return CO_NMT_INITIALIZING
+	} else {
+		return nmt.OperatingState
+	}
+}
+
 // Send NMT command to self, don't send on network
-func (nmt *NMT) SendInternalCommand(command uint16) {
-	// TODOs
+func (nmt *NMT) SendInternalCommand(command uint8) {
+	nmt.InternalCommand = command
 }
 
 // Send an NMT command to the network
 func (nmt *NMT) SendCommand(command uint8, node_id uint8) error {
 
 	if nmt == nil {
-		return fmt.Errorf(CANOPEN_ERRORS[CO_ERROR_ILLEGAL_ARGUMENT])
+		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 
 	/* Apply NMT command also to this node, if set so. */
