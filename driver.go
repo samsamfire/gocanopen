@@ -81,6 +81,10 @@ type BufferRxFrame struct {
 	CANifindex int
 }
 
+func NewBufferRxFrame(ident uint32, mask uint32, object FrameHandler, CANifindex int) BufferRxFrame {
+	return BufferRxFrame{Ident: ident, Mask: mask, Object: object, CANifindex: CANifindex}
+}
+
 /* Transmit message object */
 type BufferTxFrame struct {
 	Ident      uint32
@@ -89,6 +93,10 @@ type BufferTxFrame struct {
 	BufferFull bool
 	SyncFlag   bool
 	CANifindex int
+}
+
+func NewBufferTxFrame(ident uint32, length uint8, syncFlag bool, CANifindex int) BufferTxFrame {
+	return BufferTxFrame{Ident: ident, DLC: length, BufferFull: false, SyncFlag: syncFlag, CANifindex: CANifindex}
 }
 
 /* CANModule */
@@ -123,10 +131,10 @@ func NewCANModule(bus Bus, rxArray []BufferRxFrame, txArray []BufferTxFrame) *CA
 	return canmodule
 }
 
-func (canmodule *CANModule) Init(bus Bus, rxArray []BufferRxFrame, txArray []BufferTxFrame) {
+func (canmodule *CANModule) Init(bus Bus) {
 	canmodule.Bus = bus
-	canmodule.RxArray = rxArray
-	canmodule.TxArray = txArray
+	canmodule.RxArray = []BufferRxFrame{}
+	canmodule.TxArray = []BufferTxFrame{}
 	canmodule.CANerrorstatus = 0
 	canmodule.CANnormal = false
 	canmodule.UseCANrxFilters = false
@@ -185,56 +193,35 @@ func (canmodule *CANModule) Process() error {
 
 }
 
-/* Initialize one transmit buffer element in tx array*/
-func (canmodule *CANModule) TxBufferInit(index uint32, ident uint32, rtr bool, length uint8, syncFlag bool) (result error, msg *BufferTxFrame) {
-	var buffer *BufferTxFrame = &BufferTxFrame{}
-	if canmodule == nil || index >= uint32(len(canmodule.TxArray)) {
-		return CO_ERROR_ILLEGAL_ARGUMENT, nil
-	}
-	buffer.CANifindex = 0
-	/* get specific buffer */
-	buffer = &canmodule.TxArray[index]
-	/* CAN identifier and rtr */
-	buffer.Ident = ident & CAN_SFF_MASK
+// Initialize transmit buffer append it to existing transmit buffer array and return it
+func (canmodule *CANModule) InsertTxBuffer(ident uint32, rtr bool, length uint8, syncFlag bool) (result error, msg *BufferTxFrame) {
+	// This is specific to socketcan
+	ident = ident & CAN_SFF_MASK
 	if rtr {
-		buffer.Ident |= CAN_RTR_FLAG
+		ident |= CAN_RTR_FLAG
 	}
-	buffer.DLC = length
-	buffer.BufferFull = false
-	buffer.SyncFlag = syncFlag
-	return nil, buffer
+	canmodule.TxArray = append(canmodule.TxArray, NewBufferTxFrame(ident, length, syncFlag, 0))
+	return nil, &canmodule.TxArray[len(canmodule.TxArray)-1]
 }
 
-/* Initialize one receive buffer element in rx array with function callback*/
-func (canmodule *CANModule) RxBufferInit(index uint32, ident uint32, mask uint32, rtr bool, object FrameHandler) error {
+// Initialize receive buffer append it to existing receive buffer
+func (canmodule *CANModule) InsertRxBuffer(ident uint32, mask uint32, rtr bool, object FrameHandler) error {
 
-	var ret error
-	if canmodule == nil || object == nil || index >= uint32(len(canmodule.RxArray)) {
-		log.Warn("Some arguments in RX buffer init are nil")
+	if object == nil {
+		log.Error("Rx buffer needs a frame handler")
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
-
-	/* Configure object variables */
-	buffer := &canmodule.RxArray[index]
-	buffer.Object = object
-	buffer.CANifindex = 0
-
-	/* CAN identifier and CAN mask, bit aligned with CAN module. Different on different microcontrollers. */
-	buffer.Ident = ident & CAN_SFF_MASK
+	// This part is specific to socketcan
+	ident = ident & CAN_SFF_MASK
 	if rtr {
-		buffer.Ident |= CAN_RTR_FLAG
+		ident |= CAN_RTR_FLAG
 	}
-	buffer.Mask = (mask & CAN_SFF_MASK) | CAN_EFF_FLAG | CAN_RTR_FLAG
+	mask = (mask & CAN_SFF_MASK) | CAN_EFF_FLAG | CAN_RTR_FLAG
 
-	/* Set CAN hardware module filter and mask. */
-	if canmodule.UseCANrxFilters {
-		// pass
-	} else {
-		//pass
-		//ret = CO_ERROR_ILLEGAL_ARGUMENT
-	}
+	canmodule.RxArray = append(canmodule.RxArray, NewBufferRxFrame(ident, mask, object, 0))
 
-	return ret
+	// TODO handle RX filters smhw
+	return nil
 }
 
 // Implements handle interface i.e processes a can message
