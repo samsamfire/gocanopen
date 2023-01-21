@@ -97,7 +97,7 @@ func (Node *Node) Init(
 	if Entry1017 == nil {
 		return CO_ERROR_OD_PARAMETERS
 	}
-	err := Node.NMT.Init(Entry1017, nil, node_id, nmt_control, first_hb_time_ms, Node.CANModule, 0, 0, 1, NMT_SERVICE_ID, NMT_SERVICE_ID, HEARTBEAT_SERVICE_ID+uint16(node_id))
+	err := Node.NMT.Init(Entry1017, nil, node_id, nmt_control, first_hb_time_ms, Node.CANModule, NMT_SERVICE_ID, NMT_SERVICE_ID, HEARTBEAT_SERVICE_ID+uint16(node_id))
 	if err != nil {
 		log.Errorf("Error when initializing NMT object %v", err)
 		return err

@@ -82,20 +82,17 @@ func (nmt *NMT) Handle(frame can.Frame) {
 }
 
 func (nmt *NMT) Init(
-	OD_1017_ProducerHbTime *Entry,
+	EntryHbProducer *Entry,
 	emergency *EM,
 	node_id uint8,
 	control uint16,
 	first_hb_time_ms uint16,
 	can_module *CANModule,
-	nmt_tx_index uint32,
-	nmt_rx_index uint32,
-	hb_tx_index uint32,
 	can_id_nmt_tx uint16,
 	can_id_nmt_rx uint16,
 	can_id_hb_tx uint16,
 ) error {
-	if OD_1017_ProducerHbTime == nil || can_module == nil {
+	if EntryHbProducer == nil || can_module == nil {
 		log.Errorf("Entry 1017, Emergency object or CANModule is nil")
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
@@ -110,7 +107,7 @@ func (nmt *NMT) Init(
 	/* get and verify required "Producer heartbeat time" from Object Dict. */
 
 	var HBprodTime_ms uint16
-	err := OD_1017_ProducerHbTime.GetUint16(0, &HBprodTime_ms)
+	err := EntryHbProducer.GetUint16(0, &HBprodTime_ms)
 	if err != nil {
 		log.Errorf("Error when reading entry for producer hearbeat at 0x1017 : %v", err)
 		return CO_ERROR_OD_PARAMETERS
@@ -121,7 +118,7 @@ func (nmt *NMT) Init(
 	nmt.ExtensionEntry1017.Read = ReadEntryOriginal
 	nmt.ExtensionEntry1017.Write = writeEntry1017
 	// And added to the entry
-	OD_1017_ProducerHbTime.AddExtension(&nmt.ExtensionEntry1017)
+	EntryHbProducer.AddExtension(&nmt.ExtensionEntry1017)
 
 	if nmt.HearbeatProducerTimer > nmt.HearbeatProducerTimeUs {
 		nmt.HearbeatProducerTimer = nmt.HearbeatProducerTimeUs
@@ -130,28 +127,22 @@ func (nmt *NMT) Init(
 	// Configure CAN TX/RX buffers
 	nmt.CANModule = can_module
 	// NMT RX buffer
-	err = can_module.RxBufferInit(nmt_rx_index, uint32(can_id_nmt_rx), 0x7FF, false, nmt)
+	err = can_module.InsertRxBuffer(uint32(can_id_nmt_rx), 0x7FF, false, nmt)
 	if err != nil {
 		log.Error("Failed to Initialize NMT rx buffer")
 		return err
 	}
 	// NMT TX buffer
-	err, nmt.NMTTxBuff = can_module.TxBufferInit(nmt_tx_index, uint32(can_id_nmt_tx), false, 2, false)
+	err, nmt.NMTTxBuff = can_module.InsertTxBuffer(uint32(can_id_nmt_tx), false, 2, false)
 	if err != nil {
 		log.Error("Failed to Initialize NMT tx buffer")
 		return err
 	}
-	if nmt.NMTTxBuff == nil {
-		return CO_ERROR_ILLEGAL_ARGUMENT
-	}
 	// NMT HB TX buffer
-	err, nmt.HBTxBuff = can_module.TxBufferInit(hb_tx_index, uint32(can_id_hb_tx), false, 1, false)
+	err, nmt.HBTxBuff = can_module.InsertTxBuffer(uint32(can_id_hb_tx), false, 1, false)
 	if err != nil {
 		log.Error("Failed to Initialize HB tx buffer")
 		return err
-	}
-	if nmt.HBTxBuff == nil {
-		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	return nil
 
