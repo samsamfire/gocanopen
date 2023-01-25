@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
 )
 
@@ -82,7 +83,8 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 				if err != nil {
 					return nil, err
 				}
-				od.AddEntry(Entry{Index: index, Object: *variable, Extension: nil})
+				od.AddEntry(&Entry{Index: index, Object: *variable, Extension: nil})
+				log.Debugf("Adding new VAR entry at %x", index)
 
 			case OBJ_DOMAIN:
 				// Build en entry for Domain type
@@ -90,7 +92,8 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 				if err != nil {
 					return nil, err
 				}
-				od.AddEntry(Entry{Index: index, Object: *variable, Extension: nil})
+				od.AddEntry(&Entry{Index: index, Object: *variable, Extension: nil})
+				log.Debugf("Adding new DOMAIN entry at %x", index)
 
 			case OBJ_ARR:
 				// Get number of elements inside array
@@ -99,11 +102,12 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 					return nil, err
 				}
 				array := Array{Variables: make([]Variable, subNumber)}
-				od.AddEntry(Entry{Index: uint16(index), Name: name, Object: array, Extension: nil})
+				od.AddEntry(&Entry{Index: uint16(index), Name: name, Object: array, Extension: nil})
+				log.Debugf("Adding new ARRAY entry at %x", index)
 
 			case OBJ_RECORD:
-				record := []Record{}
-				od.AddEntry(Entry{Index: index, Name: name, Object: record, Extension: nil})
+				od.AddEntry(&Entry{Index: index, Name: name, Object: make([]Record, 0), Extension: nil})
+				log.Debugf("Adding new RECORD entry at %x", index)
 
 			default:
 				continue
@@ -144,4 +148,23 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 
 	return &od, nil
 
+}
+
+// Print od out
+func (od *ObjectDictionary) Print() {
+	for k, v := range od.entries {
+		fmt.Printf("Entry %x : %v\n", k, v.Name)
+		switch object := v.Object.(type) {
+		case Array:
+			for subindex, variable := range object.Variables {
+				fmt.Printf("\t\tSub Entry %x : %v \n", subindex, variable)
+			}
+
+		case []Record:
+			for _, subvalue := range object {
+				fmt.Printf("\t\tSub Entry %x : %v \n", subvalue.Subindex, subvalue.Variable.Name)
+			}
+		}
+
+	}
 }

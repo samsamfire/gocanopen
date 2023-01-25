@@ -226,7 +226,6 @@ func (canmodule *CANModule) InsertRxBuffer(ident uint32, mask uint32, rtr bool, 
 
 // Implements handle interface i.e processes a can message
 func (canmodule *CANModule) Handle(frame can.Frame) {
-	log.Debug("Received can frame ", frame)
 	// Feed the frame to the correct callback
 	// TODO this could probably be quicker if it was sorted or we had a map
 	for _, framebBuffer := range canmodule.RxArray {

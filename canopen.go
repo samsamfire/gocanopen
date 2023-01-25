@@ -7,13 +7,16 @@ type Configuration struct{}
 const (
 	NMT_SERVICE_ID       uint16 = 0
 	HEARTBEAT_SERVICE_ID uint16 = 0x700
+	SDO_SERVER_ID        uint16 = 0x580
+	SDO_CLIENT_ID        uint16 = 0x600
 )
 
 // Node regroups all the different canopen objects and is responsible for processing each one of them
 type Node struct {
-	Config    *Configuration
-	CANModule *CANModule
-	NMT       *NMT
+	Config     *Configuration
+	CANModule  *CANModule
+	NMT        *NMT
+	SDOclients []SDOClient
 }
 
 /* This file contains the basic high level API */
@@ -73,7 +76,7 @@ func (Node *Node) InitPDO(emergency *EM, od *ObjectDictionary, node_id uint8) (r
 }
 
 /*Initialize CANopen stack */
-func (Node *Node) Init(
+func (node *Node) Init(
 	nmt *NMT,
 	emergency *EM,
 	od *ObjectDictionary,
@@ -87,9 +90,9 @@ func (Node *Node) Init(
 
 ) error {
 	if nmt == nil {
-		Node.NMT = &NMT{}
+		node.NMT = &NMT{}
 	} else {
-		Node.NMT = nmt
+		node.NMT = nmt
 	}
 	// For now just NMT init
 	// Get NMT obj 1017 :
@@ -97,10 +100,26 @@ func (Node *Node) Init(
 	if Entry1017 == nil {
 		return CO_ERROR_OD_PARAMETERS
 	}
-	err := Node.NMT.Init(Entry1017, nil, node_id, nmt_control, first_hb_time_ms, Node.CANModule, NMT_SERVICE_ID, NMT_SERVICE_ID, HEARTBEAT_SERVICE_ID+uint16(node_id))
+	err := node.NMT.Init(Entry1017, nil, node_id, nmt_control, first_hb_time_ms, node.CANModule, NMT_SERVICE_ID, NMT_SERVICE_ID, HEARTBEAT_SERVICE_ID+uint16(node_id))
 	if err != nil {
 		log.Errorf("Error when initializing NMT object %v", err)
 		return err
 	}
+
+	// Initialize SDO clients if any
+	// For now only one client
+	Entry1280 := od.Find(0x1280)
+	if Entry1280 == nil {
+		log.Info("No SDO clients initialized in node")
+	}
+
+	node.SDOclients = make([]SDOClient, 1)
+	client := SDOClient{}
+	err = client.Init(od, Entry1280, node_id, node.CANModule)
+	if err != nil {
+		log.Errorf("Error when initializing SDO client %v", err)
+	}
+	node.SDOclients[0] = client
+
 	return nil
 }
