@@ -1,0 +1,714 @@
+package canopen
+
+import (
+	"encoding/binary"
+	"time"
+
+	"github.com/brutella/can"
+	log "github.com/sirupsen/logrus"
+)
+
+/* TODOs
+- Locking mechanisms
+- string with different size if no null character
+
+*/
+
+const SDO_CLI_BUFFER_SIZE = 1000
+const CO_CONFIG_SDO_CLI_PST = 500
+
+type SDOClient struct {
+	OD                         *ObjectDictionary
+	Streamer                   *ObjectStreamer
+	NodeId                     uint8
+	CANModule                  *CANModule
+	CANtxBuff                  *BufferTxFrame
+	CobIdClientToServer        uint32
+	CobIdServerToClient        uint32
+	ExtensionEntry1280         *Extension
+	NodeIdServer               uint8
+	Valid                      bool
+	Index                      uint16
+	Subindex                   uint8
+	Finished                   bool
+	SizeIndicated              uint32
+	SizeTransferred            uint32
+	State                      uint8
+	TimeoutTimeUs              uint32
+	TimeoutTimer               uint32
+	Fifo                       *Fifo
+	Buffer                     []byte
+	RxNew                      bool
+	Response                   SDOResponse
+	Toggle                     uint8
+	TimeoutTimeBlockTransferUs uint32
+	TimeoutTimerBlock          uint32
+	BlockSequenceNb            uint8
+	BlockSize                  uint8
+	BlockNoData                uint8
+	BlockCRCEnabled            bool
+	BlockDataUploadLast        [7]byte
+	BlockCRC                   CRC16
+}
+
+const (
+	CO_SDO_ST_IDLE                      uint8 = 0x00
+	CO_SDO_ST_ABORT                     uint8 = 0x0
+	CO_SDO_ST_DOWNLOAD_LOCAL_TRANSFER   uint8 = 0x10
+	CO_SDO_ST_DOWNLOAD_INITIATE_REQ     uint8 = 0x11
+	CO_SDO_ST_DOWNLOAD_INITIATE_RSP     uint8 = 0x12
+	CO_SDO_ST_DOWNLOAD_SEGMENT_REQ      uint8 = 0x13
+	CO_SDO_ST_DOWNLOAD_SEGMENT_RSP      uint8 = 0x14
+	CO_SDO_ST_UPLOAD_LOCAL_TRANSFER     uint8 = 0x20
+	CO_SDO_ST_UPLOAD_INITIATE_REQ       uint8 = 0x21
+	CO_SDO_ST_UPLOAD_INITIATE_RSP       uint8 = 0x22
+	CO_SDO_ST_UPLOAD_SEGMENT_REQ        uint8 = 0x23
+	CO_SDO_ST_UPLOAD_SEGMENT_RSP        uint8 = 0x24
+	CO_SDO_ST_DOWNLOAD_BLK_INITIATE_REQ uint8 = 0x51
+	CO_SDO_ST_DOWNLOAD_BLK_INITIATE_RSP uint8 = 0x52
+	CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ uint8 = 0x53
+	CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_RSP uint8 = 0x54
+	CO_SDO_ST_DOWNLOAD_BLK_END_REQ      uint8 = 0x55
+	CO_SDO_ST_DOWNLOAD_BLK_END_RSP      uint8 = 0x56
+	CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ   uint8 = 0x61
+	CO_SDO_ST_UPLOAD_BLK_INITIATE_RSP   uint8 = 0x62
+	CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ2  uint8 = 0x63
+	CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ  uint8 = 0x64
+	CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_CRSP  uint8 = 0x65
+	CO_SDO_ST_UPLOAD_BLK_END_SREQ       uint8 = 0x66
+	CO_SDO_ST_UPLOAD_BLK_END_CRSP       uint8 = 0x67
+)
+
+type SDOReturn int8
+
+const (
+	CO_SDO_RT_waitingLocalTransfer  SDOReturn = 6   // Waiting in client local transfer.
+	CO_SDO_RT_uploadDataBufferFull  SDOReturn = 5   // Data buffer is full.SDO client: data must be read before next upload cycle begins.
+	CO_SDO_RT_transmittBufferFull   SDOReturn = 4   // CAN transmit buffer is full. Waiting.
+	CO_SDO_RT_blockDownldInProgress SDOReturn = 3   // Block download is in progress. Sending train of messages.
+	CO_SDO_RT_blockUploadInProgress SDOReturn = 2   // Block upload is in progress. Receiving train of messages.SDO client: Data must not be read in this state.
+	CO_SDO_RT_waitingResponse       SDOReturn = 1   // Waiting server or client response.
+	CO_SDO_RT_ok_communicationEnd   SDOReturn = 0   // Success, end of communication. SDO client: uploaded data must be read.
+	CO_SDO_RT_wrongArguments        SDOReturn = -2  // Error in arguments
+	CO_SDO_RT_endedWithClientAbort  SDOReturn = -9  // Communication ended with client abort
+	CO_SDO_RT_endedWithServerAbort  SDOReturn = -10 // Communication ended with server abort
+)
+
+const ()
+
+func (client *SDOClient) Init(od *ObjectDictionary, entry1280 *Entry, nodeId uint8, canmodule *CANModule) error {
+
+	if entry1280.Index < 0x1280 || entry1280.Index > (0x1280+0x7F) {
+		log.Errorf("Invalid index for SDO communication parameters %v", entry1280.Index)
+		return CO_ERROR_ILLEGAL_ARGUMENT
+	}
+	if entry1280 == nil || canmodule == nil || od == nil {
+		return CO_ERROR_ILLEGAL_ARGUMENT
+	}
+	client.OD = od
+	client.NodeId = nodeId
+	client.CANModule = canmodule
+	client.Streamer = &ObjectStreamer{}
+
+	fifo := NewFifo(1000)
+	client.Fifo = fifo
+
+	var maxSubindex, nodeIdServer uint8
+	var CobIdClientToServer, CobIdServerToClient uint32
+	err1 := entry1280.GetUint8(0, &maxSubindex)
+	err2 := entry1280.GetUint32(1, &CobIdClientToServer)
+	err3 := entry1280.GetUint32(2, &CobIdServerToClient)
+	err4 := entry1280.GetUint8(3, &nodeIdServer)
+	if err1 != nil || err2 != nil || err3 != nil || err4 != nil || maxSubindex != 3 {
+		log.Errorf("Invalid parameters inside SDO client entry. [0: %v,1: %v, 2: %v, 3: %v]. Max sub index : %v", err1, err2, err3, err4, maxSubindex)
+		return CO_ERROR_OD_PARAMETERS
+	}
+
+	// TODO Initialize extension
+
+	client.CobIdClientToServer = 0
+	client.CobIdServerToClient = 0
+
+	sdoReturn := client.Setup(CobIdClientToServer, CobIdServerToClient, nodeIdServer)
+	if sdoReturn != CO_SDO_RT_ok_communicationEnd {
+		return CO_ERROR_ILLEGAL_ARGUMENT
+	}
+	return nil
+
+}
+
+// Setup the client for a new communication
+func (client *SDOClient) Setup(cobIdClientToServer uint32, cobIdServerToClient uint32, nodeIdServer uint8) SDOReturn {
+	client.State = CO_SDO_ST_IDLE
+	client.RxNew = false
+	client.NodeIdServer = nodeIdServer
+	// If server is the same don't re-initialize the buffers
+	if client.CobIdClientToServer == cobIdClientToServer && client.CobIdServerToClient == cobIdServerToClient {
+		return CO_SDO_RT_ok_communicationEnd
+	}
+	client.CobIdClientToServer = cobIdClientToServer
+	client.CobIdServerToClient = cobIdServerToClient
+	// Check the valid bit
+	var CanIdC2S, CanIdS2C uint16
+	if cobIdClientToServer&0x80000000 == 0 {
+		CanIdC2S = uint16(cobIdClientToServer & 0x7FF)
+	} else {
+		CanIdC2S = 0
+	}
+	if cobIdServerToClient&0x80000000 == 0 {
+		CanIdS2C = uint16(cobIdServerToClient & 0x7FF)
+	} else {
+		CanIdS2C = 0
+	}
+	if CanIdC2S != 0 && CanIdS2C != 0 {
+		client.Valid = true
+	} else {
+		CanIdC2S = 0
+		CanIdS2C = 0
+		client.Valid = false
+	}
+	err1 := client.CANModule.InsertRxBuffer(uint32(CanIdS2C), 0x7FF, false, client)
+	if err1 != nil {
+		log.Errorf("Error initializing RX buffer for SDO client %v", err1)
+		client.Valid = false
+	}
+	var err2 error
+	err2, client.CANtxBuff = client.CANModule.InsertTxBuffer(uint32(CanIdC2S), false, 8, false)
+	if err2 != nil {
+		log.Errorf("Error initializing TX buffer for SDO client %v", err2)
+		client.Valid = false
+	}
+	log.Infof("Communication prepared for SDO, RX: %x, TX: %x", CanIdS2C, CanIdC2S)
+	if err1 != nil || err2 != nil {
+		return CO_SDO_RT_wrongArguments
+	}
+
+	return CO_SDO_RT_ok_communicationEnd
+
+}
+
+func (client *SDOClient) Handle(frame can.Frame) {
+
+	if client.State != CO_SDO_ST_IDLE && frame.Length == 8 && (!client.RxNew || frame.Data[0] == 0x80) {
+		if frame.Data[0] == 0x80 || (client.State != CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ && client.State != CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_CRSP) {
+			// Copy data in response
+			client.Response.raw = frame.Data
+			client.RxNew = true
+		} else if client.State == CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ {
+			state := CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ
+			seqno := frame.Data[0] & 0x7F
+			client.TimeoutTimer = 0
+			client.TimeoutTimerBlock = 0
+			// Checks on the Sequence number
+			if seqno <= client.BlockSize && seqno == (client.BlockSequenceNb+1) {
+				client.BlockSequenceNb = seqno
+				// Is it last segment
+				if frame.Data[0]&0x80 != 0 {
+					copy(client.BlockDataUploadLast[:], frame.Data[1:])
+					client.Finished = true
+					state = CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_CRSP
+				} else {
+					client.Fifo.Write(frame.Data[1:], &client.BlockCRC)
+					client.SizeTransferred += 7
+					if seqno == client.BlockSize {
+						log.Debug("All segments in sub-block have been transfered")
+						state = CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_CRSP
+					}
+				}
+			} else if seqno != client.BlockSequenceNb && client.BlockSequenceNb != 0 {
+				state = CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_CRSP
+				log.Warnf("Wrong sequence number in rx sub-block. seqno %x, previous %x", seqno, client.BlockSequenceNb)
+			} else {
+				log.Warnf("Wrong sequence number in rx ignored. seqno %x, expected %x", seqno, client.BlockSequenceNb+1)
+			}
+
+			if state != CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ {
+				client.RxNew = false
+				client.State = state
+
+			}
+
+		}
+	} else {
+		log.Debugf("Ignoring response %v", frame.Data)
+	}
+
+}
+
+// Start a new download sequence
+func (client *SDOClient) DownloadInitiate(index uint16, subindex uint8, sizeIndicated uint32, timeoutMs uint16, blockEnabled bool) SDOReturn {
+	if !client.Valid {
+		return CO_SDO_RT_wrongArguments
+	}
+	client.Index = index
+	client.Subindex = subindex
+	client.SizeIndicated = sizeIndicated
+	client.SizeTransferred = 0
+	client.Finished = false
+	client.TimeoutTimeUs = uint32(timeoutMs) * 1000
+	client.TimeoutTimer = 0
+	client.Fifo.Reset()
+
+	if client.OD != nil && client.NodeId != 0 && client.NodeIdServer == client.NodeId {
+		client.Streamer.Write = nil
+		client.State = CO_SDO_ST_DOWNLOAD_LOCAL_TRANSFER
+	} else if blockEnabled && (sizeIndicated == 0 || sizeIndicated > CO_CONFIG_SDO_CLI_PST) {
+		client.State = CO_SDO_ST_DOWNLOAD_BLK_INITIATE_REQ
+	} else {
+		client.State = CO_SDO_ST_DOWNLOAD_INITIATE_REQ
+	}
+	client.RxNew = false
+	return CO_SDO_RT_ok_communicationEnd
+}
+
+func (client *SDOClient) DownloadInitiateSize(sizeIndicated uint32) {
+	client.SizeIndicated = sizeIndicated
+	if client.State == CO_SDO_ST_DOWNLOAD_BLK_INITIATE_REQ && sizeIndicated > 0 && sizeIndicated <= CO_CONFIG_SDO_CLI_PST {
+		client.State = CO_SDO_ST_DOWNLOAD_INITIATE_REQ
+	}
+}
+
+func (client *SDOClient) DownloadBufWrite(buffer []byte) int {
+	if buffer == nil {
+		return 0
+	}
+	return client.Fifo.Write(buffer, nil)
+}
+
+// Write value to OD locally
+// func (client *SDOClient) DownloadLocal(bufferPartial bool, timerNextUs *uint32) {
+// 	ret := CO_SDO_RT_waitingResponse
+// 	var abortCode SDOAbortCode = CO_SDO_AB_NONE
+
+// 	if client.Streamer.Write == nil {
+// 		log.Info("Downloading via local transfer")
+// 		// Get the object on first function call
+// 		err := client.OD.Find(client.Index).Sub(client.Subindex, false, client.Streamer)
+// 		odr_err, _ := err.(ODR)
+// 		if err != nil {
+// 			abortCode = odr_err.GetSDOAbordCode()
+// 			ret = CO_SDO_RT_endedWithClientAbort
+// 		} else if (client.Streamer.Stream.Attribute & ODA_SDO_RW) == 0 {
+// 			abortCode = CO_SDO_AB_UNSUPPORTED_ACCESS
+// 			ret = CO_SDO_RT_endedWithClientAbort
+// 		} else if (client.Streamer.Stream.Attribute & ODA_SDO_W) == 0 {
+// 			abortCode = CO_SDO_AB_READONLY
+// 			ret = CO_SDO_RT_endedWithClientAbort
+// 		} else if client.Streamer.Write == nil {
+// 			abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+// 			ret = CO_SDO_RT_endedWithClientAbort
+// 		}
+// 	} else {
+// 		// Do the real stuff
+// 		buffer := client.Queue
+// 		count := len(buffer)
+// 		client.SizeTransferred += uint32(count)
+// 		// No data error
+// 		if count == 0 {
+// 			abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+// 			ret = CO_SDO_RT_endedWithClientAbort
+// 			// Size transferred is too large
+// 		} else if client.SizeIndicated > 0 && client.SizeTransferred > client.SizeIndicated {
+// 			client.SizeTransferred -= uint32(count)
+// 			abortCode = CO_SDO_AB_DATA_LONG
+// 			ret = CO_SDO_RT_endedWithClientAbort
+// 			// Size transferred is too small (check on last call)
+// 		} else if !bufferPartial && client.SizeIndicated > 0 && client.SizeTransferred < client.SizeIndicated {
+// 			abortCode = CO_SDO_AB_DATA_SHORT
+// 			ret = CO_SDO_RT_endedWithClientAbort
+// 			// Last part of data !
+// 		} else if !bufferPartial {
+// 			odVarSize := len(client.Streamer.Stream.Data)
+// 			// Special case for strings where the downloaded data may be shorter (nul character can be omitted)
+// 			// TODO, finish this because unclear with how go stores strings
+// 			if client.Streamer.Stream.Attribute&ODA_STR != 0 && odVarSize == 0 || client.SizeTransferred < uint32(odVarSize) {
+// 				buffer = append(buffer, byte(0))
+// 				client.SizeTransferred += 1
+// 				if odVarSize == 0 || odVarSize > int(client.SizeTransferred) {
+// 					buffer = append(buffer, byte(0))
+// 				} else if odVarSize == 0 {
+// 					log.Warn("odvarsize 0 case not handled for now")
+// 					abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+// 					ret = CO_SDO_RT_endedWithClientAbort
+
+// 				} else if client.SizeTransferred > uint32(odVarSize) {
+// 					abortCode = CO_SDO_AB_DATA_LONG
+// 					ret = CO_SDO_RT_endedWithClientAbort
+// 				} else if client.SizeTransferred < uint32(odVarSize) {
+// 					abortCode = CO_SDO_AB_DATA_SHORT
+// 					ret = CO_SDO_RT_endedWithClientAbort
+// 				}
+// 			}
+// 		}
+
+// 		if abortCode == CO_SDO_AB_NONE {
+// 			var countWritten uint16 = 0
+// 			// TODO l
+// 			//lock := client.Streamer.Stream.Mappable()
+// 			err := client.Streamer.Write(client.Streamer.Stream, buffer, &countWritten)
+// 			odr_err, _ := err.(ODR)
+// 			// Check errors when writing
+// 			if err != nil && odr_err != ODR_PARTIAL {
+// 				abortCode = odr_err.GetSDOAbordCode()
+// 				ret = CO_SDO_RT_endedWithClientAbort
+// 				// Error if written completely but download still has data
+// 			} else if bufferPartial && err == nil {
+// 				abortCode = CO_SDO_AB_DATA_LONG
+// 				ret = CO_SDO_RT_endedWithClientAbort
+// 			} else if !bufferPartial {
+// 				// Error if not written completely but download end
+// 				if odr_err == ODR_PARTIAL {
+// 					abortCode = CO_SDO_AB_DATA_SHORT
+// 					ret = CO_SDO_RT_endedWithClientAbort
+// 				} else {
+// 					ret = CO_SDO_RT_ok_communicationEnd
+// 				}
+// 			} else {
+// 				ret = CO_SDO_RT_waitingLocalTransfer
+// 			}
+
+// 		}
+
+// 		if ret != CO_SDO_RT_waitingLocalTransfer {
+// 			client.State = CO_SDO_ST_IDLE
+// 		} else if timerNextUs != nil {
+// 			*timerNextUs = 0
+// 		}
+// 	}
+
+// }
+
+func (client *SDOClient) DownloadRemote(bufferPartial bool, timerNextUs *uint32) {
+
+}
+
+func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPartial bool, sdoAbortCode *SDOAbortCode, sizeTransferred *uint32, timerNextUs *uint32, forceSegmented *bool) SDOReturn {
+
+	ret := CO_SDO_RT_waitingResponse
+	var abortCode error
+
+	if !client.Valid {
+		abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+		ret = CO_SDO_RT_wrongArguments
+	} else if client.State == CO_SDO_ST_IDLE {
+		ret = CO_SDO_RT_ok_communicationEnd
+	} else if client.State == CO_SDO_ST_DOWNLOAD_LOCAL_TRANSFER && !abort {
+		log.Info("Downloading via local transfer")
+		// TODO Add Download Local function O
+
+	} else if client.RxNew {
+		response := client.Response
+		if response.IsAbort() {
+			abortCode = response.GetAbortCode()
+			log.Warnf("Received an abort from Server : %v", abortCode)
+			client.State = CO_SDO_ST_IDLE
+			ret = CO_SDO_RT_endedWithServerAbort
+			// Abort from the client
+		} else if abort {
+			if sdoAbortCode == nil {
+				abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+			} else {
+				abortCode = *sdoAbortCode
+			}
+			log.Warnf("Client is aborting : %x", abortCode)
+			client.State = CO_SDO_ST_ABORT
+
+		} else if !response.isResponseValid(client.State) {
+			log.Warnf("Unexpected response code from server : %x", response.raw[0])
+			client.State = CO_SDO_ST_ABORT
+			abortCode = CO_SDO_AB_CMD
+
+		} else {
+			switch client.State {
+			case CO_SDO_ST_DOWNLOAD_INITIATE_RSP:
+
+				index := response.GetIndex()
+				subIndex := response.GetSubindex()
+				if index != client.Index || subIndex != client.Subindex {
+					abortCode = CO_SDO_AB_PRAM_INCOMPAT
+					client.State = CO_SDO_ST_ABORT
+					break
+				}
+				// Expedited transfer
+				if client.Finished {
+					client.State = CO_SDO_ST_IDLE
+					ret = CO_SDO_RT_ok_communicationEnd
+					// Segmented transfer
+				} else {
+					client.Toggle = 0x00
+					client.State = CO_SDO_ST_DOWNLOAD_SEGMENT_REQ
+				}
+
+			case CO_SDO_ST_DOWNLOAD_SEGMENT_RSP:
+
+				// Verify and alternate toggle bit
+				toggle := response.GetToggle()
+				if toggle != client.Toggle {
+					abortCode = CO_SDO_AB_TOGGLE_BIT
+					client.State = CO_SDO_ST_ABORT
+					break
+				}
+				client.Toggle ^= 0x10
+				if client.Finished {
+					client.State = CO_SDO_ST_IDLE
+					ret = CO_SDO_RT_ok_communicationEnd
+				} else {
+					client.State = CO_SDO_ST_DOWNLOAD_SEGMENT_REQ
+				}
+
+			case CO_SDO_ST_DOWNLOAD_BLK_INITIATE_RSP:
+
+				index := response.GetIndex()
+				subIndex := response.GetSubindex()
+				if index != client.Index || subIndex != client.Subindex {
+					abortCode = CO_SDO_AB_PRAM_INCOMPAT
+					client.State = CO_SDO_ST_ABORT
+					break
+				}
+				client.BlockCRC = CRC16{0}
+				client.BlockSize = response.GetBlockSize()
+				if client.BlockSize < 1 || client.BlockSize > 127 {
+					client.BlockSize = 127
+				}
+				client.BlockSequenceNb = 0
+				client.Fifo.AltBegin(0)
+				client.State = CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ
+
+			case CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ, CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_RSP:
+
+				if response.GetNumberOfSegments() < client.BlockSequenceNb {
+					log.Error("Not all segments transferred successfully")
+					client.Fifo.AltBegin(int(response.raw[1]) * 7)
+					client.Finished = false
+
+				} else if response.GetNumberOfSegments() > client.BlockSequenceNb {
+					abortCode = CO_SDO_AB_CMD
+					client.State = CO_SDO_ST_ABORT
+					break
+				}
+				// TODO alt finish
+				client.Fifo.AltFinish(&client.BlockCRC)
+
+				if client.Finished {
+					client.State = CO_SDO_ST_DOWNLOAD_BLK_END_REQ
+				} else {
+					client.BlockSize = response.raw[2]
+					client.BlockSequenceNb = 0
+					client.Fifo.AltBegin(0)
+					client.State = CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ
+				}
+
+			case CO_SDO_ST_DOWNLOAD_BLK_END_RSP:
+
+				client.State = CO_SDO_ST_IDLE
+				ret = CO_SDO_RT_ok_communicationEnd
+
+			}
+
+			client.TimeoutTimer = 0
+			timeDifferenceUs = 0
+			client.RxNew = false
+
+		}
+
+	} else if abort {
+		if sdoAbortCode == nil {
+			abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+		} else {
+			abortCode = *sdoAbortCode
+		}
+		log.Warnf("Client is aborting : %x", abortCode)
+		client.State = CO_SDO_ST_ABORT
+	}
+
+	if ret == CO_SDO_RT_waitingResponse {
+		if client.TimeoutTimer < client.TimeoutTimeUs {
+			client.TimeoutTimer += timeDifferenceUs
+		}
+		if client.TimeoutTimer >= client.TimeoutTimeUs {
+			abortCode = CO_SDO_AB_TIMEOUT
+			client.State = CO_SDO_ST_ABORT
+		} else if timerNextUs != nil {
+			diff := client.TimeoutTimeUs - client.TimeoutTimer
+			if *timerNextUs > diff {
+				*timerNextUs = diff
+			}
+		}
+		if client.CANtxBuff.BufferFull {
+			ret = CO_SDO_RT_transmittBufferFull
+		}
+	}
+
+	if ret == CO_SDO_RT_waitingResponse {
+
+		client.CANtxBuff.Data = [8]byte{0}
+		switch client.State {
+		case CO_SDO_ST_DOWNLOAD_INITIATE_REQ:
+			if forceSegmented == nil {
+				abortCode = client.InitiateDownload(false)
+			} else {
+				abortCode = client.InitiateDownload(*forceSegmented)
+			}
+			if abortCode != nil {
+				client.State = CO_SDO_ST_IDLE
+				ret = CO_SDO_RT_endedWithClientAbort
+				break
+			}
+			client.State = CO_SDO_ST_DOWNLOAD_INITIATE_RSP
+
+		case CO_SDO_ST_DOWNLOAD_SEGMENT_REQ:
+			// Fill data part
+			abortCode = client.DownloadSegmented(bufferPartial)
+			if abortCode != nil {
+				client.State = CO_SDO_ST_ABORT
+				break
+			}
+			client.State = CO_SDO_ST_DOWNLOAD_SEGMENT_RSP
+		default:
+			break
+
+		}
+
+		// case CO_SDO_ST_DOWNLOAD_BLK_INITIATE_REQ:
+		// 	// TODO
+		// case CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ:
+		// 	// TODO
+
+		// case CO_SDO_ST_DOWNLOAD_BLK_END_REQ:
+		// 	// TODO
+
+	}
+
+	if ret == CO_SDO_RT_waitingResponse {
+
+		if client.State == CO_SDO_ST_ABORT {
+			client.Abort(abortCode.(SDOAbortCode))
+			ret = CO_SDO_RT_endedWithClientAbort
+			client.State = CO_SDO_ST_IDLE
+
+		} else if client.State == CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ {
+			ret = CO_SDO_RT_blockDownldInProgress
+		}
+	}
+
+	if sizeTransferred != nil {
+		*sizeTransferred = client.SizeTransferred
+	}
+
+	if sdoAbortCode != nil && abortCode != nil {
+		*sdoAbortCode = abortCode.(SDOAbortCode)
+	}
+
+	return ret
+}
+
+func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, data []byte, forceSegmented bool) error {
+	bufferPartial := false
+	ret := client.Setup(uint32(SDO_CLIENT_ID)+uint32(nodeId), uint32(SDO_SERVER_ID)+uint32(nodeId), nodeId)
+	if ret != CO_SDO_RT_ok_communicationEnd {
+		log.Errorf("Error when setting up SDO client reason : %v", ret)
+		return CO_SDO_AB_GENERAL
+	}
+	ret = client.DownloadInitiate(index, subindex, uint32(len(data)), 1000, false)
+
+	// Fill buffer
+	nWritten := client.DownloadBufWrite(data)
+	if nWritten < len(data) {
+		bufferPartial = true
+		log.Info("Not enough space in buffer so using buffer partial")
+	}
+	var timeDifferenceUs uint32 = 10000
+	abortCode := CO_SDO_AB_NONE
+
+	for {
+		ret = client.Download(timeDifferenceUs, false, bufferPartial, &abortCode, nil, nil, &forceSegmented)
+		if ret < 0 {
+			log.Errorf("SDO write failed : %v", ret)
+			return CO_SDO_AB_GENERAL
+		} else if uint8(ret) == 0 {
+			break
+		}
+		time.Sleep(time.Duration(timeDifferenceUs) * time.Microsecond)
+	}
+
+	return CO_SDO_AB_NONE
+}
+
+// Helpers functions for different SDO messages
+// Valid for both expedited and segmented
+func (client *SDOClient) InitiateDownload(forceSegmented bool) error {
+
+	client.CANtxBuff.Data[0] = 0x20
+	client.CANtxBuff.Data[1] = byte(client.Index)
+	client.CANtxBuff.Data[2] = byte(client.Index >> 8)
+	client.CANtxBuff.Data[3] = client.Subindex
+
+	count := uint32(client.Fifo.GetOccupied())
+	if (client.SizeIndicated == 0 && count <= 4) || (client.SizeIndicated > 0 && client.SizeIndicated <= 4) && forceSegmented == false {
+		client.CANtxBuff.Data[0] |= 0x02
+		// Check length
+		if count == 0 || (client.SizeIndicated > 0 && client.SizeIndicated != count) {
+			client.State = CO_SDO_ST_IDLE
+			return CO_SDO_AB_TYPE_MISMATCH
+		}
+		if client.SizeIndicated > 0 {
+			client.CANtxBuff.Data[0] |= byte(0x01 | ((4 - count) << 2))
+		}
+		// Copy the data in queue and add the count
+		count = uint32(client.Fifo.Read(client.CANtxBuff.Data[4:], nil))
+		client.SizeTransferred = count
+		client.Finished = true
+
+	} else {
+		/* segmented transfer, indicate data size */
+		if client.SizeIndicated > 0 {
+			size := client.SizeIndicated
+			client.CANtxBuff.Data[0] |= 0x01
+			binary.LittleEndian.PutUint32(client.CANtxBuff.Data[4:], size)
+		}
+	}
+	client.TimeoutTimer = 0
+	log.Debugf("Initiating a DOWNLOAD REQ object x%x:x%x to node x%x", client.Index, client.Subindex, client.NodeIdServer)
+	client.CANModule.Bus.Send(*client.CANtxBuff)
+	return nil
+
+}
+
+// Called for each segment
+func (client *SDOClient) DownloadSegmented(bufferPartial bool) error {
+	// Fill data part
+	count := uint32(client.Fifo.Read(client.CANtxBuff.Data[1:], nil))
+	client.SizeTransferred += count
+	if client.SizeIndicated > 0 && client.SizeTransferred > client.SizeIndicated {
+		client.SizeTransferred -= count
+		return CO_SDO_AB_DATA_LONG
+	}
+
+	//Command specifier
+	client.CANtxBuff.Data[0] = uint8(uint32(client.Toggle) | ((7 - count) << 1))
+	if client.Fifo.GetOccupied() == 0 && !bufferPartial {
+		if client.SizeIndicated > 0 && client.SizeTransferred < client.SizeIndicated {
+			return CO_SDO_AB_DATA_SHORT
+		}
+		client.CANtxBuff.Data[0] |= 0x01
+		client.Finished = true
+	}
+
+	client.TimeoutTimer = 0
+	log.Debugf("Downloading segment : transferred %v bytes / total %v bytes", client.SizeTransferred, client.SizeIndicated)
+	client.CANModule.Send(*client.CANtxBuff)
+	return nil
+}
+
+// Create & send abort on bus
+func (client *SDOClient) Abort(abortCode SDOAbortCode) {
+	code := uint32(abortCode)
+	client.CANtxBuff.Data[0] = 0x80
+	client.CANtxBuff.Data[1] = uint8(client.Index)
+	client.CANtxBuff.Data[2] = uint8(client.Index >> 8)
+	client.CANtxBuff.Data[3] = client.Subindex
+	binary.LittleEndian.PutUint32(client.CANtxBuff.Data[4:], code)
+	client.CANModule.Send(*client.CANtxBuff)
+	log.Warnf("Aborting on client side because %x : %v", uint32(abortCode), abortCode)
+
+}

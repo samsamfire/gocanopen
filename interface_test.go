@@ -2,6 +2,8 @@ package canopen
 
 import (
 	"testing"
+
+	log "github.com/sirupsen/logrus"
 )
 
 var BaseObjectDictionaryParsed ObjectDictionary
@@ -89,6 +91,26 @@ func TestRead(t *testing.T) {
 	err = entry.GetUint8(0, &data2)
 	if err != ODR_TYPE_MISMATCH {
 		t.Error()
+	}
+
+}
+
+// Test reading SDO client parameter entry
+func TestReadSDO1280(t *testing.T) {
+	BaseObjectDictionaryParsed, err := ParseEDS("base.eds", 0x10)
+	if err != nil {
+		t.Error(err)
+	}
+	entry := BaseObjectDictionaryParsed.Find(0x1280)
+	log.Infof("Entry 1280 : %v", entry)
+	if entry == nil {
+		t.Error()
+	}
+	var streamer ObjectStreamer
+	err = entry.Sub(0, true, &streamer)
+
+	if err != nil {
+		t.Errorf("Failed to get sub object of 1280 %v", err)
 	}
 
 }

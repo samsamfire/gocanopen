@@ -49,77 +49,15 @@ const (
 )
 
 func (odr ODR) Error() string {
-	err_string, ok := SDO_ABORT_EXPLANATION_MAP[odr]
-	if ok {
-		return err_string
-	} else {
-		return SDO_ABORT_EXPLANATION_MAP[ODR_DEV_INCOMPAT]
-	}
-}
-
-var SDO_ABORT_EXPLANATION_MAP = map[ODR]string{
-	0:  "No abort",
-	1:  "Out of memory",
-	2:  "Unsupported access to an object",
-	3:  "Attempt to read a write only object",
-	4:  "Attempt to write a read only object",
-	5:  "Object does not exist in the object dictionary",
-	6:  "Object cannot be mapped to the PDO",
-	7:  "Num and len of object to be mapped exceeds PDO len",
-	8:  "General parameter incompatibility reasons",
-	9:  "General internal incompatibility in device",
-	10: "Access failed due to hardware error",
-	11: "Data type does not match, length does not match",
-	12: "Data type does not match, length too high",
-	13: "Data type does not match, length too short",
-	14: "Sub index does not exist",
-	15: "Invalid value for parameter (download only)",
-	16: "Value range of parameter written too high",
-	17: "Value range of parameter written too low",
-	18: "Maximum value is less than minimum value.",
-	19: "Resource not available: SDO connection",
-	20: "General error",
-	21: "Data cannot be transferred or stored to application",
-	22: "Data cannot be transferred because of local control",
-	23: "Data cannot be tran. because of present device state",
-	24: "Object dict. not present or dynamic generation fails",
-	25: "No data available",
-}
-
-var SDO_ABORT_MAP = map[ODR]uint32{
-	0:  0x00000000, /* No abort */
-	1:  0x05040005, /* Out of memory */
-	2:  0x06010000, /* Unsupported access to an object */
-	3:  0x06010001, /* Attempt to read a write only object */
-	4:  0x06010002, /* Attempt to write a read only object */
-	5:  0x06020000, /* Object does not exist in the object dictionary */
-	6:  0x06040041, /* Object cannot be mapped to the PDO */
-	7:  0x06040042, /* Num and len of object to be mapped exceeds PDO len */
-	8:  0x06040043, /* General parameter incompatibility reasons */
-	9:  0x06040047, /* General internal incompatibility in device */
-	10: 0x06060000, /* Access failed due to hardware error */
-	11: 0x06070010, /* Data type does not match, length does not match */
-	12: 0x06070012, /* Data type does not match, length too high */
-	13: 0x06070013, /* Data type does not match, length too short */
-	14: 0x06090011, /* Sub index does not exist */
-	15: 0x06090030, /* Invalid value for parameter (download only). */
-	16: 0x06090031, /* Value range of parameter written too high */
-	17: 0x06090032, /* Value range of parameter written too low */
-	18: 0x06090036, /* Maximum value is less than minimum value. */
-	19: 0x060A0023, /* Resource not available: SDO connection */
-	20: 0x08000000, /* General error */
-	21: 0x08000020, /* Data cannot be transferred or stored to application */
-	22: 0x08000021, /* Data cannot be transferred because of local control */
-	23: 0x08000022, /* Data cannot be tran. because of present device state */
-	24: 0x08000023, /* Object dict. not present or dynamic generation fails */
-	25: 0x08000024, /* No data available */
+	abort := odr.GetSDOAbordCode()
+	return abort.Error()
 }
 
 // Get the associated abort code, if the code is not present in map, return ODR_DEV_INCOMPAT
-func (result ODR) GetSDOAbordCode() uint32 {
+func (result ODR) GetSDOAbordCode() SDOAbortCode {
 	abort_code, ok := SDO_ABORT_MAP[result]
 	if ok {
-		return abort_code
+		return SDOAbortCode(abort_code)
 	} else {
 		return SDO_ABORT_MAP[ODR_DEV_INCOMPAT]
 	}
@@ -177,19 +115,16 @@ const (
 )
 
 type ObjectDictionary struct {
-	entries map[uint16]Entry
+	entries map[uint16]*Entry
 }
 
 // Add a new entry to OD
-func (od *ObjectDictionary) AddEntry(entry Entry) {
-	od.entries[entry.Index] = entry
-}
-
-// String representation of object dictionary
-func (od *ObjectDictionary) Print() {
-	for k, v := range od.entries {
-		fmt.Printf("key[%d] value[%+v]\n", k, v)
+func (od *ObjectDictionary) AddEntry(entry *Entry) {
+	_, ok := od.entries[entry.Index]
+	if ok {
+		log.Warnf("Re-adding entry %x to dictionary !", entry.Index)
 	}
+	od.entries[entry.Index] = entry
 }
 
 // Find entry inside object dictionary, returns nil if not found
@@ -197,7 +132,7 @@ func (od *ObjectDictionary) Find(index uint16) *Entry {
 
 	entry, ok := od.entries[index]
 	if ok {
-		return &entry
+		return entry
 	} else {
 		return nil
 	}
@@ -214,6 +149,10 @@ type Stream struct {
 	DataOffset uint32
 	Attribute  ODA
 	Subindex   uint8
+}
+
+func (stream *Stream) Mappable() bool {
+	return stream.Attribute&(ODA_TRPDO|ODA_TRSRDO) != 0
 }
 
 // Extension object, is used for extending some functionnality to some OD entries
@@ -236,15 +175,16 @@ type ObjectStreamer struct {
 type Entry struct {
 	Index     uint16
 	Name      string
-	Object    interface{}
+	Object    any
 	Extension *Extension
 }
 
 // Add a member to an Entry object, this is only possible for Array or Record objects
 func (entry *Entry) AddMember(section *ini.Section, name string, nodeId uint8, subindex uint8) error {
+
 	switch object := entry.Object.(type) {
 	case Variable:
-		return fmt.Errorf("Cannot add member to variable type")
+		return fmt.Errorf("Cannot add a member to variable type")
 	case Array:
 		variable, err := buildVariable(section, name, nodeId, entry.Index, subindex)
 		if err != nil {
@@ -259,9 +199,9 @@ func (entry *Entry) AddMember(section *ini.Section, name string, nodeId uint8, s
 		if err != nil {
 			return err
 		}
-		record := Record{Subindex: subindex, Variable: *variable}
-		entry.Object = append(object, record)
+		entry.Object = append(object, Record{Subindex: subindex, Variable: *variable})
 		return nil
+
 	default:
 		return fmt.Errorf("Add member not supported for %T", object)
 	}
@@ -534,7 +474,6 @@ func (entry *Entry) GetUint16(subIndex uint8, data *uint16) error {
 		return err
 	}
 	*data = binary.LittleEndian.Uint16(buffer)
-	fmt.Printf("Data value is %v", *data)
 	return nil
 }
 
@@ -601,16 +540,16 @@ func (entry *Entry) SetUint64(subIndex uint8, data uint64) error {
 }
 
 func NewOD() ObjectDictionary {
-	return ObjectDictionary{entries: make(map[uint16]Entry)}
+	return ObjectDictionary{entries: make(map[uint16]*Entry)}
 }
 
 /* Create a new Object dictionary Entry of Variable type */
-func NewVariableEntry(index uint16, data []byte, attribute ODA) Entry {
+func NewVariableEntry(index uint16, data []byte, attribute ODA) *Entry {
 	Object := Variable{Data: data, Attribute: attribute}
-	return Entry{Index: index, Object: Object, Extension: nil}
+	return &Entry{Index: index, Object: Object, Extension: nil}
 }
 
 /* Create a new Object dictionary Entry of Record type, Object is an empty slice of Record elements */
-func NewRecordEntry(index uint16, records []Record) Entry {
-	return Entry{Index: index, Object: records, Extension: nil}
+func NewRecordEntry(index uint16, records []Record) *Entry {
+	return &Entry{Index: index, Object: records, Extension: nil}
 }
