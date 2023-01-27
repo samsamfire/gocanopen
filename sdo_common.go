@@ -125,6 +125,8 @@ type SDOResponse struct {
 
 func (response *SDOResponse) isResponseValid(state uint8) bool {
 	switch state {
+
+	// Download
 	case CO_SDO_ST_DOWNLOAD_INITIATE_RSP:
 		if response.raw[0] == 0x60 {
 			return true
@@ -147,7 +149,30 @@ func (response *SDOResponse) isResponseValid(state uint8) bool {
 		if response.raw[0] == 0xA1 {
 			return true
 		}
+	// Upload
+	case CO_SDO_ST_UPLOAD_INITIATE_RSP:
+		if (response.raw[0] & 0xF0) == 0x40 {
+			return true
+		}
+	case CO_SDO_ST_UPLOAD_SEGMENT_RSP:
+		if (response.raw[0] & 0xE0) == 0x00 {
+			return true
+		}
+	case CO_SDO_ST_UPLOAD_BLK_INITIATE_RSP:
+		if (response.raw[0]&0xF9) == 0xC0 || (response.raw[0]&0xF0) == 0x40 {
+			return true
+		}
+	case CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ:
+		//TODO but not checked in normal upload function
+		return true
+
+	case CO_SDO_ST_UPLOAD_BLK_END_SREQ:
+		if (response.raw[0] & 0xE3) == 0xC1 {
+			return true
+		}
+
 	}
+
 	log.Errorf("Invalid response received, with code : %x", response.raw[0])
 	return false
 

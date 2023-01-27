@@ -14,6 +14,8 @@ func handleCANFrame(frame can.Frame) {
 	fmt.Println(frame)
 }
 
+var NODE_ID uint8 = 0x20
+
 func main() {
 
 	log.SetLevel(logrus.DebugLevel)
@@ -27,23 +29,21 @@ func main() {
 	socketcanbus := canopen.SocketCANBus{Bus: bus}
 
 	canmodule := &canopen.CANModule{}
-	rxBuffer := make([]canopen.BufferRxFrame, 100)
-	txBuffer := make([]canopen.BufferTxFrame, 100)
-	canmodule.Init(&socketcanbus, rxBuffer, txBuffer)
+	canmodule.Init(&socketcanbus)
 
 	// CanModule is the message broker
 	bus.Subscribe(canmodule)
 
-	//go bus.ConnectAndPublish()
+	go bus.ConnectAndPublish()
 
 	// First load the EDS
-	od, err := canopen.ParseEDS("../../base.eds", 0x10)
+	od, err := canopen.ParseEDS("../../base.eds", NODE_ID)
 	if err != nil {
 		log.Panicf("Error encountered when loading EDS : %v", err)
 	}
 
 	node := canopen.Node{Config: nil, CANModule: canmodule, NMT: nil}
-	err = node.Init(nil, nil, od, nil, canopen.CO_NMT_STARTUP_TO_OPERATIONAL, 500, 0, 0, true, 0x10)
+	err = node.Init(nil, nil, od, nil, canopen.CO_NMT_STARTUP_TO_OPERATIONAL, 500, 0, 0, true, NODE_ID)
 
 	if err != nil {
 		log.Panicf("Failed Initializing Node because %v", err)
@@ -54,8 +54,9 @@ func main() {
 	start := time.Now()
 	var timer_next_us uint32 = 1000 // i.e 1 ms
 
+	client := node.SDOclients[0]
+
 	counter := 0
-	sent := false
 	for {
 		counter += 1
 		elapsed := time.Since(start)
@@ -65,11 +66,22 @@ func main() {
 		//fmt.Printf("Timer next %v ; Elapsed %v", timer_next_us, time_difference_us)
 		time.Sleep(time.Duration(timer_next_us) * time.Microsecond)
 
-		if counter >= 2000 && sent == false {
-			node.NMT.SendInternalCommand(canopen.CO_NMT_ENTER_PRE_OPERATIONAL)
-			counter = 0
-			sent = true
-		}
+		data := []byte{0x20}
+
+		_ = client.WriteRaw(0x10, 0x2002, 0x0, data, true)
+		_, err = client.ReadRaw(0x10, 0x2002, 0x0, data)
+		log.Infof("Read back %v", data)
+		return
+		// if err != nil {
+		// 	log.Errorf("Error reading %v", err)
+		// }
+		//once = false
+
+		// if counter >= 2000 && sent == false {
+		// 	node.NMT.SendInternalCommand(canopen.CO_NMT_ENTER_PRE_OPERATIONAL)
+		// 	counter = 0
+		// 	sent = true
+		// }
 
 	}
 }
