@@ -18,7 +18,6 @@ func buildVariable(
 	index uint16,
 	subindex uint8,
 ) (*Variable, error) {
-	//TODO
 
 	// Prepare with known values
 	variable := &Variable{
@@ -136,6 +135,9 @@ func encode(variable string, datatype uint8, nodeId uint8) ([]byte, error) {
 		}
 		data = make([]byte, 4)
 		binary.LittleEndian.PutUint32(data, uint32(parsed+uint64(nodeId)))
+
+	case VISIBLE_STRING:
+		return []byte(variable), nil
 
 	default:
 		return nil, ODR_TYPE_MISMATCH
