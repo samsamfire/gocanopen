@@ -1,12 +1,8 @@
 package main
 
 import (
-	"archive/zip"
-	"bytes"
 	"canopen"
 	"fmt"
-	"io"
-	"os"
 	"time"
 
 	"github.com/brutella/can"
@@ -24,7 +20,7 @@ func main() {
 
 	log.SetLevel(logrus.DebugLevel)
 
-	bus, e := can.NewBusForInterfaceWithName("can0")
+	bus, e := can.NewBusForInterfaceWithName("vcan0")
 	if e != nil {
 		fmt.Println(e)
 		return
@@ -58,7 +54,19 @@ func main() {
 	start := time.Now()
 	var timer_next_us uint32 = 1000 // i.e 1 ms
 
-	client := node.SDOclients[0]
+	// client := node.SDOclients[0]
+
+	go func() {
+		var tmrNextUs uint32 = 1000
+		for {
+			elapsed := time.Since(start)
+			start = time.Now()
+			time_difference_us = uint32(elapsed.Microseconds())
+			node.ProcessSYNC(time_difference_us, &tmrNextUs)
+			//fmt.Printf("Timer next %v ; Elapsed %v", timer_next_us, time_difference_us)
+			time.Sleep(time.Duration(timer_next_us) * time.Microsecond)
+		}
+	}()
 
 	counter := 0
 	for {
@@ -71,31 +79,31 @@ func main() {
 		time.Sleep(time.Duration(timer_next_us) * time.Microsecond)
 
 		//_ = client.WriteRaw(0x10, 0x2000, 0x0, data, true)
-		reader := canopen.NewBlockReader(0x10, 0x1021, 0x0, &client)
-		data, _ := reader.ReadAll()
-		// _, err = client.ReadRaw(0x10, 0x1021, 0x0, data)
-		log.Infof("Read back %v", data)
+		// reader := canopen.NewBlockReader(0x10, 0x1021, 0x0, &client)
+		// data, _ := reader.ReadAll()
+		// // _, err = client.ReadRaw(0x10, 0x1021, 0x0, data)
+		// log.Infof("Read back %v", data)
 
-		// _, err = f.Write(data)
+		// // _, err = f.Write(data)
+		// // if err != nil {
+		// // 	fmt.Print("Error occurred when writing to file")
+		// // }
+
+		// // Write to a file
+		// buf := bytes.NewReader(data)
+		// w, _ := zip.NewReader(buf, int64(len(data)))
+		// f, err := w.File[0].Open()
 		// if err != nil {
-		// 	fmt.Print("Error occurred when writing to file")
+		// 	panic(err)
+		// }
+		// unzipped_data, _ := io.ReadAll(f)
+		// os.WriteFile("dictionnary.eds", unzipped_data, 0644)
+
+		// if err != nil {
+		// 	panic(err)
 		// }
 
-		// Write to a file
-		buf := bytes.NewReader(data)
-		w, _ := zip.NewReader(buf, int64(len(data)))
-		f, err := w.File[0].Open()
-		if err != nil {
-			panic(err)
-		}
-		unzipped_data, _ := io.ReadAll(f)
-		os.WriteFile("dictionnary.eds", unzipped_data, 0644)
-
-		if err != nil {
-			panic(err)
-		}
-
-		return
+		// return
 		// if err != nil {
 		// 	log.Errorf("Error reading %v", err)
 		// }
