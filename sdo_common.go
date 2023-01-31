@@ -205,3 +205,7 @@ func (response *SDOResponse) GetBlockSize() uint8 {
 func (response *SDOResponse) GetNumberOfSegments() uint8 {
 	return response.raw[1]
 }
+
+func (response *SDOResponse) IsCRCEnabled() bool {
+	return (response.raw[0] & 0x04) != 0
+}
