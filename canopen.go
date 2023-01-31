@@ -13,10 +13,12 @@ const (
 
 // Node regroups all the different canopen objects and is responsible for processing each one of them
 type Node struct {
-	Config     *Configuration
-	CANModule  *CANModule
-	NMT        *NMT
-	SDOclients []SDOClient
+	Config             *Configuration
+	CANModule          *CANModule
+	NMT                *NMT
+	SDOclients         []SDOClient
+	SYNC               *SYNC
+	NodeIdUnconfigured bool
 }
 
 /* This file contains the basic high level API */
@@ -45,9 +47,27 @@ func (Node *Node) ProcessRPDO(sync_was bool, time_difference_us uint32) (timer_n
 }
 
 /* Process SYNC */
-func (Node *Node) ProcessSYNC(time_difference_us uint32) (sync_was bool, timer_next_us uint32) {
-	// Process SYNC object
-	return false, 0
+func (node *Node) ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32) bool {
+	syncWas := false
+	sync := node.SYNC
+	if !node.NodeIdUnconfigured && sync != nil {
+
+		nmtState := node.NMT.GetInternalState()
+		nmtIsPreOrOperational := nmtState == CO_NMT_PRE_OPERATIONAL || nmtState == CO_NMT_OPERATIONAL
+		syncProcess := sync.Process(nmtIsPreOrOperational, timeDifferenceUs, timerNextUs)
+
+		switch syncProcess {
+		case CO_SYNC_NONE:
+			break
+		case CO_SYNC_RX_TX:
+			syncWas = true
+			break
+		case CO_SYNC_PASSED_WINDOW:
+			node.CANModule.ClearSyncPDOs()
+			break
+		}
+	}
+	return syncWas
 }
 
 /* Process all objects */
@@ -94,6 +114,9 @@ func (node *Node) Init(
 	} else {
 		node.NMT = nmt
 	}
+
+	node.NodeIdUnconfigured = false
+
 	// For now just NMT init
 	// Get NMT obj 1017 :
 	Entry1017 := od.Find(0x1017)
@@ -121,5 +144,12 @@ func (node *Node) Init(
 	}
 	node.SDOclients[0] = client
 
+	//Initialize SYNC
+	sync := SYNC{}
+	err = sync.Init(&EM{}, od.Find(0x1005), od.Find(0x1006), od.Find(0x1007), od.Find(0x1019), node.CANModule)
+	if err != nil {
+		log.Errorf("Error when initialising SYNC object %v", err)
+	}
+	node.SYNC = &sync
 	return nil
 }

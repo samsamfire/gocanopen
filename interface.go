@@ -439,6 +439,19 @@ func (entry *Entry) Get(subIndex uint8, buffer []byte, length uint16, origin boo
 	return streamer.Read(streamer.Stream, buffer, &countRead)
 }
 
+// Getptr inside OD, similar to read
+func (entry *Entry) GetPtr(subIndex uint8, length uint16) (*[]byte, error) {
+	streamer := &ObjectStreamer{}
+	err := entry.Sub(subIndex, true, streamer)
+	if err != nil {
+		return nil, err
+	}
+	if len(streamer.Stream.Data) != int(length) && length != 0 {
+		return nil, ODR_TYPE_MISMATCH
+	}
+	return &streamer.Stream.Data, nil
+}
+
 // Set value inside OD and write it into data
 func (entry *Entry) Set(subIndex uint8, buffer []byte, length uint16, origin bool) error {
 	streamer := &ObjectStreamer{}
