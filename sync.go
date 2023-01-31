@@ -7,6 +7,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+/* TODOs
+- Add dynamic od entries
+- Test sync reception
+- Test also with PDOs
+- Add emergency frames
+*/
+
 type SYNC struct {
 	emergency            *EM
 	RxNew                bool
