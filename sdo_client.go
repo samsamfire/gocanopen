@@ -110,7 +110,7 @@ func (client *SDOClient) Init(od *ObjectDictionary, entry1280 *Entry, nodeId uin
 	client.CANModule = canmodule
 	client.Streamer = &ObjectStreamer{}
 
-	fifo := NewFifo(1000)
+	fifo := NewFifo(300)
 	client.Fifo = fifo
 
 	var maxSubindex, nodeIdServer uint8
@@ -211,7 +211,7 @@ func (client *SDOClient) Handle(frame can.Frame) {
 					client.Fifo.Write(frame.Data[1:], &client.BlockCRC)
 					client.SizeTransferred += 7
 					if seqno == client.BlockSize {
-						log.Debug("All segments in sub-block have been transfered")
+						log.Debugf("<==Rx (x%x) | BLOCK UPLOAD | Last sub-block received (%v)", client.NodeIdServer, seqno)
 						state = CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_CRSP
 					}
 				}
@@ -396,7 +396,7 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 		response := client.Response
 		if response.IsAbort() {
 			abortCode = response.GetAbortCode()
-			log.Warnf("Received an abort from Server : %v", abortCode)
+			log.Debugf("<==Rx (x%x) | SERVER ABORT | %v (x%x)", client.NodeIdServer, abortCode, abortCode)
 			client.State = CO_SDO_ST_IDLE
 			ret = CO_SDO_RT_endedWithServerAbort
 			// Abort from the client
@@ -757,7 +757,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 		response := client.Response
 		if response.IsAbort() {
 			abortCode = response.GetAbortCode()
-			log.Warnf("Received an abort from Server : %v", abortCode)
+			log.Debugf("<==Rx (x%x) | SERVER ABORT | %v (x%x)", client.NodeIdServer, abortCode, uint32(abortCode.(SDOAbortCode)))
 			client.State = CO_SDO_ST_IDLE
 			ret = CO_SDO_RT_endedWithServerAbort
 			// Abort from the client
@@ -852,8 +852,85 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				}
 				break
 
-				//TODO add block upload
+			case CO_SDO_ST_UPLOAD_BLK_INITIATE_RSP:
+
+				index := response.GetIndex()
+				subindex := response.GetSubindex()
+				if index != client.Index || subindex != client.Subindex {
+					abortCode = CO_SDO_AB_PRAM_INCOMPAT
+					client.State = CO_SDO_ST_ABORT
+					break
+				}
+				// Block is supported
+				if (response.raw[0] & 0xF9) == 0xC0 {
+					client.BlockCRCEnabled = response.IsCRCEnabled()
+					if (response.raw[0] & 0x02) != 0 {
+						client.SizeIndicated = uint32(response.GetBlockSize())
+					}
+					client.State = CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ2
+					log.Debugf("<==Rx (x%x) | BLOCK UPLOAD (CRC : %v) | x%x:x%x %v", client.NodeIdServer, response.IsCRCEnabled(), client.Index, client.Subindex, response.raw)
+
+					//Switch to normal transfer
+				} else if (response.raw[0] & 0xF0) == 0x40 {
+					if (response.raw[0] & 0x02) != 0 {
+						//Expedited
+						count := 4
+						if (response.raw[0] & 0x01) != 0 {
+							count -= (int(response.raw[0]>>2) & 0x03)
+						}
+						client.Fifo.Write(response.raw[4:4+count], nil)
+						client.SizeTransferred = uint32(count)
+						client.State = CO_SDO_ST_IDLE
+						ret = CO_SDO_RT_ok_communicationEnd
+						log.Debugf("<==Rx (x%x) | BLOCK UPLOAD SWITCHING to EXPEDITED | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
+
+					} else {
+						if (response.raw[0] & 0x01) != 0 {
+							client.SizeIndicated = uint32(response.GetBlockSize())
+						}
+						client.Toggle = 0x00
+						client.State = CO_SDO_ST_UPLOAD_SEGMENT_REQ
+						log.Debugf("<==Rx (x%x) | BLOCK UPLOAD SWITCHING to SEGMENTED | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
+					}
+
+				}
+			case CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ:
+				// Handled directly in Rx callback
+				break
+
+			case CO_SDO_ST_UPLOAD_BLK_END_SREQ:
+				//Get number of data bytes in last segment, that do not
+				//contain data. Then copy remaining data into fifo
+				noData := (response.raw[0] >> 2) & 0x07
+				client.Fifo.Write(client.BlockDataUploadLast[:7-noData], &client.BlockCRC)
+				client.SizeTransferred += uint32(7 - noData)
+
+				if client.SizeIndicated > 0 && client.SizeTransferred > client.SizeIndicated {
+					abortCode = CO_SDO_AB_DATA_LONG
+					client.State = CO_SDO_ST_ABORT
+					break
+				} else if client.SizeIndicated > 0 && client.SizeTransferred < client.SizeIndicated {
+					abortCode = CO_SDO_AB_DATA_SHORT
+					client.State = CO_SDO_ST_ABORT
+					break
+				}
+				if client.BlockCRCEnabled {
+					crcServer := binary.LittleEndian.Uint16(response.raw[1:3])
+					if crcServer != client.BlockCRC.crc {
+						abortCode = CO_SDO_AB_CRC
+						client.State = CO_SDO_ST_ABORT
+						break
+					}
+				}
+				client.State = CO_SDO_ST_UPLOAD_BLK_END_CRSP
+				log.Debugf("<==Rx (x%x) | BLOCK UPLOAD END | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
+
+			default:
+				abortCode = CO_SDO_AB_CMD
+				client.State = CO_SDO_ST_ABORT
+				break
 			}
+
 		}
 		client.TimeoutTimer = 0
 		timeDifferenceUs = 0
@@ -951,6 +1028,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.TimeoutTimer = 0
 			client.CANModule.Send(*client.CANtxBuff)
 			client.State = CO_SDO_ST_UPLOAD_BLK_INITIATE_RSP
+			log.Debugf("==>Tx (x%x) | BLOCK UPLOAD INITIATE | x%x:x%x %v blksize : %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data, client.BlockSize)
 			break
 
 		case CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ2:
@@ -982,8 +1060,9 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				if count >= 127 {
 					count = 127
 
-				} else if client.Fifo.GetSpace() > 0 {
+				} else if client.Fifo.GetOccupied() > 0 {
 					ret = CO_SDO_RT_uploadDataBufferFull
+					log.Warnf("Fifo is full")
 					if transferShort {
 						log.Warnf("sub-block , upload data is full seqno=%v", seqnoStart)
 					}
@@ -1079,4 +1158,54 @@ func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, dat
 		time.Sleep(time.Duration(timeDifferenceUs) * time.Microsecond)
 	}
 	return client.UploadBufRead(data), abortCode
+}
+
+type BlockReader struct {
+	Client       *SDOClient
+	Index        uint16
+	SubIndex     uint8
+	NodeIdServer uint8
+}
+
+// Read hole block
+func (reader *BlockReader) ReadAll() (data []byte, err error) {
+
+	client := reader.Client
+	ret := client.Setup(uint32(SDO_CLIENT_ID)+uint32(reader.NodeIdServer), uint32(SDO_SERVER_ID)+uint32(reader.NodeIdServer), reader.NodeIdServer)
+	if ret != CO_SDO_RT_ok_communicationEnd {
+		log.Errorf("Error when setting up SDO client reason : %v", ret)
+		return nil, CO_SDO_AB_GENERAL
+	}
+	ret = client.UploadInitiate(reader.Index, reader.SubIndex, 1000, true)
+
+	if ret != CO_SDO_RT_ok_communicationEnd {
+		return nil, CO_SDO_AB_GENERAL
+	}
+
+	var timeDifferenceUs uint32 = 10000
+	abortCode := CO_SDO_AB_NONE
+	buffer := make([]byte, 1000)
+	single_read := 0
+
+	for {
+		ret = client.Upload(timeDifferenceUs, false, &abortCode, nil, nil, nil)
+		if ret < 0 {
+			log.Errorf("SDO write failed : %v", ret)
+			return nil, abortCode
+		} else if uint8(ret) == 0 {
+			break
+		} else if ret == CO_SDO_RT_uploadDataBufferFull {
+			single_read = client.UploadBufRead(buffer)
+			data = append(data, buffer[0:single_read]...)
+		}
+		time.Sleep(time.Duration(timeDifferenceUs) * time.Microsecond)
+	}
+	single_read = client.UploadBufRead(buffer)
+	data = append(data, buffer[0:single_read]...)
+	return data, abortCode
+
+}
+
+func NewBlockReader(nodeid uint8, index uint16, subindex uint8, client *SDOClient) *BlockReader {
+	return &BlockReader{Client: client, Index: index, SubIndex: subindex, NodeIdServer: nodeid}
 }
