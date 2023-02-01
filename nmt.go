@@ -127,19 +127,19 @@ func (nmt *NMT) Init(
 	// Configure CAN TX/RX buffers
 	nmt.CANModule = can_module
 	// NMT RX buffer
-	err = can_module.InsertRxBuffer(uint32(can_id_nmt_rx), 0x7FF, false, nmt)
+	_, err = can_module.InsertRxBuffer(uint32(can_id_nmt_rx), 0x7FF, false, nmt)
 	if err != nil {
 		log.Error("Failed to Initialize NMT rx buffer")
 		return err
 	}
 	// NMT TX buffer
-	err, nmt.NMTTxBuff = can_module.InsertTxBuffer(uint32(can_id_nmt_tx), false, 2, false)
+	nmt.NMTTxBuff, _, err = can_module.InsertTxBuffer(uint32(can_id_nmt_tx), false, 2, false)
 	if err != nil {
 		log.Error("Failed to Initialize NMT tx buffer")
 		return err
 	}
 	// NMT HB TX buffer
-	err, nmt.HBTxBuff = can_module.InsertTxBuffer(uint32(can_id_hb_tx), false, 1, false)
+	nmt.HBTxBuff, _, err = can_module.InsertTxBuffer(uint32(can_id_hb_tx), false, 1, false)
 	if err != nil {
 		log.Error("Failed to Initialize HB tx buffer")
 		return err

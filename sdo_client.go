@@ -11,7 +11,9 @@ import (
 /* TODOs
 - Locking mechanisms
 - string with different size if no null character
-
+- extension management
+- block download
+- refactor/document
 */
 
 const SDO_CLI_BUFFER_SIZE = 1000
@@ -167,13 +169,13 @@ func (client *SDOClient) Setup(cobIdClientToServer uint32, cobIdServerToClient u
 		CanIdS2C = 0
 		client.Valid = false
 	}
-	err1 := client.CANModule.InsertRxBuffer(uint32(CanIdS2C), 0x7FF, false, client)
+	_, err1 := client.CANModule.InsertRxBuffer(uint32(CanIdS2C), 0x7FF, false, client)
 	if err1 != nil {
 		log.Errorf("Error initializing RX buffer for SDO client %v", err1)
 		client.Valid = false
 	}
 	var err2 error
-	err2, client.CANtxBuff = client.CANModule.InsertTxBuffer(uint32(CanIdC2S), false, 8, false)
+	client.CANtxBuff, _, err2 = client.CANModule.InsertTxBuffer(uint32(CanIdC2S), false, 8, false)
 	if err2 != nil {
 		log.Errorf("Error initializing TX buffer for SDO client %v", err2)
 		client.Valid = false

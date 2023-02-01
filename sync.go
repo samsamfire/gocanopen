@@ -8,6 +8,7 @@ import (
 )
 
 /* TODOs
+- BUG ! : don't recreate buffers on client setup, only update them
 - Add dynamic od entries
 - Test sync reception
 - Test also with PDOs
@@ -28,6 +29,8 @@ type SYNC struct {
 	OD1007Window         *[]byte
 	IsProducer           bool
 	CANTxBuff            *BufferTxFrame
+	CANTxBuffIndex       int
+	CANRxBuffIndex       int
 	CANModule            *CANModule
 	Ident                uint16
 	ExtensionEntry1005   Extension
@@ -76,8 +79,7 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 
 	sync.ExtensionEntry1005.Object = sync
 	sync.ExtensionEntry1005.Read = ReadEntryOriginal
-	// TODO change once write 1005 added
-	sync.ExtensionEntry1005.Write = WriteEntryOriginal
+	sync.ExtensionEntry1005.Write = WriteEntry1005
 
 	if entry1006 == nil {
 		log.Warnf("Failed to read entry 1006 (Comm cycle period) because empty")
@@ -127,7 +129,8 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	sync.Ident = uint16(cobIdSync) & 0x7FF
 	sync.CANModule = canmodule
 
-	err1 := sync.CANModule.InsertRxBuffer(uint32(sync.Ident), 0x7FF, false, sync)
+	var err1 error
+	sync.CANRxBuffIndex, err1 = sync.CANModule.InsertRxBuffer(uint32(sync.Ident), 0x7FF, false, sync)
 	if err1 != nil {
 		log.Errorf("Error initializing RX buffer for SDO client %v", err1)
 		return err1
@@ -137,7 +140,7 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	if syncCounterOverflow != 0 {
 		frameSize = 1
 	}
-	err2, sync.CANTxBuff = sync.CANModule.InsertTxBuffer(uint32(sync.Ident), false, frameSize, false)
+	sync.CANTxBuff, sync.CANTxBuffIndex, err2 = sync.CANModule.InsertTxBuffer(uint32(sync.Ident), false, frameSize, false)
 	if err2 != nil {
 		log.Errorf("Error initializing TX buffer for SDO client %v", err2)
 		return err2
@@ -235,4 +238,47 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 	}
 
 	return status
+}
+
+// Special extension function
+func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
+	// Expect a uint32 and subindex 0 and no nill pointers
+	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
+		return ODR_DEV_INCOMPAT
+	}
+	sync, ok := stream.Object.(*SYNC)
+	if !ok {
+		log.Error("Object in 1005 is not a SYNC pointer object")
+		return ODR_DEV_INCOMPAT
+	}
+	cobIdSync := binary.LittleEndian.Uint32(data)
+	var canId uint16 = uint16(cobIdSync & 0x7FF)
+	isProducer := (cobIdSync & 0x40000000) != 0
+	if (cobIdSync&0xBFFFF800) != 0 || isIDRestricted(canId) || (sync.IsProducer && isProducer && canId != sync.Ident) {
+		return ODR_INVALID_VALUE
+	}
+	// Reconfigure the receive and transmit buffers only if changed
+	if canId != sync.Ident {
+		err := sync.CANModule.UpdateRxBuffer(sync.CANRxBuffIndex, uint32(canId), 0x7FF, false, sync)
+		if err != nil {
+			return ODR_DEV_INCOMPAT
+		}
+		var frameSize uint8 = 0
+		if sync.CounterOverflowValue != 0 {
+			frameSize = 1
+		}
+		sync.CANTxBuff, err = sync.CANModule.UpdateTxBuffer(sync.CANTxBuffIndex, uint32(canId), false, frameSize, false)
+		if sync.CANTxBuff == nil || err != nil {
+			return ODR_DEV_INCOMPAT
+		}
+		sync.Ident = canId
+	}
+	// Reset in case sync is producer
+	sync.IsProducer = isProducer
+	if isProducer {
+		log.Info("SYNC is now a producer")
+		sync.Counter = 0
+		sync.Timer = 0
+	}
+	return WriteEntryOriginal(stream, data, countWritten)
 }

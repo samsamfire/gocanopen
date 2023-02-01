@@ -194,22 +194,35 @@ func (canmodule *CANModule) Process() error {
 }
 
 // Initialize transmit buffer append it to existing transmit buffer array and return it
-func (canmodule *CANModule) InsertTxBuffer(ident uint32, rtr bool, length uint8, syncFlag bool) (result error, msg *BufferTxFrame) {
+// Return buffer, index of buffer
+func (canmodule *CANModule) InsertTxBuffer(ident uint32, rtr bool, length uint8, syncFlag bool) (*BufferTxFrame, int, error) {
 	// This is specific to socketcan
 	ident = ident & CAN_SFF_MASK
 	if rtr {
 		ident |= CAN_RTR_FLAG
 	}
 	canmodule.TxArray = append(canmodule.TxArray, NewBufferTxFrame(ident, length, syncFlag, 0))
-	return nil, &canmodule.TxArray[len(canmodule.TxArray)-1]
+	return &canmodule.TxArray[len(canmodule.TxArray)-1], len(canmodule.TxArray) - 1, nil
+}
+
+// Update an already present buffer instead of appending
+func (canmodule *CANModule) UpdateTxBuffer(index int, ident uint32, rtr bool, length uint8, syncFlag bool) (*BufferTxFrame, error) {
+	// This is specific to socketcan
+	ident = ident & CAN_SFF_MASK
+	if rtr {
+		ident |= CAN_RTR_FLAG
+	}
+	canmodule.TxArray[index] = NewBufferTxFrame(ident, length, syncFlag, 0)
+	return &canmodule.TxArray[index], nil
 }
 
 // Initialize receive buffer append it to existing receive buffer
-func (canmodule *CANModule) InsertRxBuffer(ident uint32, mask uint32, rtr bool, object FrameHandler) error {
+// Return the index of the added buffer
+func (canmodule *CANModule) InsertRxBuffer(ident uint32, mask uint32, rtr bool, object FrameHandler) (int, error) {
 
 	if object == nil {
 		log.Error("Rx buffer needs a frame handler")
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return 0, CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	// This part is specific to socketcan
 	ident = ident & CAN_SFF_MASK
@@ -221,6 +234,23 @@ func (canmodule *CANModule) InsertRxBuffer(ident uint32, mask uint32, rtr bool, 
 	canmodule.RxArray = append(canmodule.RxArray, NewBufferRxFrame(ident, mask, object, 0))
 
 	// TODO handle RX filters smhw
+	return len(canmodule.RxArray) - 1, nil
+}
+
+// Update an already present buffer instead of appending
+func (canmodule *CANModule) UpdateRxBuffer(index int, ident uint32, mask uint32, rtr bool, object FrameHandler) error {
+	if object == nil {
+		log.Error("Rx buffer needs a frame handler")
+		return CO_ERROR_ILLEGAL_ARGUMENT
+	}
+	// This part is specific to socketcan
+	ident = ident & CAN_SFF_MASK
+	if rtr {
+		ident |= CAN_RTR_FLAG
+	}
+	mask = (mask & CAN_SFF_MASK) | CAN_EFF_FLAG | CAN_RTR_FLAG
+	// Here, accessing an invalid is worse than panicing
+	canmodule.RxArray[index] = NewBufferRxFrame(ident, mask, object, 0)
 	return nil
 }
 
