@@ -209,3 +209,7 @@ func (response *SDOResponse) GetNumberOfSegments() uint8 {
 func (response *SDOResponse) IsCRCEnabled() bool {
 	return (response.raw[0] & 0x04) != 0
 }
+
+func (response *SDOResponse) GetCRCClient() uint16 {
+	return binary.LittleEndian.Uint16(response.raw[1:2])
+}
