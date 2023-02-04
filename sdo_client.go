@@ -39,7 +39,6 @@ type SDOClient struct {
 	TimeoutTimeUs              uint32
 	TimeoutTimer               uint32
 	Fifo                       *Fifo
-	Buffer                     []byte
 	RxNew                      bool
 	Response                   SDOResponse
 	Toggle                     uint8
@@ -743,6 +742,7 @@ func (client *SDOClient) UploadInitiate(index uint16, subindex uint8, timeoutTim
 	return CO_SDO_RT_ok_communicationEnd
 }
 
+// Main state machine
 func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCode *SDOAbortCode, sizeIndicated *uint32, sizeTransferred *uint32, timerNextUs *uint32) SDOReturn {
 
 	ret := CO_SDO_RT_waitingResponse
@@ -973,7 +973,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				client.State = CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_CRSP
 				client.RxNew = false
 			} else if timerNextUs != nil {
-				diff := client.TimeoutTimeBlockTransferUs - client.TimeoutTimer
+				diff := client.TimeoutTimeBlockTransferUs - client.TimeoutTimerBlock
 				if *timerNextUs > diff {
 					*timerNextUs = diff
 				}
