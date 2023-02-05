@@ -3,6 +3,7 @@ package main
 import (
 	"canopen"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/brutella/can"
@@ -17,10 +18,14 @@ func handleCANFrame(frame can.Frame) {
 var NODE_ID uint8 = 0x20
 
 func main() {
-
 	log.SetLevel(logrus.DebugLevel)
+	can_interface := "can0"
 
-	bus, e := can.NewBusForInterfaceWithName("vcan0")
+	if len(os.Args) > 1 {
+		can_interface = os.Args[1]
+	}
+
+	bus, e := can.NewBusForInterfaceWithName(can_interface)
 	if e != nil {
 		fmt.Println(e)
 		return
@@ -43,7 +48,7 @@ func main() {
 	}
 
 	node := canopen.Node{Config: nil, CANModule: canmodule, NMT: nil}
-	err = node.Init(nil, nil, od, nil, canopen.CO_NMT_STARTUP_TO_OPERATIONAL, 500, 0, 0, true, NODE_ID)
+	err = node.Init(nil, nil, od, nil, canopen.CO_NMT_STARTUP_TO_OPERATIONAL, 500, 1000, 1000, true, NODE_ID)
 
 	if err != nil {
 		log.Panicf("Failed Initializing Node because %v", err)
@@ -52,17 +57,17 @@ func main() {
 	var time_difference_us uint32
 
 	start := time.Now()
-	var timer_next_us uint32 = 1000 // i.e 1 ms
+	var timer_next_us uint32 = 10000 // i.e 1 ms
 
 	// client := node.SDOclients[0]
 
 	go func() {
-		var tmrNextUs uint32 = 1000
+		//var tmrNextUs uint32 = 10000
 		for {
 			elapsed := time.Since(start)
 			start = time.Now()
 			time_difference_us = uint32(elapsed.Microseconds())
-			node.ProcessSYNC(time_difference_us, &tmrNextUs)
+			node.ProcessSYNC(time_difference_us, nil)
 			//fmt.Printf("Timer next %v ; Elapsed %v", timer_next_us, time_difference_us)
 			time.Sleep(time.Duration(timer_next_us) * time.Microsecond)
 		}
@@ -74,10 +79,9 @@ func main() {
 		elapsed := time.Since(start)
 		start = time.Now()
 		time_difference_us = uint32(elapsed.Microseconds())
-		node.Process(false, time_difference_us, &timer_next_us)
+		node.Process(false, time_difference_us, nil)
 		//fmt.Printf("Timer next %v ; Elapsed %v", timer_next_us, time_difference_us)
 		time.Sleep(time.Duration(timer_next_us) * time.Microsecond)
-
 		//_ = client.WriteRaw(0x10, 0x2000, 0x0, data, true)
 		// reader := canopen.NewBlockReader(0x10, 0x1021, 0x0, &client)
 		// data, _ := reader.ReadAll()
