@@ -16,7 +16,8 @@ type Node struct {
 	Config             *Configuration
 	CANModule          *CANModule
 	NMT                *NMT
-	SDOclients         []SDOClient
+	SDOclients         []*SDOClient
+	SDOServers         []*SDOServer
 	SYNC               *SYNC
 	NodeIdUnconfigured bool
 }
@@ -71,19 +72,24 @@ func (node *Node) ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32) bool
 }
 
 /* Process all objects */
-func (Node *Node) Process(enable_gateway bool, time_difference_us uint32, timer_next_us *uint32) uint8 {
+func (node *Node) Process(enable_gateway bool, time_difference_us uint32, timer_next_us *uint32) uint8 {
 	// Process all objects
 	reset := CO_RESET_NOT
-	NMTState := Node.NMT.GetInternalState()
-	//NMTisPreOrOperational := (NMTState == CO_NMT_PRE_OPERATIONAL) || (NMTState == CO_NMT_OPERATIONAL)
+	NMTState := node.NMT.GetInternalState()
+	NMTisPreOrOperational := (NMTState == CO_NMT_PRE_OPERATIONAL) || (NMTState == CO_NMT_OPERATIONAL)
 
 	// CAN stuff to process
-	Node.CANModule.Process()
+	node.CANModule.Process()
 
 	// For now, only process NMT heartbeat part
-	reset = Node.NMT.Process(&NMTState, time_difference_us, timer_next_us)
+	reset = node.NMT.Process(&NMTState, time_difference_us, timer_next_us)
 	// Update NMTisPreOrOperational
-	//NMTisPreOrOperational = (NMTState == CO_NMT_PRE_OPERATIONAL) || (NMTState == CO_NMT_OPERATIONAL)
+	NMTisPreOrOperational = (NMTState == CO_NMT_PRE_OPERATIONAL) || (NMTState == CO_NMT_OPERATIONAL)
+
+	// Process SDO servers
+	for _, server := range node.SDOServers {
+		server.Process(NMTisPreOrOperational, time_difference_us, timer_next_us)
+	}
 
 	return reset
 
@@ -129,20 +135,38 @@ func (node *Node) Init(
 		return err
 	}
 
+	// Initialize SDO server
+	// For now only one server
+	Entry1200 := od.Find(0x1200)
+	if Entry1200 == nil {
+		log.Info("No SDO servers initialized in node")
+	} else {
+		node.SDOServers = make([]*SDOServer, 1)
+		server := &SDOServer{}
+		err = server.Init(od, Entry1200, node_id, sdo_server_timeout_ms, node.CANModule)
+		node.SDOServers[0] = server
+		if err != nil {
+			log.Errorf("Error when initializing SDO server %v", err)
+			return err
+		}
+		log.Infof("SDO server initialized for node %x", node_id)
+	}
+
 	// Initialize SDO clients if any
 	// For now only one client
 	Entry1280 := od.Find(0x1280)
 	if Entry1280 == nil {
 		log.Info("No SDO clients initialized in node")
+	} else {
+		node.SDOclients = make([]*SDOClient, 1)
+		client := SDOClient{}
+		err = client.Init(od, Entry1280, node_id, node.CANModule)
+		if err != nil {
+			log.Errorf("Error when initializing SDO client %v", err)
+		}
+		node.SDOclients[0] = &client
+		log.Infof("SDO client initialized for node %x", node_id)
 	}
-
-	node.SDOclients = make([]SDOClient, 1)
-	client := SDOClient{}
-	err = client.Init(od, Entry1280, node_id, node.CANModule)
-	if err != nil {
-		log.Errorf("Error when initializing SDO client %v", err)
-	}
-	node.SDOclients[0] = client
 
 	//Initialize SYNC
 	sync := SYNC{}
