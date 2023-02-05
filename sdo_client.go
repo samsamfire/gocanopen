@@ -709,8 +709,8 @@ func (client *SDOClient) Abort(abortCode SDOAbortCode) {
 	client.CANtxBuff.Data[2] = uint8(client.Index >> 8)
 	client.CANtxBuff.Data[3] = client.Subindex
 	binary.LittleEndian.PutUint32(client.CANtxBuff.Data[4:], code)
+	log.Warnf("[CLIENT]==>Tx (x%x) | CLIENT ABORT | %v (x%x)", client.NodeIdServer, abortCode, abortCode)
 	client.CANModule.Send(*client.CANtxBuff)
-	log.Warnf("Aborting on client side (x%x): %v", uint32(abortCode), abortCode)
 
 }
 
