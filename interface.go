@@ -401,12 +401,12 @@ func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) e
 
 	// Populate the used readers or writers if an extension is used
 	if entry.Extension == nil || origin {
-		log.Infof("Created stream object with default read/write for %x|%x, %v", entry.Index, subindex, streamer.Stream)
+		log.Debugf("Created stream object with default read/write for %x|%x, %v", entry.Index, subindex, streamer.Stream)
 		streamer.Read = ReadEntryOriginal
 		streamer.Write = WriteEntryOriginal
 		stream.Object = nil
 	} else {
-		log.Infof("Created stream object with extension for %x|%x, %v", entry.Index, subindex, streamer.Stream)
+		log.Debugf("Created stream object with extension for %x|%x, %v", entry.Index, subindex, streamer.Stream)
 		if entry.Extension.Read == nil {
 			streamer.Read = ReadEntryDisabled
 		} else {
@@ -513,43 +513,52 @@ func (entry *Entry) GetUint64(subIndex uint8, data *uint64) error {
 }
 
 // Set Uint8, 16 , 32 , 64
-func (entry *Entry) SetUint8(subIndex uint8, data uint8) error {
+func (entry *Entry) SetUint8(subIndex uint8, data uint8, origin bool) error {
 	buffer := []byte{data}
-	err := entry.Set(subIndex, buffer, 1, true)
+	err := entry.Set(subIndex, buffer, 1, origin)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (entry *Entry) SetUint16(subIndex uint8, data uint16) error {
+func (entry *Entry) SetUint16(subIndex uint8, data uint16, origin bool) error {
 	buffer := make([]byte, 2)
 	binary.LittleEndian.PutUint16(buffer, data)
-	err := entry.Set(subIndex, buffer, 2, true)
+	err := entry.Set(subIndex, buffer, 2, origin)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (entry *Entry) SetUint32(subIndex uint8, data uint32) error {
+func (entry *Entry) SetUint32(subIndex uint8, data uint32, origin bool) error {
 	buffer := make([]byte, 4)
 	binary.LittleEndian.PutUint32(buffer, data)
-	err := entry.Set(subIndex, buffer, 4, true)
+	err := entry.Set(subIndex, buffer, 4, origin)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (entry *Entry) SetUint64(subIndex uint8, data uint64) error {
+func (entry *Entry) SetUint64(subIndex uint8, data uint64, origin bool) error {
 	buffer := make([]byte, 8)
 	binary.LittleEndian.PutUint64(buffer, data)
-	err := entry.Set(subIndex, buffer, 8, true)
+	err := entry.Set(subIndex, buffer, 8, origin)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func isIDRestricted(canId uint16) bool {
+	return canId <= 0x7f ||
+		(canId >= 0x101 && canId <= 0x180) ||
+		(canId >= 0x581 && canId <= 0x5FF) ||
+		(canId >= 0x601 && canId <= 0x67F) ||
+		(canId >= 0x6E0 && canId <= 0x6FF) ||
+		canId >= 0x701
 }
 
 func NewOD() ObjectDictionary {
