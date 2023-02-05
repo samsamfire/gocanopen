@@ -123,9 +123,6 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	sync.CounterOverflowValue = syncCounterOverflow
 	sync.emergency = emergency
 	sync.IsProducer = (cobIdSync & 0x40000000) != 0
-	if sync.IsProducer {
-		log.Info("SYNC is producer")
-	}
 	sync.Ident = uint16(cobIdSync) & 0x7FF
 	sync.CANModule = canmodule
 
