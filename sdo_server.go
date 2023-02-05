@@ -217,7 +217,6 @@ func (server *SDOServer) InitRxTx(canModule *CANModule, idRx uint16, idTx uint16
 	}
 	// Configure buffers, if initializing then insert in buffer, otherwise, update
 	if idRx == idTx && idTx == 0 {
-		log.Infof("Buffer rx ident %x", CanIdC2S)
 		server.idRxBuff, ret = server.CANModule.InsertRxBuffer(uint32(CanIdC2S), 0x7FF, false, server)
 		server.CANtxBuff, server.idTxBuff, _ = server.CANModule.InsertTxBuffer(uint32(CanIdS2C), false, 8, false)
 	} else {
