@@ -179,7 +179,6 @@ func (client *SDOClient) Setup(cobIdClientToServer uint32, cobIdServerToClient u
 		log.Errorf("Error initializing TX buffer for SDO client %v", err2)
 		client.Valid = false
 	}
-	log.Infof("Communication prepared for SDO, RX: %x, TX: %x", CanIdS2C, CanIdC2S)
 	if err1 != nil || err2 != nil {
 		return CO_SDO_RT_wrongArguments
 	}

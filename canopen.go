@@ -11,7 +11,6 @@ const (
 	SDO_CLIENT_ID        uint16 = 0x600
 )
 
-// Node regroups all the different canopen objects and is responsible for processing each one of them
 type Node struct {
 	Config             *Configuration
 	CANModule          *CANModule
@@ -22,27 +21,25 @@ type Node struct {
 	NodeIdUnconfigured bool
 }
 
-/* This file contains the basic high level API */
-
 /* Create a new canopen management object */
 func NewNode(configuration *Configuration) *Node {
 	return &Node{Config: configuration}
 }
 
 /* Process SRDO part */
-func (Node *Node) ProcessSRDO(time_difference_us uint32) (timer_next_us uint32) {
+func (node *Node) ProcessSRDO(time_difference_us uint32) (timer_next_us uint32) {
 	// Process SRDO object
 	return 0
 }
 
 /* Process TPDO */
-func (Node *Node) ProcessTPDO(sync_was bool, time_difference_us uint32) (timer_next_us uint32) {
+func (node *Node) ProcessTPDO(sync_was bool, time_difference_us uint32) (timer_next_us uint32) {
 	// Process TPDO object
 	return 0
 }
 
 /* Process RPDO */
-func (Node *Node) ProcessRPDO(sync_was bool, time_difference_us uint32) (timer_next_us uint32) {
+func (node *Node) ProcessRPDO(sync_was bool, time_difference_us uint32) (timer_next_us uint32) {
 	// Process RPDO object
 	return 0
 }
@@ -106,74 +103,77 @@ func (node *Node) Init(
 	nmt *NMT,
 	emergency *EM,
 	od *ObjectDictionary,
-	status_bits *Entry,
-	nmt_control uint16,
-	first_hb_time_ms uint16,
-	sdo_server_timeout_ms uint16,
-	sdo_client_timeout_ms uint16,
-	block_transfer bool,
-	node_id uint8,
+	statusBits *Entry,
+	nmtControl uint16,
+	firstHbTimeMs uint16,
+	sdoServerTimeoutMs uint16,
+	sdoClientTimeoutMs uint16,
+	blockTransferEnabled bool,
+	nodeId uint8,
 
 ) error {
+
+	node.NodeIdUnconfigured = false
+	// NMT object can either be supplied or created with OD entry
 	if nmt == nil {
 		node.NMT = &NMT{}
 	} else {
 		node.NMT = nmt
 	}
-
-	node.NodeIdUnconfigured = false
-
-	// For now just NMT init
-	// Get NMT obj 1017 :
-	Entry1017 := od.Find(0x1017)
-	if Entry1017 == nil {
+	// Initialize NMT
+	entry1017 := od.Find(0x1017)
+	if entry1017 == nil {
 		return CO_ERROR_OD_PARAMETERS
 	}
-	err := node.NMT.Init(Entry1017, nil, node_id, nmt_control, first_hb_time_ms, node.CANModule, NMT_SERVICE_ID, NMT_SERVICE_ID, HEARTBEAT_SERVICE_ID+uint16(node_id))
+	err := node.NMT.Init(entry1017, nil, nodeId, nmtControl, firstHbTimeMs, node.CANModule, NMT_SERVICE_ID, NMT_SERVICE_ID, HEARTBEAT_SERVICE_ID+uint16(nodeId))
 	if err != nil {
 		log.Errorf("Error when initializing NMT object %v", err)
 		return err
+	} else {
+		log.Infof("NMT initialized for node x%x", nodeId)
 	}
 
 	// Initialize SDO server
 	// For now only one server
-	Entry1200 := od.Find(0x1200)
-	if Entry1200 == nil {
-		log.Info("No SDO servers initialized in node")
+	entry1200 := od.Find(0x1200)
+	if entry1200 == nil {
+		log.Warnf("No SDO servers initialized in node x%x", nodeId)
 	} else {
-		node.SDOServers = make([]*SDOServer, 1)
+		node.SDOServers = make([]*SDOServer, 0)
 		server := &SDOServer{}
-		err = server.Init(od, Entry1200, node_id, sdo_server_timeout_ms, node.CANModule)
-		node.SDOServers[0] = server
+		err = server.Init(od, entry1200, nodeId, sdoServerTimeoutMs, node.CANModule)
 		if err != nil {
-			log.Errorf("Error when initializing SDO server %v", err)
+			log.Errorf("Error when initializing SDO server object %v", err)
 			return err
 		}
-		log.Infof("SDO server initialized for node %x", node_id)
+		node.SDOServers = append(node.SDOServers, server)
+		log.Infof("SDO server initialized for node x%x", nodeId)
 	}
 
 	// Initialize SDO clients if any
 	// For now only one client
-	Entry1280 := od.Find(0x1280)
-	if Entry1280 == nil {
+	entry1280 := od.Find(0x1280)
+	if entry1280 == nil {
 		log.Info("No SDO clients initialized in node")
 	} else {
-		node.SDOclients = make([]*SDOClient, 1)
-		client := SDOClient{}
-		err = client.Init(od, Entry1280, node_id, node.CANModule)
+		node.SDOclients = make([]*SDOClient, 0)
+		client := &SDOClient{}
+		err = client.Init(od, entry1280, nodeId, node.CANModule)
 		if err != nil {
-			log.Errorf("Error when initializing SDO client %v", err)
+			log.Errorf("Error when initializing SDO client object %v", err)
 		}
-		node.SDOclients[0] = &client
-		log.Infof("SDO client initialized for node %x", node_id)
+		node.SDOclients = append(node.SDOclients, client)
+		log.Infof("SDO client initialized for node x%x", nodeId)
 	}
 
 	//Initialize SYNC
-	sync := SYNC{}
+	sync := &SYNC{}
 	err = sync.Init(&EM{}, od.Find(0x1005), od.Find(0x1006), od.Find(0x1007), od.Find(0x1019), node.CANModule)
 	if err != nil {
 		log.Errorf("Error when initialising SYNC object %v", err)
+	} else {
+		log.Infof("SYNC initialized for node x%x, producer : %v", nodeId, sync.IsProducer)
 	}
-	node.SYNC = &sync
+	node.SYNC = sync
 	return nil
 }
