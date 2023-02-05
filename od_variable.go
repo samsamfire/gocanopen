@@ -40,16 +40,16 @@ func buildVariable(
 	} else {
 		pdoMapping = true
 	}
-	//Determine variable attribute
-	variable.Attribute = calculateAttribute(accessType.String(), pdoMapping)
 
 	// TODO maybe add support for datatype particularities (>1B)
 	dataType, err := strconv.ParseInt(section.Key("DataType").Value(), 0, 8)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse DataType for %x : %x, because %v", index, subindex, err)
 	}
-
 	variable.DataType = byte(dataType)
+
+	//Determine variable attribute
+	variable.Attribute = calculateAttribute(accessType.String(), pdoMapping, variable.DataType)
 
 	// All the parameters aftewards are optional elements that can be used in EDS
 	if highLimit, err := section.GetKey("HighLimit"); err == nil {
@@ -147,9 +147,9 @@ func encode(variable string, datatype uint8, nodeId uint8) ([]byte, error) {
 }
 
 // Calculate the attribute in function of the of attribute type and pdo mapping for EDS entry
-func calculateAttribute(access_type string, pdo_mapping bool) ODA {
+func calculateAttribute(accessType string, pdoMapping bool, dataType uint8) ODA {
 	var attribute ODA
-	switch access_type {
+	switch accessType {
 	case "rw":
 		attribute = ODA_SDO_RW
 	case "ro":
@@ -161,8 +161,11 @@ func calculateAttribute(access_type string, pdo_mapping bool) ODA {
 	default:
 		attribute = ODA_SDO_RW
 	}
-	if pdo_mapping {
+	if pdoMapping {
 		attribute |= ODA_TRPDO
+	}
+	if dataType == VISIBLE_STRING || dataType == OCTET_STRING {
+		attribute |= ODA_STR
 	}
 	return attribute
 }
