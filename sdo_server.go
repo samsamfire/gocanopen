@@ -128,7 +128,7 @@ func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uin
 	if entry12xx == nil {
 		/*Configure sdo channel*/
 		if nodeId < 1 || nodeId > 127 {
-			log.Error("SDO server node id is not valid : %x", nodeId)
+			log.Errorf("SDO server node id is not valid : %x", nodeId)
 			return CO_ERROR_ILLEGAL_ARGUMENT
 		}
 		canIdClientToServer = SDO_CLIENT_ID + uint16(nodeId)
@@ -138,7 +138,7 @@ func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uin
 		if entry12xx.Index == 0x1200 {
 			// Default channels
 			if nodeId < 1 || nodeId > 127 {
-				log.Error("SDO server node id is not valid : %x", nodeId)
+				log.Errorf("SDO server node id is not valid : %x", nodeId)
 				return CO_ERROR_ILLEGAL_ARGUMENT
 			}
 			canIdClientToServer = SDO_CLIENT_ID + uint16(nodeId)
@@ -155,7 +155,7 @@ func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uin
 			err2 := entry12xx.GetUint32(2, &cobIdServerToClient32)
 			if err0 != nil || (maxSubIndex != 2 && maxSubIndex != 3) ||
 				err1 != nil || err2 != nil {
-				log.Error("Error when retreiving sdo server parameters : %v, %v, %v, %v")
+				log.Errorf("Error when retreiving sdo server parameters : %v, %v, %v, %v", err0, err1, err2, maxSubIndex)
 				return CO_ERROR_OD_PARAMETERS
 			}
 			if (cobIdClientToServer32 & 0x80000000) == 0 {
@@ -498,7 +498,6 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				}
 				server.State = CO_SDO_ST_DOWNLOAD_INITIATE_RSP
 				server.Finished = false
-				break
 
 			case CO_SDO_ST_DOWNLOAD_SEGMENT_REQ:
 				if (response.raw[0] & 0xE0) == 0x00 {
@@ -531,19 +530,16 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					abortCode = CO_SDO_AB_CMD
 					server.State = CO_SDO_ST_ABORT
 				}
-				break
 
 			case CO_SDO_ST_UPLOAD_INITIATE_REQ:
 				log.Debugf("[SERVER]<==Rx | UPLOAD EXPEDITED | x%x:x%x %v", server.Index, server.Subindex, response.raw)
 				server.State = CO_SDO_ST_UPLOAD_INITIATE_RSP
-				break
 
 			case CO_SDO_ST_UPLOAD_SEGMENT_REQ:
 				log.Debugf("[SERVER]<==Rx | UPLOAD SEGMENTED | x%x:x%x %v", server.Index, server.Subindex, response.raw)
 				if (response.raw[0] & 0xEF) != 0x60 {
 					abortCode = CO_SDO_AB_CMD
 					server.State = CO_SDO_ST_ABORT
-					break
 				}
 				toggle := response.GetToggle()
 				if toggle != server.Toggle {
@@ -552,7 +548,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					break
 				}
 				server.State = CO_SDO_ST_UPLOAD_SEGMENT_RSP
-				break
+
 			case CO_SDO_ST_DOWNLOAD_BLK_INITIATE_REQ:
 				log.Debugf("[SERVER]<==Rx | DOWNLOAD BLOCK INIT | x%x:x%x %v", server.Index, server.Subindex, response.raw)
 				server.BlockCRCEnabled = response.IsCRCEnabled()
@@ -577,10 +573,8 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				}
 				server.State = CO_SDO_ST_DOWNLOAD_BLK_INITIATE_RSP
 				server.Finished = false
-				break
 
 			case CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ:
-				break
 
 			case CO_SDO_ST_DOWNLOAD_BLK_END_REQ:
 				log.Debugf("[SERVER]<==Rx | DOWNLOAD BLOCK END | x%x:x%x %v", server.Index, server.Subindex, response.raw)
@@ -607,7 +601,6 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					break
 				}
 				server.State = CO_SDO_ST_DOWNLOAD_BLK_END_RSP
-				break
 
 			case CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ:
 				log.Debugf("[SERVER]<==Rx | UPLOAD BLOCK INIT | x%x:x%x %v", server.Index, server.Subindex, response.raw)
@@ -640,7 +633,6 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					server.State = CO_SDO_ST_UPLOAD_BLK_INITIATE_RSP
 
 				}
-				break
 
 			case CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ2:
 				if response.raw[0] == 0xA3 {
@@ -650,7 +642,6 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					abortCode = CO_SDO_AB_CMD
 					server.State = CO_SDO_ST_ABORT
 				}
-				break
 
 			case CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ, CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_CRSP:
 				if response.raw[0] != 0xA2 {
@@ -688,7 +679,6 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					server.BlockSequenceNb = 0
 					server.State = CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ
 				}
-				break
 
 			default:
 				abortCode = CO_SDO_AB_CMD
@@ -758,7 +748,6 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.BufferOffsetRead = 0
 				server.State = CO_SDO_ST_DOWNLOAD_SEGMENT_REQ
 			}
-			break
 
 		case CO_SDO_ST_DOWNLOAD_SEGMENT_RSP:
 			server.CANtxBuff.Data[0] = 0x20 | server.Toggle
@@ -772,7 +761,6 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			} else {
 				server.State = CO_SDO_ST_DOWNLOAD_SEGMENT_REQ
 			}
-			break
 
 		case CO_SDO_ST_UPLOAD_INITIATE_RSP:
 			if server.SizeIndicated > 0 && server.SizeIndicated <= 4 {
@@ -799,7 +787,6 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.CANtxBuff.Data[3] = server.Subindex
 			log.Debugf("[SERVER] ==>Tx | UPLOAD INIT | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			server.CANModule.Send(*server.CANtxBuff)
-			break
 
 		case CO_SDO_ST_UPLOAD_SEGMENT_RSP:
 			// Refill buffer if needed
@@ -837,7 +824,6 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			}
 			log.Debugf("[SERVER] ==>Tx | UPLOAD SEGMENTED | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			server.CANModule.Send(*server.CANtxBuff)
-			break
 
 		case CO_SDO_ST_DOWNLOAD_BLK_INITIATE_RSP:
 			server.CANtxBuff.Data[0] = 0xA4
@@ -864,7 +850,6 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.RxNew = false
 			log.Debugf("[SERVER] ==>Tx | BLOCK DOWNLOAD INIT | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			server.CANModule.Send(*server.CANtxBuff)
-			break
 
 		case CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_RSP:
 			server.CANtxBuff.Data[0] = 0xA2
@@ -899,9 +884,8 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			log.Debugf("[SERVER] ==>Tx | BLOCK DOWNLOAD SUB-BLOCK | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			server.CANModule.Send(*server.CANtxBuff)
 			if transferShort && !server.Finished {
-				log.Debug("sub-block restarte : seqno prev=%v, blksize=%v", seqnoStart, server.BlockSize)
+				log.Debugf("sub-block restarte : seqno prev=%v, blksize=%v", seqnoStart, server.BlockSize)
 			}
-			break
 
 		case CO_SDO_ST_DOWNLOAD_BLK_END_RSP:
 			server.CANtxBuff.Data[0] = 0xA1
@@ -909,7 +893,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.CANModule.Send(*server.CANtxBuff)
 			server.State = CO_SDO_ST_IDLE
 			ret = CO_SDO_RT_ok_communicationEnd
-			break
+
 		case CO_SDO_ST_UPLOAD_BLK_INITIATE_RSP:
 			server.CANtxBuff.Data[0] = 0xC4
 			server.CANtxBuff.Data[1] = byte(server.Index)
@@ -925,7 +909,6 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			log.Debugf("[SERVER] ==>Tx | BLOCK UPLOAD INIT | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			server.CANModule.Send(*server.CANtxBuff)
 			server.State = CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ2
-			break
 
 		case CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ:
 			// Write header & gend current count
@@ -966,7 +949,6 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.TimeoutTimer = 0
 			log.Debugf("[SERVER] ==>Tx | BLOCK UPLOAD SUB-BLOCK | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			server.CANModule.Send(*server.CANtxBuff)
-			break
 
 		case CO_SDO_ST_UPLOAD_BLK_END_SREQ:
 			server.CANtxBuff.Data[0] = 0xC1 | (server.BlockNoData << 2)
@@ -976,9 +958,9 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			log.Debugf("[SERVER] ==>Tx | BLOCK DOWNLOAD END | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			server.CANModule.Send(*server.CANtxBuff)
 			server.State = CO_SDO_ST_UPLOAD_BLK_END_CRSP
-			break
+
 		default:
-			break
+
 		}
 
 	}

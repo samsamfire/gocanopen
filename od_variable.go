@@ -44,7 +44,7 @@ func buildVariable(
 	// TODO maybe add support for datatype particularities (>1B)
 	dataType, err := strconv.ParseInt(section.Key("DataType").Value(), 0, 8)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to parse DataType for %x : %x, because %v", index, subindex, err)
+		return nil, fmt.Errorf("failed to parse DataType for %x : %x, because %v", index, subindex, err)
 	}
 	variable.DataType = byte(dataType)
 
@@ -55,14 +55,14 @@ func buildVariable(
 	if highLimit, err := section.GetKey("HighLimit"); err == nil {
 		variable.HighLimit, err = highLimit.Int()
 		if err != nil {
-			return nil, fmt.Errorf("Failed to parse HighLimit for %x : %x, because %v", index, subindex, err)
+			return nil, fmt.Errorf("failed to parse HighLimit for %x : %x, because %v", index, subindex, err)
 		}
 	}
 
 	if lowLimit, err := section.GetKey("LowLimit"); err == nil {
 		variable.LowLimit, err = lowLimit.Int()
 		if err != nil {
-			return nil, fmt.Errorf("Failed to parse LowLimit for %x : %x, because %v", index, subindex, err)
+			return nil, fmt.Errorf("failed to parse LowLimit for %x : %x, because %v", index, subindex, err)
 		}
 	}
 
@@ -77,7 +77,7 @@ func buildVariable(
 		}
 		variable.DefaultValue, err = encode(defaultValueStr, variable.DataType, nodeId)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to parse DefaultValue for %x : %x, because %v", index, subindex, err)
+			return nil, fmt.Errorf("failed to parse DefaultValue for %x : %x, because %v", index, subindex, err)
 		}
 		// Also update Data with default value
 		variable.Data = variable.DefaultValue

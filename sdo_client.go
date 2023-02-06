@@ -644,7 +644,7 @@ func (client *SDOClient) InitiateDownload(forceSegmented bool) error {
 	client.CANtxBuff.Data[3] = client.Subindex
 
 	count := uint32(client.Fifo.GetOccupied())
-	if (client.SizeIndicated == 0 && count <= 4) || (client.SizeIndicated > 0 && client.SizeIndicated <= 4) && forceSegmented == false {
+	if (client.SizeIndicated == 0 && count <= 4) || (client.SizeIndicated > 0 && client.SizeIndicated <= 4) && !forceSegmented {
 		client.CANtxBuff.Data[0] |= 0x02
 		// Check length
 		if count == 0 || (client.SizeIndicated > 0 && client.SizeIndicated != count) {
@@ -810,7 +810,6 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 					log.Debugf("<==Rx (x%x) | UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
 
 				}
-				break
 
 			case CO_SDO_ST_UPLOAD_SEGMENT_RSP:
 				// Verify and alternate toggle bit
@@ -842,7 +841,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				//No more segments ?
 				if (response.raw[0] & 0x01) != 0 {
 					// Check size uploaded
-					if client.SizeIndicated > 0 && client.SizeTransferred < client.SizeTransferred {
+					if client.SizeIndicated > 0 && client.SizeTransferred < client.SizeIndicated {
 						abortCode = CO_SDO_AB_DATA_LONG
 						client.State = CO_SDO_ST_ABORT
 					} else {
@@ -852,7 +851,6 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				} else {
 					client.State = CO_SDO_ST_UPLOAD_SEGMENT_REQ
 				}
-				break
 
 			case CO_SDO_ST_UPLOAD_BLK_INITIATE_RSP:
 
@@ -930,7 +928,6 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			default:
 				abortCode = CO_SDO_AB_CMD
 				client.State = CO_SDO_ST_ABORT
-				break
 			}
 
 		}
@@ -996,7 +993,6 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.CANModule.Send(*client.CANtxBuff)
 			client.State = CO_SDO_ST_UPLOAD_INITIATE_RSP
 			log.Debugf("==>Tx (x%x) | UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
-			break
 
 		case CO_SDO_ST_UPLOAD_SEGMENT_REQ:
 			if client.Fifo.GetSpace() < 7 {
@@ -1008,7 +1004,6 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.CANModule.Send(*client.CANtxBuff)
 			client.State = CO_SDO_ST_UPLOAD_SEGMENT_RSP
 			log.Debugf("==>Tx (x%x) | UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
-			break
 
 		case CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ:
 			client.CANtxBuff.Data[0] = 0xA4
@@ -1031,7 +1026,6 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.CANModule.Send(*client.CANtxBuff)
 			client.State = CO_SDO_ST_UPLOAD_BLK_INITIATE_RSP
 			log.Debugf("==>Tx (x%x) | BLOCK UPLOAD INITIATE | x%x:x%x %v blksize : %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data, client.BlockSize)
-			break
 
 		case CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ2:
 			client.CANtxBuff.Data[0] = 0xA3
@@ -1042,7 +1036,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.State = CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ
 			client.RxNew = false
 			client.CANModule.Send(*client.CANtxBuff)
-			break
+
 		case CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_CRSP:
 			client.CANtxBuff.Data[0] = 0xA2
 			client.CANtxBuff.Data[1] = client.BlockSequenceNb
@@ -1084,14 +1078,12 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			if transferShort && !client.Finished {
 				log.Warnf("sub-block restarted: seqnoPrev=%v, blksize=%v", seqnoStart, client.BlockSize)
 			}
-			break
 
 		case CO_SDO_ST_UPLOAD_BLK_END_CRSP:
 			client.CANtxBuff.Data[0] = 0xA1
 			client.CANModule.Send(*client.CANtxBuff)
 			client.State = CO_SDO_ST_IDLE
 			ret = CO_SDO_RT_ok_communicationEnd
-			break
 
 		default:
 			break

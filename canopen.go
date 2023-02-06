@@ -59,13 +59,10 @@ func (node *Node) ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32) bool
 
 		switch syncProcess {
 		case CO_SYNC_NONE:
-			break
 		case CO_SYNC_RX_TX:
 			syncWas = true
-			break
 		case CO_SYNC_PASSED_WINDOW:
 			node.CANModule.ClearSyncPDOs()
-			break
 		}
 	}
 	return syncWas
@@ -76,7 +73,7 @@ func (node *Node) Process(enable_gateway bool, time_difference_us uint32, timer_
 	// Process all objects
 	reset := CO_RESET_NOT
 	NMTState := node.NMT.GetInternalState()
-	NMTisPreOrOperational := (NMTState == CO_NMT_PRE_OPERATIONAL) || (NMTState == CO_NMT_OPERATIONAL)
+	//NMTisPreOrOperational := (NMTState == CO_NMT_PRE_OPERATIONAL) || (NMTState == CO_NMT_OPERATIONAL)
 
 	// CAN stuff to process
 	node.CANModule.Process()
@@ -84,7 +81,7 @@ func (node *Node) Process(enable_gateway bool, time_difference_us uint32, timer_
 	// For now, only process NMT heartbeat part
 	reset = node.NMT.Process(&NMTState, time_difference_us, timer_next_us)
 	// Update NMTisPreOrOperational
-	NMTisPreOrOperational = (NMTState == CO_NMT_PRE_OPERATIONAL) || (NMTState == CO_NMT_OPERATIONAL)
+	NMTisPreOrOperational := (NMTState == CO_NMT_PRE_OPERATIONAL) || (NMTState == CO_NMT_OPERATIONAL)
 
 	// Process SDO servers
 	for _, server := range node.SDOServers {
