@@ -42,7 +42,7 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 	// Open the EDS file
 	edsFile, err := ini.Load(filePath)
 	if err != nil {
-		//
+		return nil, err
 	}
 
 	// Get all the sections in the file
