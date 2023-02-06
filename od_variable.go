@@ -19,7 +19,6 @@ func buildVariable(
 	subindex uint8,
 ) (*Variable, error) {
 
-	// Prepare with known values
 	variable := &Variable{
 		Name: name,
 	}
@@ -27,7 +26,7 @@ func buildVariable(
 	// Get AccessType
 	accessType, err := section.GetKey("AccessType")
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get AccessType for %x : %x", index, subindex)
+		return nil, fmt.Errorf("failed to get AccessType for %x : %x", index, subindex)
 	}
 
 	// Get PDOMapping to know if pdo mappable
@@ -87,15 +86,17 @@ func buildVariable(
 }
 
 // Encode value from EDS into bytes respecting canopen datatype
+// nodeId is used as an offset
 func encode(variable string, datatype uint8, nodeId uint8) ([]byte, error) {
 
 	var data []byte
+	var err error
+	var parsed uint64
 
 	if variable == "" {
 		// Treat empty string as a 0 value
 		variable = "0x0"
 	}
-
 	if datatype == BOOLEAN || datatype == UNSIGNED8 || datatype == INTEGER8 {
 		parsed, err := strconv.ParseUint(variable, 0, 8)
 		if err != nil {
@@ -107,32 +108,22 @@ func encode(variable string, datatype uint8, nodeId uint8) ([]byte, error) {
 	switch datatype {
 
 	case UNSIGNED16:
-		parsed, err := strconv.ParseUint(variable, 0, 16)
-		if err != nil {
-			return nil, err
-		}
+		parsed, err = strconv.ParseUint(variable, 0, 16)
 		data = make([]byte, 2)
 		binary.LittleEndian.PutUint16(data, uint16(parsed+uint64(nodeId)))
+
 	case UNSIGNED32:
-		parsed, err := strconv.ParseUint(variable, 0, 32)
-		if err != nil {
-			return nil, err
-		}
+		parsed, err = strconv.ParseUint(variable, 0, 32)
 		data = make([]byte, 4)
 		binary.LittleEndian.PutUint32(data, uint32(parsed+uint64(nodeId)))
 
 	case INTEGER16:
-		parsed, err := strconv.ParseUint(variable, 0, 16)
-		if err != nil {
-			return nil, err
-		}
+		parsed, err = strconv.ParseUint(variable, 0, 16)
 		data = make([]byte, 2)
 		binary.LittleEndian.PutUint16(data, uint16(parsed+uint64(nodeId)))
+
 	case INTEGER32:
-		parsed, err := strconv.ParseUint(variable, 0, 32)
-		if err != nil {
-			return nil, err
-		}
+		parsed, err = strconv.ParseUint(variable, 0, 32)
 		data = make([]byte, 4)
 		binary.LittleEndian.PutUint32(data, uint32(parsed+uint64(nodeId)))
 
@@ -143,12 +134,18 @@ func encode(variable string, datatype uint8, nodeId uint8) ([]byte, error) {
 		return nil, ODR_TYPE_MISMATCH
 
 	}
+	if err != nil {
+		return nil, err
+	}
+
 	return data, nil
 }
 
 // Calculate the attribute in function of the of attribute type and pdo mapping for EDS entry
 func calculateAttribute(accessType string, pdoMapping bool, dataType uint8) ODA {
+
 	var attribute ODA
+
 	switch accessType {
 	case "rw":
 		attribute = ODA_SDO_RW
