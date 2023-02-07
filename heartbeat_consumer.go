@@ -2,6 +2,7 @@ package canopen
 
 import (
 	"github.com/brutella/can"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -21,6 +22,7 @@ type HBConsumerNode struct {
 	TimeoutTimer uint32
 	TimeUs       uint32
 	RxNew        bool
+	RxBufferIdx  int
 }
 
 type HBConsumer struct {
@@ -44,6 +46,50 @@ func (node_consumer *HBConsumerNode) Handle(frame can.Frame) {
 
 }
 
+// Initialize hearbeat consumer
+func (consumer *HBConsumer) Init(em *EM, monitoredNodes []*HBConsumerNode, entry1016 *Entry, canmodule *CANModule) error {
+	if monitoredNodes == nil || entry1016 == nil || canmodule == nil {
+		return CO_ERROR_ILLEGAL_ARGUMENT
+	}
+	consumer.em = em
+	consumer.MonitoredNodes = monitoredNodes
+	consumer.canmodule = canmodule
+
+	// Get real number of monitored nodes
+	nbSubEntries := entry1016.GetNbSubEntries()
+	if nbSubEntries-1 < len(monitoredNodes) {
+		consumer.NbMonitoredNodes = uint8(nbSubEntries) - 1
+	} else {
+		consumer.NbMonitoredNodes = uint8(len(monitoredNodes))
+	}
+	for index, monitoredNode := range consumer.MonitoredNodes {
+		var hbConsValue uint32
+		odRet := entry1016.GetUint32(uint8(index)+1, &hbConsValue)
+		if odRet != nil {
+			log.Errorf("Error accessing OD for HB consumer object because : %v", odRet)
+			return CO_ERROR_OD_PARAMETERS
+		}
+		nodeId := (hbConsValue >> 16) & 0xFF
+		time := uint16(hbConsValue & 0xFFFF)
+		// Set the buffer index before initializing
+		monitoredNode.RxBufferIdx = -1
+		ret := consumer.InitEntry(uint8(index), uint8(nodeId), time)
+		if ret != nil {
+			// Exit only if more than a param problem
+			if ret != CO_ERROR_OD_PARAMETERS {
+				log.Errorf("Error when initializing HB consumer object for node x%x", nodeId)
+				return ret
+			}
+			log.Warnf("Error (ignoring) when initializing HB consumer object for node x%x", nodeId)
+		}
+
+	}
+
+	return nil
+
+}
+
+// Initialize a single node consumer
 func (consumer *HBConsumer) InitEntry(index uint8, nodeId uint8, consumerTimeMs uint16) error {
 
 	var ret error
@@ -76,17 +122,118 @@ func (consumer *HBConsumer) InitEntry(index uint8, nodeId uint8, consumerTimeMs 
 		monitoredNode.TimeUs = 0
 		monitoredNode.HBState = HB_UNCONFIGURED
 	}
+	// Configure RX buffer for hearbeat reception
+	if monitoredNode.HBState != HB_UNCONFIGURED {
+		if monitoredNode.RxBufferIdx == -1 {
+			// Never been configured
+			monitoredNode.RxBufferIdx, ret = consumer.canmodule.InsertRxBuffer(uint32(cobId), 0x7FF, false, monitoredNode)
+		} else {
+			//Only update
+			ret = consumer.canmodule.UpdateRxBuffer(monitoredNode.RxBufferIdx, uint32(cobId), 0x7FF, false, monitoredNode)
+		}
+	}
+	return ret
 
 }
 
-// /* configure Heartbeat consumer (or disable) CAN reception */
-// ret = CO_CANrxBufferInit(HBcons->CANdevRx,
-// HBcons->CANdevRxIdxStart + idx,
-// COB_ID,
-// 0x7FF,
-// 0,
-// (void*)&HBcons->monitoredNodes[idx],
-// CO_HBcons_receive);
-// }
-// return ret;
-// }
+// Dynamically update heartbeat consumer object when writing to entry x1016
+func WriteEntry1016(stream *Stream, data []byte, countWritten *uint16) error {
+	consumer, ok := stream.Object.(*HBConsumer)
+	if !ok {
+		log.Error("Unexpected object type when writing to Entry 1016")
+		return ODR_DEV_INCOMPAT
+	}
+
+	if stream == nil || stream.Subindex < 1 || int(stream.Subindex) > len(consumer.MonitoredNodes) {
+		return ODR_DEV_INCOMPAT
+	}
+	var hbConsValue uint32
+	nodeId := uint8(hbConsValue>>16) & 0xFF
+	time := hbConsValue & 0xFFFF
+	ret := consumer.InitEntry(stream.Subindex-1, nodeId, uint16(time))
+	if ret != nil {
+		return ODR_PAR_INCOMPAT
+	}
+
+	// Continue with normal write
+	return WriteEntryOriginal(stream, data, countWritten)
+}
+
+// Process Hearbeat consuming
+func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
+	allMonitoredActiveCurrent := true
+	allMonitoredOperationalCurrent := true
+	if nmtIsPreOrOperational && consumer.NMTisPreOrOperationalPrev {
+		for _, monitoredNode := range consumer.MonitoredNodes {
+			timeDifferenceUsCopy := timeDifferenceUs
+			// If unconfigured skip to next iteration
+			if monitoredNode.HBState == HB_UNCONFIGURED {
+				continue
+			}
+
+			if monitoredNode.RxNew {
+				if monitoredNode.NMTState == CO_NMT_INITIALIZING {
+					//Boot up message
+					if monitoredNode.HBState == HB_ACTIVE {
+						// TODO add emergency send
+					}
+					monitoredNode.HBState = HB_UNKNOWN
+				} else {
+					// Heartbeat message
+					monitoredNode.HBState = HB_ACTIVE
+					// Reset timer
+					monitoredNode.TimeoutTimer = 0
+					timeDifferenceUsCopy = 0
+				}
+				monitoredNode.RxNew = false
+			}
+			// Check timeout
+			if monitoredNode.HBState == HB_ACTIVE {
+				monitoredNode.TimeoutTimer += timeDifferenceUsCopy
+				if monitoredNode.TimeoutTimer >= monitoredNode.TimeUs {
+					// Timeout is expired
+					// TODO add emergency sending
+					monitoredNode.NMTState = CO_NMT_UNKNOWN
+					monitoredNode.HBState = HB_TIMEOUT
+				} else if timerNextUs != nil {
+					// Calculate when to recheck
+					diff := monitoredNode.TimeUs - monitoredNode.TimeoutTimer
+					if *timerNextUs > diff {
+						*timerNextUs = diff
+					}
+				}
+			}
+			if monitoredNode.HBState != HB_ACTIVE {
+				allMonitoredActiveCurrent = false
+			}
+			if monitoredNode.NMTState != CO_NMT_OPERATIONAL {
+				allMonitoredOperationalCurrent = false
+			}
+
+			if monitoredNode.NMTState != monitoredNode.NMTStatePrev {
+				monitoredNode.NMTStatePrev = monitoredNode.NMTState
+				// TODO maybe add callbacks
+			}
+		}
+	} else if nmtIsPreOrOperational || consumer.NMTisPreOrOperationalPrev {
+		// pre or operational state changed, clear vars
+		for _, monitoredNode := range consumer.MonitoredNodes {
+			monitoredNode.NMTState = CO_NMT_UNKNOWN
+			monitoredNode.NMTStatePrev = CO_NMT_UNKNOWN
+			monitoredNode.RxNew = false
+			if monitoredNode.HBState != HB_UNCONFIGURED {
+				monitoredNode.HBState = HB_UNKNOWN
+			}
+		}
+		allMonitoredActiveCurrent = false
+		allMonitoredOperationalCurrent = false
+	}
+
+	// Clear emergencies when all monitored nodes become active
+	if !consumer.AllMonitoredActive && allMonitoredActiveCurrent {
+		// TODO send emergency frame
+	}
+	consumer.AllMonitoredActive = allMonitoredActiveCurrent
+	consumer.AllMonitoredOperational = allMonitoredOperationalCurrent
+	consumer.NMTisPreOrOperationalPrev = nmtIsPreOrOperational
+}
