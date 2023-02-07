@@ -13,10 +13,10 @@ ModificationDate=08-09-2021
 ModifiedBy=
 
 [DeviceInfo]
-VendorName=
-VendorNumber=
+VendorName=""
+VendorNumber=0
 ProductName=New Product
-ProductNumber=
+ProductNumber=0
 RevisionNumber=0
 BaudRate_10=1
 BaudRate_20=1
@@ -321,7 +321,7 @@ ObjectType=0x7
 ;StorageLocation=PERSIST_COMM
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000080
+DefaultValue=0x40000080
 PDOMapping=0
 
 [1006]
@@ -330,7 +330,7 @@ ObjectType=0x7
 ;StorageLocation=PERSIST_COMM
 DataType=0x0007
 AccessType=rw
-DefaultValue=0
+DefaultValue=100000
 PDOMapping=0
 
 [1007]
@@ -564,7 +564,7 @@ ObjectType=0x7
 ;StorageLocation=PERSIST_COMM
 DataType=0x0006
 AccessType=rw
-DefaultValue=0
+DefaultValue=1000
 PDOMapping=0
 
 [1019]
@@ -1757,4 +1757,44 @@ PDOMapping=0
 
 [ManufacturerObjects]
 SupportedObjects=0
+1=0x2000
 
+
+[2000]
+ParameterName=Writable string
+ObjectType=0x7
+DataType=0x0009
+DefaultValue=Helloitsme
+AccessType=rw
+PDOMapping=0
+
+[2001]
+ParameterName=INTEGER16 value
+ObjectType=0x7
+DataType=0x0003
+DefaultValue=0x1555
+AccessType=rw
+PDOMapping=1
+
+[2002]
+ParameterName=UNSIGNED8 value
+ObjectType=0x7
+DataType=0x0005
+DefaultValue=0x10
+AccessType=rw
+PDOMapping=1
+
+[2003]
+ParameterName=INTEGER8 value
+ObjectType=0x7
+DataType=0x0002
+DefaultValue=
+AccessType=rw
+PDOMapping=1
+
+[2004]
+ParameterName=INTEGER32 value
+ObjectType=0x7
+DataType=0x0004
+AccessType=rw
+PDOMapping=1
