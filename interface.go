@@ -213,6 +213,25 @@ func (entry *Entry) AddExtension(extension *Extension) error {
 	return nil
 }
 
+// Get number of sub entries. Depends on type
+func (entry *Entry) GetNbSubEntries() int {
+
+	switch object := entry.Object.(type) {
+	case Variable:
+		return 1
+	case Array:
+		return len(object.Variables)
+
+	case []Record:
+		return len(object)
+
+	default:
+		// This is not normal
+		log.Errorf("The entry %v has an invalid type", entry)
+		return 1
+	}
+}
+
 type FileInfo struct {
 	FileName         string
 	FileVersion      string
