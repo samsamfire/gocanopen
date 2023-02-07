@@ -46,7 +46,7 @@ func (crc *CRC16) ccitt_single(chr uint8) {
 	crc.crc = (crc.crc << 8) ^ crc16_ccitt_table[tmp]
 }
 
-func (crc CRC16) ccitt_block(block []uint8) {
+func (crc *CRC16) ccitt_block(block []uint8) {
 	for i := range block {
 		var tmp uint8 = uint8(crc.crc>>8) ^ block[i]
 		crc.crc = (crc.crc << 8) ^ crc16_ccitt_table[tmp]

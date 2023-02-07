@@ -229,6 +229,7 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 
 	if status == CO_SYNC_RX_TX {
 		if sync.TimeoutError == 2 {
+			log.Debug("Send error")
 			// TODO send timeout error
 		}
 		sync.TimeoutError = 1
