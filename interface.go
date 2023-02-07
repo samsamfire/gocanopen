@@ -401,12 +401,10 @@ func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) e
 
 	// Populate the used readers or writers if an extension is used
 	if entry.Extension == nil || origin {
-		log.Debugf("Created stream object with default read/write for %x|%x, %v", entry.Index, subindex, streamer.Stream)
 		streamer.Read = ReadEntryOriginal
 		streamer.Write = WriteEntryOriginal
 		stream.Object = nil
 	} else {
-		log.Debugf("Created stream object with extension for %x|%x, %v", entry.Index, subindex, streamer.Stream)
 		if entry.Extension.Read == nil {
 			streamer.Read = ReadEntryDisabled
 		} else {
