@@ -49,37 +49,43 @@ func Test_encode(t *testing.T) {
 		t.Errorf("%d", data)
 	}
 	// Test unsigned16
-	data, err = encode("0x10", UNSIGNED16, 0)
+	data, _ = encode("0x10", UNSIGNED16, 0)
 	if !reflect.DeepEqual([]byte{0x10, 0x00}, data) {
 		t.Errorf("%d", data)
 	}
 
 	// Test unsigned32
-	data, err = encode("0x10", UNSIGNED32, 0)
+	data, _ = encode("0x10", UNSIGNED32, 0)
 	if !reflect.DeepEqual([]byte{0x10, 0x00, 0x00, 0x00}, data) {
 		t.Errorf("%d", data)
 	}
 
 	// Test signed8
-	data, err = encode("0x20", INTEGER8, 0)
+	data, _ = encode("0x20", INTEGER8, 0)
 	if !reflect.DeepEqual([]byte{0x20}, data) {
 		t.Errorf("%d", data)
 	}
 	// Test signed16
-	data, err = encode("0x20", INTEGER16, 0)
+	data, _ = encode("0x20", INTEGER16, 0)
 	if !reflect.DeepEqual([]byte{0x20, 0x00}, data) {
 		t.Errorf("%d", data)
 	}
 	// Test signed32
-	data, err = encode("0x20", INTEGER32, 0)
+	data, _ = encode("0x20", INTEGER32, 0)
 	if !reflect.DeepEqual([]byte{0x20, 0x00, 0x00, 0x00}, data) {
 		t.Errorf("%d", data)
 	}
 
 	// Test bool
-	data, err = encode("0x1", BOOLEAN, 0)
+	data, _ = encode("0x1", BOOLEAN, 0)
 	if !reflect.DeepEqual([]byte{0x1}, data) {
 		t.Errorf("%d", data)
+	}
+
+	// Test encoding a value that is wrong
+	_, err = encode("90000", UNSIGNED8, 0)
+	if err == nil {
+		t.Error("Error should'nt be nil")
 	}
 
 }
