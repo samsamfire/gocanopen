@@ -184,7 +184,7 @@ func (entry *Entry) AddMember(section *ini.Section, name string, nodeId uint8, s
 
 	switch object := entry.Object.(type) {
 	case Variable:
-		return fmt.Errorf("Cannot add a member to variable type")
+		return fmt.Errorf("cannot add a member to variable type")
 	case Array:
 		variable, err := buildVariable(section, name, nodeId, entry.Index, subindex)
 		if err != nil {
@@ -203,7 +203,7 @@ func (entry *Entry) AddMember(section *ini.Section, name string, nodeId uint8, s
 		return nil
 
 	default:
-		return fmt.Errorf("Add member not supported for %T", object)
+		return fmt.Errorf("add member not supported for %T", object)
 	}
 }
 

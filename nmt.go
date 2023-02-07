@@ -9,10 +9,8 @@ import (
 
 /* TODOs
 - Maybe implement callbacks on change etc
-- Has not been tested at all
 - Missing nmt state on error transitions because don't have Emergency yet
 - Finish CANModule sending
-
 */
 
 const (
@@ -272,7 +270,7 @@ func writeEntry1017(stream *Stream, data []byte, countWritten *uint16) error {
 	}
 	nmt, ok := stream.Object.(NMT)
 	if !ok {
-		log.Error("Invalid type for object 1017 : %v", nmt)
+		log.Errorf("Invalid type for object 1017 : %v", nmt)
 		return ODR_GENERAL
 	}
 	nmt.HearbeatProducerTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 1000
