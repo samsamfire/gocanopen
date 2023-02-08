@@ -80,6 +80,7 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	sync.ExtensionEntry1005.Object = sync
 	sync.ExtensionEntry1005.Read = ReadEntryOriginal
 	sync.ExtensionEntry1005.Write = WriteEntry1005
+	entry1005.AddExtension(&sync.ExtensionEntry1005)
 
 	if entry1006 == nil {
 		log.Warnf("Failed to read entry 1006 (Comm cycle period) because empty")
@@ -240,6 +241,7 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 
 // Special extension function
 func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
+	log.Debug("[SYNC] Writing in extension entry 1005")
 	// Expect a uint32 and subindex 0 and no nill pointers
 	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
 		return ODR_DEV_INCOMPAT
