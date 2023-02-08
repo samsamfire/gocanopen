@@ -56,34 +56,34 @@ func main() {
 		log.Panicf("Failed Initializing Node because %v", err)
 	}
 
-	var time_difference_us uint32
-
-	start := time.Now()
-	var timer_next_us uint32 = 10000 // i.e 1 ms
+	start_background := time.Now()
+	start_main := time.Now()
+	var timer_next_main_us uint32 = 10000       // i.e 10 ms
+	var timer_next_background_us uint32 = 10000 // i.e 10 ms
 
 	// client := node.SDOclients[0]
 
 	go func() {
 		//var tmrNextUs uint32 = 10000
 		for {
-			elapsed := time.Since(start)
-			start = time.Now()
-			time_difference_us = uint32(elapsed.Microseconds())
+			elapsed := time.Since(start_background)
+			start_background = time.Now()
+			time_difference_us := uint32(elapsed.Microseconds())
 			node.ProcessSYNC(time_difference_us, nil)
 			//fmt.Printf("Timer next %v ; Elapsed %v", timer_next_us, time_difference_us)
-			time.Sleep(time.Duration(timer_next_us) * time.Microsecond)
+			time.Sleep(time.Duration(timer_next_background_us) * time.Microsecond)
 		}
 	}()
 
 	counter := 0
 	for {
 		counter += 1
-		elapsed := time.Since(start)
-		start = time.Now()
-		time_difference_us = uint32(elapsed.Microseconds())
+		elapsed := time.Since(start_main)
+		start_main = time.Now()
+		time_difference_us := uint32(elapsed.Microseconds())
 		node.Process(false, time_difference_us, nil)
 		//fmt.Printf("Timer next %v ; Elapsed %v", timer_next_us, time_difference_us)
-		time.Sleep(time.Duration(timer_next_us) * time.Microsecond)
+		time.Sleep(time.Duration(timer_next_main_us) * time.Microsecond)
 		//_ = client.WriteRaw(0x10, 0x2000, 0x0, data, true)
 		// reader := canopen.NewBlockReader(0x10, 0x1021, 0x0, &client)
 		// data, _ := reader.ReadAll()
