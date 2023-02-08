@@ -268,7 +268,7 @@ func writeEntry1017(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream.Subindex != 0 || data == nil || len(data) != 2 || countWritten == nil || stream == nil {
 		return ODR_DEV_INCOMPAT
 	}
-	nmt, ok := stream.Object.(NMT)
+	nmt, ok := stream.Object.(*NMT)
 	if !ok {
 		log.Errorf("Invalid type for object 1017 : %v", nmt)
 		return ODR_GENERAL
