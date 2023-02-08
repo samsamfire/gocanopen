@@ -539,6 +539,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				if (response.raw[0] & 0xEF) != 0x60 {
 					abortCode = CO_SDO_AB_CMD
 					server.State = CO_SDO_ST_ABORT
+					break
 				}
 				toggle := response.GetToggle()
 				if toggle != server.Toggle {
