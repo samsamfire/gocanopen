@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/brutella/can"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -18,7 +17,10 @@ func handleCANFrame(frame can.Frame) {
 var NODE_ID uint8 = 0x20
 
 func main() {
-	log.SetLevel(logrus.DebugLevel)
+	log.SetLevel(log.DebugLevel)
+	// log.SetReportCaller(true)
+
+	// log.Println("hello world")
 	can_interface := "can0"
 
 	if len(os.Args) > 1 {
