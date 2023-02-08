@@ -473,30 +473,33 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					} else {
 						server.State = CO_SDO_ST_DOWNLOAD_INITIATE_RSP
 						server.Finished = true
-					}
-				} else if (response.raw[0] & 0x01) != 0 {
-					log.Debugf("[SERVER]<==Rx | DOWNLOAD SEGMENTED | x%x:x%x %v", server.Index, server.Subindex, response.raw)
-					// Segmented transfer check if size indicated
-					sizeInOd := len(server.Streamer.Stream.Data)
-					server.SizeIndicated = binary.LittleEndian.Uint32(response.raw[4:])
-					// Check if size matches
-					if sizeInOd > 0 {
-						if server.SizeIndicated > uint32(sizeInOd) {
-							abortCode = CO_SDO_AB_DATA_LONG
-							server.State = CO_SDO_ST_ABORT
-							break
-						} else if server.SizeIndicated < uint32(sizeInOd) && (server.Streamer.Stream.Attribute&ODA_STR) == 0 {
-							log.Info("Too short")
-							abortCode = CO_SDO_AB_DATA_SHORT
-							server.State = CO_SDO_ST_ABORT
-							break
-						}
+
 					}
 				} else {
-					server.SizeIndicated = 0
+					if (response.raw[0] & 0x01) != 0 {
+						log.Debugf("[SERVER]<==Rx | DOWNLOAD SEGMENTED | x%x:x%x %v", server.Index, server.Subindex, response.raw)
+						// Segmented transfer check if size indicated
+						sizeInOd := len(server.Streamer.Stream.Data)
+						server.SizeIndicated = binary.LittleEndian.Uint32(response.raw[4:])
+						// Check if size matches
+						if sizeInOd > 0 {
+							if server.SizeIndicated > uint32(sizeInOd) {
+								abortCode = CO_SDO_AB_DATA_LONG
+								server.State = CO_SDO_ST_ABORT
+								break
+							} else if server.SizeIndicated < uint32(sizeInOd) && (server.Streamer.Stream.Attribute&ODA_STR) == 0 {
+								log.Info("Too short")
+								abortCode = CO_SDO_AB_DATA_SHORT
+								server.State = CO_SDO_ST_ABORT
+								break
+							}
+						}
+					} else {
+						server.SizeIndicated = 0
+					}
+					server.State = CO_SDO_ST_DOWNLOAD_INITIATE_RSP
+					server.Finished = false
 				}
-				server.State = CO_SDO_ST_DOWNLOAD_INITIATE_RSP
-				server.Finished = false
 
 			case CO_SDO_ST_DOWNLOAD_SEGMENT_REQ:
 				if (response.raw[0] & 0xE0) == 0x00 {
@@ -698,7 +701,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 		if server.TimeoutTimer >= server.TimeoutTimeUs {
 			abortCode = CO_SDO_AB_TIMEOUT
 			server.State = CO_SDO_ST_ABORT
-			log.Errorf("timeout %v %v", server.TimeoutTimer, server.TimeoutTimeUs)
+			log.Errorf("[SERVER] Timeout %v, State : %v", server.TimeoutTimer, server.State)
 
 		} else if timerNextUs != nil {
 			diff := server.TimeoutTimeUs - server.TimeoutTimer
@@ -736,12 +739,13 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.CANtxBuff.Data[2] = byte(server.Index >> 8)
 			server.CANtxBuff.Data[3] = server.Subindex
 			server.TimeoutTimer = 0
-			log.Debugf("[SERVER] ==>Tx | DOWNLOAD INIT | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			server.CANModule.Send(*server.CANtxBuff)
 			if server.Finished {
+				log.Debugf("[SERVER] ==>Tx | DOWNLOAD EXPEDITED | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 				server.State = CO_SDO_ST_IDLE
 				ret = CO_SDO_RT_ok_communicationEnd
 			} else {
+				log.Debugf("[SERVER] ==>Tx | DOWNLOAD SEGMENT INIT | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 				server.Toggle = 0x00
 				server.SizeTransferred = 0
 				server.BufferOffsetWrite = 0
