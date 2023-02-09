@@ -23,9 +23,8 @@ type PDOBase struct {
 	DataLength                  uint32
 	MappedObjectsCount          uint8
 	Streamers                   [MAX_MAPPED_ENTRIES]ObjectStreamer
-	FlagPDOByte                 []*byte
-	FlagPDOBitmask              []byte
-	MapPointer                  []byte
+	FlagPDOByte                 [OD_FLAGS_PDO_SIZE]*byte
+	FlagPDOBitmask              [OD_FLAGS_PDO_SIZE]byte
 	IsRPDO                      bool
 	PreDefinedIdent             uint16
 	ConfiguredIdent             uint16
@@ -88,6 +87,7 @@ func (base *PDOBase) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInde
 
 	// Total PDO length should be smaller than max possible size
 	if mappedLength > MAX_PDO_LENGTH {
+		log.Debug("[PDO] Mapped parameter is too long")
 		return ODR_MAP_LEN
 	}
 
@@ -105,6 +105,7 @@ func (base *PDOBase) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInde
 	entry := od.Find(index)
 	ret := entry.Sub(subindex, false, &streamerCopy)
 	if ret != nil {
+		log.Debug("[PDO] Couldn't get object x%x:x%x, because %v", index, subindex)
 		return ret
 	}
 
@@ -117,11 +118,20 @@ func (base *PDOBase) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInde
 	}
 	if streamerCopy.Stream.Attribute&testAttribute == 0 ||
 		(mappedLengthBits&0x07) != 0 ||
-		len(streamer.Stream.Data) < int(mappedLength) {
+		len(streamerCopy.Stream.Data) < int(mappedLength) {
+		log.Debugf("[PDO] couldn't map x%x:x%x (can be because of attribute, invalid size ... etc) %v, %v, %v",
+			index,
+			subindex,
+			streamerCopy.Stream.Attribute&testAttribute == 0,
+			(mappedLengthBits&0x07) != 0,
+			len(streamerCopy.Stream.Data) < int(mappedLength),
+		)
+		log.Debugf("Size %v,%v, %v", len(streamer.Stream.Data), mappedLength)
 		return ODR_NO_MAP
 	}
 	*streamer = streamerCopy
 	streamer.Stream.DataOffset = uint32(mappedLength)
+	log.Debugf("Setting data offset to %v for index %v", mappedLength, mapIndex)
 	if !isRPDO {
 		if uint32(subindex) < (uint32(OD_FLAGS_PDO_SIZE)*8) && entry.Extension != nil {
 			base.FlagPDOByte[mapIndex] = &entry.Extension.flagsPDO[subindex>>3]
@@ -146,14 +156,15 @@ func (base *PDOBase) InitMapping(od *ObjectDictionary, entry *Entry, isRPDO bool
 	}
 
 	// Iterate over all possible objects
-	for i, streamer := range base.Streamers {
+	for i := range base.Streamers {
+		streamer := &base.Streamers[i]
 		mapParam := uint32(0)
 		ret := entry.GetUint32(uint8(i)+1, &mapParam)
 		if ret == ODR_SUB_NOT_EXIST {
 			continue
 		}
 		if ret != nil {
-			log.Errorf("entry x%x, couldn't read mapping parameter subindex %v, because : %v", entry.Index, i+1, ret)
+			log.Errorf("[PDO] entry x%x, couldn't read mapping parameter subindex %v, because : %v", entry.Index, i+1, ret)
 			return CO_ERROR_OD_PARAMETERS
 		}
 		ret = base.ConfigureMap(od, mapParam, uint32(i), isRPDO)
@@ -164,7 +175,7 @@ func (base *PDOBase) InitMapping(od *ObjectDictionary, entry *Entry, isRPDO bool
 			if *erroneoursMap == 0 {
 				*erroneoursMap = mapParam
 			}
-			log.Warnf("failed to initialize mapping parameter x%x,%x, because %v", entry.Index, i+1, ret)
+			log.Warnf("[PDO] failed to initialize mapping parameter x%x,%x, because %v", entry.Index, i+1, ret)
 		}
 		if i < int(mappedObjectsCount) {
 			pdoDataLength += int(streamer.Stream.DataOffset)
@@ -375,7 +386,7 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 					buffer = append(buffer, make([]byte, int(MAX_PDO_LENGTH)-len(buffer))...)
 				}
 				var countWritten uint16
-				streamer.Write(streamer.Stream, buffer, &countWritten)
+				streamer.Write(&streamer.Stream, buffer, &countWritten)
 				*dataOffset = mappedLength
 
 			}
@@ -561,6 +572,7 @@ func (tpdo *TPDO) Init(
 	if canId != 0 && canId == (predefinedIdent&0xFF80) {
 		canId = predefinedIdent
 	}
+
 	var err error
 	tpdo.TxBuffer, pdo.BufferIdx, _ = pdo.Canmodule.InsertTxBuffer(uint32(canId), false, uint8(pdo.DataLength), tpdo.TransmissionType <= CO_PDO_TRANSM_TYPE_SYNC_240)
 	if tpdo.TxBuffer == nil || err != nil {
@@ -595,6 +607,13 @@ func (tpdo *TPDO) Init(
 	pdo.ExtensionMappingParam.Write = WritePDOMappingParameter
 	entry18xx.AddExtension(&pdo.ExtensionCommunicationParam)
 	entry1Axx.AddExtension(&pdo.ExtensionMappingParam)
+	log.Debugf("[TPDO] Configuration parameter : canId : %v | valid : %v | inhibit : %v | event timer : %v | transmission type : %v",
+		canId,
+		valid,
+		inhibitTime,
+		eventTime,
+		transmissionType,
+	)
 	return nil
 
 }
@@ -606,7 +625,7 @@ func (tpdo *TPDO) Send() error {
 	dataTPDO := make([]byte, 0)
 	for i := 0; i < int(pdo.MappedObjectsCount); i++ {
 		streamer := &pdo.Streamers[i]
-		stream := streamer.Stream
+		stream := &streamer.Stream
 		mappedLength := streamer.Stream.DataOffset
 		dataLength := len(stream.Data)
 		if dataLength > int(MAX_PDO_LENGTH) {
@@ -670,49 +689,49 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 				}
 			}
 		}
-		// Send PDO by application request or event timer
-		if tpdo.TransmissionType >= CO_PDO_TRANSM_TYPE_SYNC_EVENT_LO {
-			if tpdo.InhibitTimer > timeDifferenceUs {
-				tpdo.InhibitTimer = tpdo.InhibitTimer - timeDifferenceUs
-			} else {
-				tpdo.InhibitTimer = 0
-			}
-			if tpdo.SendRequest && tpdo.InhibitTimer == 0 {
+	}
+	// Send PDO by application request or event timer
+	if tpdo.TransmissionType >= CO_PDO_TRANSM_TYPE_SYNC_EVENT_LO {
+		if tpdo.InhibitTimer > timeDifferenceUs {
+			tpdo.InhibitTimer = tpdo.InhibitTimer - timeDifferenceUs
+		} else {
+			tpdo.InhibitTimer = 0
+		}
+		if tpdo.SendRequest && tpdo.InhibitTimer == 0 {
+			tpdo.Send()
+		}
+		if tpdo.SendRequest && timerNextUs != nil && *timerNextUs > tpdo.InhibitTimer {
+			*timerNextUs = tpdo.InhibitTimer
+		}
+	} else if tpdo.Sync != nil && syncWas {
+		// Send synchronous acyclic tpdo
+		if tpdo.TransmissionType == CO_PDO_TRANSM_TYPE_SYNC_ACYCLIC {
+			if tpdo.SendRequest {
 				tpdo.Send()
 			}
-			if tpdo.SendRequest && timerNextUs != nil && *timerNextUs > tpdo.InhibitTimer {
-				*timerNextUs = tpdo.InhibitTimer
+		} else {
+			// Send synchronous cyclic TPDOs
+			if tpdo.SyncCounter == 255 {
+				if tpdo.Sync.CounterOverflowValue != 0 && tpdo.SyncStartValue != 0 {
+					// Sync start value used
+					tpdo.SyncCounter = 254
+				} else {
+					tpdo.SyncCounter = tpdo.TransmissionType/2 + 1
+				}
 			}
-		} else if tpdo.Sync != nil && syncWas {
-			// Send synchronous acyclic tpdo
-			if tpdo.TransmissionType == CO_PDO_TRANSM_TYPE_SYNC_ACYCLIC {
-				if tpdo.SendRequest {
-					tpdo.Send()
-				}
-			} else {
-				// Send synchronous cyclic TPDOs
-				if tpdo.SyncCounter == 255 {
-					if tpdo.Sync.CounterOverflowValue != 0 && tpdo.SyncStartValue != 0 {
-						// Sync start value used
-						tpdo.SyncCounter = 254
-					} else {
-						tpdo.SyncCounter = tpdo.TransmissionType/2 + 1
-					}
-				}
-				// If sync start value is used , start first TPDO
-				//after sync with matched syncstartvalue
-				if tpdo.SyncCounter == 254 {
-					if tpdo.Sync.Counter == tpdo.SyncStartValue {
-						tpdo.SyncCounter = tpdo.TransmissionType
-						tpdo.Send()
-					}
-				} else if tpdo.SyncCounter == 1 {
+			// If sync start value is used , start first TPDO
+			//after sync with matched syncstartvalue
+			if tpdo.SyncCounter == 254 {
+				if tpdo.Sync.Counter == tpdo.SyncStartValue {
 					tpdo.SyncCounter = tpdo.TransmissionType
 					tpdo.Send()
-				} else {
-					// decrement sync counter
-					tpdo.SyncCounter--
 				}
+			} else if tpdo.SyncCounter == 1 {
+				tpdo.SyncCounter = tpdo.TransmissionType
+				tpdo.Send()
+			} else {
+				// decrement sync counter
+				tpdo.SyncCounter--
 			}
 		}
 	}
