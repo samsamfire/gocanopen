@@ -17,6 +17,8 @@ type Node struct {
 	NMT                *NMT
 	SDOclients         []*SDOClient
 	SDOServers         []*SDOServer
+	TPDOs              []*TPDO
+	RPDOs              []*RPDO
 	SYNC               *SYNC
 	NodeIdUnconfigured bool
 }
@@ -35,6 +37,14 @@ func (node *Node) ProcessSRDO(time_difference_us uint32) (timer_next_us uint32) 
 /* Process TPDO */
 func (node *Node) ProcessTPDO(sync_was bool, time_difference_us uint32) (timer_next_us uint32) {
 	// Process TPDO object
+	if node.NodeIdUnconfigured {
+		return
+	}
+	nmtIsOperational := node.NMT.GetInternalState() == CO_NMT_OPERATIONAL
+	for _, tpdo := range node.TPDOs {
+		tpdo.Process(time_difference_us, &timer_next_us, nmtIsOperational, sync_was)
+	}
+
 	return 0
 }
 
@@ -90,9 +100,54 @@ func (node *Node) Process(enable_gateway bool, time_difference_us uint32, timer_
 }
 
 /*Initialize all PDOs*/
-func (Node *Node) InitPDO(emergency *EM, od *ObjectDictionary, node_id uint8) (result COResult) {
-	//  TODO
-	return 0
+func (node *Node) InitPDO(emergency *EM, od *ObjectDictionary, nodeId uint8) error {
+	if nodeId < 1 || nodeId > 127 || node.NodeIdUnconfigured {
+		if node.NodeIdUnconfigured {
+			return CO_ERROR_NODE_ID_UNCONFIGURED_LSS
+		} else {
+			return CO_ERROR_ILLEGAL_ARGUMENT
+		}
+	}
+	// Iterate over all the possible entries : there can be a maximum of 512 maps
+	// Break loops as soon as entry doesn't exist (don't allow holes in mapping)
+	for i := uint16(0); i < 512; i++ {
+		entry14xx := od.Find(0x1400 + i)
+		entry16xx := od.Find(0x1600 + i)
+		preDefinedIdent := uint16(0)
+		pdoOffset := i % 4
+		nodeIdOffset := i / 4
+		preDefinedIdent = 0x200 + pdoOffset*0x100 + uint16(nodeId) + nodeIdOffset
+		rpdo := RPDO{}
+		err := rpdo.Init(od, emergency, node.SYNC, preDefinedIdent, entry14xx, entry16xx, node.CANModule)
+		if err != nil {
+			log.Warnf("Failed to Initialize RPDO%v, stopping there", i)
+			break
+		} else {
+			log.Infof("Initialized RPDO%v", i)
+			node.RPDOs = append(node.RPDOs, &rpdo)
+		}
+	}
+	// Do the same for TPDOS
+	for i := uint16(0); i < 512; i++ {
+		entry18xx := od.Find(0x1800 + i)
+		entry1Axx := od.Find(0x1A00 + i)
+		preDefinedIdent := uint16(0)
+		pdoOffset := i % 4
+		nodeIdOffset := i / 4
+		preDefinedIdent = 0x180 + pdoOffset*0x100 + uint16(nodeId) + nodeIdOffset
+		tpdo := TPDO{}
+		err := tpdo.Init(od, emergency, node.SYNC, preDefinedIdent, entry18xx, entry1Axx, node.CANModule)
+		if err != nil {
+			log.Warnf("Failed to Initialize TPDO%v, stopping there", i)
+			break
+		} else {
+			log.Infof("Initialized TPDO%v", i)
+			node.TPDOs = append(node.TPDOs, &tpdo)
+		}
+
+	}
+
+	return nil
 }
 
 /*Initialize CANopen stack */

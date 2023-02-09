@@ -1,6 +1,8 @@
 package canopen
 
 import (
+	"encoding/binary"
+
 	"github.com/brutella/can"
 	log "github.com/sirupsen/logrus"
 )
@@ -34,7 +36,7 @@ type PDOBase struct {
 
 type TPDO struct {
 	Base             PDOBase
-	TxBuffer         BufferTxFrame
+	TxBuffer         *BufferTxFrame
 	TransmissionType uint8
 	SendRequest      bool
 	Sync             *SYNC
@@ -77,13 +79,12 @@ func ReadDummy(stream *Stream, data []byte, countRead *uint16) error {
 }
 
 // Configure a PDO map
-
 func (base *PDOBase) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapIndex uint32, isRPDO bool) error {
 	index := uint16(mapParam >> 16)
 	subindex := byte(mapParam >> 8)
 	mappedLengthBits := byte(mapParam)
 	mappedLength := mappedLengthBits >> 3
-	streamer := &base.Streamer
+	streamer := &base.Streamers[mapIndex]
 
 	// Total PDO length should be smaller than max possible size
 	if mappedLength > MAX_PDO_LENGTH {
@@ -407,4 +408,313 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 			rpdo.TimeoutTimer = 0
 		}
 	}
+}
+
+// Extension for writing to TPDO communication parameters
+func WriteEntry18xx(stream *Stream, buf []byte, countWritten *uint16) error {
+	if stream == nil || buf == nil || countWritten == nil || len(buf) > 4 {
+		return ODR_DEV_INCOMPAT
+	}
+	tpdo, ok := stream.Object.(*TPDO)
+	if !ok {
+		log.Error("Expecting *TPDO")
+		return ODR_DEV_INCOMPAT
+	}
+	pdo := &tpdo.Base
+	bufCopy := make([]byte, 4)
+	copy(bufCopy, buf)
+	switch stream.Subindex {
+	case 1:
+		// COB id used by PDO
+		cobId := binary.LittleEndian.Uint32(buf)
+		canId := cobId & 0x7FF
+		valid := (cobId & 0x80000000) == 0
+		/* bits 11...29 must be zero, PDO must be disabled on change,
+		 * CAN_ID == 0 is not allowed, mapping must be configured before
+		 * enabling the PDO */
+
+		if (cobId&0x3FFFF800) != 0 ||
+			valid && pdo.Valid && canId != uint32(pdo.ConfiguredIdent) ||
+			valid && isIDRestricted(uint16(canId)) ||
+			valid && pdo.MappedObjectsCount == 0 {
+			return ODR_INVALID_VALUE
+		}
+
+		// Parameter changed ?
+		if valid != pdo.Valid || canId != uint32(pdo.ConfiguredIdent) {
+			// If default id is written store to OD without node id
+			if canId == uint32(pdo.PreDefinedIdent) {
+				binary.LittleEndian.PutUint32(bufCopy, cobId&0xFFFFFF80)
+			}
+			if !valid {
+				canId = 0
+			}
+			txBuffer, err := pdo.Canmodule.UpdateTxBuffer(
+				pdo.BufferIdx,
+				canId,
+				false,
+				uint8(pdo.DataLength),
+				tpdo.TransmissionType <= CO_PDO_TRANSM_TYPE_SYNC_240)
+			if txBuffer == nil || err != nil {
+				return ODR_DEV_INCOMPAT
+			}
+			tpdo.TxBuffer = txBuffer
+			pdo.Valid = valid
+			pdo.ConfiguredIdent = uint16(canId)
+		}
+
+	case 2:
+		// Transmission type
+		transmissionType := buf[0]
+		if transmissionType > CO_PDO_TRANSM_TYPE_SYNC_240 && transmissionType < CO_PDO_TRANSM_TYPE_SYNC_EVENT_LO {
+			return ODR_INVALID_VALUE
+		}
+		tpdo.TxBuffer.SyncFlag = transmissionType <= CO_PDO_TRANSM_TYPE_SYNC_240
+		tpdo.SyncCounter = 255
+		tpdo.TransmissionType = transmissionType
+		tpdo.SendRequest = true
+		tpdo.InhibitTimer = 0
+		tpdo.EventTimer = 0
+
+	case 3:
+		//Inhibit time
+		if pdo.Valid {
+			return ODR_INVALID_VALUE
+		}
+		inhibitTime := binary.LittleEndian.Uint16(buf)
+		tpdo.InhibitTimeUs = uint32(inhibitTime) * 100
+		tpdo.InhibitTimer = 0
+
+	case 5:
+		// Envent timer
+		eventTime := binary.LittleEndian.Uint16(buf)
+		tpdo.EventTimeUs = uint32(eventTime) * 1000
+		tpdo.EventTimer = 0
+
+	case 6:
+		syncStartValue := buf[0]
+		if pdo.Valid || syncStartValue > 240 {
+			return ODR_INVALID_VALUE
+		}
+		tpdo.SyncStartValue = syncStartValue
+
+	}
+	return WriteEntryOriginal(stream, bufCopy, countWritten)
+
+}
+
+func (tpdo *TPDO) Init(
+	od *ObjectDictionary,
+	em *EM, sync *SYNC,
+	predefinedIdent uint16,
+	entry18xx *Entry,
+	entry1Axx *Entry,
+	canmodule *CANModule) error {
+
+	pdo := &tpdo.Base
+	if od == nil || em == nil || entry18xx == nil || entry1Axx == nil || canmodule == nil {
+		return CO_ERROR_ILLEGAL_ARGUMENT
+	}
+	// Clear TPDO
+	*tpdo = TPDO{}
+	pdo.em = em
+	pdo.Canmodule = canmodule
+	// Configure mapping parameters
+	erroneousMap := uint32(0)
+	ret := pdo.InitMapping(od, entry1Axx, false, &erroneousMap)
+	if ret != nil {
+		return ret
+	}
+	// Configure transmission type
+	transmissionType := uint8(CO_PDO_TRANSM_TYPE_SYNC_EVENT_LO)
+	ret = entry18xx.GetUint8(2, &transmissionType)
+	if ret != nil {
+		return CO_ERROR_OD_PARAMETERS
+	}
+	if transmissionType < CO_PDO_TRANSM_TYPE_SYNC_EVENT_LO && transmissionType > CO_PDO_TRANSM_TYPE_SYNC_240 {
+		transmissionType = CO_PDO_TRANSM_TYPE_SYNC_EVENT_LO
+	}
+	tpdo.TransmissionType = transmissionType
+	tpdo.SendRequest = true
+
+	// Configure COB-ID
+	cobId := uint32(0)
+	ret = entry18xx.GetUint32(1, &cobId)
+	if ret != nil {
+		return CO_ERROR_OD_PARAMETERS
+	}
+	valid := (cobId & 0x80000000) == 0
+	canId := uint16(cobId & 0x7FF)
+	if valid && (pdo.MappedObjectsCount == 0 || canId == 0) {
+		valid = false
+		if erroneousMap == 0 {
+			erroneousMap = 1
+		}
+	}
+	if erroneousMap != 0 {
+		// TODO send emergency
+	}
+	if !valid {
+		canId = 0
+	}
+	// If default canId is stored in od add node id
+	if canId != 0 && canId == (predefinedIdent&0xFF80) {
+		canId = predefinedIdent
+	}
+	var err error
+	tpdo.TxBuffer, pdo.BufferIdx, _ = pdo.Canmodule.InsertTxBuffer(uint32(canId), false, uint8(pdo.DataLength), tpdo.TransmissionType <= CO_PDO_TRANSM_TYPE_SYNC_240)
+	if tpdo.TxBuffer == nil || err != nil {
+		return CO_ERROR_ILLEGAL_ARGUMENT
+	}
+	pdo.Valid = valid
+	// Configure inhibit time and event timer
+	inhibitTime := uint16(0)
+	eventTime := uint16(0)
+	ret = entry18xx.GetUint16(3, &inhibitTime)
+	ret = entry18xx.GetUint16(5, &eventTime)
+	tpdo.InhibitTimeUs = uint32(inhibitTime) * 100
+	tpdo.EventTimeUs = uint32(eventTime) * 1000
+
+	// Configure sync start value
+	tpdo.SyncStartValue = 0
+	ret = entry18xx.GetUint8(6, &tpdo.SyncStartValue)
+	tpdo.Sync = sync
+	tpdo.SyncCounter = 255
+
+	// Configure OD extensions
+	pdo.IsRPDO = false
+	pdo.od = od
+	pdo.Canmodule = canmodule
+	pdo.PreDefinedIdent = predefinedIdent
+	pdo.ConfiguredIdent = canId
+	pdo.ExtensionCommunicationParam.Object = tpdo
+	pdo.ExtensionCommunicationParam.Read = ReadPDOCommunicationParameter
+	pdo.ExtensionCommunicationParam.Write = WriteEntry18xx
+	pdo.ExtensionMappingParam.Object = tpdo
+	pdo.ExtensionMappingParam.Read = ReadEntryOriginal
+	pdo.ExtensionMappingParam.Write = WritePDOMappingParameter
+	entry18xx.AddExtension(&pdo.ExtensionCommunicationParam)
+	entry1Axx.AddExtension(&pdo.ExtensionMappingParam)
+	return nil
+
+}
+
+// Send TPDO object
+func (tpdo *TPDO) Send() error {
+	pdo := &tpdo.Base
+	eventDriven := tpdo.TransmissionType == CO_PDO_TRANSM_TYPE_SYNC_ACYCLIC || tpdo.TransmissionType >= uint8(CO_PDO_TRANSM_TYPE_SYNC_EVENT_LO)
+	dataTPDO := make([]byte, 0)
+	for i := 0; i < int(pdo.MappedObjectsCount); i++ {
+		streamer := &pdo.Streamers[i]
+		stream := streamer.Stream
+		mappedLength := streamer.Stream.DataOffset
+		dataLength := len(stream.Data)
+		if dataLength > int(MAX_PDO_LENGTH) {
+			dataLength = int(MAX_PDO_LENGTH)
+		}
+
+		stream.DataOffset = 0
+		countRead := uint16(0)
+		buffer := make([]byte, dataLength)
+		streamer.Read(stream, buffer, &countRead)
+		stream.DataOffset = mappedLength
+		// Add to tpdo frame only up to mapped length
+		dataTPDO = append(dataTPDO, buffer[:mappedLength]...)
+
+		flagPDOByte := pdo.FlagPDOByte[i]
+		if flagPDOByte != nil && eventDriven {
+			*flagPDOByte |= pdo.FlagPDOBitmask[i]
+		}
+	}
+	tpdo.SendRequest = false
+	tpdo.EventTimer = tpdo.EventTimeUs
+	tpdo.InhibitTimer = tpdo.InhibitTimeUs
+	// Copy data to the buffer & send
+	copy(tpdo.TxBuffer.Data[:], dataTPDO)
+	return pdo.Canmodule.Send(*tpdo.TxBuffer)
+}
+
+func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOperational bool, syncWas bool) {
+
+	pdo := &tpdo.Base
+	if !pdo.Valid || !nmtIsOperational {
+		tpdo.SendRequest = true
+		tpdo.InhibitTimer = 0
+		tpdo.EventTimer = 0
+		tpdo.SyncCounter = 255
+		return
+	}
+
+	if tpdo.TransmissionType == CO_PDO_TRANSM_TYPE_SYNC_ACYCLIC || tpdo.TransmissionType >= CO_PDO_TRANSM_TYPE_SYNC_EVENT_LO {
+		if tpdo.EventTimeUs != 0 {
+			if tpdo.EventTimer > timeDifferenceUs {
+				tpdo.EventTimer = tpdo.EventTimer - timeDifferenceUs
+			} else {
+				tpdo.EventTimer = 0
+			}
+			if tpdo.EventTimer == 0 {
+				tpdo.SendRequest = true
+			}
+			if timerNextUs != nil && *timerNextUs > tpdo.EventTimer {
+				*timerNextUs = tpdo.EventTimer
+			}
+		}
+		// Check for tpdo send requests
+		if !tpdo.SendRequest {
+			for i := 0; i < int(pdo.MappedObjectsCount); i++ {
+				flagPDOByte := pdo.FlagPDOByte[i]
+				if flagPDOByte != nil {
+					if (*flagPDOByte & pdo.FlagPDOBitmask[i]) == 0 {
+						tpdo.SendRequest = true
+					}
+				}
+			}
+		}
+		// Send PDO by application request or event timer
+		if tpdo.TransmissionType >= CO_PDO_TRANSM_TYPE_SYNC_EVENT_LO {
+			if tpdo.InhibitTimer > timeDifferenceUs {
+				tpdo.InhibitTimer = tpdo.InhibitTimer - timeDifferenceUs
+			} else {
+				tpdo.InhibitTimer = 0
+			}
+			if tpdo.SendRequest && tpdo.InhibitTimer == 0 {
+				tpdo.Send()
+			}
+			if tpdo.SendRequest && timerNextUs != nil && *timerNextUs > tpdo.InhibitTimer {
+				*timerNextUs = tpdo.InhibitTimer
+			}
+		} else if tpdo.Sync != nil && syncWas {
+			// Send synchronous acyclic tpdo
+			if tpdo.TransmissionType == CO_PDO_TRANSM_TYPE_SYNC_ACYCLIC {
+				if tpdo.SendRequest {
+					tpdo.Send()
+				}
+			} else {
+				// Send synchronous cyclic TPDOs
+				if tpdo.SyncCounter == 255 {
+					if tpdo.Sync.CounterOverflowValue != 0 && tpdo.SyncStartValue != 0 {
+						// Sync start value used
+						tpdo.SyncCounter = 254
+					} else {
+						tpdo.SyncCounter = tpdo.TransmissionType/2 + 1
+					}
+				}
+				// If sync start value is used , start first TPDO
+				//after sync with matched syncstartvalue
+				if tpdo.SyncCounter == 254 {
+					if tpdo.Sync.Counter == tpdo.SyncStartValue {
+						tpdo.SyncCounter = tpdo.TransmissionType
+						tpdo.Send()
+					}
+				} else if tpdo.SyncCounter == 1 {
+					tpdo.SyncCounter = tpdo.TransmissionType
+					tpdo.Send()
+				} else {
+					// decrement sync counter
+					tpdo.SyncCounter--
+				}
+			}
+		}
+	}
+
 }
