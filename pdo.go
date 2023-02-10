@@ -295,9 +295,9 @@ func (rpdo *RPDO) Init(od *ObjectDictionary,
 			erroneousMap = 1
 		}
 	}
-	if erroneousMap != 0 {
-		// TODO send emergency
-	}
+	// if erroneousMap != 0 {
+	// 	// TODO send emergency
+	// }
 	if !valid {
 		canId = 0
 	}
@@ -394,15 +394,15 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 
 		if rpdo.TimeoutTimeUs > 0 {
 			if rpdoReceived {
-				if rpdo.TimeoutTimer > rpdo.TimeoutTimeUs {
-					//TODO send emergency
-				}
+				// if rpdo.TimeoutTimer > rpdo.TimeoutTimeUs {
+				// 	//TODO send emergency
+				// }
 				rpdo.TimeoutTimer = 1
 			} else if rpdo.TimeoutTimer > 0 && rpdo.TimeoutTimer < rpdo.TimeoutTimeUs {
 				rpdo.TimeoutTimer += timeDifferenceUs
-				if rpdo.TimeoutTimer > rpdo.TimeoutTimeUs {
-					// TODO send emergency
-				}
+				// if rpdo.TimeoutTimer > rpdo.TimeoutTimeUs {
+				// 	// TODO send emergency
+				// }
 			}
 			if timerNext != nil && rpdo.TimeoutTimer < rpdo.TimeoutTimeUs {
 				diff := rpdo.TimeoutTimeUs - rpdo.TimeoutTimer
@@ -562,9 +562,9 @@ func (tpdo *TPDO) Init(
 			erroneousMap = 1
 		}
 	}
-	if erroneousMap != 0 {
-		// TODO send emergency
-	}
+	// if erroneousMap != 0 {
+	// 	// TODO send emergency
+	// }
 	if !valid {
 		canId = 0
 	}
@@ -583,13 +583,22 @@ func (tpdo *TPDO) Init(
 	inhibitTime := uint16(0)
 	eventTime := uint16(0)
 	ret = entry18xx.GetUint16(3, &inhibitTime)
+	if ret != nil {
+		log.Warnf("[PDO] error reading inhibit time %v", ret)
+	}
 	ret = entry18xx.GetUint16(5, &eventTime)
+	if ret != nil {
+		log.Warnf("[PDO] error reading event time %v", ret)
+	}
 	tpdo.InhibitTimeUs = uint32(inhibitTime) * 100
 	tpdo.EventTimeUs = uint32(eventTime) * 1000
 
 	// Configure sync start value
 	tpdo.SyncStartValue = 0
 	ret = entry18xx.GetUint8(6, &tpdo.SyncStartValue)
+	if ret != nil {
+		log.Warnf("[PDO] error reading sync start %v", ret)
+	}
 	tpdo.Sync = sync
 	tpdo.SyncCounter = 255
 
