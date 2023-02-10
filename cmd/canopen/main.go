@@ -51,9 +51,12 @@ func main() {
 
 	node := canopen.Node{Config: nil, CANModule: canmodule, NMT: nil}
 	err = node.Init(nil, nil, od, nil, canopen.CO_NMT_STARTUP_TO_OPERATIONAL, 500, 1000, 1000, true, NODE_ID)
-
 	if err != nil {
 		log.Panicf("Failed Initializing Node because %v", err)
+	}
+	err = node.InitPDO(&canopen.EM{}, od, NODE_ID)
+	if err != nil {
+		log.Panicf("Failed to initiallize PDOs for Node because %v", err)
 	}
 
 	start_background := time.Now()
@@ -69,7 +72,8 @@ func main() {
 			elapsed := time.Since(start_background)
 			start_background = time.Now()
 			time_difference_us := uint32(elapsed.Microseconds())
-			node.ProcessSYNC(time_difference_us, nil)
+			syncWas := node.ProcessSYNC(time_difference_us, nil)
+			node.ProcessTPDO(syncWas, time_difference_us, nil)
 			//fmt.Printf("Timer next %v ; Elapsed %v", timer_next_us, time_difference_us)
 			time.Sleep(time.Duration(timer_next_background_us) * time.Microsecond)
 		}
