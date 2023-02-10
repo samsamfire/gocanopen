@@ -609,6 +609,9 @@ func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, da
 		return CO_SDO_AB_GENERAL
 	}
 	ret = client.DownloadInitiate(index, subindex, uint32(len(data)), 1000, false)
+	if ret < 0 {
+		log.Errorf("Failed to initiate SDO client : %v", ret)
+	}
 
 	// Fill buffer
 	nWritten := client.DownloadBufWrite(data)
