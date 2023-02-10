@@ -295,7 +295,7 @@ func (server *SDOServer) WriteToObjectDictionnry(abortCode *SDOAbortCode, crcOpe
 	// Write the data
 	var countWritten uint16 = 0
 	// TODo add locking mechanism ?
-	ret := server.Streamer.Write(server.Streamer.Stream, server.Buffer[:server.BufferOffsetWrite], &countWritten)
+	ret := server.Streamer.Write(&server.Streamer.Stream, server.Buffer[:server.BufferOffsetWrite], &countWritten)
 	server.BufferOffsetWrite = 0
 	if ret != nil && ret != ODR_PARTIAL {
 		*abortCode = ret.(ODR).GetSDOAbordCode()
@@ -323,7 +323,7 @@ func (server *SDOServer) ReadFromObjectDictionary(abortCode *SDOAbortCode, count
 		server.BufferOffsetWrite = remainingCount
 		var countRd uint16 = 0
 		// TODO add locking
-		err := server.Streamer.Read(server.Streamer.Stream, server.Buffer[remainingCount:], &countRd)
+		err := server.Streamer.Read(&server.Streamer.Stream, server.Buffer[remainingCount:], &countRd)
 
 		if err != nil && err != ODR_PARTIAL {
 			*abortCode = err.(ODR).GetSDOAbordCode()
@@ -465,7 +465,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 						break
 					}
 					var countWritten uint16 = 0
-					err := server.Streamer.Write(server.Streamer.Stream, buf[:dataSizeToWrite], &countWritten)
+					err := server.Streamer.Write(&server.Streamer.Stream, buf[:dataSizeToWrite], &countWritten)
 					if err != nil {
 						abortCode = err.(ODR).GetSDOAbordCode()
 						server.State = CO_SDO_ST_ABORT

@@ -35,17 +35,15 @@ func (node *Node) ProcessSRDO(time_difference_us uint32) (timer_next_us uint32) 
 }
 
 /* Process TPDO */
-func (node *Node) ProcessTPDO(sync_was bool, time_difference_us uint32) (timer_next_us uint32) {
+func (node *Node) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
 	// Process TPDO object
 	if node.NodeIdUnconfigured {
 		return
 	}
 	nmtIsOperational := node.NMT.GetInternalState() == CO_NMT_OPERATIONAL
 	for _, tpdo := range node.TPDOs {
-		tpdo.Process(time_difference_us, &timer_next_us, nmtIsOperational, sync_was)
+		tpdo.Process(timeDifferenceUs, timerNextUs, nmtIsOperational, syncWas)
 	}
-
-	return 0
 }
 
 /* Process RPDO */
