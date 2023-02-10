@@ -174,9 +174,9 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 			if monitoredNode.RxNew {
 				if monitoredNode.NMTState == CO_NMT_INITIALIZING {
 					//Boot up message
-					if monitoredNode.HBState == HB_ACTIVE {
-						// TODO add emergency send
-					}
+					// if monitoredNode.HBState == HB_ACTIVE {
+					// 	// TODO add emergency send
+					// }
 					monitoredNode.HBState = HB_UNKNOWN
 				} else {
 					// Heartbeat message
@@ -230,9 +230,9 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 	}
 
 	// Clear emergencies when all monitored nodes become active
-	if !consumer.AllMonitoredActive && allMonitoredActiveCurrent {
-		// TODO send emergency frame
-	}
+	// if !consumer.AllMonitoredActive && allMonitoredActiveCurrent {
+	// 	// TODO send emergency frame
+	// }
 	consumer.AllMonitoredActive = allMonitoredActiveCurrent
 	consumer.AllMonitoredOperational = allMonitoredOperationalCurrent
 	consumer.NMTisPreOrOperationalPrev = nmtIsPreOrOperational
