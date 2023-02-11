@@ -195,8 +195,26 @@ func (base *PDOBase) InitMapping(od *ObjectDictionary, entry *Entry, isRPDO bool
 }
 
 func ReadPDOCommunicationParameter(stream *Stream, data []byte, countRead *uint16) error {
-	// TODO
-	return nil
+	err := ReadEntryOriginal(stream, data, countRead)
+	// Add node id when reading subindex 1
+	if err == nil && stream.Subindex == 1 && *countRead == 4 {
+		rpdo, ok := stream.Object.(*RPDO)
+		if !ok {
+			return ODR_DEV_INCOMPAT
+		}
+		cobId := binary.LittleEndian.Uint32(data)
+		canId := uint16(cobId & 0x7FF)
+		// Add ID if not contained
+		if canId != 0 && canId == (rpdo.Base.PreDefinedIdent&0xFF80) {
+			cobId = (cobId & 0xFFFF0000) | uint32(rpdo.Base.PreDefinedIdent)
+		}
+		// If PDO not valid, set bit 32
+		if !rpdo.Base.Valid {
+			cobId |= 0x80000000
+		}
+		binary.LittleEndian.PutUint32(data, cobId)
+	}
+	return err
 }
 
 func WritePDOMappingParameter(stream *Stream, data []byte, countWritten *uint16) error {
