@@ -316,7 +316,6 @@ func (server *SDOServer) WriteToObjectDictionnry(abortCode *SDOAbortCode, crcOpe
 
 func (server *SDOServer) ReadFromObjectDictionary(abortCode *SDOAbortCode, countMinimum uint32, calculateCRC bool) bool {
 	remainingCount := server.BufferOffsetWrite - server.BufferOffsetRead
-	log.Debug("Reading from od")
 	if !server.Finished && remainingCount < countMinimum {
 		copy(server.Buffer, server.Buffer[server.BufferOffsetRead:])
 		server.BufferOffsetRead = 0
@@ -337,9 +336,11 @@ func (server *SDOServer) ReadFromObjectDictionary(abortCode *SDOAbortCode, count
 		// 	countStr :=
 		// }
 		server.BufferOffsetWrite = remainingCount + uint32(countRd)
+		log.Errorf("count read %v,remaining %v index %v, subindex %v", countRd, remainingCount, server.Streamer)
 		if server.BufferOffsetWrite == 0 || err == ODR_PARTIAL {
 			server.Finished = false
 			if server.BufferOffsetWrite < countMinimum {
+				log.Errorf("bufferoffsetwrite %v, countmin %v", server.BufferOffsetWrite, countMinimum)
 				*abortCode = CO_SDO_AB_DEVICE_INCOMPAT
 				server.State = CO_SDO_ST_ABORT
 				return false
@@ -377,7 +378,6 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 	ret := CO_SDO_RT_waitingResponse
 	abortCode := CO_SDO_AB_NONE
 	if server.Valid && server.State == CO_SDO_ST_IDLE && !server.RxNew {
-		//log.Infof("Not processing because %v %v %v", server.Valid, server.State, server.RxNew)
 		ret = CO_SDO_RT_ok_communicationEnd
 	} else if !nmtIsPreOrOperationnal || !server.Valid {
 		server.State = CO_SDO_ST_IDLE
@@ -398,20 +398,19 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.Subindex = response.GetSubindex()
 				err := server.OD.Find(server.Index).Sub(server.Subindex, false, server.Streamer)
 				if err != nil {
-					log.Info(err)
 					abortCode = err.(ODR).GetSDOAbordCode()
 					server.State = CO_SDO_ST_ABORT
-				}
-			} else {
-				if server.Streamer.Stream.Attribute&ODA_SDO_RW == 0 {
-					abortCode = CO_SDO_AB_UNSUPPORTED_ACCESS
-					server.State = CO_SDO_ST_ABORT
-				} else if upload && (server.Streamer.Stream.Attribute&ODA_SDO_R) == 0 {
-					abortCode = CO_SDO_AB_WRITEONLY
-					server.State = CO_SDO_ST_ABORT
-				} else if !upload && (server.Streamer.Stream.Attribute&ODA_SDO_W) == 0 {
-					abortCode = CO_SDO_AB_READONLY
-					server.State = CO_SDO_ST_ABORT
+				} else {
+					if server.Streamer.Stream.Attribute&ODA_SDO_RW == 0 {
+						abortCode = CO_SDO_AB_UNSUPPORTED_ACCESS
+						server.State = CO_SDO_ST_ABORT
+					} else if upload && (server.Streamer.Stream.Attribute&ODA_SDO_R) == 0 {
+						abortCode = CO_SDO_AB_WRITEONLY
+						server.State = CO_SDO_ST_ABORT
+					} else if !upload && (server.Streamer.Stream.Attribute&ODA_SDO_W) == 0 {
+						abortCode = CO_SDO_AB_READONLY
+						server.State = CO_SDO_ST_ABORT
+					}
 				}
 			}
 			// Load data from OD
