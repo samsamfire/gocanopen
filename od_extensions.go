@@ -2,6 +2,8 @@ package canopen
 
 import (
 	"encoding/binary"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // This file regroups special functions that are executed when reading or writing to object dictionary
@@ -288,4 +290,79 @@ func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 	}
 	return WriteEntryOriginal(stream, bufCopy, countWritten)
 
+}
+
+// Write SYNC cob id & producer or not
+func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
+	log.Debug("[SYNC] Writing in extension entry 1005")
+	// Expect a uint32 and subindex 0 and no nill pointers
+	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
+		return ODR_DEV_INCOMPAT
+	}
+	sync, ok := stream.Object.(*SYNC)
+	if !ok {
+		log.Error("Object in 1005 is not a SYNC pointer object")
+		return ODR_DEV_INCOMPAT
+	}
+	cobIdSync := binary.LittleEndian.Uint32(data)
+	var canId uint16 = uint16(cobIdSync & 0x7FF)
+	isProducer := (cobIdSync & 0x40000000) != 0
+	if (cobIdSync&0xBFFFF800) != 0 || isIDRestricted(canId) || (sync.IsProducer && isProducer && canId != sync.Ident) {
+		return ODR_INVALID_VALUE
+	}
+	// Reconfigure the receive and transmit buffers only if changed
+	if canId != sync.Ident {
+		err := sync.CANModule.UpdateRxBuffer(sync.CANRxBuffIndex, uint32(canId), 0x7FF, false, sync)
+		if err != nil {
+			return ODR_DEV_INCOMPAT
+		}
+		var frameSize uint8 = 0
+		if sync.CounterOverflowValue != 0 {
+			frameSize = 1
+		}
+		sync.CANTxBuff, err = sync.CANModule.UpdateTxBuffer(sync.CANTxBuffIndex, uint32(canId), false, frameSize, false)
+		if sync.CANTxBuff == nil || err != nil {
+			return ODR_DEV_INCOMPAT
+		}
+		sync.Ident = canId
+	}
+	// Reset in case sync is producer
+	sync.IsProducer = isProducer
+	if isProducer {
+		log.Info("SYNC is now a producer")
+		sync.Counter = 0
+		sync.Timer = 0
+	}
+	return WriteEntryOriginal(stream, data, countWritten)
+}
+
+// Write sync synchronous counter overflow
+func WriteEntry1019(stream *Stream, data []byte, countWritten *uint16) error {
+	if stream == nil || data == nil || countWritten == nil || len(data) != 1 {
+		return ODR_DEV_INCOMPAT
+	}
+	sync, ok := stream.Object.(*SYNC)
+	if !ok {
+		return ODR_DEV_INCOMPAT
+	}
+	syncCounterOverflow := data[0]
+	if syncCounterOverflow == 1 || syncCounterOverflow > 240 {
+		return ODR_INVALID_VALUE
+	}
+	OD1006Period := binary.LittleEndian.Uint32(*sync.OD1006Period)
+	if OD1006Period != 0 {
+		return ODR_DATA_DEV_STATE
+	}
+	var nbBytes = uint8(0)
+	if syncCounterOverflow != 0 {
+		nbBytes = 1
+	}
+	var err error
+	sync.CANTxBuff, err = sync.CANModule.UpdateTxBuffer(sync.CANTxBuffIndex, uint32(sync.Ident), false, nbBytes, false)
+	if sync.CANTxBuff == nil || err != nil {
+		sync.IsProducer = false
+		return ODR_DEV_INCOMPAT
+	}
+	sync.CounterOverflowValue = syncCounterOverflow
+	return WriteEntryOriginal(stream, data, countWritten)
 }
