@@ -336,11 +336,9 @@ func (server *SDOServer) ReadFromObjectDictionary(abortCode *SDOAbortCode, count
 		// 	countStr :=
 		// }
 		server.BufferOffsetWrite = remainingCount + uint32(countRd)
-		log.Errorf("count read %v,remaining %v index %v, subindex %v", countRd, remainingCount, server.Streamer)
 		if server.BufferOffsetWrite == 0 || err == ODR_PARTIAL {
 			server.Finished = false
 			if server.BufferOffsetWrite < countMinimum {
-				log.Errorf("bufferoffsetwrite %v, countmin %v", server.BufferOffsetWrite, countMinimum)
 				*abortCode = CO_SDO_AB_DEVICE_INCOMPAT
 				server.State = CO_SDO_ST_ABORT
 				return false
@@ -969,13 +967,14 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 	}
 
 	if ret == CO_SDO_RT_waitingResponse {
-		if server.State == CO_SDO_ST_ABORT {
+		switch server.State {
+		case CO_SDO_ST_ABORT:
 			server.Abort(abortCode)
 			server.State = CO_SDO_ST_IDLE
 			ret = CO_SDO_RT_endedWithServerAbort
-		} else if server.State == CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ {
+		case CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ:
 			ret = CO_SDO_RT_blockDownldInProgress
-		} else if server.State == CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ {
+		case CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ:
 			ret = CO_SDO_RT_blockUploadInProgress
 		}
 	}
