@@ -1,8 +1,6 @@
 package canopen
 
 import (
-	"encoding/binary"
-
 	"github.com/brutella/can"
 	log "github.com/sirupsen/logrus"
 )
@@ -56,25 +54,6 @@ type RPDO struct {
 	Synchronous   bool
 	TimeoutTimeUs uint32
 	TimeoutTimer  uint32
-}
-
-// Write & Read dummy : to absorb an object that is not mapped in dictionary
-func WriteDummy(stream *Stream, data []byte, countWritten *uint16) error {
-	if countWritten != nil {
-		*countWritten = uint16(len(data))
-	}
-	return nil
-}
-func ReadDummy(stream *Stream, data []byte, countRead *uint16) error {
-	if countRead == nil || data == nil || stream == nil {
-		return ODR_DEV_INCOMPAT
-	}
-	if len(data) > len(stream.Data) {
-		*countRead = uint16(len(stream.Data))
-	} else {
-		*countRead = uint16(len(data))
-	}
-	return nil
 }
 
 // Configure a PDO map
@@ -194,34 +173,6 @@ func (base *PDOBase) InitMapping(od *ObjectDictionary, entry *Entry, isRPDO bool
 	return nil
 }
 
-func ReadPDOCommunicationParameter(stream *Stream, data []byte, countRead *uint16) error {
-	err := ReadEntryOriginal(stream, data, countRead)
-	// Add node id when reading subindex 1
-	if err == nil && stream.Subindex == 1 && *countRead == 4 {
-		rpdo, ok := stream.Object.(*RPDO)
-		if !ok {
-			return ODR_DEV_INCOMPAT
-		}
-		cobId := binary.LittleEndian.Uint32(data)
-		canId := uint16(cobId & 0x7FF)
-		// Add ID if not contained
-		if canId != 0 && canId == (rpdo.Base.PreDefinedIdent&0xFF80) {
-			cobId = (cobId & 0xFFFF0000) | uint32(rpdo.Base.PreDefinedIdent)
-		}
-		// If PDO not valid, set bit 32
-		if !rpdo.Base.Valid {
-			cobId |= 0x80000000
-		}
-		binary.LittleEndian.PutUint32(data, cobId)
-	}
-	return err
-}
-
-func WritePDOMappingParameter(stream *Stream, data []byte, countWritten *uint16) error {
-	// TODO
-	return nil
-}
-
 const (
 	CO_RPDO_RX_ACK_NO_ERROR = 0  /* No error */
 	CO_RPDO_RX_ACK_ERROR    = 1  /* Error is acknowledged */
@@ -270,11 +221,6 @@ func (rpdo *RPDO) Handle(frame can.Frame) {
 		}
 		rpdo.ReceiveError = err
 	}
-}
-
-func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
-	// TODO
-	return nil
 }
 
 func (rpdo *RPDO) Init(od *ObjectDictionary,
@@ -347,11 +293,11 @@ func (rpdo *RPDO) Init(od *ObjectDictionary,
 	pdo.PreDefinedIdent = preDefinedId
 	pdo.ConfiguredIdent = uint16(canId)
 	pdo.ExtensionCommunicationParam.Object = rpdo
-	pdo.ExtensionCommunicationParam.Read = ReadPDOCommunicationParameter
+	pdo.ExtensionCommunicationParam.Read = ReadEntry14xxOr18xx
 	pdo.ExtensionCommunicationParam.Write = WriteEntry14xx
 	pdo.ExtensionMappingParam.Object = rpdo
 	pdo.ExtensionMappingParam.Read = ReadEntryOriginal
-	pdo.ExtensionMappingParam.Write = WritePDOMappingParameter
+	pdo.ExtensionMappingParam.Write = WriteEntry16xxOr1Axx
 	entry14xx.AddExtension(&pdo.ExtensionCommunicationParam)
 	entry16xx.AddExtension(&pdo.ExtensionMappingParam)
 	return nil
@@ -437,99 +383,6 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 			rpdo.TimeoutTimer = 0
 		}
 	}
-}
-
-// Extension for writing to TPDO communication parameters
-func WriteEntry18xx(stream *Stream, buf []byte, countWritten *uint16) error {
-	if stream == nil || buf == nil || countWritten == nil || len(buf) > 4 {
-		return ODR_DEV_INCOMPAT
-	}
-	tpdo, ok := stream.Object.(*TPDO)
-	if !ok {
-		log.Error("Expecting *TPDO")
-		return ODR_DEV_INCOMPAT
-	}
-	pdo := &tpdo.Base
-	bufCopy := make([]byte, 4)
-	copy(bufCopy, buf)
-	switch stream.Subindex {
-	case 1:
-		// COB id used by PDO
-		cobId := binary.LittleEndian.Uint32(buf)
-		canId := cobId & 0x7FF
-		valid := (cobId & 0x80000000) == 0
-		/* bits 11...29 must be zero, PDO must be disabled on change,
-		 * CAN_ID == 0 is not allowed, mapping must be configured before
-		 * enabling the PDO */
-
-		if (cobId&0x3FFFF800) != 0 ||
-			valid && pdo.Valid && canId != uint32(pdo.ConfiguredIdent) ||
-			valid && isIDRestricted(uint16(canId)) ||
-			valid && pdo.MappedObjectsCount == 0 {
-			return ODR_INVALID_VALUE
-		}
-
-		// Parameter changed ?
-		if valid != pdo.Valid || canId != uint32(pdo.ConfiguredIdent) {
-			// If default id is written store to OD without node id
-			if canId == uint32(pdo.PreDefinedIdent) {
-				binary.LittleEndian.PutUint32(bufCopy, cobId&0xFFFFFF80)
-			}
-			if !valid {
-				canId = 0
-			}
-			txBuffer, err := pdo.Canmodule.UpdateTxBuffer(
-				pdo.BufferIdx,
-				canId,
-				false,
-				uint8(pdo.DataLength),
-				tpdo.TransmissionType <= CO_PDO_TRANSM_TYPE_SYNC_240)
-			if txBuffer == nil || err != nil {
-				return ODR_DEV_INCOMPAT
-			}
-			tpdo.TxBuffer = txBuffer
-			pdo.Valid = valid
-			pdo.ConfiguredIdent = uint16(canId)
-		}
-
-	case 2:
-		// Transmission type
-		transmissionType := buf[0]
-		if transmissionType > CO_PDO_TRANSM_TYPE_SYNC_240 && transmissionType < CO_PDO_TRANSM_TYPE_SYNC_EVENT_LO {
-			return ODR_INVALID_VALUE
-		}
-		tpdo.TxBuffer.SyncFlag = transmissionType <= CO_PDO_TRANSM_TYPE_SYNC_240
-		tpdo.SyncCounter = 255
-		tpdo.TransmissionType = transmissionType
-		tpdo.SendRequest = true
-		tpdo.InhibitTimer = 0
-		tpdo.EventTimer = 0
-
-	case 3:
-		//Inhibit time
-		if pdo.Valid {
-			return ODR_INVALID_VALUE
-		}
-		inhibitTime := binary.LittleEndian.Uint16(buf)
-		tpdo.InhibitTimeUs = uint32(inhibitTime) * 100
-		tpdo.InhibitTimer = 0
-
-	case 5:
-		// Envent timer
-		eventTime := binary.LittleEndian.Uint16(buf)
-		tpdo.EventTimeUs = uint32(eventTime) * 1000
-		tpdo.EventTimer = 0
-
-	case 6:
-		syncStartValue := buf[0]
-		if pdo.Valid || syncStartValue > 240 {
-			return ODR_INVALID_VALUE
-		}
-		tpdo.SyncStartValue = syncStartValue
-
-	}
-	return WriteEntryOriginal(stream, bufCopy, countWritten)
-
 }
 
 func (tpdo *TPDO) Init(
@@ -627,11 +480,11 @@ func (tpdo *TPDO) Init(
 	pdo.PreDefinedIdent = predefinedIdent
 	pdo.ConfiguredIdent = canId
 	pdo.ExtensionCommunicationParam.Object = tpdo
-	pdo.ExtensionCommunicationParam.Read = ReadPDOCommunicationParameter
+	pdo.ExtensionCommunicationParam.Read = ReadEntry14xxOr18xx
 	pdo.ExtensionCommunicationParam.Write = WriteEntry18xx
 	pdo.ExtensionMappingParam.Object = tpdo
 	pdo.ExtensionMappingParam.Read = ReadEntryOriginal
-	pdo.ExtensionMappingParam.Write = WritePDOMappingParameter
+	pdo.ExtensionMappingParam.Write = WriteEntry16xxOr1Axx
 	entry18xx.AddExtension(&pdo.ExtensionCommunicationParam)
 	entry1Axx.AddExtension(&pdo.ExtensionMappingParam)
 	log.Debugf("[TPDO] Configuration parameter : canId : %v | valid : %v | inhibit : %v | event timer : %v | transmission type : %v",
