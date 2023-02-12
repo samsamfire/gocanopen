@@ -67,7 +67,7 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 		return ODR_DEV_INCOMPAT
 	}
 	pdo := &rpdo.Base
-	bufCopy := make([]byte, 4)
+	bufCopy := make([]byte, len(data))
 	copy(bufCopy, data)
 	switch stream.Subindex {
 	case 1:
@@ -199,8 +199,8 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 }
 
 // Write TPDO communication parameter
-func WriteEntry18xx(stream *Stream, buf []byte, countWritten *uint16) error {
-	if stream == nil || buf == nil || countWritten == nil || len(buf) > 4 {
+func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
+	if stream == nil || data == nil || countWritten == nil || len(data) > 4 {
 		return ODR_DEV_INCOMPAT
 	}
 	tpdo, ok := stream.Object.(*TPDO)
@@ -208,12 +208,12 @@ func WriteEntry18xx(stream *Stream, buf []byte, countWritten *uint16) error {
 		return ODR_DEV_INCOMPAT
 	}
 	pdo := &tpdo.Base
-	bufCopy := make([]byte, 4)
-	copy(bufCopy, buf)
+	bufCopy := make([]byte, len(data))
+	copy(bufCopy, data)
 	switch stream.Subindex {
 	case 1:
 		// COB id used by PDO
-		cobId := binary.LittleEndian.Uint32(buf)
+		cobId := binary.LittleEndian.Uint32(data)
 		canId := cobId & 0x7FF
 		valid := (cobId & 0x80000000) == 0
 		/* bits 11...29 must be zero, PDO must be disabled on change,
@@ -252,7 +252,7 @@ func WriteEntry18xx(stream *Stream, buf []byte, countWritten *uint16) error {
 
 	case 2:
 		// Transmission type
-		transmissionType := buf[0]
+		transmissionType := data[0]
 		if transmissionType > CO_PDO_TRANSM_TYPE_SYNC_240 && transmissionType < CO_PDO_TRANSM_TYPE_SYNC_EVENT_LO {
 			return ODR_INVALID_VALUE
 		}
@@ -268,18 +268,18 @@ func WriteEntry18xx(stream *Stream, buf []byte, countWritten *uint16) error {
 		if pdo.Valid {
 			return ODR_INVALID_VALUE
 		}
-		inhibitTime := binary.LittleEndian.Uint16(buf)
+		inhibitTime := binary.LittleEndian.Uint16(data)
 		tpdo.InhibitTimeUs = uint32(inhibitTime) * 100
 		tpdo.InhibitTimer = 0
 
 	case 5:
 		// Envent timer
-		eventTime := binary.LittleEndian.Uint16(buf)
+		eventTime := binary.LittleEndian.Uint16(data)
 		tpdo.EventTimeUs = uint32(eventTime) * 1000
 		tpdo.EventTimer = 0
 
 	case 6:
-		syncStartValue := buf[0]
+		syncStartValue := data[0]
 		if pdo.Valid || syncStartValue > 240 {
 			return ODR_INVALID_VALUE
 		}
