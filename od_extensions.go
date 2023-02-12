@@ -157,7 +157,7 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 		return ODR_DEV_INCOMPAT
 	}
 	// PDO must be disabled in order to allow mapping
-	if !pdo.Valid || pdo.MappedObjectsCount != 0 && stream.Subindex > 0 {
+	if pdo.Valid || pdo.MappedObjectsCount != 0 && stream.Subindex > 0 {
 		return ODR_UNSUPP_ACCESS
 	}
 	if stream.Subindex == 0 {
