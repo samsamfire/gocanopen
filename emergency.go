@@ -1,7 +1,16 @@
 package canopen
 
-import "encoding/binary"
+import (
+	"encoding/binary"
 
+	"github.com/brutella/can"
+)
+
+/*
+	TODOs:
+
+- error register
+*/
 const CO_CONFIG_EM_ERR_STATUS_BITS_COUNT = 80
 
 // Error register values
@@ -238,7 +247,7 @@ type EM struct {
 	errorRegister       *byte
 	CANerrorStatusOld   uint16
 	CANmodule           *CANModule
-	Fifo                *EMFifo
+	Fifo                []EMFifo
 	FifoSize            byte
 	FifoWrPtr           byte
 	FifoPpPtr           byte
@@ -247,14 +256,16 @@ type EM struct {
 	ProducerEnabled     bool
 	NodeId              byte
 	CANTxBuff           *BufferTxFrame
-	TxBufferIdx         uint16
-	ExtensionEntry1014  Extension
+	TxBufferIdx         int
+	RxBufferIdx         int
 	ProducerIdent       uint16
 	InhibitEmTimeUs     uint32
 	InhibitEmTimer      uint32
+	ExtensionEntry1014  Extension
 	ExtensionEntry1015  Extension
 	ExtensionEntry1003  Extension
 	ExtensionStatusBits Extension
+	EmergencyRxCallback func(ident uint16, errorCode uint16, errorRegister byte, errorBit byte, infoCode uint32)
 }
 
 func ReadEntry1014(stream *Stream, data []byte, countRead *uint16) error {
@@ -327,4 +338,209 @@ func WriteEntry1014(stream *Stream, data []byte, countWritten *uint16) error {
 	}
 	return WriteEntryOriginal(stream, data, countWritten)
 
+}
+
+func WriteEntry1015(stream *Stream, data []byte, countWritten *uint16) error {
+	if stream == nil || stream.Subindex != 0 || data == nil || len(data) != 2 || countWritten == nil {
+		return ODR_DEV_INCOMPAT
+	}
+	em, ok := stream.Object.(*EM)
+	if !ok {
+		return ODR_DEV_INCOMPAT
+	}
+	em.InhibitEmTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 100
+	em.InhibitEmTimer = 0
+
+	return WriteEntryOriginal(stream, data, countWritten)
+
+}
+
+func ReadEntry1003(stream *Stream, data []byte, countRead *uint16) error {
+	if stream == nil || data == nil || countRead == nil ||
+		(len(data) < 4 && stream.Subindex > 0) ||
+		len(data) < 1 {
+		return ODR_DEV_INCOMPAT
+	}
+	em, ok := stream.Object.(*EM)
+	if !ok {
+		return ODR_DEV_INCOMPAT
+	}
+	if em.FifoSize < 2 {
+		return ODR_DEV_INCOMPAT
+	}
+	if stream.Subindex == 0 {
+		data[0] = em.FifoCount
+		*countRead = 1
+		return nil
+	}
+	if stream.Subindex > em.FifoCount {
+		return ODR_NO_DATA
+	}
+	// Most recent error is in subindex 1 and stored behind fifoWrPtr
+	index := int(em.FifoWrPtr) - int(stream.Subindex)
+	if index >= int(em.FifoSize) {
+		return ODR_DEV_INCOMPAT
+	}
+	if index < 0 {
+		index += int(em.FifoSize)
+	}
+	binary.LittleEndian.PutUint32(data, em.Fifo[index].msg)
+	*countRead = 4
+	return nil
+}
+
+func WriteEntry1003(stream *Stream, data []byte, countWritten *uint16) error {
+	if stream == nil || stream.Subindex != 0 || data == nil || len(data) != 1 || countWritten == nil {
+		return ODR_DEV_INCOMPAT
+	}
+	if data[0] != 0 {
+		return ODR_INVALID_VALUE
+	}
+	em, ok := stream.Object.(*EM)
+	if !ok {
+		return ODR_DEV_INCOMPAT
+	}
+	// Clear error history
+	em.FifoCount = 0
+	*countWritten = 1
+	return nil
+}
+
+func ReadEntryStatusBits(stream *Stream, data []byte, countRead *uint16) error {
+	if stream == nil || stream.Subindex != 0 || data == nil || countRead == nil {
+		return ODR_DEV_INCOMPAT
+	}
+	em, ok := stream.Object.(*EM)
+	if !ok {
+		return ODR_DEV_INCOMPAT
+	}
+
+	countReadLocal := CO_CONFIG_EM_ERR_STATUS_BITS_COUNT / 8
+	if countReadLocal > len(data) {
+		countReadLocal = len(data)
+	}
+	if len(stream.Data) != 0 && countReadLocal > len(stream.Data) {
+		countReadLocal = len(stream.Data)
+	} // Unclear why we change datalength
+	copy(data, em.errorStatusBits[:countReadLocal])
+	*countRead = uint16(countReadLocal)
+	return nil
+}
+
+func WriteEntryStatusBits(stream *Stream, data []byte, countWritten *uint16) error {
+	if stream == nil || stream.Subindex != 0 || countWritten == nil || data == nil {
+		return ODR_DEV_INCOMPAT
+	}
+	em, ok := stream.Object.(*EM)
+	if !ok {
+		return ODR_DEV_INCOMPAT
+	}
+	countWriteLocal := CO_CONFIG_EM_ERR_STATUS_BITS_COUNT / 8
+	if countWriteLocal > len(data) {
+		countWriteLocal = len(data)
+	}
+	if len(stream.Data) != 0 && countWriteLocal > len(stream.Data) {
+		countWriteLocal = len(stream.Data)
+	} // Unclear why we change datalength
+	copy(em.errorStatusBits[:], data[:countWriteLocal])
+	*countWritten = uint16(countWriteLocal)
+	return nil
+}
+
+func (emergency *EM) Handle(frame can.Frame) {
+	// Ignore sync messages and only accept 8 bytes size
+	if emergency == nil || emergency.EmergencyRxCallback == nil ||
+		frame.ID == 0x80 ||
+		len(frame.Data) != 8 {
+		return
+	}
+	errorCode := binary.LittleEndian.Uint16(frame.Data[0:2])
+	infoCode := binary.LittleEndian.Uint32(frame.Data[4:8])
+	emergency.EmergencyRxCallback(
+		uint16(frame.ID),
+		errorCode,
+		frame.Data[2],
+		frame.Data[3],
+		infoCode)
+
+}
+
+func GetErrorRegister()
+
+func (emergency *EM) Init(
+	canmodule *CANModule,
+	entry1001 *Entry,
+	fifo []EMFifo,
+	entry1014 *Entry,
+	entry1015 *Entry,
+	entry1003 *Entry,
+	entryStatusBits *Entry,
+	nodeId uint8,
+) error {
+	if emergency == nil || entry1001 == nil ||
+		fifo == nil ||
+		entry1014 == nil || canmodule == nil ||
+		nodeId < 1 || nodeId > 127 ||
+		entry1003 == nil {
+		return CO_ERROR_ILLEGAL_ARGUMENT
+
+	}
+	// Reset object
+	emergency = &EM{}
+	emergency.CANmodule = canmodule
+	// TODO handle error register ptr
+	*emergency.errorRegister = 0
+	emergency.Fifo = fifo
+
+	// Get cob id initial & verify
+	cobIdEmergency := uint32(0)
+	ret := entry1014.GetUint32(0, &cobIdEmergency)
+	if ret != nil || (cobIdEmergency&0x7FFFF800) != 0 {
+		// Don't break if only value is wrong
+		if ret != nil {
+			return CO_ERROR_OD_PARAMETERS
+		}
+	}
+	producerCanId := cobIdEmergency & 0x7FF
+	emergency.ProducerEnabled = (cobIdEmergency&0x80000000) == 0 && producerCanId != 0
+	emergency.ExtensionEntry1014.Object = emergency
+	emergency.ExtensionEntry1014.Read = ReadEntry1014
+	emergency.ExtensionEntry1014.Write = WriteEntry1014
+	err := entry1014.AddExtension(&emergency.ExtensionEntry1014)
+	if err != nil {
+		return CO_ERROR_OD_PARAMETERS
+	}
+	emergency.ProducerIdent = uint16(producerCanId)
+	if producerCanId == uint32(EMERGENCY_SERVICE_ID) {
+		producerCanId += uint32(nodeId)
+	}
+	// Configure Tx buffer
+	emergency.NodeId = nodeId
+	emergency.CANTxBuff, emergency.TxBufferIdx, err = emergency.CANmodule.InsertTxBuffer(producerCanId, false, 8, false)
+	if emergency.CANTxBuff == nil || err != nil {
+		return CO_ERROR_ILLEGAL_ARGUMENT
+	}
+	emergency.InhibitEmTimeUs = 0
+	emergency.InhibitEmTimer = 0
+	inhibitTime100us := uint16(0)
+	ret = entry1015.GetUint16(0, &inhibitTime100us)
+	if ret == nil {
+		emergency.InhibitEmTimeUs = uint32(inhibitTime100us) * 100
+		emergency.ExtensionEntry1015.Object = emergency
+		emergency.ExtensionEntry1015.Write = WriteEntry1015
+		emergency.ExtensionEntry1015.Read = ReadEntryOriginal
+		entry1015.AddExtension(&emergency.ExtensionEntry1015)
+	}
+	emergency.ExtensionEntry1003.Object = emergency
+	emergency.ExtensionEntry1003.Read = ReadEntry1003
+	emergency.ExtensionEntry1003.Write = WriteEntry1003
+	entry1003.AddExtension(&emergency.ExtensionEntry1003)
+
+	emergency.ExtensionStatusBits.Object = emergency
+	emergency.ExtensionStatusBits.Read = ReadEntryStatusBits
+	emergency.ExtensionStatusBits.Write = WriteEntryStatusBits
+	entryStatusBits.AddExtension(&emergency.ExtensionStatusBits)
+
+	emergency.RxBufferIdx, err = canmodule.InsertRxBuffer(uint32(EMERGENCY_SERVICE_ID), 0x780, false, emergency)
+	return err
 }
