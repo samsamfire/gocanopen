@@ -464,9 +464,6 @@ func (emergency *EM) Handle(frame can.Frame) {
 		infoCode)
 
 }
-
-func GetErrorRegister()
-
 func (emergency *EM) Init(
 	canmodule *CANModule,
 	entry1001 *Entry,
@@ -543,4 +540,153 @@ func (emergency *EM) Init(
 
 	emergency.RxBufferIdx, err = canmodule.InsertRxBuffer(uint32(EMERGENCY_SERVICE_ID), 0x780, false, emergency)
 	return err
+}
+
+func (emergency *EM) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
+	// Check errors from driver
+	canErrStatus := emergency.CANmodule.CANerrorstatus
+	if canErrStatus != emergency.CANerrorStatusOld {
+		canErrStatusChanged := canErrStatus ^ emergency.CANerrorStatusOld
+		emergency.CANerrorStatusOld = canErrStatus
+		if (canErrStatusChanged & (CAN_ERRTX_WARNING | CAN_ERRRX_WARNING)) != 0 {
+			emergency.Error(
+				(canErrStatus&(CAN_ERRTX_WARNING|CAN_ERRRX_WARNING)) != 0,
+				CO_EM_CAN_BUS_WARNING,
+				CO_EMC_NO_ERROR,
+				0,
+			)
+		}
+		if (canErrStatusChanged & CAN_ERRTX_PASSIVE) != 0 {
+			emergency.Error(
+				(canErrStatus&CAN_ERRTX_PASSIVE) != 0,
+				CO_EM_CAN_TX_BUS_PASSIVE,
+				CO_EMC_CAN_PASSIVE,
+				0,
+			)
+		}
+
+		if (canErrStatusChanged & CAN_ERRTX_BUS_OFF) != 0 {
+			emergency.Error(
+				(canErrStatus&CAN_ERRTX_BUS_OFF) != 0,
+				CO_EM_CAN_TX_BUS_OFF,
+				CO_EMC_BUS_OFF_RECOVERED,
+				0)
+		}
+
+		if (canErrStatusChanged & CAN_ERRTX_OVERFLOW) != 0 {
+			emergency.Error(
+				(canErrStatus&CAN_ERRTX_OVERFLOW) != 0,
+				CO_EM_CAN_TX_OVERFLOW,
+				CO_EMC_CAN_OVERRUN,
+				0)
+		}
+
+		if (canErrStatusChanged & CAN_ERRTX_PDO_LATE) != 0 {
+			emergency.Error(
+				(canErrStatus&CAN_ERRTX_PDO_LATE) != 0,
+				CO_EM_TPDO_OUTSIDE_WINDOW,
+				CO_EMC_COMMUNICATION,
+				0)
+		}
+
+		if (canErrStatusChanged & CAN_ERRRX_PASSIVE) != 0 {
+			emergency.Error(
+				(canErrStatus&CAN_ERRRX_PASSIVE) != 0,
+				CO_EM_CAN_RX_BUS_PASSIVE,
+				CO_EMC_CAN_PASSIVE,
+				0)
+		}
+
+		if (canErrStatusChanged & CAN_ERRRX_OVERFLOW) != 0 {
+			emergency.Error(
+				(canErrStatus&CAN_ERRRX_OVERFLOW) != 0,
+				CO_EM_CAN_RXB_OVERFLOW,
+				CO_EM_CAN_RXB_OVERFLOW,
+				0)
+		}
+	}
+	// TODO implement error register calculation
+	errorRegister := 0
+	if !nmtIsPreOrOperational {
+		return
+	}
+	if emergency.FifoSize >= 2 {
+		fifoPpPtr := emergency.FifoPpPtr
+		if emergency.InhibitEmTimer < emergency.InhibitEmTimeUs {
+			emergency.InhibitEmTimer += timeDifferenceUs
+		}
+		if fifoPpPtr != emergency.FifoWrPtr &&
+			!emergency.CANTxBuff.BufferFull &&
+			emergency.InhibitEmTimer >= emergency.InhibitEmTimeUs {
+			emergency.InhibitEmTimer = 0
+			emergency.Fifo[fifoPpPtr].msg |= uint32(errorRegister) << 16
+			// Send emergency
+			binary.LittleEndian.PutUint32(emergency.CANTxBuff.Data[:4], emergency.Fifo[fifoPpPtr].msg)
+			emergency.CANmodule.Send(*emergency.CANTxBuff)
+			// Also report own emergency message
+			if emergency.EmergencyRxCallback != nil {
+				errMsg := uint16(emergency.Fifo[fifoPpPtr].msg)
+				emergency.EmergencyRxCallback(
+					0,
+					errMsg,
+					byte(errorRegister),
+					byte(errMsg)>>24,
+					emergency.Fifo[fifoPpPtr].info,
+				)
+			}
+			emergency.FifoPpPtr = fifoPpPtr
+		}
+
+	}
+
+}
+
+// Set or reset an error condition
+// Function adds a new error to the history & error will be processed by Process function
+func (emergency *EM) Error(setError bool, errorBit byte, errorCode uint16, infoCode uint32) error {
+	if emergency == nil {
+		return nil
+	}
+	index := errorBit >> 3
+	bitMask := 1 << (errorBit & 0x7)
+
+	// Unsupported errorBit
+	if index >= CO_CONFIG_EM_ERR_STATUS_BITS_COUNT/8 {
+		index = CO_EM_WRONG_ERROR_REPORT >> 3
+		bitMask = 1 << (CO_EM_WRONG_ERROR_REPORT & 0x7)
+		errorCode = CO_EMC_SOFTWARE_INTERNAL
+		infoCode = uint32(errorBit)
+	}
+	errorStatusBits := &emergency.errorStatusBits[index]
+	errorStatusBitMasked := *errorStatusBits & byte(bitMask)
+
+	// If error is already set or not don't do anything
+	if setError {
+		if errorStatusBitMasked != 0 {
+			return nil
+		}
+	} else {
+		if errorStatusBitMasked == 0 {
+			return nil
+		}
+		errorCode = CO_EMC_NO_ERROR
+	}
+	errMsg := (uint32(errorBit) << 24) | uint32(errorCode)
+	if emergency.FifoSize >= 2 {
+		fifoWrPtr := emergency.FifoWrPtr
+		fifoWrPtrNext := fifoWrPtr + 1
+		if fifoWrPtrNext >= emergency.FifoSize {
+			fifoWrPtrNext = 0
+		}
+		if fifoWrPtrNext == emergency.FifoPpPtr {
+			emergency.FifoOverflow = 1
+		} else {
+			emergency.Fifo[fifoWrPtr].msg = errMsg
+			emergency.Fifo[fifoWrPtr].info = infoCode
+			emergency.FifoWrPtr = fifoWrPtrNext
+			if emergency.FifoCount < emergency.FifoSize-1 {
+				emergency.FifoCount++
+			}
+		}
+	}
 }
