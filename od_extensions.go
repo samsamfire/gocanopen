@@ -29,6 +29,59 @@ func ReadDummy(stream *Stream, data []byte, countRead *uint16) error {
 	return nil
 }
 
+// [EMERGENCY] read emergency history
+func ReadEntry1003(stream *Stream, data []byte, countRead *uint16) error {
+	if stream == nil || data == nil || countRead == nil ||
+		(len(data) < 4 && stream.Subindex > 0) ||
+		len(data) < 1 {
+		return ODR_DEV_INCOMPAT
+	}
+	em, ok := stream.Object.(*EM)
+	if !ok {
+		return ODR_DEV_INCOMPAT
+	}
+	if em.FifoSize < 2 {
+		return ODR_DEV_INCOMPAT
+	}
+	if stream.Subindex == 0 {
+		data[0] = em.FifoCount
+		*countRead = 1
+		return nil
+	}
+	if stream.Subindex > em.FifoCount {
+		return ODR_NO_DATA
+	}
+	// Most recent error is in subindex 1 and stored behind fifoWrPtr
+	index := int(em.FifoWrPtr) - int(stream.Subindex)
+	if index >= int(em.FifoSize) {
+		return ODR_DEV_INCOMPAT
+	}
+	if index < 0 {
+		index += int(em.FifoSize)
+	}
+	binary.LittleEndian.PutUint32(data, em.Fifo[index].msg)
+	*countRead = 4
+	return nil
+}
+
+// [EMERGENCY] clear emergency history
+func WriteEntry1003(stream *Stream, data []byte, countWritten *uint16) error {
+	if stream == nil || stream.Subindex != 0 || data == nil || len(data) != 1 || countWritten == nil {
+		return ODR_DEV_INCOMPAT
+	}
+	if data[0] != 0 {
+		return ODR_INVALID_VALUE
+	}
+	em, ok := stream.Object.(*EM)
+	if !ok {
+		return ODR_DEV_INCOMPAT
+	}
+	// Clear error history
+	em.FifoCount = 0
+	*countWritten = 1
+	return nil
+}
+
 // [RPDO][TPDO] get communication parameter
 func ReadEntry14xxOr18xx(stream *Stream, data []byte, countRead *uint16) error {
 	err := ReadEntryOriginal(stream, data, countRead)
@@ -38,9 +91,9 @@ func ReadEntry14xxOr18xx(stream *Stream, data []byte, countRead *uint16) error {
 		var pdo *PDOBase
 		switch v := stream.Object.(type) {
 		case *RPDO:
-			pdo = &v.Base
+			pdo = &v.PDO
 		case *TPDO:
-			pdo = &v.Base
+			pdo = &v.PDO
 		default:
 			return ODR_DEV_INCOMPAT
 		}
@@ -68,7 +121,7 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 	if !ok {
 		return ODR_DEV_INCOMPAT
 	}
-	pdo := &rpdo.Base
+	pdo := &rpdo.PDO
 	bufCopy := make([]byte, len(data))
 	copy(bufCopy, data)
 	switch stream.Subindex {
@@ -152,9 +205,9 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 	var pdo *PDOBase
 	switch v := stream.Object.(type) {
 	case *RPDO:
-		pdo = &v.Base
+		pdo = &v.PDO
 	case *TPDO:
-		pdo = &v.Base
+		pdo = &v.PDO
 	default:
 		return ODR_DEV_INCOMPAT
 	}
@@ -209,7 +262,7 @@ func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 	if !ok {
 		return ODR_DEV_INCOMPAT
 	}
-	pdo := &tpdo.Base
+	pdo := &tpdo.PDO
 	bufCopy := make([]byte, len(data))
 	copy(bufCopy, data)
 	switch stream.Subindex {
@@ -292,7 +345,7 @@ func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 
 }
 
-// [SYNC] Update cob id & if should be producer
+// [SYNC] update cob id & if should be producer
 func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 	log.Debug("[SYNC] Writing in extension entry 1005")
 	// Expect a uint32 and subindex 0 and no nill pointers
@@ -335,7 +388,97 @@ func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 	return WriteEntryOriginal(stream, data, countWritten)
 }
 
-// [HB Consumer] Update heartbeat consumer
+// [EMERGENCY] read emergency cob id
+func ReadEntry1014(stream *Stream, data []byte, countRead *uint16) error {
+	if stream == nil || data == nil || countRead == nil || len(data) < 4 || stream.Subindex != 0 {
+		return ODR_DEV_INCOMPAT
+	}
+	em, ok := stream.Object.(*EM)
+	if !ok {
+		return ODR_DEV_INCOMPAT
+	}
+	var canId uint16
+	if em.ProducerIdent == EMERGENCY_SERVICE_ID {
+		canId = EMERGENCY_SERVICE_ID + uint16(em.NodeId)
+	} else {
+		canId = em.ProducerIdent
+	}
+	var cobId uint32
+	if em.ProducerEnabled {
+		cobId = 0
+	} else {
+		cobId = 0x80000000
+	}
+	cobId |= uint32(canId)
+	binary.LittleEndian.PutUint32(data, cobId)
+	*countRead = 4
+	return nil
+}
+
+// [EMERGENCY] update emergency producer cob id
+func WriteEntry1014(stream *Stream, data []byte, countWritten *uint16) error {
+	if stream == nil || data == nil || countWritten == nil || len(data) != 4 || stream.Subindex != 0 {
+		return ODR_DEV_INCOMPAT
+	}
+	em, ok := stream.Object.(*EM)
+	if !ok {
+		return ODR_DEV_INCOMPAT
+	}
+	// Check written value, cob id musn't change when enabled
+	cobId := binary.LittleEndian.Uint32(data)
+	newCanId := cobId & 0x7FF
+	var currentCanId uint16
+	if em.ProducerIdent == EMERGENCY_SERVICE_ID {
+		currentCanId = EMERGENCY_SERVICE_ID + uint16(em.NodeId)
+	} else {
+		currentCanId = em.ProducerIdent
+	}
+	newEnabled := (cobId&uint32(currentCanId)) == 0 && newCanId != 0
+	if cobId&0x7FFFF800 != 0 || isIDRestricted(uint16(newCanId)) ||
+		(em.ProducerEnabled && newEnabled && newCanId != uint32(currentCanId)) {
+		return ODR_INVALID_VALUE
+	}
+	em.ProducerEnabled = newEnabled
+	if newCanId == uint32(EMERGENCY_SERVICE_ID+uint16(em.NodeId)) {
+		em.ProducerIdent = EMERGENCY_SERVICE_ID
+	} else {
+		em.ProducerIdent = uint16(newCanId)
+	}
+
+	if newEnabled {
+		var err error
+		em.CANTxBuff, err = em.CANmodule.UpdateTxBuffer(
+			int(em.TxBufferIdx),
+			newCanId,
+			false,
+			8,
+			false,
+		)
+		if em.CANTxBuff == nil || err != nil {
+			return ODR_DEV_INCOMPAT
+		}
+	}
+	return WriteEntryOriginal(stream, data, countWritten)
+
+}
+
+// [EMERGENCY] update inhibite time
+func WriteEntry1015(stream *Stream, data []byte, countWritten *uint16) error {
+	if stream == nil || stream.Subindex != 0 || data == nil || len(data) != 2 || countWritten == nil {
+		return ODR_DEV_INCOMPAT
+	}
+	em, ok := stream.Object.(*EM)
+	if !ok {
+		return ODR_DEV_INCOMPAT
+	}
+	em.InhibitEmTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 100
+	em.InhibitEmTimer = 0
+
+	return WriteEntryOriginal(stream, data, countWritten)
+
+}
+
+// [HB Consumer] update heartbeat consumer
 func WriteEntry1016(stream *Stream, data []byte, countWritten *uint16) error {
 	consumer, ok := stream.Object.(*HBConsumer)
 	if !ok {
@@ -454,6 +597,7 @@ func WriteEntry1280(stream *Stream, data []byte, countWritten *uint16) error {
 	return WriteEntryOriginal(stream, data, countWritten)
 }
 
+// [SDO server] update server parameters
 func WriteEntry1201(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || countWritten == nil {
 		return ODR_DEV_INCOMPAT
