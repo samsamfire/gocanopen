@@ -1,8 +1,6 @@
 package canopen
 
 import (
-	"encoding/binary"
-
 	"github.com/brutella/can"
 	log "github.com/sirupsen/logrus"
 )
@@ -114,7 +112,7 @@ func (nmt *NMT) Init(
 	// Extension needs to be initialized
 	nmt.ExtensionEntry1017.Object = nmt
 	nmt.ExtensionEntry1017.Read = ReadEntryOriginal
-	nmt.ExtensionEntry1017.Write = writeEntry1017
+	nmt.ExtensionEntry1017.Write = WriteEntry1017
 	// And added to the entry
 	EntryHbProducer.AddExtension(&nmt.ExtensionEntry1017)
 
@@ -261,20 +259,4 @@ func (nmt *NMT) SendCommand(command uint8, node_id uint8) error {
 	nmt.CANModule.Send((*nmt.NMTTxBuff))
 	return nil
 
-}
-
-// Extension for entry 0x1017
-func writeEntry1017(stream *Stream, data []byte, countWritten *uint16) error {
-	if stream.Subindex != 0 || data == nil || len(data) != 2 || countWritten == nil || stream == nil {
-		return ODR_DEV_INCOMPAT
-	}
-	nmt, ok := stream.Object.(*NMT)
-	if !ok {
-		log.Errorf("Invalid type for object 1017 : %v", nmt)
-		return ODR_GENERAL
-	}
-	nmt.HearbeatProducerTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 1000
-	nmt.HearbeatProducerTimer = 0
-	// Also update the original OD location
-	return WriteEntryOriginal(stream, data, countWritten)
 }

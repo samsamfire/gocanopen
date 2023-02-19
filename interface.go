@@ -9,12 +9,6 @@ import (
 	"gopkg.in/ini.v1"
 )
 
-/**
- * Return codes from OD access functions.
- *
- * @ref OD_getSDOabCode() can be used to retrieve corresponding SDO abort code.
- */
-
 type ODR int8
 
 const (
