@@ -474,7 +474,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					}
 				} else {
 					if (response.raw[0] & 0x01) != 0 {
-						log.Debugf("[SERVER]<==Rx | DOWNLOAD SEGMENTED | x%x:x%x %v", server.Index, server.Subindex, response.raw)
+						log.Debugf("[SERVER] <==Rx | DOWNLOAD SEGMENTED | x%x:x%x %v", server.Index, server.Subindex, response.raw)
 						// Segmented transfer check if size indicated
 						sizeInOd := len(server.Streamer.Stream.Data)
 						server.SizeIndicated = binary.LittleEndian.Uint32(response.raw[4:])
@@ -500,7 +500,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 
 			case CO_SDO_ST_DOWNLOAD_SEGMENT_REQ:
 				if (response.raw[0] & 0xE0) == 0x00 {
-					log.Debugf("[SERVER]<==Rx | DOWNLOAD SEGMENT | x%x:x%x %v", server.Index, server.Subindex, response.raw)
+					log.Debugf("[SERVER] <==Rx | DOWNLOAD SEGMENT | x%x:x%x %v", server.Index, server.Subindex, response.raw)
 					server.Finished = (response.raw[0] & 0x01) != 0
 					toggle := response.GetToggle()
 					if toggle != server.Toggle {
@@ -531,11 +531,11 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				}
 
 			case CO_SDO_ST_UPLOAD_INITIATE_REQ:
-				log.Debugf("[SERVER]<==Rx | UPLOAD EXPEDITED | x%x:x%x %v", server.Index, server.Subindex, response.raw)
+				log.Debugf("[SERVER] <==Rx | UPLOAD EXPEDITED | x%x:x%x %v", server.Index, server.Subindex, response.raw)
 				server.State = CO_SDO_ST_UPLOAD_INITIATE_RSP
 
 			case CO_SDO_ST_UPLOAD_SEGMENT_REQ:
-				log.Debugf("[SERVER]<==Rx | UPLOAD SEGMENTED | x%x:x%x %v", server.Index, server.Subindex, response.raw)
+				log.Debugf("[SERVER] <==Rx | UPLOAD SEGMENTED | x%x:x%x %v", server.Index, server.Subindex, response.raw)
 				if (response.raw[0] & 0xEF) != 0x60 {
 					abortCode = CO_SDO_AB_CMD
 					server.State = CO_SDO_ST_ABORT
@@ -550,7 +550,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.State = CO_SDO_ST_UPLOAD_SEGMENT_RSP
 
 			case CO_SDO_ST_DOWNLOAD_BLK_INITIATE_REQ:
-				log.Debugf("[SERVER]<==Rx | DOWNLOAD BLOCK INIT | x%x:x%x %v", server.Index, server.Subindex, response.raw)
+				log.Debugf("[SERVER] <==Rx | DOWNLOAD BLOCK INIT | x%x:x%x %v", server.Index, server.Subindex, response.raw)
 				server.BlockCRCEnabled = response.IsCRCEnabled()
 				// Check if size indicated
 				if (response.raw[0] & 0x02) != 0 {
@@ -577,7 +577,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			case CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ:
 
 			case CO_SDO_ST_DOWNLOAD_BLK_END_REQ:
-				log.Debugf("[SERVER]<==Rx | DOWNLOAD BLOCK END | x%x:x%x %v", server.Index, server.Subindex, response.raw)
+				log.Debugf("[SERVER] <==Rx | DOWNLOAD BLOCK END | x%x:x%x %v", server.Index, server.Subindex, response.raw)
 				if (response.raw[0] & 0xE3) != 0xC1 {
 					abortCode = CO_SDO_AB_CMD
 					server.State = CO_SDO_ST_ABORT
@@ -603,7 +603,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.State = CO_SDO_ST_DOWNLOAD_BLK_END_RSP
 
 			case CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ:
-				log.Debugf("[SERVER]<==Rx | UPLOAD BLOCK INIT | x%x:x%x %v", server.Index, server.Subindex, response.raw)
+				log.Debugf("[SERVER] <==Rx | UPLOAD BLOCK INIT | x%x:x%x %v", server.Index, server.Subindex, response.raw)
 				// If protocol switch threshold (byte 5) is larger than data
 				// size of OD var, then switch to segmented
 				if server.SizeIndicated > 0 && response.raw[5] > 0 && uint32(response.raw[5]) >= server.SizeIndicated {
@@ -990,6 +990,6 @@ func (server *SDOServer) Abort(abortCode SDOAbortCode) {
 	server.CANtxBuff.Data[3] = server.Subindex
 	binary.LittleEndian.PutUint32(server.CANtxBuff.Data[4:], code)
 	server.CANModule.Send(*server.CANtxBuff)
-	log.Warnf("[SERVER] ==>Tx | SERVER ABORT | %v (x%x)", abortCode, uint32(abortCode))
+	log.Warnf("[SERVER] ==>Tx | SERVER ABORT | x%x:x%x | %v (x%x)", server.Index, server.Subindex, abortCode, uint32(abortCode))
 
 }
