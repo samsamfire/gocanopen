@@ -1,14 +1,14 @@
 package canopen
 
+// This file regroups special functions that are executed when reading or writing to object dictionary
+
 import (
 	"encoding/binary"
 
 	log "github.com/sirupsen/logrus"
 )
 
-// This file regroups special functions that are executed when reading or writing to object dictionary
-
-// Write dummy : write method that doesn't write anything when an object is not present inside OD
+// [RPDO][TPDO] write method that fakes writing an OD variable
 func WriteDummy(stream *Stream, data []byte, countWritten *uint16) error {
 	if countWritten != nil {
 		*countWritten = uint16(len(data))
@@ -16,7 +16,7 @@ func WriteDummy(stream *Stream, data []byte, countWritten *uint16) error {
 	return nil
 }
 
-// Read dummy : read method that doesn't read anything when an object is not present inside OD
+// [RPDO][TPDO] read method that fakes reading an OD variable
 func ReadDummy(stream *Stream, data []byte, countRead *uint16) error {
 	if countRead == nil || data == nil || stream == nil {
 		return ODR_DEV_INCOMPAT
@@ -29,7 +29,7 @@ func ReadDummy(stream *Stream, data []byte, countRead *uint16) error {
 	return nil
 }
 
-// Read RPDO or TPDO communication parameter
+// [RPDO][TPDO] get communication parameter
 func ReadEntry14xxOr18xx(stream *Stream, data []byte, countRead *uint16) error {
 	err := ReadEntryOriginal(stream, data, countRead)
 	// Add node id when reading subindex 1
@@ -59,7 +59,7 @@ func ReadEntry14xxOr18xx(stream *Stream, data []byte, countRead *uint16) error {
 	return err
 }
 
-// Write RPDO communication parameter
+// [RPDO] update communication parameter
 func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || countWritten == nil || len(data) > 4 {
 		return ODR_DEV_INCOMPAT
@@ -143,7 +143,7 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 	return WriteEntryOriginal(stream, bufCopy, countWritten)
 }
 
-// Write RPDO or TPDO mapping parameter
+// [RPDO][TPDO] update mapping parameter
 func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || countWritten == nil || stream.Subindex > MAX_MAPPED_ENTRIES {
 		return ODR_DEV_INCOMPAT
@@ -200,7 +200,7 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 	return WriteEntryOriginal(stream, data, countWritten)
 }
 
-// Write TPDO communication parameter
+// [TPDO] update communication parameter
 func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || countWritten == nil || len(data) > 4 {
 		return ODR_DEV_INCOMPAT
@@ -292,7 +292,7 @@ func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 
 }
 
-// Write SYNC cob id & producer or not
+// [SYNC] Update cob id & if should be producer
 func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 	log.Debug("[SYNC] Writing in extension entry 1005")
 	// Expect a uint32 and subindex 0 and no nill pointers
@@ -301,7 +301,6 @@ func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 	}
 	sync, ok := stream.Object.(*SYNC)
 	if !ok {
-		log.Error("Object in 1005 is not a SYNC pointer object")
 		return ODR_DEV_INCOMPAT
 	}
 	cobIdSync := binary.LittleEndian.Uint32(data)
@@ -336,7 +335,41 @@ func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 	return WriteEntryOriginal(stream, data, countWritten)
 }
 
-// Write sync synchronous counter overflow
+// [HB Consumer] Update heartbeat consumer
+func WriteEntry1016(stream *Stream, data []byte, countWritten *uint16) error {
+	consumer, ok := stream.Object.(*HBConsumer)
+	if !ok {
+		return ODR_DEV_INCOMPAT
+	}
+
+	if stream == nil || stream.Subindex < 1 || int(stream.Subindex) > len(consumer.MonitoredNodes) {
+		return ODR_DEV_INCOMPAT
+	}
+	var hbConsValue uint32
+	nodeId := uint8(hbConsValue>>16) & 0xFF
+	time := hbConsValue & 0xFFFF
+	ret := consumer.InitEntry(stream.Subindex-1, nodeId, uint16(time))
+	if ret != nil {
+		return ODR_PAR_INCOMPAT
+	}
+	return WriteEntryOriginal(stream, data, countWritten)
+}
+
+// [NMT] update heartbeat period
+func WriteEntry1017(stream *Stream, data []byte, countWritten *uint16) error {
+	if stream.Subindex != 0 || data == nil || len(data) != 2 || countWritten == nil || stream == nil {
+		return ODR_DEV_INCOMPAT
+	}
+	nmt, ok := stream.Object.(*NMT)
+	if !ok {
+		return ODR_DEV_INCOMPAT
+	}
+	nmt.HearbeatProducerTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 1000
+	nmt.HearbeatProducerTimer = 0
+	return WriteEntryOriginal(stream, data, countWritten)
+}
+
+// [SYNC] update synchronous counter overflow
 func WriteEntry1019(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || countWritten == nil || len(data) != 1 {
 		return ODR_DEV_INCOMPAT

@@ -136,29 +136,6 @@ func (consumer *HBConsumer) InitEntry(index uint8, nodeId uint8, consumerTimeMs 
 
 }
 
-// Dynamically update heartbeat consumer object when writing to entry x1016
-func WriteEntry1016(stream *Stream, data []byte, countWritten *uint16) error {
-	consumer, ok := stream.Object.(*HBConsumer)
-	if !ok {
-		log.Error("Unexpected object type when writing to Entry 1016")
-		return ODR_DEV_INCOMPAT
-	}
-
-	if stream == nil || stream.Subindex < 1 || int(stream.Subindex) > len(consumer.MonitoredNodes) {
-		return ODR_DEV_INCOMPAT
-	}
-	var hbConsValue uint32
-	nodeId := uint8(hbConsValue>>16) & 0xFF
-	time := hbConsValue & 0xFFFF
-	ret := consumer.InitEntry(stream.Subindex-1, nodeId, uint16(time))
-	if ret != nil {
-		return ODR_PAR_INCOMPAT
-	}
-
-	// Continue with normal write
-	return WriteEntryOriginal(stream, data, countWritten)
-}
-
 // Process Hearbeat consuming
 func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
 	allMonitoredActiveCurrent := true
