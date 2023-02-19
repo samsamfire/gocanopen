@@ -399,3 +399,124 @@ func WriteEntry1019(stream *Stream, data []byte, countWritten *uint16) error {
 	sync.CounterOverflowValue = syncCounterOverflow
 	return WriteEntryOriginal(stream, data, countWritten)
 }
+
+// [SDO Client] update parameters
+func WriteEntry1280(stream *Stream, data []byte, countWritten *uint16) error {
+	if stream == nil || data == nil || countWritten == nil {
+		return ODR_DEV_INCOMPAT
+	}
+	client, ok := stream.Object.(*SDOClient)
+	if !ok {
+		return ODR_DEV_INCOMPAT
+	}
+	switch stream.Subindex {
+	case 0:
+		return ODR_READONLY
+	// cob id client to server
+	case 1:
+		cobId := binary.LittleEndian.Uint32(data)
+		canId := uint16(cobId & 0x7FF)
+		canIdCurrent := uint16(client.CobIdClientToServer & 0x7FF)
+		valid := (cobId & 0x80000000) == 0
+		if (cobId&0x3FFFF800) != 0 ||
+			(valid && client.Valid && canId != canIdCurrent) ||
+			(valid && isIDRestricted(canId)) {
+			return ODR_INVALID_VALUE
+		}
+		client.Setup(cobId, client.CobIdServerToClient, client.NodeIdServer)
+	// cob id server to client
+	case 2:
+		cobId := binary.LittleEndian.Uint32(data)
+		canId := uint16(cobId & 0x7FF)
+		canIdCurrent := uint16(client.CobIdServerToClient & 0x7FF)
+		valid := (cobId & 0x80000000) == 0
+		if (cobId&0x3FFFF800) != 0 ||
+			(valid && client.Valid && canId != canIdCurrent) ||
+			(valid && isIDRestricted(canId)) {
+			return ODR_INVALID_VALUE
+		}
+		client.Setup(cobId, client.CobIdClientToServer, client.NodeIdServer)
+	// node id of server
+	case 3:
+		if len(data) != 1 {
+			return ODR_TYPE_MISMATCH
+		}
+		nodeId := data[0]
+		if nodeId > 127 {
+			return ODR_INVALID_VALUE
+		}
+		client.NodeIdServer = nodeId
+
+	default:
+		return ODR_SUB_NOT_EXIST
+
+	}
+	return WriteEntryOriginal(stream, data, countWritten)
+}
+
+func WriteEntry1201(stream *Stream, data []byte, countWritten *uint16) error {
+	if stream == nil || data == nil || countWritten == nil {
+		return ODR_DEV_INCOMPAT
+	}
+	server, ok := stream.Object.(*SDOServer)
+	if !ok {
+		return ODR_DEV_INCOMPAT
+	}
+
+	switch stream.Subindex {
+
+	case 0:
+		return ODR_READONLY
+	// cob id client to server
+	case 1:
+		cobId := binary.LittleEndian.Uint32(data)
+		canId := uint16(cobId & 0x7FF)
+		canIdCurrent := uint16(server.CobIdClientToServer & 0x7FF)
+		valid := (cobId & 0x80000000) == 0
+		if (cobId&0x3FFFF800) != 0 ||
+			(valid && server.Valid && canId != canIdCurrent) ||
+			(valid && isIDRestricted(canId)) {
+			return ODR_INVALID_VALUE
+		}
+		server.InitRxTx(
+			server.CANModule,
+			uint16(server.idRxBuff),
+			uint16(server.idTxBuff),
+			cobId,
+			server.CobIdServerToClient,
+		)
+	// cob id server to client
+	case 2:
+		cobId := binary.LittleEndian.Uint32(data)
+		canId := uint16(cobId & 0x7FF)
+		canIdCurrent := uint16(server.CobIdServerToClient & 0x7FF)
+		valid := (cobId & 0x80000000) == 0
+		if (cobId&0x3FFFF800) != 0 ||
+			(valid && server.Valid && canId != canIdCurrent) ||
+			(valid && isIDRestricted(canId)) {
+			return ODR_INVALID_VALUE
+		}
+		server.InitRxTx(
+			server.CANModule,
+			uint16(server.idRxBuff),
+			uint16(server.idTxBuff),
+			server.CobIdClientToServer,
+			cobId,
+		)
+		// node id of server
+	case 3:
+		if len(data) != 1 {
+			return ODR_TYPE_MISMATCH
+		}
+		nodeId := data[0]
+		if nodeId < 1 || nodeId > 127 {
+			return ODR_INVALID_VALUE
+		}
+		server.NodeId = nodeId // ??
+
+	default:
+		return ODR_SUB_NOT_EXIST
+
+	}
+	return WriteEntryOriginal(stream, data, countWritten)
+}
