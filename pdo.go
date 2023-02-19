@@ -32,7 +32,7 @@ type PDOBase struct {
 }
 
 type TPDO struct {
-	Base             PDOBase
+	PDO              PDOBase
 	TxBuffer         *BufferTxFrame
 	TransmissionType uint8
 	SendRequest      bool
@@ -46,7 +46,7 @@ type TPDO struct {
 }
 
 type RPDO struct {
-	Base          PDOBase
+	PDO           PDOBase
 	RxNew         [RPDO_BUFFER_COUNT]bool
 	RxData        [RPDO_BUFFER_COUNT][MAX_PDO_LENGTH]byte
 	ReceiveError  uint8
@@ -105,12 +105,10 @@ func (base *PDOBase) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInde
 			(mappedLengthBits&0x07) != 0,
 			len(streamerCopy.Stream.Data) < int(mappedLength),
 		)
-		log.Debugf("Size %v,%v, %v", len(streamer.Stream.Data), mappedLength)
 		return ODR_NO_MAP
 	}
 	*streamer = streamerCopy
 	streamer.Stream.DataOffset = uint32(mappedLength)
-	log.Debugf("Setting data offset to %v for index %v", mappedLength, mapIndex)
 	if !isRPDO {
 		if uint32(subindex) < (uint32(OD_FLAGS_PDO_SIZE)*8) && entry.Extension != nil {
 			base.FlagPDOByte[mapIndex] = &entry.Extension.flagsPDO[subindex>>3]
@@ -191,7 +189,7 @@ const (
 )
 
 func (rpdo *RPDO) Handle(frame can.Frame) {
-	pdo := &rpdo.Base
+	pdo := &rpdo.PDO
 	err := rpdo.ReceiveError
 
 	if pdo.Valid {
@@ -230,7 +228,7 @@ func (rpdo *RPDO) Init(od *ObjectDictionary,
 	entry14xx *Entry,
 	entry16xx *Entry,
 	canmodule *CANModule) error {
-	pdo := &rpdo.Base
+	pdo := &rpdo.PDO
 	if od == nil || em == nil || entry14xx == nil || entry16xx == nil || canmodule == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
@@ -304,7 +302,7 @@ func (rpdo *RPDO) Init(od *ObjectDictionary,
 }
 
 func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOperational bool, syncWas bool) {
-	pdo := &rpdo.Base
+	pdo := &rpdo.PDO
 	if pdo.Valid && nmtIsOperational && (syncWas || !rpdo.Synchronous) {
 		// Check errors in length of received messages
 		if rpdo.ReceiveError > CO_RPDO_RX_ACK {
@@ -393,7 +391,7 @@ func (tpdo *TPDO) Init(
 	entry1Axx *Entry,
 	canmodule *CANModule) error {
 
-	pdo := &tpdo.Base
+	pdo := &tpdo.PDO
 	if od == nil || em == nil || entry18xx == nil || entry1Axx == nil || canmodule == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
@@ -500,7 +498,7 @@ func (tpdo *TPDO) Init(
 
 // Send TPDO object
 func (tpdo *TPDO) Send() error {
-	pdo := &tpdo.Base
+	pdo := &tpdo.PDO
 	eventDriven := tpdo.TransmissionType == CO_PDO_TRANSM_TYPE_SYNC_ACYCLIC || tpdo.TransmissionType >= uint8(CO_PDO_TRANSM_TYPE_SYNC_EVENT_LO)
 	dataTPDO := make([]byte, 0)
 	for i := 0; i < int(pdo.MappedObjectsCount); i++ {
@@ -535,7 +533,7 @@ func (tpdo *TPDO) Send() error {
 
 func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOperational bool, syncWas bool) {
 
-	pdo := &tpdo.Base
+	pdo := &tpdo.PDO
 	if !pdo.Valid || !nmtIsOperational {
 		tpdo.SendRequest = true
 		tpdo.InhibitTimer = 0
