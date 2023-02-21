@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 
 	"github.com/brutella/can"
+	log "github.com/sirupsen/logrus"
 )
 
 /*
@@ -248,7 +249,6 @@ type EM struct {
 	CANerrorStatusOld   uint16
 	CANmodule           *CANModule
 	Fifo                []EMFifo
-	FifoSize            byte
 	FifoWrPtr           byte
 	FifoPpPtr           byte
 	FifoOverflow        byte
@@ -266,144 +266,6 @@ type EM struct {
 	ExtensionEntry1003  Extension
 	ExtensionStatusBits Extension
 	EmergencyRxCallback func(ident uint16, errorCode uint16, errorRegister byte, errorBit byte, infoCode uint32)
-}
-
-func ReadEntry1014(stream *Stream, data []byte, countRead *uint16) error {
-	if stream == nil || data == nil || countRead == nil || len(data) < 4 || stream.Subindex != 0 {
-		return ODR_DEV_INCOMPAT
-	}
-	em, ok := stream.Object.(*EM)
-	if !ok {
-		return ODR_DEV_INCOMPAT
-	}
-	var canId uint16
-	if em.ProducerIdent == EMERGENCY_SERVICE_ID {
-		canId = EMERGENCY_SERVICE_ID + uint16(em.NodeId)
-	} else {
-		canId = em.ProducerIdent
-	}
-	var cobId uint32
-	if em.ProducerEnabled {
-		cobId = 0
-	} else {
-		cobId = 0x80000000
-	}
-	cobId |= uint32(canId)
-	binary.LittleEndian.PutUint32(data, cobId)
-	*countRead = 4
-	return nil
-}
-
-func WriteEntry1014(stream *Stream, data []byte, countWritten *uint16) error {
-	if stream == nil || data == nil || countWritten == nil || len(data) != 4 || stream.Subindex != 0 {
-		return ODR_DEV_INCOMPAT
-	}
-	em, ok := stream.Object.(*EM)
-	if !ok {
-		return ODR_DEV_INCOMPAT
-	}
-	// Check written value, cob id musn't change when enabled
-	cobId := binary.LittleEndian.Uint32(data)
-	newCanId := cobId & 0x7FF
-	var currentCanId uint16
-	if em.ProducerIdent == EMERGENCY_SERVICE_ID {
-		currentCanId = EMERGENCY_SERVICE_ID + uint16(em.NodeId)
-	} else {
-		currentCanId = em.ProducerIdent
-	}
-	newEnabled := (cobId&uint32(currentCanId)) == 0 && newCanId != 0
-	if cobId&0x7FFFF800 != 0 || isIDRestricted(uint16(newCanId)) ||
-		(em.ProducerEnabled && newEnabled && newCanId != uint32(currentCanId)) {
-		return ODR_INVALID_VALUE
-	}
-	em.ProducerEnabled = newEnabled
-	if newCanId == uint32(EMERGENCY_SERVICE_ID+uint16(em.NodeId)) {
-		em.ProducerIdent = EMERGENCY_SERVICE_ID
-	} else {
-		em.ProducerIdent = uint16(newCanId)
-	}
-
-	if newEnabled {
-		var err error
-		em.CANTxBuff, err = em.CANmodule.UpdateTxBuffer(
-			int(em.TxBufferIdx),
-			newCanId,
-			false,
-			8,
-			false,
-		)
-		if em.CANTxBuff == nil || err != nil {
-			return ODR_DEV_INCOMPAT
-		}
-	}
-	return WriteEntryOriginal(stream, data, countWritten)
-
-}
-
-func WriteEntry1015(stream *Stream, data []byte, countWritten *uint16) error {
-	if stream == nil || stream.Subindex != 0 || data == nil || len(data) != 2 || countWritten == nil {
-		return ODR_DEV_INCOMPAT
-	}
-	em, ok := stream.Object.(*EM)
-	if !ok {
-		return ODR_DEV_INCOMPAT
-	}
-	em.InhibitEmTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 100
-	em.InhibitEmTimer = 0
-
-	return WriteEntryOriginal(stream, data, countWritten)
-
-}
-
-func ReadEntry1003(stream *Stream, data []byte, countRead *uint16) error {
-	if stream == nil || data == nil || countRead == nil ||
-		(len(data) < 4 && stream.Subindex > 0) ||
-		len(data) < 1 {
-		return ODR_DEV_INCOMPAT
-	}
-	em, ok := stream.Object.(*EM)
-	if !ok {
-		return ODR_DEV_INCOMPAT
-	}
-	if em.FifoSize < 2 {
-		return ODR_DEV_INCOMPAT
-	}
-	if stream.Subindex == 0 {
-		data[0] = em.FifoCount
-		*countRead = 1
-		return nil
-	}
-	if stream.Subindex > em.FifoCount {
-		return ODR_NO_DATA
-	}
-	// Most recent error is in subindex 1 and stored behind fifoWrPtr
-	index := int(em.FifoWrPtr) - int(stream.Subindex)
-	if index >= int(em.FifoSize) {
-		return ODR_DEV_INCOMPAT
-	}
-	if index < 0 {
-		index += int(em.FifoSize)
-	}
-	binary.LittleEndian.PutUint32(data, em.Fifo[index].msg)
-	*countRead = 4
-	return nil
-}
-
-func WriteEntry1003(stream *Stream, data []byte, countWritten *uint16) error {
-	if stream == nil || stream.Subindex != 0 || data == nil || len(data) != 1 || countWritten == nil {
-		return ODR_DEV_INCOMPAT
-	}
-	if data[0] != 0 {
-		return ODR_INVALID_VALUE
-	}
-	em, ok := stream.Object.(*EM)
-	if !ok {
-		return ODR_DEV_INCOMPAT
-	}
-	// Clear error history
-	em.FifoCount = 0
-	*countWritten = 1
-	return nil
 }
 
 func ReadEntryStatusBits(stream *Stream, data []byte, countRead *uint16) error {
@@ -467,7 +329,6 @@ func (emergency *EM) Handle(frame can.Frame) {
 func (emergency *EM) Init(
 	canmodule *CANModule,
 	entry1001 *Entry,
-	fifo []EMFifo,
 	entry1014 *Entry,
 	entry1015 *Entry,
 	entry1003 *Entry,
@@ -475,19 +336,19 @@ func (emergency *EM) Init(
 	nodeId uint8,
 ) error {
 	if emergency == nil || entry1001 == nil ||
-		fifo == nil ||
 		entry1014 == nil || canmodule == nil ||
 		nodeId < 1 || nodeId > 127 ||
 		entry1003 == nil {
+		log.Debugf("%v", emergency)
 		return CO_ERROR_ILLEGAL_ARGUMENT
 
 	}
-	// Reset object
-	emergency = &EM{}
+	var err error
 	emergency.CANmodule = canmodule
 	// TODO handle error register ptr
-	*emergency.errorRegister = 0
-	emergency.Fifo = fifo
+	//emergency.errorRegister
+	fifoSize := entry1003.GetNbSubEntries()
+	emergency.Fifo = make([]EMFifo, fifoSize)
 
 	// Get cob id initial & verify
 	cobIdEmergency := uint32(0)
@@ -503,7 +364,7 @@ func (emergency *EM) Init(
 	emergency.ExtensionEntry1014.Object = emergency
 	emergency.ExtensionEntry1014.Read = ReadEntry1014
 	emergency.ExtensionEntry1014.Write = WriteEntry1014
-	err := entry1014.AddExtension(&emergency.ExtensionEntry1014)
+	err = entry1014.AddExtension(&emergency.ExtensionEntry1014)
 	if err != nil {
 		return CO_ERROR_OD_PARAMETERS
 	}
@@ -532,11 +393,12 @@ func (emergency *EM) Init(
 	emergency.ExtensionEntry1003.Read = ReadEntry1003
 	emergency.ExtensionEntry1003.Write = WriteEntry1003
 	entry1003.AddExtension(&emergency.ExtensionEntry1003)
-
-	emergency.ExtensionStatusBits.Object = emergency
-	emergency.ExtensionStatusBits.Read = ReadEntryStatusBits
-	emergency.ExtensionStatusBits.Write = WriteEntryStatusBits
-	entryStatusBits.AddExtension(&emergency.ExtensionStatusBits)
+	if entryStatusBits != nil {
+		emergency.ExtensionStatusBits.Object = emergency
+		emergency.ExtensionStatusBits.Read = ReadEntryStatusBits
+		emergency.ExtensionStatusBits.Write = WriteEntryStatusBits
+		entryStatusBits.AddExtension(&emergency.ExtensionStatusBits)
+	}
 
 	emergency.RxBufferIdx, err = canmodule.InsertRxBuffer(uint32(EMERGENCY_SERVICE_ID), 0x780, false, emergency)
 	return err
@@ -610,7 +472,7 @@ func (emergency *EM) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32
 	if !nmtIsPreOrOperational {
 		return
 	}
-	if emergency.FifoSize >= 2 {
+	if len(emergency.Fifo) >= 2 {
 		fifoPpPtr := emergency.FifoPpPtr
 		if emergency.InhibitEmTimer < emergency.InhibitEmTimeUs {
 			emergency.InhibitEmTimer += timeDifferenceUs
@@ -620,17 +482,16 @@ func (emergency *EM) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32
 			emergency.InhibitEmTimer >= emergency.InhibitEmTimeUs {
 			emergency.InhibitEmTimer = 0
 			emergency.Fifo[fifoPpPtr].msg |= uint32(errorRegister) << 16
-			// Send emergency
 			binary.LittleEndian.PutUint32(emergency.CANTxBuff.Data[:4], emergency.Fifo[fifoPpPtr].msg)
 			emergency.CANmodule.Send(*emergency.CANTxBuff)
 			// Also report own emergency message
 			if emergency.EmergencyRxCallback != nil {
-				errMsg := uint16(emergency.Fifo[fifoPpPtr].msg)
+				errMsg := uint32(emergency.Fifo[fifoPpPtr].msg)
 				emergency.EmergencyRxCallback(
 					0,
-					errMsg,
+					uint16(errMsg),
 					byte(errorRegister),
-					byte(errMsg)>>24,
+					byte(errMsg>>24),
 					emergency.Fifo[fifoPpPtr].info,
 				)
 			}
@@ -638,7 +499,6 @@ func (emergency *EM) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32
 		}
 
 	}
-
 }
 
 // Set or reset an error condition
@@ -672,10 +532,10 @@ func (emergency *EM) Error(setError bool, errorBit byte, errorCode uint16, infoC
 		errorCode = CO_EMC_NO_ERROR
 	}
 	errMsg := (uint32(errorBit) << 24) | uint32(errorCode)
-	if emergency.FifoSize >= 2 {
+	if len(emergency.Fifo) >= 2 {
 		fifoWrPtr := emergency.FifoWrPtr
 		fifoWrPtrNext := fifoWrPtr + 1
-		if fifoWrPtrNext >= emergency.FifoSize {
+		if int(fifoWrPtrNext) >= len(emergency.Fifo) {
 			fifoWrPtrNext = 0
 		}
 		if fifoWrPtrNext == emergency.FifoPpPtr {
@@ -684,9 +544,10 @@ func (emergency *EM) Error(setError bool, errorBit byte, errorCode uint16, infoC
 			emergency.Fifo[fifoWrPtr].msg = errMsg
 			emergency.Fifo[fifoWrPtr].info = infoCode
 			emergency.FifoWrPtr = fifoWrPtrNext
-			if emergency.FifoCount < emergency.FifoSize-1 {
+			if int(emergency.FifoCount) < len(emergency.Fifo)-1 {
 				emergency.FifoCount++
 			}
 		}
 	}
+	return nil
 }
