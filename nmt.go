@@ -78,7 +78,7 @@ func (nmt *NMT) Handle(frame can.Frame) {
 }
 
 func (nmt *NMT) Init(
-	EntryHbProducer *Entry,
+	entry1017 *Entry,
 	emergency *EM,
 	node_id uint8,
 	control uint16,
@@ -88,8 +88,7 @@ func (nmt *NMT) Init(
 	can_id_nmt_rx uint16,
 	can_id_hb_tx uint16,
 ) error {
-	if EntryHbProducer == nil || can_module == nil {
-		log.Errorf("Entry 1017, Emergency object or CANModule is nil")
+	if entry1017 == nil || can_module == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 
@@ -103,7 +102,7 @@ func (nmt *NMT) Init(
 	/* get and verify required "Producer heartbeat time" from Object Dict. */
 
 	var HBprodTime_ms uint16
-	err := EntryHbProducer.GetUint16(0, &HBprodTime_ms)
+	err := entry1017.GetUint16(0, &HBprodTime_ms)
 	if err != nil {
 		log.Errorf("Error when reading entry for producer hearbeat at 0x1017 : %v", err)
 		return CO_ERROR_OD_PARAMETERS
@@ -114,7 +113,7 @@ func (nmt *NMT) Init(
 	nmt.ExtensionEntry1017.Read = ReadEntryOriginal
 	nmt.ExtensionEntry1017.Write = WriteEntry1017
 	// And added to the entry
-	EntryHbProducer.AddExtension(&nmt.ExtensionEntry1017)
+	entry1017.AddExtension(&nmt.ExtensionEntry1017)
 
 	if nmt.HearbeatProducerTimer > nmt.HearbeatProducerTimeUs {
 		nmt.HearbeatProducerTimer = nmt.HearbeatProducerTimeUs

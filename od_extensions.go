@@ -40,7 +40,7 @@ func ReadEntry1003(stream *Stream, data []byte, countRead *uint16) error {
 	if !ok {
 		return ODR_DEV_INCOMPAT
 	}
-	if em.FifoSize < 2 {
+	if len(em.Fifo) < 2 {
 		return ODR_DEV_INCOMPAT
 	}
 	if stream.Subindex == 0 {
@@ -53,11 +53,11 @@ func ReadEntry1003(stream *Stream, data []byte, countRead *uint16) error {
 	}
 	// Most recent error is in subindex 1 and stored behind fifoWrPtr
 	index := int(em.FifoWrPtr) - int(stream.Subindex)
-	if index >= int(em.FifoSize) {
+	if index >= len(em.Fifo) {
 		return ODR_DEV_INCOMPAT
 	}
 	if index < 0 {
-		index += int(em.FifoSize)
+		index += len(em.Fifo)
 	}
 	binary.LittleEndian.PutUint32(data, em.Fifo[index].msg)
 	*countRead = 4
