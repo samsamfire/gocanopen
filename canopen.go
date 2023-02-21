@@ -6,6 +6,7 @@ type Configuration struct{}
 
 const (
 	NMT_SERVICE_ID       uint16 = 0
+	EMERGENCY_SERVICE_ID uint16 = 0x80
 	HEARTBEAT_SERVICE_ID uint16 = 0x700
 	SDO_SERVER_ID        uint16 = 0x580
 	SDO_CLIENT_ID        uint16 = 0x600
@@ -20,6 +21,7 @@ type Node struct {
 	TPDOs              []*TPDO
 	RPDOs              []*RPDO
 	SYNC               *SYNC
+	EM                 *EM
 	NodeIdUnconfigured bool
 }
 
@@ -78,15 +80,14 @@ func (node *Node) Process(enable_gateway bool, time_difference_us uint32, timer_
 	// Process all objects
 	reset := CO_RESET_NOT
 	NMTState := node.NMT.GetInternalState()
-	//NMTisPreOrOperational := (NMTState == CO_NMT_PRE_OPERATIONAL) || (NMTState == CO_NMT_OPERATIONAL)
+	NMTisPreOrOperational := (NMTState == CO_NMT_PRE_OPERATIONAL) || (NMTState == CO_NMT_OPERATIONAL)
 
 	// CAN stuff to process
 	node.CANModule.Process()
-
-	// For now, only process NMT heartbeat part
+	node.EM.Process(NMTisPreOrOperational, time_difference_us, timer_next_us)
 	reset = node.NMT.Process(&NMTState, time_difference_us, timer_next_us)
 	// Update NMTisPreOrOperational
-	NMTisPreOrOperational := (NMTState == CO_NMT_PRE_OPERATIONAL) || (NMTState == CO_NMT_OPERATIONAL)
+	NMTisPreOrOperational = (NMTState == CO_NMT_PRE_OPERATIONAL) || (NMTState == CO_NMT_OPERATIONAL)
 
 	// Process SDO servers
 	for _, server := range node.SDOServers {
@@ -162,8 +163,29 @@ func (node *Node) Init(
 	nodeId uint8,
 
 ) error {
-
+	var err error
 	node.NodeIdUnconfigured = false
+
+	if emergency == nil {
+		node.EM = &EM{}
+	} else {
+		node.EM = emergency
+	}
+	// Initialize EM object
+	err = node.EM.Init(
+		node.CANModule,
+		od.Find(0x1001),
+		od.Find(0x1014),
+		od.Find(0x1015),
+		od.Find(0x1003),
+		nil,
+		nodeId,
+	)
+	if err != nil {
+		log.Errorf("[EMERGENCY producer] error when initializing emergency producer %v", err)
+		return CO_ERROR_OD_PARAMETERS
+	}
+
 	// NMT object can either be supplied or created with OD entry
 	if nmt == nil {
 		node.NMT = &NMT{}
@@ -175,7 +197,7 @@ func (node *Node) Init(
 	if entry1017 == nil {
 		return CO_ERROR_OD_PARAMETERS
 	}
-	err := node.NMT.Init(entry1017, nil, nodeId, nmtControl, firstHbTimeMs, node.CANModule, NMT_SERVICE_ID, NMT_SERVICE_ID, HEARTBEAT_SERVICE_ID+uint16(nodeId))
+	err = node.NMT.Init(entry1017, nil, nodeId, nmtControl, firstHbTimeMs, node.CANModule, NMT_SERVICE_ID, NMT_SERVICE_ID, HEARTBEAT_SERVICE_ID+uint16(nodeId))
 	if err != nil {
 		log.Errorf("Error when initializing NMT object %v", err)
 		return err
