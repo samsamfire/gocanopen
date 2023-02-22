@@ -243,7 +243,7 @@ func (node *Node) Init(
 	//Initialize TIME
 	time := &TIME{}
 	node.TIME = time
-	err = time.Init(od.Find(0x1012), node.CANModule)
+	err = time.Init(od.Find(0x1012), node.CANModule, 1000)
 	if err != nil {
 		log.Errorf("[TIME] Error when initializing TIME object %v", err)
 	}
