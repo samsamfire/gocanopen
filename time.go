@@ -80,7 +80,7 @@ func (time *TIME) Init(entry1012 *Entry, canmodule *CANModule, producerIntervalM
 	time.ProducerIntervalMs = producerIntervalMs
 	time.ProducerTimerMs = producerIntervalMs
 	if time.IsProducer {
-		log.Infof("[TIME] publish period is %v", producerIntervalMs)
+		log.Infof("[TIME] publish period is %v ms", producerIntervalMs)
 	}
 	return nil
 }
