@@ -67,7 +67,7 @@ func (nmt *NMT) Handle(frame can.Frame) {
 	dlc := frame.Length
 	data := frame.Data
 	if dlc != 2 {
-		log.Warnf("Received an NMT message but the length is not correct : %v", dlc)
+		return
 	}
 	command := data[0]
 	nodeId := data[1]
@@ -80,24 +80,24 @@ func (nmt *NMT) Handle(frame can.Frame) {
 func (nmt *NMT) Init(
 	entry1017 *Entry,
 	emergency *EM,
-	node_id uint8,
+	nodeId uint8,
 	control uint16,
-	first_hb_time_ms uint16,
-	can_module *CANModule,
-	can_id_nmt_tx uint16,
-	can_id_nmt_rx uint16,
-	can_id_hb_tx uint16,
+	firstHbIimeMs uint16,
+	canmodule *CANModule,
+	canIdNmtTx uint16,
+	canIdNmtRx uint16,
+	canIdHbTx uint16,
 ) error {
-	if entry1017 == nil || can_module == nil {
+	if entry1017 == nil || canmodule == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 
 	nmt.OperatingState = CO_NMT_INITIALIZING
 	nmt.OperatingStatePrev = nmt.OperatingState
-	nmt.NodeId = node_id
+	nmt.NodeId = nodeId
 	nmt.Control = control
 	nmt.Emergency = emergency
-	nmt.HearbeatProducerTimer = uint32(first_hb_time_ms * 1000)
+	nmt.HearbeatProducerTimer = uint32(firstHbIimeMs * 1000)
 
 	/* get and verify required "Producer heartbeat time" from Object Dict. */
 
@@ -120,21 +120,21 @@ func (nmt *NMT) Init(
 	}
 
 	// Configure CAN TX/RX buffers
-	nmt.CANModule = can_module
+	nmt.CANModule = canmodule
 	// NMT RX buffer
-	_, err = can_module.InsertRxBuffer(uint32(can_id_nmt_rx), 0x7FF, false, nmt)
+	_, err = canmodule.InsertRxBuffer(uint32(canIdNmtRx), 0x7FF, false, nmt)
 	if err != nil {
 		log.Error("Failed to Initialize NMT rx buffer")
 		return err
 	}
 	// NMT TX buffer
-	nmt.NMTTxBuff, _, err = can_module.InsertTxBuffer(uint32(can_id_nmt_tx), false, 2, false)
+	nmt.NMTTxBuff, _, err = canmodule.InsertTxBuffer(uint32(canIdNmtTx), false, 2, false)
 	if err != nil {
 		log.Error("Failed to Initialize NMT tx buffer")
 		return err
 	}
 	// NMT HB TX buffer
-	nmt.HBTxBuff, _, err = can_module.InsertTxBuffer(uint32(can_id_hb_tx), false, 1, false)
+	nmt.HBTxBuff, _, err = canmodule.InsertTxBuffer(uint32(canIdHbTx), false, 1, false)
 	if err != nil {
 		log.Error("Failed to Initialize HB tx buffer")
 		return err
