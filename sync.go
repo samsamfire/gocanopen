@@ -203,8 +203,8 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 				periodTimeout = 0xFFFFFFFF
 			}
 			if sync.Timer > periodTimeout {
-				// TODO add emergency
-				log.Warnf("Sync timed out error : %v", sync.ReceiveError)
+				sync.emergency.Error(true, CO_EM_SYNC_TIME_OUT, CO_EMC_COMMUNICATION, sync.Timer)
+				log.Warnf("[SYNC] time out error : %v", sync.Timer)
 				sync.TimeoutError = 2
 			} else if timerNextUs != nil {
 				diff := periodTimeout - sync.Timer
@@ -228,16 +228,16 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 
 	// Check reception errors in handler
 	if sync.ReceiveError != 0 {
-		//TODO send emergency
-		log.Warnf("Sync timed out error : %v", sync.ReceiveError)
+		sync.emergency.Error(true, CO_EM_SYNC_LENGTH, CO_EMC_SYNC_DATA_LENGTH, sync.Timer)
+		log.Warnf("[SYNC] receive error : %v", sync.ReceiveError)
 		sync.ReceiveError = 0
 
 	}
 
 	if status == CO_SYNC_RX_TX {
 		if sync.TimeoutError == 2 {
-			log.Debug("Send error")
-			// TODO send timeout error
+			sync.emergency.Error(false, CO_EM_SYNC_TIME_OUT, 0, 0)
+			log.Warnf("[SYNC] reset error")
 		}
 		sync.TimeoutError = 1
 	}
