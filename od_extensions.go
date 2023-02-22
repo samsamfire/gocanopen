@@ -388,6 +388,26 @@ func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 	return WriteEntryOriginal(stream, data, countWritten)
 }
 
+// [TIME] update cob id & if should be producer
+func WriteEntry1012(stream *Stream, data []byte, countWritten *uint16) error {
+	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
+		return ODR_DEV_INCOMPAT
+	}
+	time, ok := stream.Object.(*TIME)
+	if !ok {
+		return ODR_DEV_INCOMPAT
+	}
+	cobIdTimestamp := binary.LittleEndian.Uint32(data)
+	var canId = uint16(cobIdTimestamp & 0x7FF)
+	if (cobIdTimestamp&0x3FFFF800) != 0 || isIDRestricted(canId) {
+		return ODR_INVALID_VALUE
+	}
+	time.IsConsumer = (cobIdTimestamp & 0x80000000) != 0
+	time.IsProducer = (cobIdTimestamp & 0x40000000) != 0
+
+	return WriteEntryOriginal(stream, data, countWritten)
+}
+
 // [EMERGENCY] read emergency cob id
 func ReadEntry1014(stream *Stream, data []byte, countRead *uint16) error {
 	if stream == nil || data == nil || countRead == nil || len(data) < 4 || stream.Subindex != 0 {

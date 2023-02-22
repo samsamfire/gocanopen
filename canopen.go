@@ -22,6 +22,7 @@ type Node struct {
 	RPDOs              []*RPDO
 	SYNC               *SYNC
 	EM                 *EM
+	TIME               *TIME
 	NodeIdUnconfigured bool
 }
 
@@ -93,6 +94,8 @@ func (node *Node) Process(enable_gateway bool, time_difference_us uint32, timer_
 	for _, server := range node.SDOServers {
 		server.Process(NMTisPreOrOperational, time_difference_us, timer_next_us)
 	}
+	// Process TIME object
+	node.TIME.Process(NMTisPreOrOperational, time_difference_us)
 
 	return reset
 
@@ -236,6 +239,13 @@ func (node *Node) Init(
 		}
 		node.SDOclients = append(node.SDOclients, client)
 		log.Infof("SDO client initialized for node x%x", nodeId)
+	}
+	//Initialize TIME
+	time := &TIME{}
+	node.TIME = time
+	err = time.Init(od.Find(0x1012), node.CANModule)
+	if err != nil {
+		log.Errorf("[TIME] Error when initializing TIME object %v", err)
 	}
 
 	//Initialize SYNC
