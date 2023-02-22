@@ -78,7 +78,6 @@ func main() {
 			time.Sleep(time.Duration(timer_next_background_us) * time.Microsecond)
 		}
 	}()
-
 	counter := 0
 	for {
 		counter += 1
@@ -86,6 +85,7 @@ func main() {
 		start_main = time.Now()
 		time_difference_us := uint32(elapsed.Microseconds())
 		node.Process(false, time_difference_us, nil)
+		//node.EM.Error(true, 0x10, 0x1000, 0x2000)
 		//fmt.Printf("Timer next %v ; Elapsed %v", timer_next_us, time_difference_us)
 		time.Sleep(time.Duration(timer_next_main_us) * time.Microsecond)
 		//_ = client.WriteRaw(0x10, 0x2000, 0x0, data, true)
