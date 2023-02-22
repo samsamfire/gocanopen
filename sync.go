@@ -82,32 +82,34 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	sync.ExtensionEntry1005.Write = WriteEntry1005
 	entry1005.AddExtension(&sync.ExtensionEntry1005)
 
+	var err error
+
 	if entry1006 == nil {
 		log.Warnf("Failed to read entry 1006 (Comm cycle period) because empty")
 	} else {
-		var err error
 		sync.OD1006Period, err = entry1006.GetPtr(0, 4)
 		if err != nil {
 			log.Errorf("Error reading entry 1006 (Comm cycle period): %v", res)
 			return CO_ERROR_OD_PARAMETERS
 		}
+		log.Infof("[SYNC] comm cycle period %v ms", binary.LittleEndian.Uint32(*sync.OD1006Period))
 	}
 
 	if entry1007 == nil {
 		log.Warnf("Failed to read entry 1007 (Synchronous window len) because empty")
 	} else {
-		var err error
 		sync.OD1007Window, err = entry1007.GetPtr(0, 4)
 		if err != nil {
 			log.Errorf("Error reading entry 1007 (Synchronous window len): %v", res)
 			return CO_ERROR_OD_PARAMETERS
 		}
+		log.Infof("[SYNC] synchronous window %v ms", binary.LittleEndian.Uint32(*sync.OD1007Window))
 	}
 
 	var syncCounterOverflow uint8 = 0
 	if entry1019 != nil {
-		res = entry1019.GetUint8(0, &syncCounterOverflow)
-		if res != nil {
+		err = entry1019.GetUint8(0, &syncCounterOverflow)
+		if err != nil {
 			log.Errorf("Error reading entry 1019 (Synchronous counter overflow): %v", res)
 			return CO_ERROR_OD_PARAMETERS
 		}
@@ -118,8 +120,8 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 		}
 		sync.ExtensionEntry1019.Object = sync
 		sync.ExtensionEntry1019.Read = ReadEntryOriginal
-		// TODO
-		sync.ExtensionEntry1019.Write = WriteEntryOriginal
+		sync.ExtensionEntry1019.Write = WriteEntry1019
+		log.Infof("[SYNC] sync counter overflow %v", syncCounterOverflow)
 	}
 	sync.CounterOverflowValue = syncCounterOverflow
 	sync.emergency = emergency
@@ -146,6 +148,10 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	if sync.CANTxBuff == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
+	log.Infof("[SYNC] initialized sync | producer : %v ",
+		sync.IsProducer,
+		syncCounterOverflow,
+	)
 	return nil
 }
 
