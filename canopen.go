@@ -202,57 +202,57 @@ func (node *Node) Init(
 	}
 	err = node.NMT.Init(entry1017, nil, nodeId, nmtControl, firstHbTimeMs, node.CANModule, NMT_SERVICE_ID, NMT_SERVICE_ID, HEARTBEAT_SERVICE_ID+uint16(nodeId))
 	if err != nil {
-		log.Errorf("Error when initializing NMT object %v", err)
+		log.Errorf("[NMT] error when initializing NMT object %v", err)
 		return err
 	} else {
-		log.Infof("NMT initialized for node x%x", nodeId)
+		log.Infof("[NMT] initialized for node x%x", nodeId)
 	}
 
 	// Initialize SDO server
 	// For now only one server
 	entry1200 := od.Find(0x1200)
 	if entry1200 == nil {
-		log.Warnf("No SDO servers initialized in node x%x", nodeId)
+		log.Warnf("[SDO SERVER] no sdo servers initialized for node x%x", nodeId)
 	} else {
 		node.SDOServers = make([]*SDOServer, 0)
 		server := &SDOServer{}
 		err = server.Init(od, entry1200, nodeId, sdoServerTimeoutMs, node.CANModule)
 		if err != nil {
-			log.Errorf("Error when initializing SDO server object %v", err)
+			log.Errorf("[SDO SERVER] error when initializing SDO server object %v", err)
 			return err
 		}
 		node.SDOServers = append(node.SDOServers, server)
-		log.Infof("SDO server initialized for node x%x", nodeId)
+		log.Infof("[SDO SERVER] initialized for node x%x", nodeId)
 	}
 
 	// Initialize SDO clients if any
 	// For now only one client
 	entry1280 := od.Find(0x1280)
 	if entry1280 == nil {
-		log.Info("No SDO clients initialized in node")
+		log.Info("[SDO CLIENT] no SDO clients initialized for node")
 	} else {
 		node.SDOclients = make([]*SDOClient, 0)
 		client := &SDOClient{}
 		err = client.Init(od, entry1280, nodeId, node.CANModule)
 		if err != nil {
-			log.Errorf("Error when initializing SDO client object %v", err)
+			log.Errorf("[SDO CLIENT] error when initializing SDO client object %v", err)
 		}
 		node.SDOclients = append(node.SDOclients, client)
-		log.Infof("SDO client initialized for node x%x", nodeId)
+		log.Infof("[SDO CLIENT] initialized for node x%x", nodeId)
 	}
 	//Initialize TIME
 	time := &TIME{}
 	node.TIME = time
 	err = time.Init(od.Find(0x1012), node.CANModule, 1000)
 	if err != nil {
-		log.Errorf("[TIME] Error when initializing TIME object %v", err)
+		log.Errorf("[TIME] error when initializing TIME object %v", err)
 	}
 
 	//Initialize SYNC
 	sync := &SYNC{}
 	err = sync.Init(&EM{}, od.Find(0x1005), od.Find(0x1006), od.Find(0x1007), od.Find(0x1019), node.CANModule)
 	if err != nil {
-		log.Errorf("Error when initialising SYNC object %v", err)
+		log.Errorf("[SYNC] error when initialising SYNC object %v", err)
 	}
 	node.SYNC = sync
 	return nil
