@@ -102,7 +102,7 @@ func (node *Node) Process(enable_gateway bool, time_difference_us uint32, timer_
 }
 
 /*Initialize all PDOs*/
-func (node *Node) InitPDO(emergency *EM, od *ObjectDictionary, nodeId uint8) error {
+func (node *Node) InitPDO(od *ObjectDictionary, nodeId uint8) error {
 	if nodeId < 1 || nodeId > 127 || node.NodeIdUnconfigured {
 		if node.NodeIdUnconfigured {
 			return CO_ERROR_NODE_ID_UNCONFIGURED_LSS
@@ -120,7 +120,7 @@ func (node *Node) InitPDO(emergency *EM, od *ObjectDictionary, nodeId uint8) err
 		nodeIdOffset := i / 4
 		preDefinedIdent = 0x200 + pdoOffset*0x100 + uint16(nodeId) + nodeIdOffset
 		rpdo := RPDO{}
-		err := rpdo.Init(od, emergency, node.SYNC, preDefinedIdent, entry14xx, entry16xx, node.CANModule)
+		err := rpdo.Init(od, node.EM, node.SYNC, preDefinedIdent, entry14xx, entry16xx, node.CANModule)
 		if err != nil {
 			log.Warnf("Failed to Initialize RPDO%v, stopping there", i)
 			break
@@ -138,7 +138,7 @@ func (node *Node) InitPDO(emergency *EM, od *ObjectDictionary, nodeId uint8) err
 		nodeIdOffset := i / 4
 		preDefinedIdent = 0x180 + pdoOffset*0x100 + uint16(nodeId) + nodeIdOffset
 		tpdo := TPDO{}
-		err := tpdo.Init(od, emergency, node.SYNC, preDefinedIdent, entry18xx, entry1Axx, node.CANModule)
+		err := tpdo.Init(od, node.EM, node.SYNC, preDefinedIdent, entry18xx, entry1Axx, node.CANModule)
 		if err != nil {
 			log.Warnf("Failed to Initialize TPDO%v, stopping there", i)
 			break
@@ -253,8 +253,6 @@ func (node *Node) Init(
 	err = sync.Init(&EM{}, od.Find(0x1005), od.Find(0x1006), od.Find(0x1007), od.Find(0x1019), node.CANModule)
 	if err != nil {
 		log.Errorf("Error when initialising SYNC object %v", err)
-	} else {
-		log.Infof("SYNC initialized for node x%x, producer : %v", nodeId, sync.IsProducer)
 	}
 	node.SYNC = sync
 	return nil

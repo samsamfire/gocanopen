@@ -2,6 +2,7 @@ package main
 
 import (
 	"canopen"
+	"flag"
 	"fmt"
 	"os"
 	"time"
@@ -10,120 +11,77 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func handleCANFrame(frame can.Frame) {
-	fmt.Println(frame)
-}
-
-var NODE_ID uint8 = 0x20
+var DEFAULT_NODE_ID = 0x20
+var DEFAULT_CAN_INTERFACE = "can0"
 
 func main() {
 	log.SetLevel(log.DebugLevel)
-	// log.SetReportCaller(true)
+	// Command line arguments
+	can_interface := flag.String("i", DEFAULT_CAN_INTERFACE, "socketcan interface e.g. can0,vcan0")
+	node_id := flag.Int("n", DEFAULT_NODE_ID, "node id")
+	eds_path := flag.String("p", "", "eds file path")
+	flag.Parse()
 
-	// log.Println("hello world")
-	can_interface := "can0"
-
-	if len(os.Args) > 1 {
-		can_interface = os.Args[1]
-	}
-
-	bus, e := can.NewBusForInterfaceWithName(can_interface)
+	// Start CAN bus
+	bus, e := can.NewBusForInterfaceWithName(*can_interface)
 	if e != nil {
-		fmt.Println(e)
-		return
+		fmt.Printf("could not connect to interface %v : %v\n", *can_interface, e)
+		os.Exit(1)
 	}
 
 	socketcanbus := canopen.SocketCANBus{Bus: bus}
-
 	canmodule := &canopen.CANModule{}
 	canmodule.Init(&socketcanbus)
-
-	// CanModule is the message broker
+	// canmodule handles incoming CAN messages
 	bus.Subscribe(canmodule)
-
 	go bus.ConnectAndPublish()
 
-	// First load the EDS
-	od, err := canopen.ParseEDS("../../base.eds", NODE_ID)
+	// Load node EDS
+	// Basic template can be found in the current directory
+	object_dictionary, err := canopen.ParseEDS(*eds_path, uint8(*node_id))
 	if err != nil {
-		log.Panicf("Error encountered when loading EDS : %v", err)
-	}
+		fmt.Printf("error encountered when loading EDS : %v\n", err)
+		os.Exit(1)
 
+	}
+	// Create and initialize CANopen node
 	node := canopen.Node{Config: nil, CANModule: canmodule, NMT: nil}
-	err = node.Init(nil, nil, od, nil, canopen.CO_NMT_STARTUP_TO_OPERATIONAL, 500, 1000, 1000, true, NODE_ID)
+	err = node.Init(nil, nil, object_dictionary, nil, canopen.CO_NMT_STARTUP_TO_OPERATIONAL, 500, 1000, 1000, true, uint8(*node_id))
 	if err != nil {
-		log.Panicf("Failed Initializing Node because %v", err)
+		fmt.Printf("failed Initializing Node : %v\n", err)
+		os.Exit(1)
 	}
-	err = node.InitPDO(&canopen.EM{}, od, NODE_ID)
+	err = node.InitPDO(object_dictionary, uint8(*node_id))
 	if err != nil {
-		log.Panicf("Failed to initiallize PDOs for Node because %v", err)
+		fmt.Printf("failed to initiallize PDOs : %v\n", err)
+		os.Exit(1)
 	}
 
-	start_background := time.Now()
-	start_main := time.Now()
-	var timer_next_main_us uint32 = 10000       // i.e 10 ms
-	var timer_next_background_us uint32 = 10000 // i.e 10 ms
+	startBackground := time.Now()
+	backgroundPeriod := time.Duration(10 * time.Millisecond)
+	startMain := time.Now()
+	mainPeriod := time.Duration(10 * time.Millisecond)
 
-	// client := node.SDOclients[0]
-
+	// Go routine responsible for processing background tasks such as PDO and SYNC
 	go func() {
-		//var tmrNextUs uint32 = 10000
 		for {
-			elapsed := time.Since(start_background)
-			start_background = time.Now()
-			time_difference_us := uint32(elapsed.Microseconds())
-			syncWas := node.ProcessSYNC(time_difference_us, nil)
-			node.ProcessTPDO(syncWas, time_difference_us, nil)
-			//fmt.Printf("Timer next %v ; Elapsed %v", timer_next_us, time_difference_us)
-			time.Sleep(time.Duration(timer_next_background_us) * time.Microsecond)
+			elapsed := time.Since(startBackground)
+			startBackground = time.Now()
+			timeDifferenceUs := uint32(elapsed.Microseconds())
+			syncWas := node.ProcessSYNC(timeDifferenceUs, nil)
+			node.ProcessTPDO(syncWas, timeDifferenceUs, nil)
+			time.Sleep(backgroundPeriod)
 		}
 	}()
-	counter := 0
+
+	// Main loop
 	for {
-		counter += 1
-		elapsed := time.Since(start_main)
-		start_main = time.Now()
-		time_difference_us := uint32(elapsed.Microseconds())
-		node.Process(false, time_difference_us, nil)
-		//node.EM.Error(true, 0x10, 0x1000, 0x2000)
-		//fmt.Printf("Timer next %v ; Elapsed %v", timer_next_us, time_difference_us)
-		time.Sleep(time.Duration(timer_next_main_us) * time.Microsecond)
-		//_ = client.WriteRaw(0x10, 0x2000, 0x0, data, true)
-		// reader := canopen.NewBlockReader(0x10, 0x1021, 0x0, &client)
-		// data, _ := reader.ReadAll()
-		// // _, err = client.ReadRaw(0x10, 0x1021, 0x0, data)
-		// log.Infof("Read back %v", data)
-
-		// // _, err = f.Write(data)
-		// // if err != nil {
-		// // 	fmt.Print("Error occurred when writing to file")
-		// // }
-
-		// // Write to a file
-		// buf := bytes.NewReader(data)
-		// w, _ := zip.NewReader(buf, int64(len(data)))
-		// f, err := w.File[0].Open()
-		// if err != nil {
-		// 	panic(err)
-		// }
-		// unzipped_data, _ := io.ReadAll(f)
-		// os.WriteFile("dictionnary.eds", unzipped_data, 0644)
-
-		// if err != nil {
-		// 	panic(err)
-		// }
-
-		// return
-		// if err != nil {
-		// 	log.Errorf("Error reading %v", err)
-		// }
-		//once = false
-
-		// if counter >= 2000 && sent == false {
-		// 	node.NMT.SendInternalCommand(canopen.CO_NMT_ENTER_PRE_OPERATIONAL)
-		// 	counter = 0
-		// 	sent = true
-		// }
+		elapsed := time.Since(startMain)
+		startMain = time.Now()
+		timeDifferenceUs := uint32(elapsed.Microseconds())
+		node.Process(false, timeDifferenceUs, nil)
+		// Add application code HERE
+		time.Sleep(mainPeriod)
 
 	}
 }
