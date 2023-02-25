@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/brutella/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -22,19 +21,18 @@ func main() {
 	eds_path := flag.String("p", "", "eds file path")
 	flag.Parse()
 
-	// Start CAN bus
-	bus, e := can.NewBusForInterfaceWithName(*can_interface)
+	// Create a new socket can bus
+	bus, e := canopen.NewSocketcanBus(*can_interface)
 	if e != nil {
 		fmt.Printf("could not connect to interface %v : %v\n", *can_interface, e)
 		os.Exit(1)
 	}
 
-	socketcanbus := canopen.SocketCANBus{Bus: bus}
-	canmodule := &canopen.CANModule{}
-	canmodule.Init(&socketcanbus)
-	// canmodule handles incoming CAN messages
-	bus.Subscribe(canmodule)
-	go bus.ConnectAndPublish()
+	busManager := &canopen.BusManager{}
+	busManager.Init(&bus)
+	// Subscribe to incoming messages
+	bus.Subscribe(busManager)
+	bus.Connect()
 
 	// Load node EDS
 	// Basic template can be found in the current directory
@@ -45,7 +43,7 @@ func main() {
 
 	}
 	// Create and initialize CANopen node
-	node := canopen.Node{Config: nil, CANModule: canmodule, NMT: nil}
+	node := canopen.Node{Config: nil, BusManager: busManager, NMT: nil}
 	err = node.Init(nil, nil, object_dictionary, nil, canopen.CO_NMT_STARTUP_TO_OPERATIONAL, 500, 1000, 1000, true, uint8(*node_id))
 	if err != nil {
 		fmt.Printf("failed Initializing Node : %v\n", err)

@@ -18,7 +18,7 @@ type TIME struct {
 	RxNew              bool
 	ProducerIntervalMs uint32
 	ProducerTimerMs    uint32
-	canmodule          *CANModule
+	busManager         *BusManager
 	TxBuffer           *BufferTxFrame
 	ExtensionEntry1012 Extension
 }
@@ -33,8 +33,8 @@ func (time *TIME) Handle(frame can.Frame) {
 
 }
 
-func (time *TIME) Init(entry1012 *Entry, canmodule *CANModule, producerIntervalMs uint32) error {
-	if time == nil || entry1012 == nil || canmodule == nil {
+func (time *TIME) Init(entry1012 *Entry, busManager *BusManager, producerIntervalMs uint32) error {
+	if time == nil || entry1012 == nil || busManager == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	// Read param from OD
@@ -55,7 +55,7 @@ func (time *TIME) Init(entry1012 *Entry, canmodule *CANModule, producerIntervalM
 	log.Infof("[TIME] producer : %v | consumer : %v", time.IsProducer, time.IsConsumer)
 	var err error
 	if time.IsConsumer {
-		_, err = canmodule.InsertRxBuffer(
+		_, err = busManager.InsertRxBuffer(
 			cobId,
 			0x7FF,
 			false,
@@ -65,8 +65,8 @@ func (time *TIME) Init(entry1012 *Entry, canmodule *CANModule, producerIntervalM
 			return CO_ERROR_ILLEGAL_ARGUMENT
 		}
 	}
-	time.canmodule = canmodule
-	time.TxBuffer, _, err = canmodule.InsertTxBuffer(
+	time.busManager = busManager
+	time.TxBuffer, _, err = busManager.InsertTxBuffer(
 		cobId,
 		false,
 		6,
@@ -114,7 +114,7 @@ func (time *TIME) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) b
 			time.ProducerTimerMs -= time.ProducerIntervalMs
 			binary.LittleEndian.PutUint32(time.TxBuffer.Data[0:4], time.Ms)
 			binary.LittleEndian.PutUint16(time.TxBuffer.Data[4:6], time.Days)
-			time.canmodule.Send(*time.TxBuffer)
+			time.busManager.Send(*time.TxBuffer)
 		} else {
 			time.ProducerTimerMs += ms
 		}

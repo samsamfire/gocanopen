@@ -32,7 +32,7 @@ type HBConsumer struct {
 	AllMonitoredActive        bool
 	AllMonitoredOperational   bool
 	NMTisPreOrOperationalPrev bool
-	canmodule                 *CANModule
+	busManager                *BusManager
 	ExtensionEntry1016        Extension
 }
 
@@ -47,13 +47,13 @@ func (node_consumer *HBConsumerNode) Handle(frame can.Frame) {
 }
 
 // Initialize hearbeat consumer
-func (consumer *HBConsumer) Init(em *EM, monitoredNodes []*HBConsumerNode, entry1016 *Entry, canmodule *CANModule) error {
-	if monitoredNodes == nil || entry1016 == nil || canmodule == nil {
+func (consumer *HBConsumer) Init(em *EM, monitoredNodes []*HBConsumerNode, entry1016 *Entry, busManager *BusManager) error {
+	if monitoredNodes == nil || entry1016 == nil || busManager == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	consumer.em = em
 	consumer.MonitoredNodes = monitoredNodes
-	consumer.canmodule = canmodule
+	consumer.busManager = busManager
 
 	// Get real number of monitored nodes
 	nbSubEntries := entry1016.GetNbSubEntries()
@@ -126,10 +126,10 @@ func (consumer *HBConsumer) InitEntry(index uint8, nodeId uint8, consumerTimeMs 
 	if monitoredNode.HBState != HB_UNCONFIGURED {
 		if monitoredNode.RxBufferIdx == -1 {
 			// Never been configured
-			monitoredNode.RxBufferIdx, ret = consumer.canmodule.InsertRxBuffer(uint32(cobId), 0x7FF, false, monitoredNode)
+			monitoredNode.RxBufferIdx, ret = consumer.busManager.InsertRxBuffer(uint32(cobId), 0x7FF, false, monitoredNode)
 		} else {
 			//Only update
-			ret = consumer.canmodule.UpdateRxBuffer(monitoredNode.RxBufferIdx, uint32(cobId), 0x7FF, false, monitoredNode)
+			ret = consumer.busManager.UpdateRxBuffer(monitoredNode.RxBufferIdx, uint32(cobId), 0x7FF, false, monitoredNode)
 		}
 	}
 	return ret

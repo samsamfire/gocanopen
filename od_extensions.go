@@ -364,7 +364,7 @@ func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 	}
 	// Reconfigure the receive and transmit buffers only if changed
 	if canId != sync.Ident {
-		err := sync.CANModule.UpdateRxBuffer(sync.CANRxBuffIndex, uint32(canId), 0x7FF, false, sync)
+		err := sync.BusManager.UpdateRxBuffer(sync.CANRxBuffIndex, uint32(canId), 0x7FF, false, sync)
 		if err != nil {
 			return ODR_DEV_INCOMPAT
 		}
@@ -372,7 +372,7 @@ func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 		if sync.CounterOverflowValue != 0 {
 			frameSize = 1
 		}
-		sync.CANTxBuff, err = sync.CANModule.UpdateTxBuffer(sync.CANTxBuffIndex, uint32(canId), false, frameSize, false)
+		sync.CANTxBuff, err = sync.BusManager.UpdateTxBuffer(sync.CANTxBuffIndex, uint32(canId), false, frameSize, false)
 		if sync.CANTxBuff == nil || err != nil {
 			return ODR_DEV_INCOMPAT
 		}
@@ -554,7 +554,7 @@ func WriteEntry1019(stream *Stream, data []byte, countWritten *uint16) error {
 		nbBytes = 1
 	}
 	var err error
-	sync.CANTxBuff, err = sync.CANModule.UpdateTxBuffer(sync.CANTxBuffIndex, uint32(sync.Ident), false, nbBytes, false)
+	sync.CANTxBuff, err = sync.BusManager.UpdateTxBuffer(sync.CANTxBuffIndex, uint32(sync.Ident), false, nbBytes, false)
 	if sync.CANTxBuff == nil || err != nil {
 		sync.IsProducer = false
 		return ODR_DEV_INCOMPAT
@@ -643,7 +643,7 @@ func WriteEntry1201(stream *Stream, data []byte, countWritten *uint16) error {
 			return ODR_INVALID_VALUE
 		}
 		server.InitRxTx(
-			server.CANModule,
+			server.BusManager,
 			uint16(server.idRxBuff),
 			uint16(server.idTxBuff),
 			cobId,
@@ -661,7 +661,7 @@ func WriteEntry1201(stream *Stream, data []byte, countWritten *uint16) error {
 			return ODR_INVALID_VALUE
 		}
 		server.InitRxTx(
-			server.CANModule,
+			server.BusManager,
 			uint16(server.idRxBuff),
 			uint16(server.idTxBuff),
 			server.CobIdClientToServer,

@@ -8,7 +8,7 @@ import (
 /* TODOs
 - Maybe implement callbacks on change etc
 - Missing nmt state on error transitions because don't have Emergency yet
-- Finish CANModule sending
+- Finish BusManager sending
 */
 
 const (
@@ -55,7 +55,7 @@ type NMT struct {
 	HearbeatProducerTimer  uint32
 	ExtensionEntry1017     Extension
 	Emergency              *EM
-	CANModule              *CANModule
+	BusManager             *BusManager
 	NMTTxBuff              *BufferTxFrame
 	HBTxBuff               *BufferTxFrame
 	Callback               func(nmtState uint8)
@@ -83,12 +83,12 @@ func (nmt *NMT) Init(
 	nodeId uint8,
 	control uint16,
 	firstHbIimeMs uint16,
-	canmodule *CANModule,
+	busManager *BusManager,
 	canIdNmtTx uint16,
 	canIdNmtRx uint16,
 	canIdHbTx uint16,
 ) error {
-	if entry1017 == nil || canmodule == nil {
+	if entry1017 == nil || busManager == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 
@@ -120,21 +120,21 @@ func (nmt *NMT) Init(
 	}
 
 	// Configure CAN TX/RX buffers
-	nmt.CANModule = canmodule
+	nmt.BusManager = busManager
 	// NMT RX buffer
-	_, err = canmodule.InsertRxBuffer(uint32(canIdNmtRx), 0x7FF, false, nmt)
+	_, err = busManager.InsertRxBuffer(uint32(canIdNmtRx), 0x7FF, false, nmt)
 	if err != nil {
 		log.Error("Failed to Initialize NMT rx buffer")
 		return err
 	}
 	// NMT TX buffer
-	nmt.NMTTxBuff, _, err = canmodule.InsertTxBuffer(uint32(canIdNmtTx), false, 2, false)
+	nmt.NMTTxBuff, _, err = busManager.InsertTxBuffer(uint32(canIdNmtTx), false, 2, false)
 	if err != nil {
 		log.Error("Failed to Initialize NMT tx buffer")
 		return err
 	}
 	// NMT HB TX buffer
-	nmt.HBTxBuff, _, err = canmodule.InsertTxBuffer(uint32(canIdHbTx), false, 1, false)
+	nmt.HBTxBuff, _, err = busManager.InsertTxBuffer(uint32(canIdHbTx), false, 1, false)
 	if err != nil {
 		log.Error("Failed to Initialize HB tx buffer")
 		return err
@@ -159,7 +159,7 @@ func (nmt *NMT) Process(internal_state *uint8, time_difference_us uint32, timer_
 	 */
 	if nmtInit || (nmt.HearbeatProducerTimeUs != 0 && (nmt.HearbeatProducerTimer == 0 || nmtStateCopy != nmt.OperatingStatePrev)) {
 		nmt.HBTxBuff.Data[0] = nmtStateCopy
-		nmt.CANModule.Send(*nmt.HBTxBuff)
+		nmt.BusManager.Send(*nmt.HBTxBuff)
 		if nmtStateCopy == CO_NMT_INITIALIZING {
 			/* NMT slave is self starting */
 			if nmt.Control&CO_NMT_STARTUP_TO_OPERATIONAL != 0 {
@@ -255,7 +255,7 @@ func (nmt *NMT) SendCommand(command uint8, node_id uint8) error {
 	nmt.NMTTxBuff.Data[0] = command
 	nmt.NMTTxBuff.Data[1] = node_id
 
-	nmt.CANModule.Send((*nmt.NMTTxBuff))
+	nmt.BusManager.Send((*nmt.NMTTxBuff))
 	return nil
 
 }

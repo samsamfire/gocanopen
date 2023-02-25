@@ -16,7 +16,7 @@ const (
 type PDOBase struct {
 	od                          *ObjectDictionary
 	em                          *EM
-	Canmodule                   *CANModule
+	Canmodule                   *BusManager
 	Valid                       bool
 	DataLength                  uint32
 	MappedObjectsCount          uint8
@@ -227,15 +227,15 @@ func (rpdo *RPDO) Init(od *ObjectDictionary,
 	preDefinedId uint16,
 	entry14xx *Entry,
 	entry16xx *Entry,
-	canmodule *CANModule) error {
+	busManager *BusManager) error {
 	pdo := &rpdo.PDO
-	if od == nil || em == nil || entry14xx == nil || entry16xx == nil || canmodule == nil {
+	if od == nil || em == nil || entry14xx == nil || entry16xx == nil || busManager == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	// Clean object
 	*rpdo = RPDO{}
 	pdo.em = em
-	pdo.Canmodule = canmodule
+	pdo.Canmodule = busManager
 	erroneousMap := uint32(0)
 	// Configure mapping params
 	ret := pdo.InitMapping(od, entry16xx, true, &erroneousMap)
@@ -264,7 +264,7 @@ func (rpdo *RPDO) Init(od *ObjectDictionary,
 		canId = 0
 	}
 
-	pdo.BufferIdx, ret = canmodule.InsertRxBuffer(canId, 0x7FF, false, rpdo)
+	pdo.BufferIdx, ret = busManager.InsertRxBuffer(canId, 0x7FF, false, rpdo)
 	if ret != nil {
 		return ret
 	}
@@ -389,16 +389,16 @@ func (tpdo *TPDO) Init(
 	predefinedIdent uint16,
 	entry18xx *Entry,
 	entry1Axx *Entry,
-	canmodule *CANModule) error {
+	busManager *BusManager) error {
 
 	pdo := &tpdo.PDO
-	if od == nil || em == nil || entry18xx == nil || entry1Axx == nil || canmodule == nil {
+	if od == nil || em == nil || entry18xx == nil || entry1Axx == nil || busManager == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	// Clear TPDO
 	*tpdo = TPDO{}
 	pdo.em = em
-	pdo.Canmodule = canmodule
+	pdo.Canmodule = busManager
 	// Configure mapping parameters
 	erroneousMap := uint32(0)
 	ret := pdo.InitMapping(od, entry1Axx, false, &erroneousMap)
@@ -474,7 +474,7 @@ func (tpdo *TPDO) Init(
 	// Configure OD extensions
 	pdo.IsRPDO = false
 	pdo.od = od
-	pdo.Canmodule = canmodule
+	pdo.Canmodule = busManager
 	pdo.PreDefinedIdent = predefinedIdent
 	pdo.ConfiguredIdent = canId
 	pdo.ExtensionCommunicationParam.Object = tpdo

@@ -31,7 +31,7 @@ type SYNC struct {
 	CANTxBuff            *BufferTxFrame
 	CANTxBuffIndex       int
 	CANRxBuffIndex       int
-	CANModule            *CANModule
+	BusManager           *BusManager
 	Ident                uint16
 	ExtensionEntry1005   Extension
 	ExtensionEntry1019   Extension
@@ -66,7 +66,7 @@ func (sync *SYNC) Handle(frame can.Frame) {
 
 }
 
-func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1007 *Entry, entry1019 *Entry, canmodule *CANModule) error {
+func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1007 *Entry, entry1019 *Entry, busManager *BusManager) error {
 	if emergency == nil || entry1005 == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
@@ -127,10 +127,10 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	sync.emergency = emergency
 	sync.IsProducer = (cobIdSync & 0x40000000) != 0
 	sync.Ident = uint16(cobIdSync) & 0x7FF
-	sync.CANModule = canmodule
+	sync.BusManager = busManager
 
 	var err1 error
-	sync.CANRxBuffIndex, err1 = sync.CANModule.InsertRxBuffer(uint32(sync.Ident), 0x7FF, false, sync)
+	sync.CANRxBuffIndex, err1 = sync.BusManager.InsertRxBuffer(uint32(sync.Ident), 0x7FF, false, sync)
 	if err1 != nil {
 		log.Errorf("Error initializing RX buffer for SDO client %v", err1)
 		return err1
@@ -140,7 +140,7 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	if syncCounterOverflow != 0 {
 		frameSize = 1
 	}
-	sync.CANTxBuff, sync.CANTxBuffIndex, err2 = sync.CANModule.InsertTxBuffer(uint32(sync.Ident), false, frameSize, false)
+	sync.CANTxBuff, sync.CANTxBuffIndex, err2 = sync.BusManager.InsertTxBuffer(uint32(sync.Ident), false, frameSize, false)
 	if err2 != nil {
 		log.Errorf("Error initializing TX buffer for SDO client %v", err2)
 		return err2
@@ -163,7 +163,7 @@ func (sync *SYNC) sendSync() {
 	sync.Timer = 0
 	sync.RxToggle = !sync.RxToggle
 	sync.CANTxBuff.Data[0] = sync.Counter
-	sync.CANModule.Send(*sync.CANTxBuff)
+	sync.BusManager.Send(*sync.CANTxBuff)
 }
 
 func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
