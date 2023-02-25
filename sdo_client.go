@@ -23,7 +23,7 @@ type SDOClient struct {
 	OD                         *ObjectDictionary
 	Streamer                   *ObjectStreamer
 	NodeId                     uint8
-	CANModule                  *CANModule
+	BusManager                 *BusManager
 	CANtxBuff                  *BufferTxFrame
 	CobIdClientToServer        uint32
 	CobIdServerToClient        uint32
@@ -97,18 +97,18 @@ const (
 
 const ()
 
-func (client *SDOClient) Init(od *ObjectDictionary, entry1280 *Entry, nodeId uint8, canmodule *CANModule) error {
+func (client *SDOClient) Init(od *ObjectDictionary, entry1280 *Entry, nodeId uint8, busManager *BusManager) error {
 
 	if entry1280.Index < 0x1280 || entry1280.Index > (0x1280+0x7F) {
 		log.Errorf("Invalid index for SDO communication parameters %v", entry1280.Index)
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
-	if entry1280 == nil || canmodule == nil || od == nil {
+	if entry1280 == nil || busManager == nil || od == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	client.OD = od
 	client.NodeId = nodeId
-	client.CANModule = canmodule
+	client.BusManager = busManager
 	client.Streamer = &ObjectStreamer{}
 
 	fifo := NewFifo(300)
@@ -168,13 +168,13 @@ func (client *SDOClient) Setup(cobIdClientToServer uint32, cobIdServerToClient u
 		CanIdS2C = 0
 		client.Valid = false
 	}
-	_, err1 := client.CANModule.InsertRxBuffer(uint32(CanIdS2C), 0x7FF, false, client)
+	_, err1 := client.BusManager.InsertRxBuffer(uint32(CanIdS2C), 0x7FF, false, client)
 	if err1 != nil {
 		log.Errorf("Error initializing RX buffer for SDO client %v", err1)
 		client.Valid = false
 	}
 	var err2 error
-	client.CANtxBuff, _, err2 = client.CANModule.InsertTxBuffer(uint32(CanIdC2S), false, 8, false)
+	client.CANtxBuff, _, err2 = client.BusManager.InsertTxBuffer(uint32(CanIdC2S), false, 8, false)
 	if err2 != nil {
 		log.Errorf("Error initializing TX buffer for SDO client %v", err2)
 		client.Valid = false
@@ -672,7 +672,7 @@ func (client *SDOClient) InitiateDownload(forceSegmented bool) error {
 		log.Debugf("==>Tx (x%x) | DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
 	}
 	client.TimeoutTimer = 0
-	client.CANModule.Bus.Send(*client.CANtxBuff)
+	client.BusManager.Bus.Send(*client.CANtxBuff)
 	return nil
 
 }
@@ -699,7 +699,7 @@ func (client *SDOClient) DownloadSegmented(bufferPartial bool) error {
 
 	client.TimeoutTimer = 0
 	log.Debugf("==>Tx (x%x) | DOWNLOAD SEGMENT | x%x:x%x %v | %v%%", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data, ((float64(client.SizeTransferred) / float64(client.SizeIndicated)) * 100))
-	client.CANModule.Send(*client.CANtxBuff)
+	client.BusManager.Send(*client.CANtxBuff)
 	return nil
 }
 
@@ -712,7 +712,7 @@ func (client *SDOClient) Abort(abortCode SDOAbortCode) {
 	client.CANtxBuff.Data[3] = client.Subindex
 	binary.LittleEndian.PutUint32(client.CANtxBuff.Data[4:], code)
 	log.Warnf("[CLIENT]==>Tx (x%x) | CLIENT ABORT | %v (x%x)", client.NodeIdServer, abortCode, abortCode)
-	client.CANModule.Send(*client.CANtxBuff)
+	client.BusManager.Send(*client.CANtxBuff)
 
 }
 
@@ -992,7 +992,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.CANtxBuff.Data[2] = byte(client.Index >> 8)
 			client.CANtxBuff.Data[3] = client.Subindex
 			client.TimeoutTimer = 0
-			client.CANModule.Send(*client.CANtxBuff)
+			client.BusManager.Send(*client.CANtxBuff)
 			client.State = CO_SDO_ST_UPLOAD_INITIATE_RSP
 			log.Debugf("==>Tx (x%x) | UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
 
@@ -1003,7 +1003,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			}
 			client.CANtxBuff.Data[0] = 0x60 | client.Toggle
 			client.TimeoutTimer = 0
-			client.CANModule.Send(*client.CANtxBuff)
+			client.BusManager.Send(*client.CANtxBuff)
 			client.State = CO_SDO_ST_UPLOAD_SEGMENT_RSP
 			log.Debugf("==>Tx (x%x) | UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
 
@@ -1025,7 +1025,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.CANtxBuff.Data[4] = client.BlockSize
 			client.CANtxBuff.Data[5] = CO_CONFIG_SDO_CLI_PST
 			client.TimeoutTimer = 0
-			client.CANModule.Send(*client.CANtxBuff)
+			client.BusManager.Send(*client.CANtxBuff)
 			client.State = CO_SDO_ST_UPLOAD_BLK_INITIATE_RSP
 			log.Debugf("==>Tx (x%x) | BLOCK UPLOAD INITIATE | x%x:x%x %v blksize : %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data, client.BlockSize)
 
@@ -1037,7 +1037,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.BlockCRC = CRC16{0}
 			client.State = CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ
 			client.RxNew = false
-			client.CANModule.Send(*client.CANtxBuff)
+			client.BusManager.Send(*client.CANtxBuff)
 
 		case CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_CRSP:
 			client.CANtxBuff.Data[0] = 0xA2
@@ -1076,14 +1076,14 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			}
 			client.CANtxBuff.Data[2] = client.BlockSize
 			client.TimeoutTimerBlock = 0
-			client.CANModule.Send(*client.CANtxBuff)
+			client.BusManager.Send(*client.CANtxBuff)
 			if transferShort && !client.Finished {
 				log.Warnf("sub-block restarted: seqnoPrev=%v, blksize=%v", seqnoStart, client.BlockSize)
 			}
 
 		case CO_SDO_ST_UPLOAD_BLK_END_CRSP:
 			client.CANtxBuff.Data[0] = 0xA1
-			client.CANModule.Send(*client.CANtxBuff)
+			client.BusManager.Send(*client.CANtxBuff)
 			client.State = CO_SDO_ST_IDLE
 			ret = CO_SDO_RT_ok_communicationEnd
 

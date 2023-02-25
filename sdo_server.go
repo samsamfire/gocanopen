@@ -17,7 +17,7 @@ type SDOServer struct {
 	OD                         *ObjectDictionary
 	Streamer                   *ObjectStreamer
 	NodeId                     uint8
-	CANModule                  *CANModule
+	BusManager                 *BusManager
 	CANtxBuff                  *BufferTxFrame
 	idRxBuff                   int
 	idTxBuff                   int
@@ -111,8 +111,8 @@ func (server *SDOServer) Handle(frame can.Frame) {
 	}
 }
 
-func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uint8, timeoutTimeMs uint16, canmodule *CANModule) error {
-	if od == nil || canmodule == nil {
+func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uint8, timeoutTimeMs uint16, busManager *BusManager) error {
+	if od == nil || busManager == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	server.OD = od
@@ -178,16 +178,16 @@ func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uin
 		}
 	}
 	server.RxNew = false
-	server.CANModule = canmodule
+	server.BusManager = busManager
 	server.idRxBuff = 0
 	server.idTxBuff = 0
 	server.CobIdClientToServer = 0
 	server.CobIdServerToClient = 0
-	return server.InitRxTx(server.CANModule, 0, 0, uint32(canIdClientToServer), uint32(canIdServerToClient))
+	return server.InitRxTx(server.BusManager, 0, 0, uint32(canIdClientToServer), uint32(canIdServerToClient))
 
 }
 
-func (server *SDOServer) InitRxTx(canModule *CANModule, idRx uint16, idTx uint16, cobIdClientToServer uint32, cobIdServerToClient uint32) error {
+func (server *SDOServer) InitRxTx(canModule *BusManager, idRx uint16, idTx uint16, cobIdClientToServer uint32, cobIdServerToClient uint32) error {
 	var ret error
 	// Only proceed if parameters change (i.e. different client)
 	if cobIdServerToClient == server.CobIdServerToClient && cobIdClientToServer == server.CobIdClientToServer {
@@ -217,11 +217,11 @@ func (server *SDOServer) InitRxTx(canModule *CANModule, idRx uint16, idTx uint16
 	}
 	// Configure buffers, if initializing then insert in buffer, otherwise, update
 	if idRx == idTx && idTx == 0 {
-		server.idRxBuff, ret = server.CANModule.InsertRxBuffer(uint32(CanIdC2S), 0x7FF, false, server)
-		server.CANtxBuff, server.idTxBuff, _ = server.CANModule.InsertTxBuffer(uint32(CanIdS2C), false, 8, false)
+		server.idRxBuff, ret = server.BusManager.InsertRxBuffer(uint32(CanIdC2S), 0x7FF, false, server)
+		server.CANtxBuff, server.idTxBuff, _ = server.BusManager.InsertTxBuffer(uint32(CanIdS2C), false, 8, false)
 	} else {
-		ret = server.CANModule.UpdateRxBuffer(server.idRxBuff, uint32(CanIdC2S), 0x7FF, false, server)
-		server.CANtxBuff, _ = server.CANModule.UpdateTxBuffer(server.idTxBuff, uint32(CanIdS2C), false, 8, false)
+		ret = server.BusManager.UpdateRxBuffer(server.idRxBuff, uint32(CanIdC2S), 0x7FF, false, server)
+		server.CANtxBuff, _ = server.BusManager.UpdateTxBuffer(server.idTxBuff, uint32(CanIdS2C), false, 8, false)
 	}
 	if server.CANtxBuff == nil {
 		ret = CO_ERROR_ILLEGAL_ARGUMENT
@@ -736,7 +736,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.CANtxBuff.Data[2] = byte(server.Index >> 8)
 			server.CANtxBuff.Data[3] = server.Subindex
 			server.TimeoutTimer = 0
-			server.CANModule.Send(*server.CANtxBuff)
+			server.BusManager.Send(*server.CANtxBuff)
 			if server.Finished {
 				log.Debugf("[SERVER] ==>Tx | DOWNLOAD EXPEDITED | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 				server.State = CO_SDO_ST_IDLE
@@ -755,7 +755,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.Toggle ^= 0x10
 			server.TimeoutTimer = 0
 			log.Debugf("[SERVER] ==>Tx | DOWNLOAD SEGMENT | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
-			server.CANModule.Send(*server.CANtxBuff)
+			server.BusManager.Send(*server.CANtxBuff)
 			if server.Finished {
 				server.State = CO_SDO_ST_IDLE
 				ret = CO_SDO_RT_ok_communicationEnd
@@ -787,7 +787,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.CANtxBuff.Data[2] = byte(server.Index >> 8)
 			server.CANtxBuff.Data[3] = server.Subindex
 			log.Debugf("[SERVER] ==>Tx | UPLOAD INIT | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
-			server.CANModule.Send(*server.CANtxBuff)
+			server.BusManager.Send(*server.CANtxBuff)
 
 		case CO_SDO_ST_UPLOAD_SEGMENT_RSP:
 			// Refill buffer if needed
@@ -824,7 +824,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				}
 			}
 			log.Debugf("[SERVER] ==>Tx | UPLOAD SEGMENTED | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
-			server.CANModule.Send(*server.CANtxBuff)
+			server.BusManager.Send(*server.CANtxBuff)
 
 		case CO_SDO_ST_DOWNLOAD_BLK_INITIATE_RSP:
 			server.CANtxBuff.Data[0] = 0xA4
@@ -850,7 +850,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.State = CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ
 			server.RxNew = false
 			log.Debugf("[SERVER] ==>Tx | BLOCK DOWNLOAD INIT | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
-			server.CANModule.Send(*server.CANtxBuff)
+			server.BusManager.Send(*server.CANtxBuff)
 
 		case CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_RSP:
 			server.CANtxBuff.Data[0] = 0xA2
@@ -883,7 +883,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.CANtxBuff.Data[2] = server.BlockSize
 			server.TimeoutTimerBlock = 0
 			log.Debugf("[SERVER] ==>Tx | BLOCK DOWNLOAD SUB-BLOCK | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
-			server.CANModule.Send(*server.CANtxBuff)
+			server.BusManager.Send(*server.CANtxBuff)
 			if transferShort && !server.Finished {
 				log.Debugf("sub-block restarte : seqno prev=%v, blksize=%v", seqnoStart, server.BlockSize)
 			}
@@ -891,7 +891,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 		case CO_SDO_ST_DOWNLOAD_BLK_END_RSP:
 			server.CANtxBuff.Data[0] = 0xA1
 			log.Debugf("[SERVER] ==>Tx | BLOCK DOWNLOAD END | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
-			server.CANModule.Send(*server.CANtxBuff)
+			server.BusManager.Send(*server.CANtxBuff)
 			server.State = CO_SDO_ST_IDLE
 			ret = CO_SDO_RT_ok_communicationEnd
 
@@ -908,7 +908,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			// Reset timer & send
 			server.TimeoutTimer = 0
 			log.Debugf("[SERVER] ==>Tx | BLOCK UPLOAD INIT | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
-			server.CANModule.Send(*server.CANtxBuff)
+			server.BusManager.Send(*server.CANtxBuff)
 			server.State = CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ2
 
 		case CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ:
@@ -949,7 +949,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			// Reset timer & send
 			server.TimeoutTimer = 0
 			log.Debugf("[SERVER] ==>Tx | BLOCK UPLOAD SUB-BLOCK | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
-			server.CANModule.Send(*server.CANtxBuff)
+			server.BusManager.Send(*server.CANtxBuff)
 
 		case CO_SDO_ST_UPLOAD_BLK_END_SREQ:
 			server.CANtxBuff.Data[0] = 0xC1 | (server.BlockNoData << 2)
@@ -957,7 +957,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.CANtxBuff.Data[2] = byte(server.BlockCRC.crc >> 8)
 			server.TimeoutTimer = 0
 			log.Debugf("[SERVER] ==>Tx | BLOCK DOWNLOAD END | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
-			server.CANModule.Send(*server.CANtxBuff)
+			server.BusManager.Send(*server.CANtxBuff)
 			server.State = CO_SDO_ST_UPLOAD_BLK_END_CRSP
 
 		default:
@@ -989,7 +989,7 @@ func (server *SDOServer) Abort(abortCode SDOAbortCode) {
 	server.CANtxBuff.Data[2] = uint8(server.Index >> 8)
 	server.CANtxBuff.Data[3] = server.Subindex
 	binary.LittleEndian.PutUint32(server.CANtxBuff.Data[4:], code)
-	server.CANModule.Send(*server.CANtxBuff)
+	server.BusManager.Send(*server.CANtxBuff)
 	log.Warnf("[SERVER] ==>Tx | SERVER ABORT | x%x:x%x | %v (x%x)", server.Index, server.Subindex, abortCode, uint32(abortCode))
 
 }

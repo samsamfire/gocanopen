@@ -247,7 +247,7 @@ type EM struct {
 	errorStatusBits     [CO_CONFIG_EM_ERR_STATUS_BITS_COUNT / 8]byte
 	errorRegister       *byte
 	CANerrorStatusOld   uint16
-	CANmodule           *CANModule
+	CANmodule           *BusManager
 	Fifo                []EMFifo
 	FifoWrPtr           byte
 	FifoPpPtr           byte
@@ -327,7 +327,7 @@ func (emergency *EM) Handle(frame can.Frame) {
 
 }
 func (emergency *EM) Init(
-	canmodule *CANModule,
+	busManager *BusManager,
 	entry1001 *Entry,
 	entry1014 *Entry,
 	entry1015 *Entry,
@@ -336,7 +336,7 @@ func (emergency *EM) Init(
 	nodeId uint8,
 ) error {
 	if emergency == nil || entry1001 == nil ||
-		entry1014 == nil || canmodule == nil ||
+		entry1014 == nil || busManager == nil ||
 		nodeId < 1 || nodeId > 127 ||
 		entry1003 == nil {
 		log.Debugf("%v", emergency)
@@ -344,7 +344,7 @@ func (emergency *EM) Init(
 
 	}
 	var err error
-	emergency.CANmodule = canmodule
+	emergency.CANmodule = busManager
 	// TODO handle error register ptr
 	//emergency.errorRegister
 	fifoSize := entry1003.GetNbSubEntries()
@@ -400,7 +400,7 @@ func (emergency *EM) Init(
 		entryStatusBits.AddExtension(&emergency.ExtensionStatusBits)
 	}
 
-	emergency.RxBufferIdx, err = canmodule.InsertRxBuffer(uint32(EMERGENCY_SERVICE_ID), 0x780, false, emergency)
+	emergency.RxBufferIdx, err = busManager.InsertRxBuffer(uint32(EMERGENCY_SERVICE_ID), 0x780, false, emergency)
 	return err
 }
 
