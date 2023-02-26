@@ -1,7 +1,6 @@
 package canopen
 
 import (
-	"github.com/brutella/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -63,8 +62,8 @@ type NMT struct {
 
 // NMT RX buffer handle (called when node receives an nmt message)
 // Implements FrameHandler
-func (nmt *NMT) Handle(frame can.Frame) {
-	dlc := frame.Length
+func (nmt *NMT) Handle(frame Frame) {
+	dlc := frame.DLC
 	data := frame.Data
 	if dlc != 2 {
 		return

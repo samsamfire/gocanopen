@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/brutella/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -187,9 +186,9 @@ func (client *SDOClient) Setup(cobIdClientToServer uint32, cobIdServerToClient u
 
 }
 
-func (client *SDOClient) Handle(frame can.Frame) {
+func (client *SDOClient) Handle(frame Frame) {
 
-	if client.State != CO_SDO_ST_IDLE && frame.Length == 8 && (!client.RxNew || frame.Data[0] == 0x80) {
+	if client.State != CO_SDO_ST_IDLE && frame.DLC == 8 && (!client.RxNew || frame.Data[0] == 0x80) {
 		if frame.Data[0] == 0x80 || (client.State != CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ && client.State != CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_CRSP) {
 			// Copy data in response
 			client.Response.raw = frame.Data

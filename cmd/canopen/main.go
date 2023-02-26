@@ -22,7 +22,7 @@ func main() {
 	flag.Parse()
 
 	// Create a new socket can bus
-	bus, e := canopen.NewSocketcanBus(*can_interface)
+	bus, e := NewSocketcanBus(*can_interface)
 	if e != nil {
 		fmt.Printf("could not connect to interface %v : %v\n", *can_interface, e)
 		os.Exit(1)

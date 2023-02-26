@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/brutella/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -23,7 +22,7 @@ type TIME struct {
 	ExtensionEntry1012 Extension
 }
 
-func (time *TIME) Handle(frame can.Frame) {
+func (time *TIME) Handle(frame Frame) {
 	if len(frame.Data) != 6 {
 		return
 	}

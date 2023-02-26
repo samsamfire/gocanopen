@@ -1,7 +1,6 @@
 package canopen
 
 import (
-	"github.com/brutella/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -37,8 +36,8 @@ type HBConsumer struct {
 }
 
 // Handle hearbeat reception specific to a node
-func (node_consumer *HBConsumerNode) Handle(frame can.Frame) {
-	if frame.Length != 8 {
+func (node_consumer *HBConsumerNode) Handle(frame Frame) {
+	if frame.DLC != 8 {
 		return
 	}
 	node_consumer.NMTState = int(frame.Data[0])

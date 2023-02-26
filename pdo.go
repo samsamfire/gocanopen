@@ -1,7 +1,6 @@
 package canopen
 
 import (
-	"github.com/brutella/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -188,14 +187,14 @@ const (
 	CO_PDO_TRANSM_TYPE_SYNC_EVENT_HI = 0xFF /**< event-driven, higher value (device profile and application profile specific) */
 )
 
-func (rpdo *RPDO) Handle(frame can.Frame) {
+func (rpdo *RPDO) Handle(frame Frame) {
 	pdo := &rpdo.PDO
 	err := rpdo.ReceiveError
 
 	if pdo.Valid {
-		if frame.Length >= uint8(pdo.DataLength) {
+		if frame.DLC >= uint8(pdo.DataLength) {
 			// Indicate if errors in PDO length
-			if frame.Length == uint8(pdo.DataLength) {
+			if frame.DLC == uint8(pdo.DataLength) {
 				if err == CO_RPDO_RX_ACK_ERROR {
 					err = CO_RPDO_RX_OK
 				}
