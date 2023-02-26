@@ -3,7 +3,6 @@ package canopen
 import (
 	"encoding/binary"
 
-	"github.com/brutella/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -50,8 +49,8 @@ type SDOServer struct {
 }
 
 // Handle received messages
-func (server *SDOServer) Handle(frame can.Frame) {
-	if frame.Length != 8 {
+func (server *SDOServer) Handle(frame Frame) {
+	if frame.DLC != 8 {
 		log.Debugf("Ignoring client message because wrong length x%x %v; Server state : x%x", frame.ID, frame.Data, server.State)
 		return
 	}

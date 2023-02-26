@@ -3,7 +3,6 @@ package canopen
 import (
 	"encoding/binary"
 
-	"github.com/brutella/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -43,20 +42,20 @@ const (
 	CO_SYNC_PASSED_WINDOW uint8 = 2 /** Time has just passed SYNC window (OD_1007) in last cycle */
 )
 
-func (sync *SYNC) Handle(frame can.Frame) {
+func (sync *SYNC) Handle(frame Frame) {
 	syncReceived := false
 	if sync.CounterOverflowValue == 0 {
-		if frame.Length == 0 {
+		if frame.DLC == 0 {
 			syncReceived = true
 		} else {
-			sync.ReceiveError = frame.Length | 0x40
+			sync.ReceiveError = frame.DLC | 0x40
 		}
 	} else {
-		if frame.Length == 1 {
+		if frame.DLC == 1 {
 			sync.Counter = frame.Data[0]
 			syncReceived = true
 		} else {
-			sync.ReceiveError = frame.Length | 0x80
+			sync.ReceiveError = frame.DLC | 0x80
 		}
 	}
 	if syncReceived {

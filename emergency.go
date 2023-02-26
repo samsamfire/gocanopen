@@ -3,7 +3,6 @@ package canopen
 import (
 	"encoding/binary"
 
-	"github.com/brutella/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -309,7 +308,7 @@ func WriteEntryStatusBits(stream *Stream, data []byte, countWritten *uint16) err
 	return nil
 }
 
-func (emergency *EM) Handle(frame can.Frame) {
+func (emergency *EM) Handle(frame Frame) {
 	// Ignore sync messages and only accept 8 bytes size
 	if emergency == nil || emergency.EmergencyRxCallback == nil ||
 		frame.ID == 0x80 ||

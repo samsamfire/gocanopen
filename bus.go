@@ -1,9 +1,28 @@
 package canopen
 
 import (
-	"github.com/brutella/can"
 	log "github.com/sirupsen/logrus"
 )
+
+// A CAN Bus interface that implements sending
+type Bus interface {
+	Send(frame BufferTxFrame) error    // Send a frame on the bus
+	Subscribe(subscriber FrameHandler) // Subscribe to can frames
+	Connect(...any) error
+}
+
+// A CAN frame
+type Frame struct {
+	ID    uint32
+	DLC   uint8
+	Data  [8]byte
+	Flags uint8
+}
+
+// Interface used for handling a CAN frame, implementation depends on the CAN object type
+type FrameHandler interface {
+	Handle(frame Frame)
+}
 
 type COResult int8
 
@@ -163,7 +182,7 @@ func (bus_manager *BusManager) Init(bus Bus) {
 }
 
 // Implements CAN package handle interface for processing a CAN message
-func (bus_manager *BusManager) Handle(frame can.Frame) {
+func (bus_manager *BusManager) Handle(frame Frame) {
 	// Feed the frame to the correct callback
 	// TODO this could probably be quicker if it was sorted or we had a map
 	for _, framebBuffer := range bus_manager.RxArray {
