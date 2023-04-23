@@ -26,7 +26,7 @@ type HBConsumerNode struct {
 
 type HBConsumer struct {
 	em                        *EM
-	MonitoredNodes            []*HBConsumerNode
+	MonitoredNodes            []HBConsumerNode
 	NbMonitoredNodes          uint8
 	AllMonitoredActive        bool
 	AllMonitoredOperational   bool
@@ -37,7 +37,7 @@ type HBConsumer struct {
 
 // Handle hearbeat reception specific to a node
 func (node_consumer *HBConsumerNode) Handle(frame Frame) {
-	if frame.DLC != 8 {
+	if frame.DLC != 1 {
 		return
 	}
 	node_consumer.NMTState = int(frame.Data[0])
@@ -46,22 +46,20 @@ func (node_consumer *HBConsumerNode) Handle(frame Frame) {
 }
 
 // Initialize hearbeat consumer
-func (consumer *HBConsumer) Init(em *EM, monitoredNodes []*HBConsumerNode, entry1016 *Entry, busManager *BusManager) error {
-	if monitoredNodes == nil || entry1016 == nil || busManager == nil {
+func (consumer *HBConsumer) Init(em *EM, entry1016 *Entry, busManager *BusManager) error {
+	if entry1016 == nil || busManager == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	consumer.em = em
-	consumer.MonitoredNodes = monitoredNodes
+
 	consumer.busManager = busManager
 
 	// Get real number of monitored nodes
-	nbSubEntries := entry1016.GetNbSubEntries()
-	if nbSubEntries-1 < len(monitoredNodes) {
-		consumer.NbMonitoredNodes = uint8(nbSubEntries) - 1
-	} else {
-		consumer.NbMonitoredNodes = uint8(len(monitoredNodes))
-	}
-	for index, monitoredNode := range consumer.MonitoredNodes {
+	consumer.NbMonitoredNodes = uint8(entry1016.GetNbSubEntries() - 1)
+	log.Debugf("[HB consumer] %v possible entries for nodes to monitor", consumer.NbMonitoredNodes)
+	consumer.MonitoredNodes = make([]HBConsumerNode, consumer.NbMonitoredNodes)
+	for index := range consumer.MonitoredNodes {
+		monitoredNode := &consumer.MonitoredNodes[index]
 		var hbConsValue uint32
 		odRet := entry1016.GetUint32(uint8(index)+1, &hbConsValue)
 		if odRet != nil {
@@ -73,10 +71,11 @@ func (consumer *HBConsumer) Init(em *EM, monitoredNodes []*HBConsumerNode, entry
 		// Set the buffer index before initializing
 		monitoredNode.RxBufferIdx = -1
 		ret := consumer.InitEntry(uint8(index), uint8(nodeId), time)
+		log.Debugf("[HB Consumer] added x%x to list of monitored nodes | timeout %v", nodeId, time)
 		if ret != nil {
 			// Exit only if more than a param problem
 			if ret != CO_ERROR_OD_PARAMETERS {
-				log.Errorf("Error when initializing HB consumer object for node x%x", nodeId)
+				log.Errorf("Error when initializing HB consumer object for node x%x %v", nodeId, ret)
 				return ret
 			}
 			log.Warnf("Error (ignoring) when initializing HB consumer object for node x%x", nodeId)
@@ -92,7 +91,6 @@ func (consumer *HBConsumer) Init(em *EM, monitoredNodes []*HBConsumerNode, entry
 func (consumer *HBConsumer) InitEntry(index uint8, nodeId uint8, consumerTimeMs uint16) error {
 
 	var ret error
-
 	if index >= consumer.NbMonitoredNodes {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
@@ -105,7 +103,7 @@ func (consumer *HBConsumer) InitEntry(index uint8, nodeId uint8, consumerTimeMs 
 		}
 	}
 	// Configure one monitored node
-	monitoredNode := consumer.MonitoredNodes[index]
+	monitoredNode := &consumer.MonitoredNodes[index]
 	monitoredNode.NodeId = nodeId
 	monitoredNode.TimeUs = uint32(consumerTimeMs) * 1000
 	monitoredNode.NMTState = CO_NMT_UNKNOWN
@@ -116,6 +114,7 @@ func (consumer *HBConsumer) InitEntry(index uint8, nodeId uint8, consumerTimeMs 
 	var cobId uint16
 	if monitoredNode.NodeId != 0 && monitoredNode.TimeUs != 0 {
 		cobId = uint16(monitoredNode.NodeId) + HEARTBEAT_SERVICE_ID
+		monitoredNode.HBState = HB_UNKNOWN
 	} else {
 		cobId = 0
 		monitoredNode.TimeUs = 0
@@ -140,7 +139,8 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 	allMonitoredActiveCurrent := true
 	allMonitoredOperationalCurrent := true
 	if nmtIsPreOrOperational && consumer.NMTisPreOrOperationalPrev {
-		for _, monitoredNode := range consumer.MonitoredNodes {
+		for i, _ := range consumer.MonitoredNodes {
+			monitoredNode := &consumer.MonitoredNodes[i]
 			timeDifferenceUsCopy := timeDifferenceUs
 			// If unconfigured skip to next iteration
 			if monitoredNode.HBState == HB_UNCONFIGURED {
@@ -149,12 +149,14 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 
 			if monitoredNode.RxNew {
 				if monitoredNode.NMTState == CO_NMT_INITIALIZING {
+					log.Debugf("monitored node state %v", monitoredNode.NMTState)
 					//Boot up message
-					// if monitoredNode.HBState == HB_ACTIVE {
-					// 	// TODO add emergency send
-					// }
+					if monitoredNode.HBState == HB_ACTIVE {
+						consumer.em.ErrorReport(CO_EM_HB_CONSUMER_REMOTE_RESET, CO_EMC_HEARTBEAT, uint32(i))
+					}
 					monitoredNode.HBState = HB_UNKNOWN
 				} else {
+					log.Debugf("monitored node state %v", monitoredNode.NMTState)
 					// Heartbeat message
 					monitoredNode.HBState = HB_ACTIVE
 					// Reset timer
@@ -168,7 +170,7 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 				monitoredNode.TimeoutTimer += timeDifferenceUsCopy
 				if monitoredNode.TimeoutTimer >= monitoredNode.TimeUs {
 					// Timeout is expired
-					// TODO add emergency sending
+					consumer.em.ErrorReport(CO_EM_HEARTBEAT_CONSUMER, CO_EMC_HEARTBEAT, uint32(i))
 					monitoredNode.NMTState = CO_NMT_UNKNOWN
 					monitoredNode.HBState = HB_TIMEOUT
 				} else if timerNextUs != nil {
@@ -193,7 +195,8 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 		}
 	} else if nmtIsPreOrOperational || consumer.NMTisPreOrOperationalPrev {
 		// pre or operational state changed, clear vars
-		for _, monitoredNode := range consumer.MonitoredNodes {
+		for i, _ := range consumer.MonitoredNodes {
+			monitoredNode := &consumer.MonitoredNodes[i]
 			monitoredNode.NMTState = CO_NMT_UNKNOWN
 			monitoredNode.NMTStatePrev = CO_NMT_UNKNOWN
 			monitoredNode.RxNew = false
