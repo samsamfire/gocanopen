@@ -149,7 +149,6 @@ func (response *SDOResponse) isResponseValid(state uint8) bool {
 		if response.raw[0] == 0xA1 {
 			return true
 		}
-	// Upload
 	case CO_SDO_ST_UPLOAD_INITIATE_RSP:
 		if (response.raw[0] & 0xF0) == 0x40 {
 			return true
@@ -172,7 +171,6 @@ func (response *SDOResponse) isResponseValid(state uint8) bool {
 		}
 
 	}
-
 	log.Errorf("Invalid response received, with code : %x", response.raw[0])
 	return false
 
