@@ -53,7 +53,7 @@ func (crc *CRC16) ccitt_block(block []uint8) {
 	}
 }
 
-// Fifo used in some modules like SDO client
+// Circular Fifo object used in some modules like SDO client
 type Fifo struct {
 	buffer     []byte
 	writePos   int
@@ -117,7 +117,7 @@ func (fifo *Fifo) Write(buffer []byte, crc *CRC16) int {
 
 }
 
-// Read data from fio
+// Read data from fifo
 func (fifo *Fifo) Read(buffer []byte, eof *bool) int {
 	var readCounter int = 0
 
@@ -127,7 +127,7 @@ func (fifo *Fifo) Read(buffer []byte, eof *bool) int {
 	if fifo.readPos == fifo.writePos || buffer == nil {
 		return 0
 	}
-	for index, _ := range buffer {
+	for index := range buffer {
 		if fifo.readPos == fifo.writePos {
 			break
 		}
@@ -159,19 +159,37 @@ func (fifo *Fifo) AltBegin(offset int) int {
 	return offset - i
 }
 
-// Alternate finish ; same
 func (fifo *Fifo) AltFinish(crc *CRC16) {
 
 	if crc == nil {
 		fifo.readPos = fifo.altReadPos
-	} else {
-		// TODO
+		return
+	}
+	for fifo.readPos != fifo.altReadPos {
+		bufSrc := fifo.buffer[fifo.readPos]
+		crc.ccitt_single(bufSrc)
+		fifo.readPos++
+		if fifo.readPos == len(fifo.buffer) {
+			fifo.readPos = 0
+		}
 	}
 }
 
-// Alternate read; same
+func (fifo *Fifo) AltRead(buffer []byte) int {
 
-func (fifo *Fifo) AltRead(buffer []byte) {
-	//TODO
+	readCounter := int(0)
 
+	for index := range buffer {
+		if fifo.altReadPos == fifo.writePos {
+			break
+		}
+		buffer[index] = fifo.buffer[fifo.readPos]
+		readCounter++
+		fifo.readPos++
+
+		if fifo.readPos == len(fifo.buffer) {
+			fifo.readPos = 0
+		}
+	}
+	return readCounter
 }
