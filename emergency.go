@@ -550,3 +550,12 @@ func (emergency *EM) Error(setError bool, errorBit byte, errorCode uint16, infoC
 	}
 	return nil
 }
+
+func (emergency *EM) ErrorReport(errorBit byte, errorCode uint16, infoCode uint32) error {
+	log.Warnf("[EMERGENCY] sending emergency errorBit %v | errorCode %v | infoCode %v", errorBit, errorCode, infoCode)
+	return emergency.Error(true, errorBit, errorCode, infoCode)
+}
+
+func (emergency *EM) ErrorReset(errorBit byte, errorCode uint16, infoCode uint32) error {
+	return emergency.Error(false, errorBit, errorCode, infoCode)
+}
