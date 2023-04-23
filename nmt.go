@@ -199,8 +199,27 @@ func (nmt *NMT) Process(internal_state *uint8, time_difference_us uint32, timer_
 		nmt.InternalCommand = CO_NMT_NO_COMMAND
 	}
 
-	/* verify NMT transitions based on error register */
-	// TODO, don't have Emergency implementation yet
+	busOff_HB := nmt.Control&CO_NMT_ERR_ON_BUSOFF_HB != 0 &&
+		(nmt.Emergency.IsError(CO_EM_CAN_TX_BUS_OFF) ||
+			nmt.Emergency.IsError(CO_EM_HEARTBEAT_CONSUMER) ||
+			nmt.Emergency.IsError(CO_EM_HB_CONSUMER_REMOTE_RESET))
+
+	errRegMasked := (nmt.Control&CO_NMT_ERR_ON_ERR_REG != 0) &&
+		((nmt.Emergency.GetErrorRegister() & byte(nmt.Control)) != 0)
+
+	if nmtStateCopy == CO_NMT_OPERATIONAL && (busOff_HB || errRegMasked) {
+		if nmt.Control&CO_NMT_ERR_TO_STOPPED != 0 {
+			nmtStateCopy = CO_NMT_STOPPED
+		} else {
+			nmtStateCopy = CO_NMT_PRE_OPERATIONAL
+		}
+	} else if (nmt.Control&CO_NMT_ERR_FREE_TO_OPERATIONAL) != 0 &&
+		nmtStateCopy == CO_NMT_PRE_OPERATIONAL &&
+		!busOff_HB &&
+		!errRegMasked {
+
+		nmtStateCopy = CO_NMT_OPERATIONAL
+	}
 
 	/* Callback on operating state change */
 	if nmt.OperatingStatePrev != nmtStateCopy || nmtInit {

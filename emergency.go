@@ -559,3 +559,22 @@ func (emergency *EM) ErrorReport(errorBit byte, errorCode uint16, infoCode uint3
 func (emergency *EM) ErrorReset(errorBit byte, errorCode uint16, infoCode uint32) error {
 	return emergency.Error(false, errorBit, errorCode, infoCode)
 }
+
+func (emergency *EM) IsError(errorBit byte) bool {
+	if emergency == nil {
+		return true
+	}
+	byteIndex := errorBit >> 3
+	bitMask := uint8(1) << (errorBit & 0x7)
+	if byteIndex >= (CO_CONFIG_EM_ERR_STATUS_BITS_COUNT / 8) {
+		return true
+	}
+	return (emergency.errorStatusBits[byteIndex] & bitMask) != 0
+}
+
+func (emergency *EM) GetErrorRegister() byte {
+	if emergency == nil || emergency.errorRegister == nil {
+		return 0
+	}
+	return *emergency.errorRegister
+}
