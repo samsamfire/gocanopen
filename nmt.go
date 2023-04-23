@@ -81,7 +81,7 @@ func (nmt *NMT) Init(
 	emergency *EM,
 	nodeId uint8,
 	control uint16,
-	firstHbIimeMs uint16,
+	firstHbTimeMs uint16,
 	busManager *BusManager,
 	canIdNmtTx uint16,
 	canIdNmtRx uint16,
@@ -96,7 +96,7 @@ func (nmt *NMT) Init(
 	nmt.NodeId = nodeId
 	nmt.Control = control
 	nmt.Emergency = emergency
-	nmt.HearbeatProducerTimer = uint32(firstHbIimeMs * 1000)
+	nmt.HearbeatProducerTimer = uint32(firstHbTimeMs * 1000)
 
 	/* get and verify required "Producer heartbeat time" from Object Dict. */
 
