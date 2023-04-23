@@ -80,7 +80,7 @@ func TestRead(t *testing.T) {
 		t.Error()
 	}
 	var streamer ObjectStreamer
-	err = entry.Sub(0, true, &streamer)
+	_ = entry.Sub(0, true, &streamer)
 
 	var data uint16
 	entry.GetUint16(0, &data)
@@ -123,7 +123,7 @@ func TestReadWriteDisabled(t *testing.T) {
 	if entry == nil {
 		t.Error("Empty entry")
 	}
-	extension := Extension{Object: nil, Read: ReadEntryDisabled, Write: WriteEntryDisabled, flagsPDO: [4]uint8{0, 0, 0, 0}}
+	extension := Extension{Object: nil, Read: ReadEntryDisabled, Write: WriteEntryDisabled, flagsPDO: [32]uint8{0}}
 	entry.Extension = &extension
 	streamer := ObjectStreamer{}
 	err := entry.Sub(0, false, &streamer)
@@ -131,12 +131,12 @@ func TestReadWriteDisabled(t *testing.T) {
 		t.Error()
 	}
 	var countRead uint16
-	err = streamer.Read(streamer.Stream, []byte{0}, &countRead)
+	err = streamer.Read(&streamer.Stream, []byte{0}, &countRead)
 	if err != ODR_UNSUPP_ACCESS {
 		t.Error(err)
 	}
 	var countWrite uint16
-	err = streamer.Read(streamer.Stream, []byte{0}, &countWrite)
+	err = streamer.Read(&streamer.Stream, []byte{0}, &countWrite)
 	if err != ODR_UNSUPP_ACCESS {
 		t.Error(err)
 	}
