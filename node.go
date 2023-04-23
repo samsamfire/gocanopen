@@ -16,6 +16,7 @@ type Node struct {
 	Config             *Configuration
 	BusManager         *BusManager
 	NMT                *NMT
+	HBConsumer         *HBConsumer
 	SDOclients         []*SDOClient
 	SDOServers         []*SDOServer
 	TPDOs              []*TPDO
@@ -31,15 +32,7 @@ func NewNode(configuration *Configuration) *Node {
 	return &Node{Config: configuration}
 }
 
-/* Process SRDO part */
-func (node *Node) ProcessSRDO(time_difference_us uint32) (timer_next_us uint32) {
-	// Process SRDO object
-	return 0
-}
-
-/* Process TPDO */
 func (node *Node) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
-	// Process TPDO object
 	if node.NodeIdUnconfigured {
 		return
 	}
@@ -49,13 +42,16 @@ func (node *Node) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs
 	}
 }
 
-/* Process RPDO */
-func (node *Node) ProcessRPDO(sync_was bool, time_difference_us uint32) (timer_next_us uint32) {
-	// Process RPDO object
-	return 0
+func (node *Node) ProcessRPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
+	if node.NodeIdUnconfigured {
+		return
+	}
+	nmtIsOperational := node.NMT.GetInternalState() == CO_NMT_OPERATIONAL
+	for _, rpdo := range node.RPDOs {
+		rpdo.Process(timeDifferenceUs, timerNextUs, nmtIsOperational, syncWas)
+	}
 }
 
-/* Process SYNC */
 func (node *Node) ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32) bool {
 	syncWas := false
 	sync := node.SYNC
@@ -77,7 +73,7 @@ func (node *Node) ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32) bool
 }
 
 /* Process all objects */
-func (node *Node) Process(enable_gateway bool, time_difference_us uint32, timer_next_us *uint32) uint8 {
+func (node *Node) Process(enableGateway bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
 	// Process all objects
 	reset := CO_RESET_NOT
 	NMTState := node.NMT.GetInternalState()
@@ -85,17 +81,19 @@ func (node *Node) Process(enable_gateway bool, time_difference_us uint32, timer_
 
 	// CAN stuff to process
 	node.BusManager.Process()
-	node.EM.Process(NMTisPreOrOperational, time_difference_us, timer_next_us)
-	reset = node.NMT.Process(&NMTState, time_difference_us, timer_next_us)
+	node.EM.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
+	reset = node.NMT.Process(&NMTState, timeDifferenceUs, timerNextUs)
 	// Update NMTisPreOrOperational
 	NMTisPreOrOperational = (NMTState == CO_NMT_PRE_OPERATIONAL) || (NMTState == CO_NMT_OPERATIONAL)
 
 	// Process SDO servers
 	for _, server := range node.SDOServers {
-		server.Process(NMTisPreOrOperational, time_difference_us, timer_next_us)
+		server.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
 	}
+	// Process HB consumer
+	node.HBConsumer.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
 	// Process TIME object
-	node.TIME.Process(NMTisPreOrOperational, time_difference_us)
+	node.TIME.Process(NMTisPreOrOperational, timeDifferenceUs)
 
 	return reset
 
@@ -111,7 +109,7 @@ func (node *Node) InitPDO(od *ObjectDictionary, nodeId uint8) error {
 		}
 	}
 	// Iterate over all the possible entries : there can be a maximum of 512 maps
-	// Break loops as soon as entry doesn't exist (don't allow holes in mapping)
+	// Break loops when an entry doesn't exist (don't allow holes in mapping)
 	for i := uint16(0); i < 512; i++ {
 		entry14xx := od.Find(0x1400 + i)
 		entry16xx := od.Find(0x1600 + i)
@@ -122,10 +120,10 @@ func (node *Node) InitPDO(od *ObjectDictionary, nodeId uint8) error {
 		rpdo := RPDO{}
 		err := rpdo.Init(od, node.EM, node.SYNC, preDefinedIdent, entry14xx, entry16xx, node.BusManager)
 		if err != nil {
-			log.Warnf("Failed to Initialize RPDO%v, stopping there", i)
+			log.Warnf("[PDO] no more RPDO after RPDO %v", i-1)
 			break
 		} else {
-			log.Infof("Initialized RPDO%v", i)
+			log.Infof("[PDO] initialized RPDO%v", i)
 			node.RPDOs = append(node.RPDOs, &rpdo)
 		}
 	}
@@ -140,10 +138,10 @@ func (node *Node) InitPDO(od *ObjectDictionary, nodeId uint8) error {
 		tpdo := TPDO{}
 		err := tpdo.Init(od, node.EM, node.SYNC, preDefinedIdent, entry18xx, entry1Axx, node.BusManager)
 		if err != nil {
-			log.Warnf("Failed to Initialize TPDO%v, stopping there", i)
+			log.Warnf("[PDO] no more TPDO after TPDO %v", i-1)
 			break
 		} else {
-			log.Infof("Initialized TPDO%v", i)
+			log.Infof("[PDO] initialized TPDO%v", i)
 			node.TPDOs = append(node.TPDOs, &tpdo)
 		}
 
@@ -204,9 +202,18 @@ func (node *Node) Init(
 	if err != nil {
 		log.Errorf("[NMT] error when initializing NMT object %v", err)
 		return err
-	} else {
-		log.Infof("[NMT] initialized for node x%x", nodeId)
 	}
+	log.Infof("[NMT] initialized for node x%x", nodeId)
+
+	// Initialize HB consumer
+	hbCons := &HBConsumer{}
+	err = hbCons.Init(emergency, od.Find(0x1016), node.BusManager)
+	if err != nil {
+		log.Errorf("[HB Consumer] error when initializing HB consummers %v", err)
+	} else {
+		node.HBConsumer = hbCons
+	}
+	log.Infof("[HB Consumer] initialized for node x%x", nodeId)
 
 	// Initialize SDO server
 	// For now only one server
