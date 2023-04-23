@@ -61,13 +61,21 @@ func TestFifoRead(t *testing.T) {
 	}
 }
 
-// func TestCcitt_block(t *testing.T) {
-// 	crc := CRC16{0}
-// 	nums := []uint8{0x12, 0x34}
-
-// 	res := crc.Ccitt_block(nums)
-// 	if res != 0x1DF8 {
-// 		t.Errorf("Was expecting 0x1DF8, got %x", res)
-// 	}
-
-// }
+func TestFifoAltRead(t *testing.T) {
+	fifo := NewFifo(100)
+	receive_buffer := make([]byte, 10)
+	var eof bool = false
+	res := fifo.AltRead(receive_buffer)
+	if res != 0 {
+		t.Error()
+	}
+	// Write to fifo
+	res = fifo.Write([]byte{1, 2, 3, 4}, nil)
+	if res != 4 && fifo.writePos != 4 {
+		t.Error()
+	}
+	res = fifo.Read(receive_buffer, &eof)
+	if res != 4 {
+		t.Errorf("Res is %v", res)
+	}
+}
