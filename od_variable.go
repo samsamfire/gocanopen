@@ -149,12 +149,10 @@ func calculateAttribute(accessType string, pdoMapping bool, dataType uint8) ODA 
 	switch accessType {
 	case "rw":
 		attribute = ODA_SDO_RW
-	case "ro":
+	case "ro", "const":
 		attribute = ODA_SDO_R
 	case "wo":
 		attribute = ODA_SDO_W
-	case "const":
-		attribute = 0
 	default:
 		attribute = ODA_SDO_RW
 	}
