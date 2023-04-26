@@ -147,7 +147,7 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	if sync.CANTxBuff == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
-	log.Infof("[SYNC] initialized sync | producer : %v ",
+	log.Infof("[SYNC] initialized sync | producer : %v | overflow %v",
 		sync.IsProducer,
 		syncCounterOverflow,
 	)

@@ -83,7 +83,7 @@ func (base *PDOBase) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInde
 	entry := od.Find(index)
 	ret := entry.Sub(subindex, false, &streamerCopy)
 	if ret != nil {
-		log.Debug("[PDO] Couldn't get object x%x:x%x, because %v", index, subindex)
+		log.Debugf("[PDO] Couldn't get object x%x:x%x, because %v", index, subindex, ret)
 		return ret
 	}
 
