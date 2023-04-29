@@ -209,5 +209,5 @@ func (response *SDOResponse) IsCRCEnabled() bool {
 }
 
 func (response *SDOResponse) GetCRCClient() uint16 {
-	return binary.LittleEndian.Uint16(response.raw[1:2])
+	return binary.LittleEndian.Uint16(response.raw[1:3])
 }
