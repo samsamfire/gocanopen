@@ -117,7 +117,7 @@ func encode(variable string, datatype uint8, nodeId uint8) ([]byte, error) {
 		return []byte(variable), nil
 
 	case DOMAIN:
-		return []byte{}, nil
+		return []byte{0x00}, nil
 
 	default:
 		return nil, ODR_TYPE_MISMATCH
