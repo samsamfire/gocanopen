@@ -97,38 +97,27 @@ func encode(variable string, datatype uint8, nodeId uint8) ([]byte, error) {
 		// Treat empty string as a 0 value
 		variable = "0x0"
 	}
-	if datatype == BOOLEAN || datatype == UNSIGNED8 || datatype == INTEGER8 {
-		parsed, err := strconv.ParseUint(variable, 0, 8)
-		if err != nil {
-			return nil, err
-		}
-		return []byte{byte(uint8(parsed + uint64(nodeId)))}, nil
-	}
 
 	switch datatype {
+	case BOOLEAN, UNSIGNED8, INTEGER8:
+		parsed, err = strconv.ParseUint(variable, 0, 8)
+		data = []byte{byte(uint8(parsed + uint64(nodeId)))}
 
-	case UNSIGNED16:
+	case UNSIGNED16, INTEGER16:
 		parsed, err = strconv.ParseUint(variable, 0, 16)
 		data = make([]byte, 2)
 		binary.LittleEndian.PutUint16(data, uint16(parsed+uint64(nodeId)))
 
-	case UNSIGNED32:
-		parsed, err = strconv.ParseUint(variable, 0, 32)
-		data = make([]byte, 4)
-		binary.LittleEndian.PutUint32(data, uint32(parsed+uint64(nodeId)))
-
-	case INTEGER16:
-		parsed, err = strconv.ParseUint(variable, 0, 16)
-		data = make([]byte, 2)
-		binary.LittleEndian.PutUint16(data, uint16(parsed+uint64(nodeId)))
-
-	case INTEGER32:
+	case UNSIGNED32, INTEGER32:
 		parsed, err = strconv.ParseUint(variable, 0, 32)
 		data = make([]byte, 4)
 		binary.LittleEndian.PutUint32(data, uint32(parsed+uint64(nodeId)))
 
 	case VISIBLE_STRING:
 		return []byte(variable), nil
+
+	case DOMAIN:
+		return []byte{}, nil
 
 	default:
 		return nil, ODR_TYPE_MISMATCH
