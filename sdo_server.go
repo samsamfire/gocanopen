@@ -91,12 +91,12 @@ func (server *SDOServer) Handle(frame Frame) {
 				// seqno is wron
 			} else if seqno != server.BlockSequenceNb && server.BlockSequenceNb != 0 {
 				state = CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_RSP
-				log.Warnf("Wrong sequence number in rx sub-block. seqno %x, previous %x", seqno, server.BlockSequenceNb)
+				log.Warnf("Wrong sequence number in rx sub-block. seqno %v, previous %v", seqno, server.BlockSequenceNb)
 			} else {
-				log.Warnf("Wrong sequence number in rx ignored. seqno %x, expected %x", seqno, server.BlockSequenceNb+1)
+				log.Warnf("Wrong sequence number in rx ignored. seqno %v, expected %v", seqno, server.BlockSequenceNb+1)
 			}
 
-			if state != CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_RSP {
+			if state != CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ {
 				server.RxNew = false
 				server.State = state
 			}
@@ -585,7 +585,6 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.State = CO_SDO_ST_DOWNLOAD_BLK_END_RSP
 
 			case CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ:
-				log.Debugf("[SERVER] <==Rx | UPLOAD BLOCK INIT | x%x:x%x %v", server.Index, server.Subindex, response.raw)
 				// If protocol switch threshold (byte 5) is larger than data
 				// size of OD var, then switch to segmented
 				if server.SizeIndicated > 0 && response.raw[5] > 0 && uint32(response.raw[5]) >= server.SizeIndicated {
@@ -613,6 +612,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 						break
 					}
 					server.State = CO_SDO_ST_UPLOAD_BLK_INITIATE_RSP
+					log.Debugf("[SERVER] <==Rx | UPLOAD BLOCK INIT | x%x:x%x %v | crc : %v, blksize :%v", server.Index, server.Subindex, response.raw, server.BlockCRCEnabled, server.BlockSize)
 
 				}
 
@@ -751,6 +751,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				copy(server.CANtxBuff.Data[4:], server.Buffer[:server.SizeIndicated])
 				server.State = CO_SDO_ST_IDLE
 				ret = CO_SDO_RT_ok_communicationEnd
+				log.Debugf("[SERVER] ==>Tx | UPLOAD EXPEDITED | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			} else {
 				// Segmented transfer
 				if server.SizeIndicated > 0 {
@@ -764,11 +765,11 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.Toggle = 0x00
 				server.TimeoutTimer = 0
 				server.State = CO_SDO_ST_UPLOAD_SEGMENT_REQ
+				log.Debugf("[SERVER] ==>Tx | UPLOAD SEGMENTED | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			}
 			server.CANtxBuff.Data[1] = byte(server.Index)
 			server.CANtxBuff.Data[2] = byte(server.Index >> 8)
 			server.CANtxBuff.Data[3] = server.Subindex
-			log.Debugf("[SERVER] ==>Tx | UPLOAD INIT | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			server.BusManager.Send(*server.CANtxBuff)
 
 		case CO_SDO_ST_UPLOAD_SEGMENT_RSP:
