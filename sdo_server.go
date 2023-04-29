@@ -367,7 +367,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 	} else if server.RxNew {
 		response := server.Response
 		if server.State == CO_SDO_ST_IDLE {
-			var upload bool = false
+			upload := false
 			updateStateFromRequest(response.raw[0], &server.State, &upload)
 			if server.State == CO_SDO_ST_ABORT {
 				abortCode = CO_SDO_AB_CMD
