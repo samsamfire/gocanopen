@@ -42,13 +42,13 @@ type CRC16 struct {
 }
 
 func (crc *CRC16) ccitt_single(chr uint8) {
-	var tmp uint8 = uint8(crc.crc>>8) ^ chr
+	tmp := uint8(crc.crc>>8) ^ chr
 	crc.crc = (crc.crc << 8) ^ crc16_ccitt_table[tmp]
 }
 
 func (crc *CRC16) ccitt_block(block []uint8) {
 	for i := range block {
-		var tmp uint8 = uint8(crc.crc>>8) ^ block[i]
+		tmp := uint8(crc.crc>>8) ^ block[i]
 		crc.crc = (crc.crc << 8) ^ crc16_ccitt_table[tmp]
 	}
 }
@@ -93,7 +93,7 @@ func (fifo *Fifo) GetOccupied() int {
 // Write data to fifo
 func (fifo *Fifo) Write(buffer []byte, crc *CRC16) int {
 
-	var writeCounter int = 0
+	writeCounter := 0
 
 	for _, element := range buffer {
 		writePosNext := fifo.writePos + 1
