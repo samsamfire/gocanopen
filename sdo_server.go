@@ -2,6 +2,7 @@ package canopen
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -46,6 +47,7 @@ type SDOServer struct {
 	BlockCRCEnabled            bool
 	BlockDataUploadLast        [7]byte
 	BlockCRC                   CRC16
+	ErrorExtraInfo             error
 }
 
 // Handle received messages
@@ -116,7 +118,7 @@ func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uin
 	}
 	server.OD = od
 	server.Streamer = &ObjectStreamer{}
-	server.Buffer = make([]byte, 500)
+	server.Buffer = make([]byte, 1000)
 	server.BufferOffsetRead = 0
 	server.BufferOffsetWrite = 0
 	server.NodeId = nodeId
@@ -324,6 +326,7 @@ func (server *SDOServer) readObjectDictionary(abortCode *SDOAbortCode, countMini
 			if server.BufferOffsetWrite < countMinimum {
 				*abortCode = CO_SDO_AB_DEVICE_INCOMPAT
 				server.State = CO_SDO_ST_ABORT
+				server.ErrorExtraInfo = fmt.Errorf("buffer offset write %v is less than the minimum count %v", server.BufferOffsetWrite, countMinimum)
 				return false
 			}
 		} else {
@@ -401,12 +404,12 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.SizeTransferred = 0
 				server.Finished = false
 				if server.readObjectDictionary(&abortCode, 7, false) {
-					// Size may not be known yet
 					if server.Finished {
 						server.SizeIndicated = uint32(len(server.Streamer.Stream.Data))
 						if server.SizeIndicated == 0 {
 							server.SizeIndicated = server.BufferOffsetWrite
 						} else if server.SizeIndicated != server.BufferOffsetWrite {
+							server.ErrorExtraInfo = fmt.Errorf("size indicated %v != to buffer write offset %v", server.SizeIndicated, server.BufferOffsetWrite)
 							abortCode = CO_SDO_AB_DEVICE_INCOMPAT
 							server.State = CO_SDO_ST_ABORT
 						}
@@ -557,6 +560,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.Finished = false
 
 			case CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ:
+				// This is done in receive handler
 
 			case CO_SDO_ST_DOWNLOAD_BLK_END_REQ:
 				log.Debugf("[SERVER] <==Rx | DOWNLOAD BLOCK END | x%x:x%x %v", server.Index, server.Subindex, response.raw)
@@ -569,6 +573,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				//contain data. Then reduce buffer
 				noData := (response.raw[0] >> 2) & 0x07
 				if server.BufferOffsetWrite <= uint32(noData) {
+					server.ErrorExtraInfo = fmt.Errorf("internal buffer and end of block download are inconsitent")
 					abortCode = CO_SDO_AB_DEVICE_INCOMPAT
 					server.State = CO_SDO_ST_ABORT
 					break
@@ -599,6 +604,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					}
 					// Get block size and check okay
 					server.BlockSize = response.GetBlockSize()
+					log.Debugf("[SERVER] <==Rx | UPLOAD BLOCK INIT | x%x:x%x %v | crc : %v, blksize :%v", server.Index, server.Subindex, response.raw, server.BlockCRCEnabled, server.BlockSize)
 					if server.BlockSize < 1 || server.BlockSize > 127 {
 						abortCode = CO_SDO_AB_BLOCK_SIZE
 						server.State = CO_SDO_ST_ABORT
@@ -609,11 +615,10 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					if !server.Finished && server.BufferOffsetWrite < uint32(server.BlockSize)*7 {
 						abortCode = CO_SDO_AB_DEVICE_INCOMPAT
 						server.State = CO_SDO_ST_ABORT
+						server.ErrorExtraInfo = fmt.Errorf("no more space in buffer, current %v, total %v", server.BufferOffsetWrite, uint32(server.BlockSize)*7)
 						break
 					}
 					server.State = CO_SDO_ST_UPLOAD_BLK_INITIATE_RSP
-					log.Debugf("[SERVER] <==Rx | UPLOAD BLOCK INIT | x%x:x%x %v | crc : %v, blksize :%v", server.Index, server.Subindex, response.raw, server.BlockCRCEnabled, server.BlockSize)
-
 				}
 
 			case CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ2:
@@ -921,17 +926,18 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					break
 				}
 			}
-			// Check if last segment or all semgents in current block transferred
+			// Check if last segment or all segments in current block transferred
 			if server.BufferOffsetWrite == server.BufferOffsetRead || server.BlockSequenceNb >= server.BlockSize {
 				server.State = CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_CRSP
+				log.Debugf("[SERVER] ==>Tx | BLOCK UPLOAD END SUB-BLOCK | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			} else {
+				log.Debugf("[SERVER] ==>Tx | BLOCK UPLOAD SUB-BLOCK | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 				if timerNextUs != nil {
 					*timerNextUs = 0
 				}
 			}
 			// Reset timer & send
 			server.TimeoutTimer = 0
-			log.Debugf("[SERVER] ==>Tx | BLOCK UPLOAD SUB-BLOCK | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			server.BusManager.Send(*server.CANtxBuff)
 
 		case CO_SDO_ST_UPLOAD_BLK_END_SREQ:
@@ -939,7 +945,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.CANtxBuff.Data[1] = byte(server.BlockCRC.crc)
 			server.CANtxBuff.Data[2] = byte(server.BlockCRC.crc >> 8)
 			server.TimeoutTimer = 0
-			log.Debugf("[SERVER] ==>Tx | BLOCK DOWNLOAD END | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
+			log.Debugf("[SERVER] ==>Tx | BLOCK UPLOAD END | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			server.BusManager.Send(*server.CANtxBuff)
 			server.State = CO_SDO_ST_UPLOAD_BLK_END_CRSP
 
@@ -974,5 +980,8 @@ func (server *SDOServer) Abort(abortCode SDOAbortCode) {
 	binary.LittleEndian.PutUint32(server.CANtxBuff.Data[4:], code)
 	server.BusManager.Send(*server.CANtxBuff)
 	log.Warnf("[SERVER] ==>Tx | SERVER ABORT | x%x:x%x | %v (x%x)", server.Index, server.Subindex, abortCode, uint32(abortCode))
-
+	if server.ErrorExtraInfo != nil {
+		log.Warnf("[SERVER] ==>Tx | SERVER ABORT | %v", server.ErrorExtraInfo)
+		server.ErrorExtraInfo = nil
+	}
 }
