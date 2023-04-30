@@ -333,7 +333,7 @@ func (server *SDOServer) readObjectDictionary(abortCode *SDOAbortCode, countMini
 			server.Finished = true
 		}
 		if calculateCRC && server.BlockCRCEnabled {
-			server.BlockCRC.ccitt_block(server.Buffer[remainingCount:])
+			server.BlockCRC.ccitt_block(server.Buffer[remainingCount : remainingCount+uint32(countRd)])
 		}
 
 	}
