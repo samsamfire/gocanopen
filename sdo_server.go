@@ -307,11 +307,11 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 func (server *SDOServer) readObjectDictionary(abortCode *SDOAbortCode, countMinimum uint32, calculateCRC bool) bool {
 	remainingCount := server.BufferOffsetWrite - server.BufferOffsetRead
 	if !server.Finished && remainingCount < countMinimum {
-		copy(server.Buffer, server.Buffer[server.BufferOffsetRead:])
+		copy(server.Buffer, server.Buffer[server.BufferOffsetRead:server.BufferOffsetRead+remainingCount])
 		server.BufferOffsetRead = 0
 		server.BufferOffsetWrite = remainingCount
-		var countRd uint16 = 0
 
+		var countRd uint16 = 0
 		err := server.Streamer.Read(&server.Streamer.Stream, server.Buffer[remainingCount:], &countRd)
 
 		if err != nil && err != ODR_PARTIAL {
@@ -319,7 +319,6 @@ func (server *SDOServer) readObjectDictionary(abortCode *SDOAbortCode, countMini
 			server.State = CO_SDO_ST_ABORT
 			return false
 		}
-
 		server.BufferOffsetWrite = remainingCount + uint32(countRd)
 		if server.BufferOffsetWrite == 0 || err == ODR_PARTIAL {
 			server.Finished = false
@@ -611,11 +610,10 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 						break
 					}
 
-					// Check if enough space in buffer
+					// Check that we have enough data for sending a complete sub-block with the requested size
 					if !server.Finished && server.BufferOffsetWrite < uint32(server.BlockSize)*7 {
-						abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+						abortCode = CO_SDO_AB_BLOCK_SIZE
 						server.State = CO_SDO_ST_ABORT
-						server.ErrorExtraInfo = fmt.Errorf("no more space in buffer, current %v, total %v", server.BufferOffsetWrite, uint32(server.BlockSize)*7)
 						break
 					}
 					server.State = CO_SDO_ST_UPLOAD_BLK_INITIATE_RSP
