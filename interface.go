@@ -429,6 +429,7 @@ func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) e
 	}
 
 	// Reset the stream DataOffset as if it were not read/written before
+	streamer.Stream.DataOffset = 0
 	streamer.Stream.Subindex = subindex
 	return nil
 }
