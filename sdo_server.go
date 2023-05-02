@@ -382,7 +382,7 @@ func (server *SDOServer) readObjectDictionary(abortCode *SDOAbortCode, countMini
 	return true
 }
 
-func updateStateFromRequest(stateReq uint8, state *uint8, upload *bool) {
+func updateStateFromRequest(stateReq uint8, state *uint8, upload *bool) SDOAbortCode {
 	*upload = false
 	if (stateReq & 0xF0) == 0x20 {
 		*state = CO_SDO_ST_DOWNLOAD_INITIATE_REQ
@@ -396,7 +396,9 @@ func updateStateFromRequest(stateReq uint8, state *uint8, upload *bool) {
 		*state = CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ
 	} else {
 		*state = CO_SDO_ST_ABORT
+		return CO_SDO_AB_CMD
 	}
+	return CO_SDO_AB_NONE
 }
 
 func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs uint32, timerNextUs *uint32) SDOReturn {
@@ -412,10 +414,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 		response := server.Response
 		if server.State == CO_SDO_ST_IDLE {
 			upload := false
-			updateStateFromRequest(response.raw[0], &server.State, &upload)
-			if server.State == CO_SDO_ST_ABORT {
-				abortCode = CO_SDO_AB_CMD
-			}
+			abortCode = updateStateFromRequest(response.raw[0], &server.State, &upload)
 
 			// Check object exists and accessible
 			if abortCode == CO_SDO_AB_NONE {
