@@ -78,7 +78,6 @@ func buildVariable(
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse DefaultValue for %x : %x, because %v", index, subindex, err)
 		}
-		// Also update Data with default value
 		variable.Data = variable.DefaultValue
 	}
 
@@ -117,7 +116,7 @@ func encode(variable string, datatype uint8, nodeId uint8) ([]byte, error) {
 		return []byte(variable), nil
 
 	case DOMAIN:
-		return []byte{0x00}, nil
+		return []byte{}, nil
 
 	default:
 		return nil, ODR_TYPE_MISMATCH
