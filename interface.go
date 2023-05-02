@@ -138,8 +138,9 @@ and a default writer using bufio
 */
 type Stream struct {
 	Data       []byte
-	Object     any // Object can be used in case an extension is used
 	DataOffset uint32
+	DataLength uint32
+	Object     any // Custom objects can be used when using an OD extension
 	Attribute  ODA
 	Subindex   uint8
 }
@@ -243,6 +244,7 @@ type FileInfo struct {
 /*Object for basic OD variable */
 type Variable struct {
 	Data            []byte
+	DataLength      uint32 //Can be different than len(Data) for strings
 	Name            string
 	DataType        byte
 	Attribute       ODA // Attribute contains the access type and pdo mapping info
@@ -281,7 +283,7 @@ func ReadEntryOriginal(stream *Stream, data []byte, countRead *uint16) error {
 		return ODR_SUB_NOT_EXIST
 	}
 
-	dataLenToCopy := len(stream.Data)
+	dataLenToCopy := int(stream.DataLength)
 	count := len(data)
 	var err error
 
@@ -319,7 +321,7 @@ func WriteEntryOriginal(stream *Stream, data []byte, countWritten *uint16) error
 		return ODR_DEV_INCOMPAT
 	}
 
-	dataLenToCopy := len(stream.Data)
+	dataLenToCopy := int(stream.DataLength)
 	count := len(data)
 	var err error
 
@@ -364,7 +366,7 @@ func WriteEntryDisabled(stream *Stream, data []byte, countWritten *uint16) error
 	return ODR_UNSUPP_ACCESS
 }
 
-/*Get SubObject and create an object streamer */
+// Create a streamer for streaming a sub oject
 func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) error {
 
 	if entry == nil || entry.Object == nil {
@@ -380,6 +382,7 @@ func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) e
 		}
 		streamer.Stream.Attribute = object.Attribute
 		streamer.Stream.Data = object.Data
+		streamer.Stream.DataLength = uint32(len(object.Data))
 
 	case Array:
 		subEntriesCount := len(object.Variables)
@@ -388,6 +391,7 @@ func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) e
 		}
 		streamer.Stream.Attribute = object.Variables[subindex].Attribute
 		streamer.Stream.Data = object.Variables[subindex].Data
+		streamer.Stream.DataLength = uint32(len(object.Variables[subindex].Data))
 
 	case []Record:
 		records := object
@@ -403,6 +407,7 @@ func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) e
 		}
 		streamer.Stream.Attribute = record.Variable.Attribute
 		streamer.Stream.Data = record.Variable.Data
+		streamer.Stream.DataLength = uint32(len(record.Variable.Data))
 
 	default:
 		log.Errorf("Error, unknown type : %+v", object)
@@ -442,7 +447,7 @@ func (entry *Entry) Get(subIndex uint8, buffer []byte, length uint16, origin boo
 	if err != nil {
 		return err
 	}
-	if len(streamer.Stream.Data) != int(length) {
+	if int(streamer.Stream.DataLength) != int(length) {
 		return ODR_TYPE_MISMATCH
 	}
 	return streamer.Read(&streamer.Stream, buffer, &countRead)
@@ -455,7 +460,7 @@ func (entry *Entry) GetPtr(subIndex uint8, length uint16) (*[]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(streamer.Stream.Data) != int(length) && length != 0 {
+	if int(streamer.Stream.DataLength) != int(length) && length != 0 {
 		return nil, ODR_TYPE_MISMATCH
 	}
 	return &streamer.Stream.Data, nil
@@ -469,7 +474,7 @@ func (entry *Entry) Set(subIndex uint8, buffer []byte, length uint16, origin boo
 	if err != nil {
 		return err
 	}
-	if len(streamer.Stream.Data) != int(length) {
+	if int(streamer.Stream.DataLength) != int(length) {
 		return ODR_TYPE_MISMATCH
 	}
 	return streamer.Write(&streamer.Stream, buffer, &countWritten)
