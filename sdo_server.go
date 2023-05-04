@@ -53,12 +53,10 @@ type SDOServer struct {
 // Handle received messages
 func (server *SDOServer) Handle(frame Frame) {
 	if frame.DLC != 8 {
-		log.Debugf("Ignoring client message because wrong length x%x %v; Server state : x%x", frame.ID, frame.Data, server.State)
 		return
 	}
 	if frame.Data[0] == 0x80 {
 		// Client abort
-		log.Debugf("Abort from client")
 		server.State = CO_SDO_ST_IDLE
 	} else if server.RxNew {
 		// Ignore message if previous message not processed
@@ -97,9 +95,21 @@ func (server *SDOServer) Handle(frame Frame) {
 				// seqno is wrong
 			} else if seqno != server.BlockSequenceNb && server.BlockSequenceNb != 0 {
 				state = CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_RSP
-				log.Warnf("Wrong sequence number in rx sub-block. seqno %v, previous %v", seqno, server.BlockSequenceNb)
+				log.Warnf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | Wrong sequence number (got %v, previous %v) | x%x:x%x %v",
+					seqno,
+					server.BlockSequenceNb,
+					server.Index,
+					server.Subindex,
+					frame.Data,
+				)
 			} else {
-				log.Warnf("Wrong sequence number in rx ignored. seqno %v, expected %v", seqno, server.BlockSequenceNb+1)
+				log.Warnf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | Ignoring (got %v, expecting %v) | x%x:x%x %v",
+					seqno,
+					server.BlockSequenceNb+1,
+					server.Index,
+					server.Subindex,
+					frame.Data,
+				)
 			}
 
 			if state != CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ {
@@ -236,6 +246,9 @@ func (server *SDOServer) InitRxTx(canModule *BusManager, idRx uint16, idTx uint1
 }
 
 func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOperation uint, crcClient uint16) bool {
+
+	bufferOffsetWriteOriginal := server.BufferOffsetWrite
+
 	if server.Finished {
 		// Check size
 		if server.SizeIndicated > 0 && server.SizeTransferred > server.SizeIndicated {
@@ -249,7 +262,6 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 		}
 		// Golang does not have null termination characters so nothing particular to do
 		// Stream data should be limited to the sent value
-		log.Infof("buffer offset write is %v", server.BufferOffsetWrite)
 
 		varSizeInOd := server.Streamer.Stream.DataLength
 		if server.Streamer.Stream.Attribute&ODA_STR != 0 &&
@@ -257,17 +269,11 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 			int(server.BufferOffsetWrite+2) <= len(server.Buffer) {
 			server.Buffer[server.BufferOffsetWrite] = 0x00
 			server.BufferOffsetWrite++
-			str := string(server.Buffer[:server.BufferOffsetWrite])
-			log.Info(str)
-			log.Info("adding null termination 1 at %v", server.BufferOffsetWrite)
 			server.SizeTransferred++
 			if varSizeInOd == 0 || server.SizeTransferred < varSizeInOd {
 				server.Buffer[server.BufferOffsetWrite] = 0x00
 				server.BufferOffsetWrite++
 				server.SizeTransferred++
-				str := string(server.Buffer[:server.BufferOffsetWrite])
-				log.Info(str)
-				log.Info("adding null termination 2 at %v", server.BufferOffsetWrite)
 			}
 			server.Streamer.Stream.DataLength = server.SizeTransferred
 		} else if varSizeInOd == 0 {
@@ -295,10 +301,11 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 
 	// Calculate CRC
 	if server.BlockCRCEnabled && crcOperation > 0 {
-		server.BlockCRC.ccitt_block(server.Buffer[:server.BufferOffsetWrite])
+		server.BlockCRC.ccitt_block(server.Buffer[:bufferOffsetWriteOriginal])
 		if crcOperation == 2 && crcClient != server.BlockCRC.crc {
 			*abortCode = CO_SDO_AB_CRC
 			server.State = CO_SDO_ST_ABORT
+			server.ErrorExtraInfo = fmt.Errorf("server was expecting %v but got %v", server.BlockCRC.crc, crcClient)
 			return false
 		}
 	}
@@ -917,7 +924,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					if !server.writeObjectDictionary(&abortCode, 1, 0) {
 						break
 					}
-					count = (len(server.Buffer) - 2 - int(server.BufferOffsetWrite))
+					count = (len(server.Buffer) - 2 - int(server.BufferOffsetWrite)) / 7
 					if count > 127 {
 						count = 127
 					}
@@ -929,15 +936,17 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			}
 			server.CANtxBuff.Data[2] = server.BlockSize
 			server.TimeoutTimerBlock = 0
-			log.Debugf("[SERVER][TX] BLOCK DOWNLOAD SUB-BLOCK RES | x%x:x%x blksize %v %v",
-				server.Index,
-				server.Subindex,
-				server.BlockSize,
-				server.CANtxBuff.Data,
-			)
 			server.BusManager.Send(*server.CANtxBuff)
+
 			if transferShort && !server.Finished {
 				log.Debugf("[SERVER][TX] BLOCK DOWNLOAD RESTART seqno prev=%v, blksize=%v", seqnoStart, server.BlockSize)
+			} else {
+				log.Debugf("[SERVER][TX] BLOCK DOWNLOAD SUB-BLOCK RES | x%x:x%x blksize %v %v",
+					server.Index,
+					server.Subindex,
+					server.BlockSize,
+					server.CANtxBuff.Data,
+				)
 			}
 
 		case CO_SDO_ST_DOWNLOAD_BLK_END_RSP:
