@@ -661,31 +661,31 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				// size of OD var, then switch to segmented
 				if server.SizeIndicated > 0 && response.raw[5] > 0 && uint32(response.raw[5]) >= server.SizeIndicated {
 					server.State = CO_SDO_ST_UPLOAD_INITIATE_RSP
-				} else {
-					if (response.raw[0] & 0x04) != 0 {
-						server.BlockCRCEnabled = true
-						server.BlockCRC = CRC16{0}
-						server.BlockCRC.ccitt_block(server.Buffer[:server.BufferOffsetWrite])
-					} else {
-						server.BlockCRCEnabled = false
-					}
-					// Get block size and check okay
-					server.BlockSize = response.GetBlockSize()
-					log.Debugf("[SERVER][RX] UPLOAD BLOCK INIT | x%x:x%x %v | crc : %v, blksize :%v", server.Index, server.Subindex, response.raw, server.BlockCRCEnabled, server.BlockSize)
-					if server.BlockSize < 1 || server.BlockSize > 127 {
-						abortCode = CO_SDO_AB_BLOCK_SIZE
-						server.State = CO_SDO_ST_ABORT
-						break
-					}
-
-					// Check that we have enough data for sending a complete sub-block with the requested size
-					if !server.Finished && server.BufferOffsetWrite < uint32(server.BlockSize)*7 {
-						abortCode = CO_SDO_AB_BLOCK_SIZE
-						server.State = CO_SDO_ST_ABORT
-						break
-					}
-					server.State = CO_SDO_ST_UPLOAD_BLK_INITIATE_RSP
+					break
 				}
+				if (response.raw[0] & 0x04) != 0 {
+					server.BlockCRCEnabled = true
+					server.BlockCRC = CRC16{0}
+					server.BlockCRC.ccitt_block(server.Buffer[:server.BufferOffsetWrite])
+				} else {
+					server.BlockCRCEnabled = false
+				}
+				// Get block size and check okay
+				server.BlockSize = response.GetBlockSize()
+				log.Debugf("[SERVER][RX] UPLOAD BLOCK INIT | x%x:x%x %v | crc : %v, blksize :%v", server.Index, server.Subindex, response.raw, server.BlockCRCEnabled, server.BlockSize)
+				if server.BlockSize < 1 || server.BlockSize > 127 {
+					abortCode = CO_SDO_AB_BLOCK_SIZE
+					server.State = CO_SDO_ST_ABORT
+					break
+				}
+
+				// Check that we have enough data for sending a complete sub-block with the requested size
+				if !server.Finished && server.BufferOffsetWrite < uint32(server.BlockSize)*7 {
+					abortCode = CO_SDO_AB_BLOCK_SIZE
+					server.State = CO_SDO_ST_ABORT
+					break
+				}
+				server.State = CO_SDO_ST_UPLOAD_BLK_INITIATE_RSP
 
 			case CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ2:
 				if response.raw[0] == 0xA3 {
@@ -702,6 +702,12 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					server.State = CO_SDO_ST_ABORT
 					break
 				}
+				log.Debugf("[SERVER][RX] BLOCK UPLOAD END SUB-BLOCK | blksize %v | x%x:x%x %v",
+					response.raw[2],
+					server.Index,
+					server.Subindex,
+					response.raw,
+				)
 				// Check block size
 				server.BlockSize = response.raw[2]
 				if server.BlockSize < 1 || server.BlockSize > 127 {
@@ -987,7 +993,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.BufferOffsetRead += count
 			server.BlockNoData = byte(7 - count)
 			server.SizeTransferred += count
-			// Check if too shor or too large in last segment
+			// Check if too short or too large in last segment
 			if server.SizeIndicated > 0 {
 				if server.SizeTransferred > server.SizeIndicated {
 					abortCode = CO_SDO_AB_DATA_LONG
