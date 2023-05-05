@@ -83,7 +83,7 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 				if err != nil {
 					return nil, err
 				}
-				od.AddEntry(&Entry{Index: index, Object: *variable, Extension: nil})
+				od.AddEntry(&Entry{Index: index, Name: name, Object: *variable, Extension: nil})
 				log.Debugf("Adding new VAR entry at %x", index)
 
 			case OBJ_DOMAIN:
@@ -92,7 +92,7 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 				if err != nil {
 					return nil, err
 				}
-				od.AddEntry(&Entry{Index: index, Object: *variable, Extension: nil})
+				od.AddEntry(&Entry{Index: index, Name: name, Object: *variable, Extension: nil})
 				log.Debugf("Adding new DOMAIN entry at %x", index)
 
 			case OBJ_ARR:
