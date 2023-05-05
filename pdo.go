@@ -581,36 +581,40 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 			*timerNextUs = tpdo.InhibitTimer
 		}
 	} else if tpdo.Sync != nil && syncWas {
+
 		// Send synchronous acyclic tpdo
-		if tpdo.TransmissionType == CO_PDO_TRANSM_TYPE_SYNC_ACYCLIC {
-			if tpdo.SendRequest {
-				tpdo.Send()
-			}
-		} else {
-			// Send synchronous cyclic TPDOs
-			if tpdo.SyncCounter == 255 {
-				if tpdo.Sync.CounterOverflowValue != 0 && tpdo.SyncStartValue != 0 {
-					// Sync start value used
-					tpdo.SyncCounter = 254
-				} else {
-					tpdo.SyncCounter = tpdo.TransmissionType/2 + 1
-				}
-			}
-			// If sync start value is used , start first TPDO
-			//after sync with matched syncstartvalue
-			if tpdo.SyncCounter == 254 {
-				if tpdo.Sync.Counter == tpdo.SyncStartValue {
-					tpdo.SyncCounter = tpdo.TransmissionType
-					tpdo.Send()
-				}
-			} else if tpdo.SyncCounter == 1 {
-				tpdo.SyncCounter = tpdo.TransmissionType
-				tpdo.Send()
+		if tpdo.TransmissionType == CO_PDO_TRANSM_TYPE_SYNC_ACYCLIC &&
+			tpdo.SendRequest {
+			tpdo.Send()
+			return
+		}
+		// Send synchronous cyclic TPDOs
+		//log.Infof("Sync counter overflow value %v", tpdo.Sync.CounterOverflowValue)
+		if tpdo.SyncCounter == 255 {
+			if tpdo.Sync.CounterOverflowValue != 0 && tpdo.SyncStartValue != 0 {
+				// Sync start value used
+
+				tpdo.SyncCounter = 254
 			} else {
-				// decrement sync counter
-				tpdo.SyncCounter--
+				tpdo.SyncCounter = tpdo.TransmissionType/2 + 1
 			}
 		}
+		// If sync start value is used , start first TPDO
+		//after sync with matched syncstartvalue
+		switch tpdo.SyncCounter {
+		case 254:
+			if tpdo.Sync.Counter == tpdo.SyncStartValue {
+				tpdo.SyncCounter = tpdo.TransmissionType
+				tpdo.Send()
+			}
+		case 1:
+			tpdo.SyncCounter = tpdo.TransmissionType
+			tpdo.Send()
+
+		default:
+			tpdo.SyncCounter--
+		}
+
 	}
 
 }
