@@ -96,13 +96,13 @@ func (base *PDOBase) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInde
 	}
 	if streamerCopy.Stream.Attribute&testAttribute == 0 ||
 		(mappedLengthBits&0x07) != 0 ||
-		len(streamerCopy.Stream.Data) < int(mappedLength) {
+		int(streamerCopy.Stream.DataLength) < int(mappedLength) {
 		log.Debugf("[PDO] couldn't map x%x:x%x (can be because of attribute, invalid size ... etc) %v, %v, %v",
 			index,
 			subindex,
 			streamerCopy.Stream.Attribute&testAttribute == 0,
 			(mappedLengthBits&0x07) != 0,
-			len(streamerCopy.Stream.Data) < int(mappedLength),
+			int(streamerCopy.Stream.DataLength) < int(mappedLength),
 		)
 		return ODR_NO_MAP
 	}
@@ -333,8 +333,8 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 			for i := 0; i < int(pdo.MappedObjectsCount); i++ {
 				streamer := &pdo.Streamers[i]
 				dataOffset := &streamer.Stream.DataOffset
-				mappedLength := streamer.Stream.DataOffset
-				dataLength := len(streamer.Stream.Data)
+				mappedLength := *dataOffset
+				dataLength := int(streamer.Stream.DataLength)
 				if dataLength > int(MAX_PDO_LENGTH) {
 					dataLength = int(MAX_PDO_LENGTH)
 				}
@@ -508,7 +508,7 @@ func (tpdo *TPDO) Send() error {
 		streamer := &pdo.Streamers[i]
 		stream := &streamer.Stream
 		mappedLength := streamer.Stream.DataOffset
-		dataLength := len(stream.Data)
+		dataLength := int(stream.DataLength)
 		if dataLength > int(MAX_PDO_LENGTH) {
 			dataLength = int(MAX_PDO_LENGTH)
 		}
