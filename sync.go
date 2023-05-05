@@ -113,6 +113,7 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 		sync.ExtensionEntry1019.Object = sync
 		sync.ExtensionEntry1019.Read = ReadEntryOriginal
 		sync.ExtensionEntry1019.Write = WriteEntry1019
+		entry1019.AddExtension(&sync.ExtensionEntry1019)
 		log.Infof("[SYNC][%x] %v : %v", entry1019.Index, entry1019.Name, syncCounterOverflow)
 	}
 	sync.CounterOverflowValue = syncCounterOverflow
