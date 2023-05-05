@@ -6,14 +6,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-/* TODOs
-- BUG ! : don't recreate buffers on client setup, only update them
-- Add dynamic od entries
-- Test sync reception
-- Test also with PDOs
-- Add emergency frames
-*/
-
 type SYNC struct {
 	emergency            *EM
 	RxNew                bool
@@ -84,32 +76,33 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	var err error
 
 	if entry1006 == nil {
-		log.Warnf("Failed to read entry 1006 (Comm cycle period) because empty")
-	} else {
-		sync.OD1006Period, err = entry1006.GetPtr(0, 4)
-		if err != nil {
-			log.Errorf("Error reading entry 1006 (Comm cycle period): %v", res)
-			return CO_ERROR_OD_PARAMETERS
-		}
-		log.Infof("[SYNC] comm cycle period %v ms", binary.LittleEndian.Uint32(*sync.OD1006Period))
+		log.Errorf("[SYNC][1006] COMM CYCLE PERIOD not found")
+		return CO_ERROR_OD_PARAMETERS
+	} else if entry1007 == nil {
+		log.Errorf("[SYNC][1007] SYNCHRONOUS WINDOW LENGTH not found")
+		return CO_ERROR_OD_PARAMETERS
 	}
 
-	if entry1007 == nil {
-		log.Warnf("Failed to read entry 1007 (Synchronous window len) because empty")
-	} else {
-		sync.OD1007Window, err = entry1007.GetPtr(0, 4)
-		if err != nil {
-			log.Errorf("Error reading entry 1007 (Synchronous window len): %v", res)
-			return CO_ERROR_OD_PARAMETERS
-		}
-		log.Infof("[SYNC] synchronous window %v ms", binary.LittleEndian.Uint32(*sync.OD1007Window))
+	sync.OD1006Period, err = entry1006.GetPtr(0, 4)
+	if err != nil {
+		log.Errorf("[SYNC][%x] %v read error", entry1006.Index, entry1006.Name)
+		return CO_ERROR_OD_PARAMETERS
 	}
+	log.Infof("[SYNC][%x] %v : %v", entry1006.Index, entry1006.Name, binary.LittleEndian.Uint32(*sync.OD1006Period))
 
+	sync.OD1007Window, err = entry1007.GetPtr(0, 4)
+	if err != nil {
+		log.Errorf("[SYNC][%x] %v read error", entry1007.Index, entry1007.Name)
+		return CO_ERROR_OD_PARAMETERS
+	}
+	log.Infof("[SYNC][%x] %v : %v", entry1007.Index, entry1007.Name, binary.LittleEndian.Uint32(*sync.OD1007Window))
+
+	// This one is not mandatory
 	var syncCounterOverflow uint8 = 0
 	if entry1019 != nil {
 		err = entry1019.GetUint8(0, &syncCounterOverflow)
 		if err != nil {
-			log.Errorf("Error reading entry 1019 (Synchronous counter overflow): %v", res)
+			log.Errorf("[SYNC][%x] %v read error", entry1019.Index, entry1019.Name)
 			return CO_ERROR_OD_PARAMETERS
 		}
 		if syncCounterOverflow == 1 {
@@ -120,7 +113,7 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 		sync.ExtensionEntry1019.Object = sync
 		sync.ExtensionEntry1019.Read = ReadEntryOriginal
 		sync.ExtensionEntry1019.Write = WriteEntry1019
-		log.Infof("[SYNC] sync counter overflow %v", syncCounterOverflow)
+		log.Infof("[SYNC][%x] %v : %v", entry1019.Index, entry1019.Name, syncCounterOverflow)
 	}
 	sync.CounterOverflowValue = syncCounterOverflow
 	sync.emergency = emergency
@@ -131,7 +124,6 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	var err1 error
 	sync.CANRxBuffIndex, err1 = sync.BusManager.InsertRxBuffer(uint32(sync.Ident), 0x7FF, false, sync)
 	if err1 != nil {
-		log.Errorf("Error initializing RX buffer for SDO client %v", err1)
 		return err1
 	}
 	var err2 error
@@ -141,16 +133,12 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	}
 	sync.CANTxBuff, sync.CANTxBuffIndex, err2 = sync.BusManager.InsertTxBuffer(uint32(sync.Ident), false, frameSize, false)
 	if err2 != nil {
-		log.Errorf("Error initializing TX buffer for SDO client %v", err2)
 		return err2
 	}
 	if sync.CANTxBuff == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
-	log.Infof("[SYNC] initialized sync | producer : %v | overflow %v",
-		sync.IsProducer,
-		syncCounterOverflow,
-	)
+	log.Infof("[SYNC] Initialisation finished")
 	return nil
 }
 
