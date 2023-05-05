@@ -347,7 +347,11 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 					buffer = append(buffer, make([]byte, int(MAX_PDO_LENGTH)-len(buffer))...)
 				}
 				var countWritten uint16
-				streamer.Write(&streamer.Stream, buffer, &countWritten)
+				*dataOffset = 0
+				err := streamer.Write(&streamer.Stream, buffer, &countWritten)
+				if err != nil {
+					log.Warnf("[RPDO][%x]Failed to write to OD on RPDO reception because %v", rpdo.PDO.ConfiguredIdent, err)
+				}
 				*dataOffset = mappedLength
 
 			}
