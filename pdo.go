@@ -15,7 +15,7 @@ const (
 type PDOBase struct {
 	od                          *ObjectDictionary
 	em                          *EM
-	Canmodule                   *BusManager
+	busManager                  *BusManager
 	Valid                       bool
 	DataLength                  uint32
 	MappedObjectsCount          uint8
@@ -65,13 +65,11 @@ func (base *PDOBase) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInde
 
 	// Total PDO length should be smaller than max possible size
 	if mappedLength > MAX_PDO_LENGTH {
-		log.Debug("[PDO] Mapped parameter is too long")
+		log.Warnf("[PDO][%x|%x] mapped parameter is too long", index, subindex)
 		return ODR_MAP_LEN
 	}
-
-	// Dummy entry ?
+	// Dummy entries map to "fake" entries
 	if index < 0x20 && subindex == 0 {
-		// Fill with mapped length bytes
 		streamer.Stream.Data = make([]byte, mappedLength)
 		streamer.Stream.DataOffset = uint32(mappedLength)
 		streamer.Write = WriteDummy
@@ -81,7 +79,7 @@ func (base *PDOBase) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInde
 	// Get entry in OD
 	streamerCopy := ObjectStreamer{}
 	entry := od.Find(index)
-	ret := entry.Sub(subindex, false, &streamerCopy)
+	ret := od.Find(index).Sub(subindex, false, &streamerCopy)
 	if ret != nil {
 		log.Debugf("[PDO] Couldn't get object x%x:x%x, because %v", index, subindex, ret)
 		return ret
@@ -191,33 +189,34 @@ func (rpdo *RPDO) Handle(frame Frame) {
 	pdo := &rpdo.PDO
 	err := rpdo.ReceiveError
 
-	if pdo.Valid {
-		if frame.DLC >= uint8(pdo.DataLength) {
-			// Indicate if errors in PDO length
-			if frame.DLC == uint8(pdo.DataLength) {
-				if err == CO_RPDO_RX_ACK_ERROR {
-					err = CO_RPDO_RX_OK
-				}
-			} else {
-				if err == CO_RPDO_RX_ACK_NO_ERROR {
-					err = CO_RPDO_RX_LONG
-				}
-			}
-			// Determine where to copy the message
-			bufNo := 0
-			if rpdo.Synchronous && rpdo.Sync != nil && rpdo.Sync.RxToggle {
-				bufNo = 1
-			}
-			rpdo.RxData[bufNo] = frame.Data
-			rpdo.RxNew[bufNo] = true
-
-			// TODO maybe add callbacks
-
-		} else if err == CO_RPDO_RX_ACK_NO_ERROR {
-			err = CO_RPDO_RX_SHORT
-		}
-		rpdo.ReceiveError = err
+	if !pdo.Valid {
+		return
 	}
+
+	if frame.DLC >= uint8(pdo.DataLength) {
+		// Indicate if errors in PDO length
+		if frame.DLC == uint8(pdo.DataLength) {
+			if err == CO_RPDO_RX_ACK_ERROR {
+				err = CO_RPDO_RX_OK
+			}
+		} else {
+			if err == CO_RPDO_RX_ACK_NO_ERROR {
+				err = CO_RPDO_RX_LONG
+			}
+		}
+		// Determine where to copy the message
+		bufNo := 0
+		if rpdo.Synchronous && rpdo.Sync != nil && rpdo.Sync.RxToggle {
+			bufNo = 1
+		}
+		rpdo.RxData[bufNo] = frame.Data
+		rpdo.RxNew[bufNo] = true
+
+	} else if err == CO_RPDO_RX_ACK_NO_ERROR {
+		err = CO_RPDO_RX_SHORT
+	}
+	rpdo.ReceiveError = err
+
 }
 
 func (rpdo *RPDO) Init(od *ObjectDictionary,
@@ -234,7 +233,7 @@ func (rpdo *RPDO) Init(od *ObjectDictionary,
 	// Clean object
 	*rpdo = RPDO{}
 	pdo.em = em
-	pdo.Canmodule = busManager
+	pdo.busManager = busManager
 	erroneousMap := uint32(0)
 	// Configure mapping params
 	ret := pdo.InitMapping(od, entry16xx, true, &erroneousMap)
@@ -401,7 +400,7 @@ func (tpdo *TPDO) Init(
 	// Clear TPDO
 	*tpdo = TPDO{}
 	pdo.em = em
-	pdo.Canmodule = busManager
+	pdo.busManager = busManager
 	// Configure mapping parameters
 	erroneousMap := uint32(0)
 	ret := pdo.InitMapping(od, entry1Axx, false, &erroneousMap)
@@ -446,7 +445,7 @@ func (tpdo *TPDO) Init(
 	}
 
 	var err error
-	tpdo.TxBuffer, pdo.BufferIdx, _ = pdo.Canmodule.InsertTxBuffer(uint32(canId), false, uint8(pdo.DataLength), tpdo.TransmissionType <= CO_PDO_TRANSM_TYPE_SYNC_240)
+	tpdo.TxBuffer, pdo.BufferIdx, _ = pdo.busManager.InsertTxBuffer(uint32(canId), false, uint8(pdo.DataLength), tpdo.TransmissionType <= CO_PDO_TRANSM_TYPE_SYNC_240)
 	if tpdo.TxBuffer == nil || err != nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
@@ -477,7 +476,7 @@ func (tpdo *TPDO) Init(
 	// Configure OD extensions
 	pdo.IsRPDO = false
 	pdo.od = od
-	pdo.Canmodule = busManager
+	pdo.busManager = busManager
 	pdo.PreDefinedIdent = predefinedIdent
 	pdo.ConfiguredIdent = canId
 	pdo.ExtensionCommunicationParam.Object = tpdo
@@ -531,7 +530,7 @@ func (tpdo *TPDO) Send() error {
 	tpdo.InhibitTimer = tpdo.InhibitTimeUs
 	// Copy data to the buffer & send
 	copy(tpdo.TxBuffer.Data[:], dataTPDO)
-	return pdo.Canmodule.Send(*tpdo.TxBuffer)
+	return pdo.busManager.Send(*tpdo.TxBuffer)
 }
 
 func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOperational bool, syncWas bool) {
@@ -593,7 +592,6 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 			return
 		}
 		// Send synchronous cyclic TPDOs
-		//log.Infof("Sync counter overflow value %v", tpdo.Sync.CounterOverflowValue)
 		if tpdo.SyncCounter == 255 {
 			if tpdo.Sync.CounterOverflowValue != 0 && tpdo.SyncStartValue != 0 {
 				// Sync start value used
