@@ -25,13 +25,13 @@ func createOD() ObjectDictionary {
 
 func TestFind(t *testing.T) {
 	od := createOD()
-	entry := od.Find(0x1118)
+	entry := od.Index(0x1118)
 	if entry != nil {
 		t.Errorf("Entry should be nil")
 
 	}
 
-	entry = od.Find(0x1016)
+	entry = od.Index(0x1016)
 	if entry.Index != 0x1016 {
 		t.Errorf("Wrong index %x", entry.Index)
 	}
@@ -40,7 +40,7 @@ func TestFind(t *testing.T) {
 
 func TestSub(t *testing.T) {
 	od := createOD()
-	entry := od.Find(0x1018)
+	entry := od.Index(0x1018)
 	if entry == nil {
 		t.Errorf("Entry %d should exist", 0x1018)
 	}
@@ -56,7 +56,7 @@ func TestSub(t *testing.T) {
 		t.Error(err)
 	}
 	// Test access to subindex 0 of Record should return ODR_OK
-	entry = od.Find(0x1030)
+	entry = od.Index(0x1030)
 	err = entry.Sub(0, true, streamer)
 	if err != nil {
 		t.Error()
@@ -75,7 +75,7 @@ func TestRead(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	entry := BaseObjectDictionaryParsed.Find(0x2001)
+	entry := BaseObjectDictionaryParsed.Index(0x2001)
 	if entry == nil {
 		t.Error()
 	}
@@ -101,7 +101,7 @@ func TestReadSDO1280(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	entry := BaseObjectDictionaryParsed.Find(0x1280)
+	entry := BaseObjectDictionaryParsed.Index(0x1280)
 	log.Infof("Entry 1280 : %v", entry)
 	if entry == nil {
 		t.Error()
@@ -119,7 +119,7 @@ func TestReadSDO1280(t *testing.T) {
 func TestReadWriteDisabled(t *testing.T) {
 	//var streamer ObjectStreamer
 	BaseObjectDictionaryParsed, _ := ParseEDS("base.eds", 0x10)
-	entry := BaseObjectDictionaryParsed.Find(0x2001)
+	entry := BaseObjectDictionaryParsed.Index(0x2001)
 	if entry == nil {
 		t.Error("Empty entry")
 	}

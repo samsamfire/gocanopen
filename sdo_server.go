@@ -427,7 +427,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			if abortCode == CO_SDO_AB_NONE {
 				server.Index = response.GetIndex()
 				server.Subindex = response.GetSubindex()
-				err := server.OD.Find(server.Index).Sub(server.Subindex, false, server.Streamer)
+				err := server.OD.Index(server.Index).Sub(server.Subindex, false, server.Streamer)
 				if err != nil {
 					abortCode = err.(ODR).GetSDOAbordCode()
 					server.State = CO_SDO_ST_ABORT

@@ -133,7 +133,7 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 			subIndex := uint8(sidx)
 			name := section.Key("ParameterName").String()
 
-			entry := od.Find(index)
+			entry := od.Index(index)
 			if entry == nil {
 				return nil, fmt.Errorf("index with id %d not found", index)
 			}

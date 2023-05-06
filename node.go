@@ -111,8 +111,8 @@ func (node *Node) InitPDO(od *ObjectDictionary, nodeId uint8) error {
 	// Iterate over all the possible entries : there can be a maximum of 512 maps
 	// Break loops when an entry doesn't exist (don't allow holes in mapping)
 	for i := uint16(0); i < 512; i++ {
-		entry14xx := od.Find(0x1400 + i)
-		entry16xx := od.Find(0x1600 + i)
+		entry14xx := od.Index(0x1400 + i)
+		entry16xx := od.Index(0x1600 + i)
 		preDefinedIdent := uint16(0)
 		pdoOffset := i % 4
 		nodeIdOffset := i / 4
@@ -129,8 +129,8 @@ func (node *Node) InitPDO(od *ObjectDictionary, nodeId uint8) error {
 	}
 	// Do the same for TPDOS
 	for i := uint16(0); i < 512; i++ {
-		entry18xx := od.Find(0x1800 + i)
-		entry1Axx := od.Find(0x1A00 + i)
+		entry18xx := od.Index(0x1800 + i)
+		entry1Axx := od.Index(0x1A00 + i)
 		preDefinedIdent := uint16(0)
 		pdoOffset := i % 4
 		nodeIdOffset := i / 4
@@ -175,10 +175,10 @@ func (node *Node) Init(
 	// Initialize EM object
 	err = node.EM.Init(
 		node.BusManager,
-		od.Find(0x1001),
-		od.Find(0x1014),
-		od.Find(0x1015),
-		od.Find(0x1003),
+		od.Index(0x1001),
+		od.Index(0x1014),
+		od.Index(0x1015),
+		od.Index(0x1003),
 		nil,
 		nodeId,
 	)
@@ -194,7 +194,7 @@ func (node *Node) Init(
 		node.NMT = nmt
 	}
 	// Initialize NMT
-	entry1017 := od.Find(0x1017)
+	entry1017 := od.Index(0x1017)
 	if entry1017 == nil {
 		return CO_ERROR_OD_PARAMETERS
 	}
@@ -207,7 +207,7 @@ func (node *Node) Init(
 
 	// Initialize HB consumer
 	hbCons := &HBConsumer{}
-	err = hbCons.Init(emergency, od.Find(0x1016), node.BusManager)
+	err = hbCons.Init(emergency, od.Index(0x1016), node.BusManager)
 	if err != nil {
 		log.Errorf("[HB Consumer] error when initializing HB consummers %v", err)
 	} else {
@@ -217,7 +217,7 @@ func (node *Node) Init(
 
 	// Initialize SDO server
 	// For now only one server
-	entry1200 := od.Find(0x1200)
+	entry1200 := od.Index(0x1200)
 	if entry1200 == nil {
 		log.Warnf("[SDO SERVER] no sdo servers initialized for node x%x", nodeId)
 	} else {
@@ -234,7 +234,7 @@ func (node *Node) Init(
 
 	// Initialize SDO clients if any
 	// For now only one client
-	entry1280 := od.Find(0x1280)
+	entry1280 := od.Index(0x1280)
 	if entry1280 == nil {
 		log.Info("[SDO CLIENT] no SDO clients initialized for node")
 	} else {
@@ -250,14 +250,14 @@ func (node *Node) Init(
 	//Initialize TIME
 	time := &TIME{}
 	node.TIME = time
-	err = time.Init(od.Find(0x1012), node.BusManager, 1000)
+	err = time.Init(od.Index(0x1012), node.BusManager, 1000)
 	if err != nil {
 		log.Errorf("[TIME] error when initializing TIME object %v", err)
 	}
 
 	//Initialize SYNC
 	sync := &SYNC{}
-	err = sync.Init(&EM{}, od.Find(0x1005), od.Find(0x1006), od.Find(0x1007), od.Find(0x1019), node.BusManager)
+	err = sync.Init(&EM{}, od.Index(0x1005), od.Index(0x1006), od.Index(0x1007), od.Index(0x1019), node.BusManager)
 	if err != nil {
 		log.Errorf("[SYNC] error when initialising SYNC object %v", err)
 	}
