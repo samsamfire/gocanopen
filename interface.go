@@ -120,8 +120,8 @@ func (od *ObjectDictionary) AddEntry(entry *Entry) {
 	od.entries[entry.Index] = entry
 }
 
-// Find entry inside object dictionary, returns nil if not found
-func (od *ObjectDictionary) Find(index uint16) *Entry {
+// Get the entry corresponding to the given index
+func (od *ObjectDictionary) Index(index uint16) *Entry {
 
 	entry, ok := od.entries[index]
 	if ok {

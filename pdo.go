@@ -78,8 +78,8 @@ func (base *PDOBase) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInde
 	}
 	// Get entry in OD
 	streamerCopy := ObjectStreamer{}
-	entry := od.Find(index)
-	ret := od.Find(index).Sub(subindex, false, &streamerCopy)
+	entry := od.Index(index)
+	ret := od.Index(index).Sub(subindex, false, &streamerCopy)
 	if ret != nil {
 		log.Debugf("[PDO] Couldn't get object x%x:x%x, because %v", index, subindex, ret)
 		return ret
