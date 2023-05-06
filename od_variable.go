@@ -107,10 +107,15 @@ func encode(variable string, datatype uint8, nodeId uint8) ([]byte, error) {
 		data = make([]byte, 2)
 		binary.LittleEndian.PutUint16(data, uint16(parsed+uint64(nodeId)))
 
-	case UNSIGNED32, INTEGER32:
+	case UNSIGNED32, INTEGER32, REAL32:
 		parsed, err = strconv.ParseUint(variable, 0, 32)
 		data = make([]byte, 4)
 		binary.LittleEndian.PutUint32(data, uint32(parsed+uint64(nodeId)))
+
+	case UNSIGNED64, INTEGER64, REAL64:
+		parsed, err = strconv.ParseUint(variable, 0, 64)
+		data = make([]byte, 8)
+		binary.LittleEndian.PutUint64(data, parsed+uint64(nodeId))
 
 	case VISIBLE_STRING:
 		return []byte(variable), nil
