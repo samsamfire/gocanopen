@@ -408,7 +408,7 @@ func (entry *Entry) Get(subIndex uint8, buffer []byte, length uint16, origin boo
 	if int(streamer.Stream.DataLength) != int(length) {
 		return ODR_TYPE_MISMATCH
 	}
-	return streamer.read(&streamer.Stream, buffer, &countRead)
+	return streamer.Read(buffer, &countRead)
 }
 
 // Getptr inside OD, similar to read
@@ -433,7 +433,7 @@ func (entry *Entry) Set(subIndex uint8, buffer []byte, length uint16, origin boo
 	if int(streamer.Stream.DataLength) != int(length) {
 		return ODR_TYPE_MISMATCH
 	}
-	return streamer.write(&streamer.Stream, buffer, &countWritten)
+	return streamer.Write(buffer, &countWritten)
 
 }
 
