@@ -64,7 +64,7 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	var cobIdSync uint32 = 0
 	res := entry1005.GetUint32(0, &cobIdSync)
 	if res != nil {
-		log.Errorf("Error reading entry 1005 (Sync ID): %v", res)
+		log.Errorf("[SYNC][%x] %v read error", entry1005.Index, entry1005.Name)
 		return CO_ERROR_OD_PARAMETERS
 	}
 
