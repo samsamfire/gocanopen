@@ -3,18 +3,11 @@ import canopen
 from canopen.objectdictionary import datatypes
 from canopen.sdo.client import BlockDownloadStream
 import time
-from .conftest import TEST_ID, EDS_PATH
 
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
-
-@pytest.fixture
-def node(network) -> canopen.RemoteNode:
-    node = network.add_node(TEST_ID, EDS_PATH)
-    yield node
 
 
 def test_sdo_expedited_upload_download_uint8(node: canopen.RemoteNode):
