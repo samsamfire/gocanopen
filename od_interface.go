@@ -139,8 +139,16 @@ and a default writer
 */
 type ObjectStreamer struct {
 	Stream Stream
-	Read   func(stream *Stream, buffer []byte, countRead *uint16) error
-	Write  func(stream *Stream, buffer []byte, countWritten *uint16) error
+	read   func(stream *Stream, buffer []byte, countRead *uint16) error
+	write  func(stream *Stream, buffer []byte, countWritten *uint16) error
+}
+
+func (streamer *ObjectStreamer) Read(buffer []byte, countRead *uint16) error {
+	return streamer.read(&streamer.Stream, buffer, countRead)
+}
+
+func (streamer *ObjectStreamer) Write(buffer []byte, countWritten *uint16) error {
+	return streamer.write(&streamer.Stream, buffer, countWritten)
 }
 
 // Add a member to Entry, this is only possible for Array or Record objects
@@ -235,7 +243,6 @@ type Record struct {
 
 // Read value from original OD location and transfer it into a new byte slice
 func ReadEntryOriginal(stream *Stream, data []byte, countRead *uint16) error {
-
 	if stream == nil || stream.Data == nil || data == nil || countRead == nil {
 		return ODR_DEV_INCOMPAT
 	}
@@ -317,19 +324,19 @@ func WriteEntryDisabled(stream *Stream, data []byte, countWritten *uint16) error
 	return ODR_UNSUPP_ACCESS
 }
 
-// Create an object streamer for an (index,subindex)
-func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) error {
+// Create an object streamer for a given (index,subindex)
+func (entry *Entry) CreateStreamer(subindex uint8, origin bool) (*ObjectStreamer, error) {
 
 	if entry == nil || entry.Object == nil {
-		return ODR_IDX_NOT_EXIST
+		return nil, ODR_IDX_NOT_EXIST
 	}
-
+	streamer := &ObjectStreamer{}
 	object := entry.Object
 	// attribute, dataOrig and dataLength, depends on object type
 	switch object := object.(type) {
 	case Variable:
 		if subindex > 0 {
-			return ODR_SUB_NOT_EXIST
+			return nil, ODR_SUB_NOT_EXIST
 		}
 		streamer.Stream.Attribute = object.Attribute
 		streamer.Stream.Data = object.Data
@@ -338,7 +345,7 @@ func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) e
 	case Array:
 		subEntriesCount := len(object.Variables)
 		if subindex >= uint8(subEntriesCount) {
-			return ODR_SUB_NOT_EXIST
+			return nil, ODR_SUB_NOT_EXIST
 		}
 		streamer.Stream.Attribute = object.Variables[subindex].Attribute
 		streamer.Stream.Data = object.Variables[subindex].Data
@@ -354,7 +361,7 @@ func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) e
 			}
 		}
 		if record == nil {
-			return ODR_SUB_NOT_EXIST
+			return nil, ODR_SUB_NOT_EXIST
 		}
 		streamer.Stream.Attribute = record.Variable.Attribute
 		streamer.Stream.Data = record.Variable.Data
@@ -362,53 +369,51 @@ func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) e
 
 	default:
 		log.Errorf("[OD] error, unknown type : %+v", object)
-		return ODR_DEV_INCOMPAT
+		return nil, ODR_DEV_INCOMPAT
 	}
 	// Add normal reader / writer for object
 	if entry.Extension == nil || origin {
-		streamer.Read = ReadEntryOriginal
-		streamer.Write = WriteEntryOriginal
+		streamer.read = ReadEntryOriginal
+		streamer.write = WriteEntryOriginal
 		streamer.Stream.Object = nil
 		streamer.Stream.DataOffset = 0
 		streamer.Stream.Subindex = subindex
-		return nil
+		return streamer, nil
 	}
 	// Add extension reader / writer for object
 	if entry.Extension.Read == nil {
-		streamer.Read = ReadEntryDisabled
+		streamer.read = ReadEntryDisabled
 	} else {
-		streamer.Read = entry.Extension.Read
+		streamer.read = entry.Extension.Read
 	}
 	if entry.Extension.Write == nil {
-		streamer.Write = WriteEntryDisabled
+		streamer.write = WriteEntryDisabled
 	} else {
-		streamer.Write = entry.Extension.Write
+		streamer.write = entry.Extension.Write
 	}
 	streamer.Stream.Object = entry.Extension.Object
 	streamer.Stream.DataOffset = 0
 	streamer.Stream.Subindex = subindex
-	return nil
+	return streamer, nil
 }
 
 // Read value inside buffer
 // Under the hood, this uses
 func (entry *Entry) Get(subIndex uint8, buffer []byte, length uint16, origin bool) error {
-	streamer := &ObjectStreamer{}
 	var countRead uint16 = 0
-	err := entry.Sub(subIndex, origin, streamer)
+	streamer, err := entry.CreateStreamer(subIndex, origin)
 	if err != nil {
 		return err
 	}
 	if int(streamer.Stream.DataLength) != int(length) {
 		return ODR_TYPE_MISMATCH
 	}
-	return streamer.Read(&streamer.Stream, buffer, &countRead)
+	return streamer.read(&streamer.Stream, buffer, &countRead)
 }
 
 // Getptr inside OD, similar to read
 func (entry *Entry) GetPtr(subIndex uint8, length uint16) (*[]byte, error) {
-	streamer := &ObjectStreamer{}
-	err := entry.Sub(subIndex, true, streamer)
+	streamer, err := entry.CreateStreamer(subIndex, true)
 	if err != nil {
 		return nil, err
 	}
@@ -420,16 +425,15 @@ func (entry *Entry) GetPtr(subIndex uint8, length uint16) (*[]byte, error) {
 
 // Set value inside OD and write it into data
 func (entry *Entry) Set(subIndex uint8, buffer []byte, length uint16, origin bool) error {
-	streamer := &ObjectStreamer{}
 	var countWritten uint16 = 0
-	err := entry.Sub(subIndex, origin, streamer)
+	streamer, err := entry.CreateStreamer(subIndex, origin)
 	if err != nil {
 		return err
 	}
 	if int(streamer.Stream.DataLength) != int(length) {
 		return ODR_TYPE_MISMATCH
 	}
-	return streamer.Write(&streamer.Stream, buffer, &countWritten)
+	return streamer.write(&streamer.Stream, buffer, &countWritten)
 
 }
 
