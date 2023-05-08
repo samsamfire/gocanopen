@@ -44,25 +44,24 @@ func TestSub(t *testing.T) {
 	if entry == nil {
 		t.Errorf("Entry %d should exist", 0x1018)
 	}
-	streamer := &ObjectStreamer{}
 	// Test access to subindex > 1 for variable
-	err := entry.Sub(1, true, streamer)
+	_, err := entry.CreateStreamer(1, true)
 	if err != ODR_SUB_NOT_EXIST {
 		t.Errorf("%d", err)
 	}
 	// Test that subindex 0 returns ODR_OK
-	err = entry.Sub(0, true, streamer)
+	_, err = entry.CreateStreamer(0, true)
 	if err != nil {
 		t.Error(err)
 	}
 	// Test access to subindex 0 of Record should return ODR_OK
 	entry = od.Index(0x1030)
-	err = entry.Sub(0, true, streamer)
+	_, err = entry.CreateStreamer(0, true)
 	if err != nil {
 		t.Error()
 	}
 	// Test access to out of range subindex
-	err = entry.Sub(10, true, streamer)
+	_, err = entry.CreateStreamer(10, true)
 	if err != ODR_SUB_NOT_EXIST {
 		t.Error()
 	}
@@ -79,8 +78,7 @@ func TestRead(t *testing.T) {
 	if entry == nil {
 		t.Error()
 	}
-	var streamer ObjectStreamer
-	_ = entry.Sub(0, true, &streamer)
+	_, err = entry.CreateStreamer(0, true)
 
 	var data uint16
 	entry.GetUint16(0, &data)
@@ -106,8 +104,7 @@ func TestReadSDO1280(t *testing.T) {
 	if entry == nil {
 		t.Error()
 	}
-	var streamer ObjectStreamer
-	err = entry.Sub(0, true, &streamer)
+	_, err = entry.CreateStreamer(0, true)
 
 	if err != nil {
 		t.Errorf("Failed to get sub object of 1280 %v", err)
@@ -125,18 +122,17 @@ func TestReadWriteDisabled(t *testing.T) {
 	}
 	extension := Extension{Object: nil, Read: ReadEntryDisabled, Write: WriteEntryDisabled, flagsPDO: [32]uint8{0}}
 	entry.Extension = &extension
-	streamer := ObjectStreamer{}
-	err := entry.Sub(0, false, &streamer)
+	streamer, err := entry.CreateStreamer(0, false)
 	if err != nil {
 		t.Error()
 	}
 	var countRead uint16
-	err = streamer.Read(&streamer.Stream, []byte{0}, &countRead)
+	err = streamer.Read([]byte{0}, &countRead)
 	if err != ODR_UNSUPP_ACCESS {
 		t.Error(err)
 	}
 	var countWrite uint16
-	err = streamer.Read(&streamer.Stream, []byte{0}, &countWrite)
+	err = streamer.read(&streamer.Stream, []byte{0}, &countWrite)
 	if err != ODR_UNSUPP_ACCESS {
 		t.Error(err)
 	}
