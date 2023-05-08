@@ -346,7 +346,7 @@ func (emergency *EM) Init(
 	emergency.CANmodule = busManager
 	// TODO handle error register ptr
 	//emergency.errorRegister
-	fifoSize := entry1003.GetNbSubEntries()
+	fifoSize := entry1003.SubEntriesCount()
 	emergency.Fifo = make([]EMFifo, fifoSize)
 
 	// Get cob id initial & verify

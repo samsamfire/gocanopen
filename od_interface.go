@@ -57,25 +57,9 @@ func (result ODR) GetSDOAbordCode() SDOAbortCode {
 }
 
 const (
-	/** This type corresponds to CANopen Object Dictionary object with object
-	 * code equal to VAR. OD object is type of @ref OD_obj_var_t and represents
-	 * single variable of any type (any length), located on sub-index 0. Other
-	 * sub-indexes are not used. */
-	ODT_VAR = 0x01
-	/** This type corresponds to CANopen Object Dictionary object with object
-	 * code equal to ARRAY. OD object is type of @ref OD_obj_array_t and
-	 * represents array of variables with the same type, located on sub-indexes
-	 * above 0. Sub-index 0 is of type uint8_t and usually represents length of
-	 * the array. */
-	ODT_ARR = 0x02
-	/** This type corresponds to CANopen Object Dictionary object with object
-	 * code equal to RECORD. This type of OD object represents structure of
-	 * the variables. Each variable from the structure can have own type and
-	 * own attribute. OD object is an array of elements of type
-	 * @ref OD_obj_var_t. Variable at sub-index 0 is of type uint8_t and usually
-	 * represents number of sub-elements in the structure. */
-	ODT_REC = 0x03
-	/** Mask for basic type */
+	ODT_VAR       = 0x01
+	ODT_ARR       = 0x02
+	ODT_REC       = 0x03
 	ODT_TYPE_MASK = 0x0F
 )
 
@@ -107,22 +91,30 @@ const (
 	  Attribute is used for VISIBLE_STRING and UNICODE_STRING. */
 )
 
+// Object dictionary contains all node data
 type ObjectDictionary struct {
 	entries map[uint16]*Entry
+}
+
+// An entry can be any object type : variable, array, record or domain
+type Entry struct {
+	Index     uint16
+	Name      string
+	Object    any
+	Extension *Extension
 }
 
 // Add a new entry to OD
 func (od *ObjectDictionary) AddEntry(entry *Entry) {
 	_, ok := od.entries[entry.Index]
 	if ok {
-		log.Warnf("Re-adding entry %x to dictionary !", entry.Index)
+		log.Warnf("[OD] overwritting entry %x", entry.Index)
 	}
 	od.entries[entry.Index] = entry
 }
 
 // Get the entry corresponding to the given index
 func (od *ObjectDictionary) Index(index uint16) *Entry {
-
 	entry, ok := od.entries[index]
 	if ok {
 		return entry
@@ -131,11 +123,6 @@ func (od *ObjectDictionary) Index(index uint16) *Entry {
 	}
 }
 
-/*
-ObjectStreamer is created before accessing an OD entry
-It creates a buffer from OD Data []byte slice and provides a default reader
-and a default writer using bufio
-*/
 type Stream struct {
 	Data       []byte
 	DataOffset uint32
@@ -159,21 +146,18 @@ type Extension struct {
 	flagsPDO [OD_FLAGS_PDO_SIZE]uint8
 }
 
-// i.e this is some sort of reader writer
+/*
+ObjectStreamer is created before accessing an OD entry
+It creates a buffer from OD Data []byte slice and provides a default reader
+and a default writer
+*/
 type ObjectStreamer struct {
 	Stream Stream
 	Read   func(stream *Stream, buffer []byte, countRead *uint16) error
 	Write  func(stream *Stream, buffer []byte, countWritten *uint16) error
 }
 
-type Entry struct {
-	Index     uint16
-	Name      string
-	Object    any
-	Extension *Extension
-}
-
-// Add a member to an Entry object, this is only possible for Array or Record objects
+// Add a member to Entry, this is only possible for Array or Record objects
 func (entry *Entry) AddMember(section *ini.Section, name string, nodeId uint8, subindex uint8) error {
 
 	switch object := entry.Object.(type) {
@@ -208,7 +192,7 @@ func (entry *Entry) AddExtension(extension *Extension) error {
 }
 
 // Get number of sub entries. Depends on type
-func (entry *Entry) GetNbSubEntries() int {
+func (entry *Entry) SubEntriesCount() int {
 
 	switch object := entry.Object.(type) {
 	case Variable:

@@ -55,7 +55,7 @@ func (consumer *HBConsumer) Init(em *EM, entry1016 *Entry, busManager *BusManage
 	consumer.busManager = busManager
 
 	// Get real number of monitored nodes
-	consumer.NbMonitoredNodes = uint8(entry1016.GetNbSubEntries() - 1)
+	consumer.NbMonitoredNodes = uint8(entry1016.SubEntriesCount() - 1)
 	log.Debugf("[HB consumer] %v possible entries for nodes to monitor", consumer.NbMonitoredNodes)
 	consumer.MonitoredNodes = make([]HBConsumerNode, consumer.NbMonitoredNodes)
 	for index := range consumer.MonitoredNodes {
