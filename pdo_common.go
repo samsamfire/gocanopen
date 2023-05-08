@@ -50,6 +50,14 @@ func (base *PDOCommon) attribute() ODA {
 	}
 }
 
+func (base *PDOCommon) Type() string {
+	if base.IsRPDO {
+		return "RPDO"
+	} else {
+		return "TPDO"
+	}
+}
+
 // Configure a PDO map (this is done on startup and can also be done dynamically)
 func (pdo *PDOCommon) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapIndex uint32, isRPDO bool) error {
 	index := uint16(mapParam >> 16)
@@ -60,7 +68,7 @@ func (pdo *PDOCommon) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInd
 
 	// Total PDO length should be smaller than the max possible size
 	if mappedLength > MAX_PDO_LENGTH {
-		log.Warnf("[PDO][%x|%x] mapped parameter is too long", index, subindex)
+		log.Warnf("[%v][%x|%x] mapped parameter is too long", pdo.Type(), index, subindex)
 		return ODR_MAP_LEN
 	}
 	// Dummy entries map to "fake" entries
@@ -76,20 +84,20 @@ func (pdo *PDOCommon) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInd
 	entry := od.Index(index)
 	ret := entry.Sub(subindex, false, &streamerCopy)
 	if ret != nil {
-		log.Warnf("[PDO][%x|%x] mapping failed : %v", index, subindex, ret)
+		log.Warnf("[%v][%x|%x] mapping failed : %v", pdo.Type(), index, subindex, ret)
 		return ret
 	}
 
 	// Check correct attribute, length, and alignment
 	switch {
 	case streamerCopy.Stream.Attribute&pdo.attribute() == 0:
-		log.Warnf("[PDO][%x|%x] mapping failed : attribute error", index, subindex, ret)
+		log.Warnf("[%v][%x|%x] mapping failed : attribute error", pdo.Type(), index, subindex, ret)
 		return ODR_NO_MAP
 	case (mappedLengthBits & 0x07) != 0:
-		log.Warnf("[PDO][%x|%x] mapping failed : alignment error", index, subindex, ret)
+		log.Warnf("[%v][%x|%x] mapping failed : alignment error", pdo.Type(), index, subindex, ret)
 		return ODR_NO_MAP
 	case streamerCopy.Stream.DataLength < uint32(mappedLength):
-		log.Warnf("[PDO][%x|%x] mapping failed : length error", index, subindex, ret)
+		log.Warnf("[%v][%x|%x] mapping failed : length error", pdo.Type(), index, subindex, ret)
 		return ODR_NO_MAP
 	default:
 	}
@@ -118,7 +126,7 @@ func (pdo *PDOCommon) InitMapping(od *ObjectDictionary, entry *Entry, isRPDO boo
 	// Get number of mapped objects
 	ret := entry.GetUint8(0, &mappedObjectsCount)
 	if ret != nil {
-		log.Errorf("[PDO][%x|%x] reading nb mapped objects failed : %v", entry.Index, 0, ret)
+		log.Errorf("[%v][%x|%x] reading nb mapped objects failed : %v", pdo.Type(), entry.Index, 0, ret)
 		return CO_ERROR_OD_PARAMETERS
 	}
 
@@ -131,7 +139,7 @@ func (pdo *PDOCommon) InitMapping(od *ObjectDictionary, entry *Entry, isRPDO boo
 			continue
 		}
 		if ret != nil {
-			log.Errorf("[PDO][%x|%x] reading mapped object failed : %v", entry.Index, i+1, ret)
+			log.Errorf("[%v][%x|%x] reading mapped object failed : %v", pdo.Type(), entry.Index, i+1, ret)
 			return CO_ERROR_OD_PARAMETERS
 		}
 		ret = pdo.ConfigureMap(od, mapParam, uint32(i), isRPDO)
