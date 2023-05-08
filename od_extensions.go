@@ -482,16 +482,16 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 	case 2:
 		// Transmission type
 		transmissionType := data[0]
-		if transmissionType > CO_PDO_TRANSM_TYPE_SYNC_240 && transmissionType < CO_PDO_TRANSM_TYPE_SYNC_EVENT_LO {
+		if transmissionType > TRANSMISSION_TYPE_SYNC_240 && transmissionType < TRANSMISSION_TYPE_SYNC_EVENT_LO {
 			return ODR_INVALID_VALUE
 		}
-		synchronous := transmissionType <= CO_PDO_TRANSM_TYPE_SYNC_240
+		synchronous := transmissionType <= TRANSMISSION_TYPE_SYNC_240
 		// Remove old message from second buffer
 		if rpdo.Synchronous != synchronous {
 			rpdo.RxNew[1] = false
 		}
 		rpdo.Synchronous = synchronous
-		if transmissionType < CO_PDO_TRANSM_TYPE_SYNC_EVENT_LO {
+		if transmissionType < TRANSMISSION_TYPE_SYNC_EVENT_LO {
 			return ODR_INVALID_VALUE
 		}
 
@@ -511,7 +511,7 @@ func ReadEntry14xxOr18xx(stream *Stream, data []byte, countRead *uint16) error {
 	// Add node id when reading subindex 1
 	if err == nil && stream.Subindex == 1 && *countRead == 4 {
 		// Get the corresponding object, either TPDO or RPDO
-		var pdo *PDOBase
+		var pdo *PDOCommon
 		switch v := stream.Object.(type) {
 		case *RPDO:
 			pdo = &v.PDO
@@ -541,7 +541,7 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 		return ODR_DEV_INCOMPAT
 	}
 	// Get the corresponding object, either TPDO or RPDO
-	var pdo *PDOBase
+	var pdo *PDOCommon
 	switch v := stream.Object.(type) {
 	case *RPDO:
 		pdo = &v.PDO
@@ -635,7 +635,7 @@ func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 				canId,
 				false,
 				uint8(pdo.DataLength),
-				tpdo.TransmissionType <= CO_PDO_TRANSM_TYPE_SYNC_240)
+				tpdo.TransmissionType <= TRANSMISSION_TYPE_SYNC_240)
 			if txBuffer == nil || err != nil {
 				return ODR_DEV_INCOMPAT
 			}
@@ -647,10 +647,10 @@ func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 	case 2:
 		// Transmission type
 		transmissionType := data[0]
-		if transmissionType > CO_PDO_TRANSM_TYPE_SYNC_240 && transmissionType < CO_PDO_TRANSM_TYPE_SYNC_EVENT_LO {
+		if transmissionType > TRANSMISSION_TYPE_SYNC_240 && transmissionType < TRANSMISSION_TYPE_SYNC_EVENT_LO {
 			return ODR_INVALID_VALUE
 		}
-		tpdo.TxBuffer.SyncFlag = transmissionType <= CO_PDO_TRANSM_TYPE_SYNC_240
+		tpdo.TxBuffer.SyncFlag = transmissionType <= TRANSMISSION_TYPE_SYNC_240
 		tpdo.SyncCounter = 255
 		tpdo.TransmissionType = transmissionType
 		tpdo.SendRequest = true
