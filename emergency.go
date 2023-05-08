@@ -556,8 +556,8 @@ func (emergency *EM) ErrorReport(errorBit byte, errorCode uint16, infoCode uint3
 	return emergency.Error(true, errorBit, errorCode, infoCode)
 }
 
-func (emergency *EM) ErrorReset(errorBit byte, errorCode uint16, infoCode uint32) error {
-	return emergency.Error(false, errorBit, errorCode, infoCode)
+func (emergency *EM) ErrorReset(errorBit byte, infoCode uint32) error {
+	return emergency.Error(false, errorBit, CO_EMC_NO_ERROR, infoCode)
 }
 
 func (emergency *EM) IsError(errorBit byte) bool {
