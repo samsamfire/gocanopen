@@ -9,13 +9,6 @@ import (
 	"gopkg.in/ini.v1"
 )
 
-/*
-	TODOS:
-
-- What to do for ParmaterValue
-- Properly handle $NODEID stuff
-*/
-
 const (
 	BOOLEAN        uint8 = 0x01
 	INTEGER8       uint8 = 0x02
@@ -34,7 +27,28 @@ const (
 	UNSIGNED64     uint8 = 0x1B
 )
 
-// Parse an EDS and file and create an ObjectDictionary
+const (
+	ODT_VAR       byte = 0x01
+	ODT_ARR       byte = 0x02
+	ODT_REC       byte = 0x03
+	ODT_TYPE_MASK byte = 0x0F
+)
+
+const (
+	OBJ_DOMAIN byte = 2
+	OBJ_VAR    byte = 7
+	OBJ_ARR    byte = 8
+	OBJ_RECORD byte = 9
+)
+
+var OBJ_NAME_MAP = map[byte]string{
+	OBJ_DOMAIN: "DOMAIN",
+	OBJ_VAR:    "VARIABLE",
+	OBJ_ARR:    "ARRAY",
+	OBJ_RECORD: "RECORD",
+}
+
+// Parse an EDS and file and return an ObjectDictionary
 func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 
 	od := NewOD()
@@ -64,9 +78,7 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 				return nil, err
 			}
 			index := uint16(idx)
-
 			name := section.Key("ParameterName").String()
-
 			objType, err := strconv.ParseUint(section.Key("ObjectType").Value(), 0, 8)
 			objectType := uint8(objType)
 
@@ -78,23 +90,17 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 			//objectType determines what type of entry we should add to dictionary : Variable, Array or Record
 			switch objectType {
 			case OBJ_VAR:
-				// Build en entry for Variable type
 				variable, err := buildVariable(section, name, nodeId, index, 0)
 				if err != nil {
 					return nil, err
 				}
 				od.AddEntry(&Entry{Index: index, Name: name, Object: *variable, Extension: nil})
-				log.Debugf("Adding new VAR entry at %x", index)
-
 			case OBJ_DOMAIN:
-				// Build en entry for Domain type
 				variable, err := buildVariable(section, name, nodeId, index, 0)
 				if err != nil {
 					return nil, err
 				}
 				od.AddEntry(&Entry{Index: index, Name: name, Object: *variable, Extension: nil})
-				log.Debugf("Adding new DOMAIN entry at %x", index)
-
 			case OBJ_ARR:
 				// Get number of elements inside array
 				subNumber, err := strconv.ParseUint(section.Key("SubNumber").Value(), 0, 8)
@@ -103,15 +109,14 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 				}
 				array := Array{Variables: make([]Variable, subNumber)}
 				od.AddEntry(&Entry{Index: uint16(index), Name: name, Object: array, Extension: nil})
-				log.Debugf("Adding new ARRAY entry at %x", index)
-
 			case OBJ_RECORD:
 				od.AddEntry(&Entry{Index: index, Name: name, Object: make([]Record, 0), Extension: nil})
-				log.Debugf("Adding new RECORD entry at %x", index)
 
 			default:
-				continue
+				return nil, fmt.Errorf("[OD] unknown object type whilst parsing EDS %T", objType)
 			}
+
+			log.Debugf("[OD] adding new entry %v %v at %x", OBJ_NAME_MAP[objectType], name, index)
 
 		}
 
@@ -135,7 +140,7 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 
 			entry := od.Index(index)
 			if entry == nil {
-				return nil, fmt.Errorf("index with id %d not found", index)
+				return nil, fmt.Errorf("[OD] index with id %d not found", index)
 			}
 			// Add new subindex entry member
 			err = entry.AddMember(section, name, nodeId, subIndex)

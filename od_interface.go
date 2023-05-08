@@ -56,20 +56,6 @@ func (result ODR) GetSDOAbordCode() SDOAbortCode {
 	}
 }
 
-const (
-	ODT_VAR       = 0x01
-	ODT_ARR       = 0x02
-	ODT_REC       = 0x03
-	ODT_TYPE_MASK = 0x0F
-)
-
-const (
-	OBJ_DOMAIN byte = 2
-	OBJ_VAR    byte = 7
-	OBJ_ARR    byte = 8
-	OBJ_RECORD byte = 9
-)
-
 /**
  * Attributes (bit masks) for OD sub-object.
  */
@@ -239,18 +225,9 @@ type Variable struct {
 	HighLimit       int
 }
 
-/**
- * Object for OD array of variables, used for "ARRAY" type OD objects
- */
 type Array struct {
 	Variables []Variable
 }
-
-/*
-*
-  - Object for OD sub-elements, used in "RECORD" type OD objects
-    Basically a Variable object but also has a subindex
-*/
 type Record struct {
 	Variable Variable
 	Subindex uint8
@@ -259,19 +236,15 @@ type Record struct {
 // Read value from original OD location and transfer it into a new byte slice
 func ReadEntryOriginal(stream *Stream, data []byte, countRead *uint16) error {
 
-	if stream == nil || data == nil || countRead == nil {
+	if stream == nil || stream.Data == nil || data == nil || countRead == nil {
 		return ODR_DEV_INCOMPAT
-	}
-
-	if stream.Data == nil {
-		return ODR_SUB_NOT_EXIST
 	}
 
 	dataLenToCopy := int(stream.DataLength)
 	count := len(data)
 	var err error
 
-	// If reading already started or the not enough space in buffer, read
+	// If reading already started or not enough space in buffer, read
 	// in several calls
 	if stream.DataOffset > 0 || dataLenToCopy > count {
 		if stream.DataOffset >= uint32(dataLenToCopy) {
@@ -287,8 +260,6 @@ func ReadEntryOriginal(stream *Stream, data []byte, countRead *uint16) error {
 			stream.DataOffset = 0
 		}
 	}
-	// Copy from offset position to dataLenToCopy inside read buffer
-
 	copy(data, stream.Data[stream.DataOffset:stream.DataOffset+uint32(dataLenToCopy)])
 	*countRead = uint16(dataLenToCopy)
 	return err
@@ -298,10 +269,7 @@ func ReadEntryOriginal(stream *Stream, data []byte, countRead *uint16) error {
 // Write value from byte slice to original OD location
 func WriteEntryOriginal(stream *Stream, data []byte, countWritten *uint16) error {
 
-	if stream == nil || data == nil || countWritten == nil {
-		return ODR_DEV_INCOMPAT
-	}
-	if stream.Data == nil {
+	if stream == nil || stream.Data == nil || data == nil || countWritten == nil {
 		return ODR_DEV_INCOMPAT
 	}
 
@@ -317,7 +285,6 @@ func WriteEntryOriginal(stream *Stream, data []byte, countWritten *uint16) error
 		if stream.DataOffset >= uint32(dataLenToCopy) {
 			return ODR_DEV_INCOMPAT
 		}
-		/* reduce for already copied data */
 		dataLenToCopy -= int(stream.DataOffset)
 
 		if dataLenToCopy > count {
@@ -350,7 +317,7 @@ func WriteEntryDisabled(stream *Stream, data []byte, countWritten *uint16) error
 	return ODR_UNSUPP_ACCESS
 }
 
-// Create a streamer for streaming a sub oject
+// Create an object streamer for an (index,subindex)
 func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) error {
 
 	if entry == nil || entry.Object == nil {
@@ -358,7 +325,7 @@ func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) e
 	}
 
 	object := entry.Object
-	/* attribute, dataOrig and dataLength, depends on object type */
+	// attribute, dataOrig and dataLength, depends on object type
 	switch object := object.(type) {
 	case Variable:
 		if subindex > 0 {
@@ -394,36 +361,37 @@ func (entry *Entry) Sub(subindex uint8, origin bool, streamer *ObjectStreamer) e
 		streamer.Stream.DataLength = uint32(len(record.Variable.Data))
 
 	default:
-		log.Errorf("Error, unknown type : %+v", object)
+		log.Errorf("[OD] error, unknown type : %+v", object)
 		return ODR_DEV_INCOMPAT
 	}
-
-	// Populate the used readers or writers if an extension is used
+	// Add normal reader / writer for object
 	if entry.Extension == nil || origin {
 		streamer.Read = ReadEntryOriginal
 		streamer.Write = WriteEntryOriginal
 		streamer.Stream.Object = nil
-	} else {
-		if entry.Extension.Read == nil {
-			streamer.Read = ReadEntryDisabled
-		} else {
-			streamer.Read = entry.Extension.Read
-		}
-		if entry.Extension.Write == nil {
-			streamer.Write = WriteEntryDisabled
-		} else {
-			streamer.Write = entry.Extension.Write
-		}
-		streamer.Stream.Object = entry.Extension.Object
+		streamer.Stream.DataOffset = 0
+		streamer.Stream.Subindex = subindex
+		return nil
 	}
-
-	// Reset the stream DataOffset as if it were not read/written before
+	// Add extension reader / writer for object
+	if entry.Extension.Read == nil {
+		streamer.Read = ReadEntryDisabled
+	} else {
+		streamer.Read = entry.Extension.Read
+	}
+	if entry.Extension.Write == nil {
+		streamer.Write = WriteEntryDisabled
+	} else {
+		streamer.Write = entry.Extension.Write
+	}
+	streamer.Stream.Object = entry.Extension.Object
 	streamer.Stream.DataOffset = 0
 	streamer.Stream.Subindex = subindex
 	return nil
 }
 
-// Get value inside OD and read it into data
+// Read value inside buffer
+// Under the hood, this uses
 func (entry *Entry) Get(subIndex uint8, buffer []byte, length uint16, origin bool) error {
 	streamer := &ObjectStreamer{}
 	var countRead uint16 = 0
