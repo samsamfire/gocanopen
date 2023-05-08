@@ -16,11 +16,11 @@ const (
 )
 
 const (
-	CO_PDO_TRANSM_TYPE_SYNC_ACYCLIC  = 0    /**< synchronous (acyclic) */
-	CO_PDO_TRANSM_TYPE_SYNC_1        = 1    /**< synchronous (cyclic every sync) */
-	CO_PDO_TRANSM_TYPE_SYNC_240      = 0xF0 /**< synchronous (cyclic every 240-th sync) */
-	CO_PDO_TRANSM_TYPE_SYNC_EVENT_LO = 0xFE /**< event-driven, lower value (manufacturer specific),  */
-	CO_PDO_TRANSM_TYPE_SYNC_EVENT_HI = 0xFF /**< event-driven, higher value (device profile and application profile specific) */
+	TRANSMISSION_TYPE_SYNC_ACYCLIC  = 0    // synchronous (acyclic)
+	TRANSMISSION_TYPE_SYNC_1        = 1    // synchronous (cyclic every sync)
+	TRANSMISSION_TYPE_SYNC_240      = 0xF0 // synchronous (cyclic every 240-th sync)
+	TRANSMISSION_TYPE_SYNC_EVENT_LO = 0xFE // event-driven, lower value (manufacturer specific)
+	TRANSMISSION_TYPE_SYNC_EVENT_HI = 0xFF // event-driven, higher value (device profile and application profile specific)
 )
 
 // Common to TPDO & RPDO
