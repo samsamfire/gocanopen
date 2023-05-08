@@ -47,7 +47,6 @@ func (tpdo *TPDO) configureCOBID(entry18xx *Entry, predefinedIdent uint16, erron
 			erroneousMap = 1
 		}
 	}
-	// Report error if any
 	if erroneousMap != 0 {
 		errorInfo := erroneousMap
 		if erroneousMap == 1 {
@@ -58,12 +57,10 @@ func (tpdo *TPDO) configureCOBID(entry18xx *Entry, predefinedIdent uint16, erron
 	if !valid {
 		canId = 0
 	}
-
 	// If default canId is stored in od add node id
 	if canId != 0 && canId == (predefinedIdent&0xFF80) {
 		canId = predefinedIdent
 	}
-
 	var err error
 	tpdo.TxBuffer, pdo.BufferIdx, _ = pdo.busManager.InsertTxBuffer(uint32(canId), false, uint8(pdo.DataLength), tpdo.TransmissionType <= CO_PDO_TRANSM_TYPE_SYNC_240)
 	if tpdo.TxBuffer == nil || err != nil {
