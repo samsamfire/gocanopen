@@ -75,14 +75,13 @@ func (pdo *PDOCommon) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInd
 	if index < 0x20 && subindex == 0 {
 		streamer.Stream.Data = make([]byte, mappedLength)
 		streamer.Stream.DataOffset = uint32(mappedLength)
-		streamer.Write = WriteDummy
-		streamer.Read = ReadDummy
+		streamer.write = WriteDummy
+		streamer.read = ReadDummy
 		return nil
 	}
 	// Get entry in OD
-	streamerCopy := ObjectStreamer{}
 	entry := od.Index(index)
-	ret := entry.Sub(subindex, false, &streamerCopy)
+	streamerCopy, ret := entry.CreateStreamer(subindex, false)
 	if ret != nil {
 		log.Warnf("[%v][%x|%x] mapping failed : %v", pdo.Type(), index, subindex, ret)
 		return ret
@@ -102,7 +101,7 @@ func (pdo *PDOCommon) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInd
 	default:
 	}
 
-	*streamer = streamerCopy
+	streamer = streamerCopy
 	streamer.Stream.DataOffset = uint32(mappedLength)
 
 	if isRPDO {

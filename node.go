@@ -120,10 +120,9 @@ func (node *Node) InitPDO(od *ObjectDictionary, nodeId uint8) error {
 		rpdo := RPDO{}
 		err := rpdo.Init(od, node.EM, node.SYNC, preDefinedIdent, entry14xx, entry16xx, node.BusManager)
 		if err != nil {
-			log.Warnf("[PDO] no more RPDO after RPDO %v", i-1)
+			log.Warnf("[RPDO] no more RPDO after RPDO %v", i-1)
 			break
 		} else {
-			log.Infof("[PDO] initialized RPDO%v", i)
 			node.RPDOs = append(node.RPDOs, &rpdo)
 		}
 	}
@@ -138,10 +137,9 @@ func (node *Node) InitPDO(od *ObjectDictionary, nodeId uint8) error {
 		tpdo := TPDO{}
 		err := tpdo.Init(od, node.EM, node.SYNC, preDefinedIdent, entry18xx, entry1Axx, node.BusManager)
 		if err != nil {
-			log.Warnf("[PDO] no more TPDO after TPDO %v", i-1)
+			log.Warnf("[TPDO] no more TPDO after TPDO %v", i-1)
 			break
 		} else {
-			log.Infof("[PDO] initialized TPDO%v", i)
 			node.TPDOs = append(node.TPDOs, &tpdo)
 		}
 

@@ -263,7 +263,7 @@ func (tpdo *TPDO) Send() error {
 		stream.DataOffset = 0
 		countRead := uint16(0)
 		buffer := make([]byte, dataLength)
-		streamer.Read(stream, buffer, &countRead)
+		streamer.read(stream, buffer, &countRead)
 		stream.DataOffset = mappedLength
 		// Add to tpdo frame only up to mapped length
 		dataTPDO = append(dataTPDO, buffer[:mappedLength]...)
