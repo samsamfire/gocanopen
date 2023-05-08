@@ -123,14 +123,14 @@ func (rpdo *RPDO) Init(od *ObjectDictionary,
 		return err
 	}
 	// Configure transmission type
-	transmissionType := uint8(CO_PDO_TRANSM_TYPE_SYNC_EVENT_LO)
+	transmissionType := uint8(TRANSMISSION_TYPE_SYNC_EVENT_LO)
 	ret = entry14xx.GetUint8(2, &transmissionType)
 	if ret != nil {
 		log.Errorf("[RPDO][%x|%x] reading transmission type failed : %v", entry14xx.Index, 2, ret)
 		return CO_ERROR_OD_PARAMETERS
 	}
 	rpdo.Sync = sync
-	rpdo.Synchronous = transmissionType <= CO_PDO_TRANSM_TYPE_SYNC_240
+	rpdo.Synchronous = transmissionType <= TRANSMISSION_TYPE_SYNC_240
 
 	// Configure event timer
 	eventTime := uint16(0)
