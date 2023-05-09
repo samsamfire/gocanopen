@@ -139,7 +139,7 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 	allMonitoredActiveCurrent := true
 	allMonitoredOperationalCurrent := true
 	if nmtIsPreOrOperational && consumer.NMTisPreOrOperationalPrev {
-		for i, _ := range consumer.MonitoredNodes {
+		for i := range consumer.MonitoredNodes {
 			monitoredNode := &consumer.MonitoredNodes[i]
 			timeDifferenceUsCopy := timeDifferenceUs
 			// If unconfigured skip to next iteration
@@ -195,7 +195,7 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 		}
 	} else if nmtIsPreOrOperational || consumer.NMTisPreOrOperationalPrev {
 		// pre or operational state changed, clear vars
-		for i, _ := range consumer.MonitoredNodes {
+		for i := range consumer.MonitoredNodes {
 			monitoredNode := &consumer.MonitoredNodes[i]
 			monitoredNode.NMTState = NMT_UNKNOWN
 			monitoredNode.NMTStatePrev = NMT_UNKNOWN
