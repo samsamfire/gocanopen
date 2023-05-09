@@ -108,12 +108,10 @@ func (nmt *NMT) Init(
 	nmt.emergency = emergency
 	nmt.hearbeatProducerTimer = uint32(firstHbTimeMs * 1000)
 
-	/* get and verify required "Producer heartbeat time" from Object Dict. */
-
 	var HBprodTime_ms uint16
 	err := entry1017.GetUint16(0, &HBprodTime_ms)
 	if err != nil {
-		log.Errorf("Error when reading entry for producer hearbeat at 0x1017 : %v", err)
+		log.Errorf("[NMT][%x|%x] reading producer heartbeat failed : %v", err)
 		return CO_ERROR_OD_PARAMETERS
 	}
 	nmt.hearbeatProducerTimeUs = uint32(HBprodTime_ms) * 1000
@@ -121,31 +119,24 @@ func (nmt *NMT) Init(
 	nmt.extensionEntry1017.Object = nmt
 	nmt.extensionEntry1017.Read = ReadEntryOriginal
 	nmt.extensionEntry1017.Write = WriteEntry1017
-	// And added to the entry
 	entry1017.AddExtension(&nmt.extensionEntry1017)
 
 	if nmt.hearbeatProducerTimer > nmt.hearbeatProducerTimeUs {
 		nmt.hearbeatProducerTimer = nmt.hearbeatProducerTimeUs
 	}
 
-	// Configure CAN TX/RX buffers
+	// Configure NMT specific tx/rx buffers
 	nmt.busManager = busManager
-	// NMT RX buffer
 	_, err = busManager.InsertRxBuffer(uint32(canIdNmtRx), 0x7FF, false, nmt)
 	if err != nil {
-		log.Error("Failed to Initialize NMT rx buffer")
 		return err
 	}
-	// NMT TX buffer
 	nmt.nmtTxBuff, _, err = busManager.InsertTxBuffer(uint32(canIdNmtTx), false, 2, false)
 	if err != nil {
-		log.Error("Failed to Initialize NMT tx buffer")
 		return err
 	}
-	// NMT HB TX buffer
 	nmt.hbTxBuff, _, err = busManager.InsertTxBuffer(uint32(canIdHbTx), false, 1, false)
 	if err != nil {
-		log.Error("Failed to Initialize HB tx buffer")
 		return err
 	}
 	return nil
@@ -181,7 +172,7 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 	}
 	nmt.operatingStatePrev = nmtStateCopy
 
-	/* Process internal NMT commands either from RX buffer or nmt Send COmmand */
+	// Process internal NMT commands either from RX buffer or nmt send command
 	if nmt.internalCommand != NMT_NO_COMMAND {
 		switch nmt.internalCommand {
 		case NMT_ENTER_OPERATIONAL:
@@ -240,7 +231,7 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 		}
 	}
 
-	/* Calculate, when next Heartbeat needs to be send */
+	// Calculate next heartbeat
 	if nmt.hearbeatProducerTimeUs != 0 && timerNextUs != nil {
 		if nmt.operatingStatePrev != nmtStateCopy {
 			*timerNextUs = 0
