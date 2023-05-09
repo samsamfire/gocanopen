@@ -4,12 +4,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-/* TODOs
-- Maybe implement callbacks on change etc
-- Missing nmt state on error transitions because don't have Emergency yet
-- Finish BusManager sending
-*/
-
 const (
 	NMT_ERR_REG_MASK            uint16 = 0x00FF
 	NMT_STARTUP_TO_OPERATIONAL  uint16 = 0x0100
