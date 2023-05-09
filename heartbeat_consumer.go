@@ -5,18 +5,18 @@ import (
 )
 
 const (
-	HB_UNCONFIGURED = 0x00 /**< Consumer entry inactive */
-	HB_UNKNOWN      = 0x01 /**< Consumer enabled, but no heartbeat received yet */
-	HB_ACTIVE       = 0x02 /**< Heartbeat received within set time */
-	HB_TIMEOUT      = 0x03 /**< No heatbeat received for set time */
-
+	HB_UNCONFIGURED       = 0x00 /**< Consumer entry inactive */
+	HB_UNKNOWN            = 0x01 /**< Consumer enabled, but no heartbeat received yet */
+	HB_ACTIVE             = 0x02 /**< Heartbeat received within set time */
+	HB_TIMEOUT            = 0x03 /**< No heatbeat received for set time */
+	NMT_UNKNOWN     int16 = -1
 )
 
 // Node specific hearbeat consumer part
 type HBConsumerNode struct {
 	NodeId       uint8
-	NMTState     int
-	NMTStatePrev int
+	NMTState     int16
+	NMTStatePrev int16
 	HBState      uint8
 	TimeoutTimer uint32
 	TimeUs       uint32
@@ -40,7 +40,7 @@ func (node_consumer *HBConsumerNode) Handle(frame Frame) {
 	if frame.DLC != 1 {
 		return
 	}
-	node_consumer.NMTState = int(frame.Data[0])
+	node_consumer.NMTState = int16(frame.Data[0])
 	node_consumer.RxNew = true
 
 }
@@ -106,8 +106,8 @@ func (consumer *HBConsumer) InitEntry(index uint8, nodeId uint8, consumerTimeMs 
 	monitoredNode := &consumer.MonitoredNodes[index]
 	monitoredNode.NodeId = nodeId
 	monitoredNode.TimeUs = uint32(consumerTimeMs) * 1000
-	monitoredNode.NMTState = CO_NMT_UNKNOWN
-	monitoredNode.NMTStatePrev = CO_NMT_UNKNOWN
+	monitoredNode.NMTState = NMT_UNKNOWN
+	monitoredNode.NMTStatePrev = NMT_UNKNOWN
 	monitoredNode.RxNew = false
 
 	// Is it used ?
@@ -148,7 +148,7 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 			}
 
 			if monitoredNode.RxNew {
-				if monitoredNode.NMTState == CO_NMT_INITIALIZING {
+				if monitoredNode.NMTState == int16(NMT_INITIALIZING) {
 					log.Debugf("monitored node state %v", monitoredNode.NMTState)
 					//Boot up message
 					if monitoredNode.HBState == HB_ACTIVE {
@@ -171,7 +171,7 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 				if monitoredNode.TimeoutTimer >= monitoredNode.TimeUs {
 					// Timeout is expired
 					consumer.em.ErrorReport(CO_EM_HEARTBEAT_CONSUMER, CO_EMC_HEARTBEAT, uint32(i))
-					monitoredNode.NMTState = CO_NMT_UNKNOWN
+					monitoredNode.NMTState = NMT_UNKNOWN
 					monitoredNode.HBState = HB_TIMEOUT
 				} else if timerNextUs != nil {
 					// Calculate when to recheck
@@ -184,7 +184,7 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 			if monitoredNode.HBState != HB_ACTIVE {
 				allMonitoredActiveCurrent = false
 			}
-			if monitoredNode.NMTState != CO_NMT_OPERATIONAL {
+			if monitoredNode.NMTState != int16(NMT_OPERATIONAL) {
 				allMonitoredOperationalCurrent = false
 			}
 
@@ -197,8 +197,8 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 		// pre or operational state changed, clear vars
 		for i, _ := range consumer.MonitoredNodes {
 			monitoredNode := &consumer.MonitoredNodes[i]
-			monitoredNode.NMTState = CO_NMT_UNKNOWN
-			monitoredNode.NMTStatePrev = CO_NMT_UNKNOWN
+			monitoredNode.NMTState = NMT_UNKNOWN
+			monitoredNode.NMTStatePrev = NMT_UNKNOWN
 			monitoredNode.RxNew = false
 			if monitoredNode.HBState != HB_UNCONFIGURED {
 				monitoredNode.HBState = HB_UNKNOWN
