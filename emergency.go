@@ -466,8 +466,14 @@ func (emergency *EM) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32
 				0)
 		}
 	}
-	// TODO implement error register calculation
-	errorRegister := 0
+	errorRegister := CO_ERR_REG_GENERIC_ERR |
+		CO_ERR_REG_CURRENT |
+		CO_ERR_REG_VOLTAGE |
+		CO_ERR_REG_TEMPERATURE |
+		CO_ERR_REG_COMMUNICATION |
+		CO_ERR_REG_DEV_PROFILE |
+		CO_ERR_REG_MANUFACTURER
+
 	if !nmtIsPreOrOperational {
 		return
 	}
@@ -480,6 +486,7 @@ func (emergency *EM) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32
 			!emergency.CANTxBuff.BufferFull &&
 			emergency.InhibitEmTimer >= emergency.InhibitEmTimeUs {
 			emergency.InhibitEmTimer = 0
+
 			emergency.Fifo[fifoPpPtr].msg |= uint32(errorRegister) << 16
 			binary.LittleEndian.PutUint32(emergency.CANTxBuff.Data[:4], emergency.Fifo[fifoPpPtr].msg)
 			emergency.CANmodule.Send(*emergency.CANTxBuff)
@@ -494,7 +501,23 @@ func (emergency *EM) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32
 					emergency.Fifo[fifoPpPtr].info,
 				)
 			}
+			fifoPpPtr += 1
+			if fifoPpPtr >= uint8(len(emergency.Fifo)) {
+				emergency.FifoPpPtr = 0
+			}
 			emergency.FifoPpPtr = fifoPpPtr
+			if emergency.FifoOverflow == 1 {
+				emergency.FifoOverflow = 2
+				emergency.ErrorReport(CO_EM_EMERGENCY_BUFFER_FULL, CO_EMC_GENERIC, 0)
+			} else if emergency.FifoOverflow == 2 && fifoPpPtr == emergency.FifoWrPtr {
+				emergency.FifoOverflow = 0
+				emergency.ErrorReset(CO_EM_EMERGENCY_BUFFER_FULL, 0)
+			}
+		} else if timerNextUs != nil && emergency.InhibitEmTimeUs < emergency.InhibitEmTimer {
+			diff := emergency.InhibitEmTimeUs - emergency.InhibitEmTimer
+			if *timerNextUs > diff {
+				*timerNextUs = diff
+			}
 		}
 
 	}
@@ -552,11 +575,12 @@ func (emergency *EM) Error(setError bool, errorBit byte, errorCode uint16, infoC
 }
 
 func (emergency *EM) ErrorReport(errorBit byte, errorCode uint16, infoCode uint32) error {
-	log.Warnf("[EMERGENCY] sending emergency errorBit %v | errorCode %v | infoCode %v", errorBit, errorCode, infoCode)
+	log.Warnf("[EMERGENCY] report emergency errorBit %v | errorCode %v | infoCode %v", errorBit, errorCode, infoCode)
 	return emergency.Error(true, errorBit, errorCode, infoCode)
 }
 
 func (emergency *EM) ErrorReset(errorBit byte, infoCode uint32) error {
+	log.Warnf("[EMERGENCY] reset emergency errorBit %v | infoCode %v", errorBit, infoCode)
 	return emergency.Error(false, errorBit, CO_EMC_NO_ERROR, infoCode)
 }
 
