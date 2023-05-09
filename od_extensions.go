@@ -263,8 +263,8 @@ func WriteEntry1017(stream *Stream, data []byte, countWritten *uint16) error {
 	if !ok {
 		return ODR_DEV_INCOMPAT
 	}
-	nmt.HearbeatProducerTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 1000
-	nmt.HearbeatProducerTimer = 0
+	nmt.hearbeatProducerTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 1000
+	nmt.hearbeatProducerTimer = 0
 	return WriteEntryOriginal(stream, data, countWritten)
 }
 
