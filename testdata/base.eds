@@ -1439,7 +1439,7 @@ ObjectType=0x7
 ;StorageLocation=RAM
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x20010010
+DefaultValue=0x20020008
 PDOMapping=0
 
 [1A00sub2]
@@ -1770,36 +1770,27 @@ PDOMapping=0
 SupportedObjects=0
 1=0x2000
 
-
-[2000]
-ParameterName=Writable string
-ObjectType=0x7
-DataType=0x0009
-DefaultValue=Helloitsme
-AccessType=rw
-PDOMapping=0
-
 [2001]
-ParameterName=INTEGER16 value
+ParameterName=BOOLEAN value
 ObjectType=0x7
-DataType=0x0003
-DefaultValue=0x1555
-AccessType=rw
-PDOMapping=1
-
-[2002]
-ParameterName=UNSIGNED8 value
-ObjectType=0x7
-DataType=0x0005
+DataType=0x0001
 DefaultValue=0x10
 AccessType=rw
 PDOMapping=1
 
-[2003]
+[2002]
 ParameterName=INTEGER8 value
 ObjectType=0x7
 DataType=0x0002
-DefaultValue=
+DefaultValue=0x33
+AccessType=rw
+PDOMapping=1
+
+[2003]
+ParameterName=INTEGER16 value
+ObjectType=0x7
+DataType=0x0003
+DefaultValue=0x4444
 AccessType=rw
 PDOMapping=1
 
@@ -1807,5 +1798,127 @@ PDOMapping=1
 ParameterName=INTEGER32 value
 ObjectType=0x7
 DataType=0x0004
+DefaultValue=0x55555555
 AccessType=rw
 PDOMapping=1
+
+[2005]
+ParameterName=UNSIGNED8 value
+ObjectType=0x7
+DataType=0x0005
+DefaultValue=0x10
+AccessType=rw
+PDOMapping=1
+
+[2006]
+ParameterName=UNSIGNED16 value
+ObjectType=0x7
+DataType=0x0006
+DefaultValue=0x1111
+AccessType=rw
+PDOMapping=1
+
+[2007]
+ParameterName=UNSIGNED32 value
+ObjectType=0x7
+DataType=0x0007
+DefaultValue=0x22222222
+AccessType=rw
+PDOMapping=1
+
+[2008]
+ParameterName=REAL32 value
+ObjectType=0x7
+DataType=0x0008
+DefaultValue=0x55555555
+AccessType=rw
+PDOMapping=1
+
+[2009]
+ParameterName=VISIBLE STRING value
+ObjectType=0x7
+DataType=0x0009
+DefaultValue=AStringCannotBeLongerThanTheDefaultValue
+AccessType=rw
+PDOMapping=0
+
+[200F]
+ParameterName=DOMAIN value
+ObjectType=0x7
+;StorageLocation=RAM
+DataType=0x000F
+AccessType=rw
+DefaultValue=0
+PDOMapping=0
+
+[2011]
+ParameterName=REAL64 value
+ObjectType=0x7
+DataType=0x0011
+DefaultValue=0x55555555
+AccessType=rw
+PDOMapping=1
+
+[2015]
+ParameterName=INTEGER64 value
+ObjectType=0x7
+DataType=0x0015
+DefaultValue=0x55555555
+AccessType=rw
+PDOMapping=1
+
+[201B]
+ParameterName=UNSIGNED64 value
+ObjectType=0x7
+DataType=0x001B
+DefaultValue=0x55555555
+AccessType=rw
+PDOMapping=1
+
+[2030]
+ParameterName=READ ONLY
+ObjectType=0x7
+DataType=0x0005
+DefaultValue=0x10
+AccessType=ro
+PDOMapping=1
+
+[2031]
+ParameterName=WRITE ONLY
+ObjectType=0x7
+DataType=0x0005
+DefaultValue=0x10
+AccessType=wo
+PDOMapping=1
+
+[2032]
+ParameterName=READ WRITE
+ObjectType=0x7
+DataType=0x0005
+DefaultValue=0x10
+AccessType=rw
+PDOMapping=1
+
+[2033]
+ParameterName=NOT MAPPABLE
+ObjectType=0x7
+DataType=0x0005
+DefaultValue=0x10
+AccessType=rw
+PDOMapping=0
+
+[2100]
+ParameterName=LOW LIMIT
+DataType=0x0004
+LowLimit=0x100
+DefaultValue=0x500
+AccessType=rw
+PDOMapping=0
+
+[2101]
+ParameterName=HIGH LIMIT
+DataType=0x0004
+HighLimit=0x5600
+DefaultValue=0x500
+AccessType=rw
+PDOMapping=0
