@@ -26,7 +26,6 @@ func (time *TIME) Handle(frame Frame) {
 	if len(frame.Data) != 6 {
 		return
 	}
-	// Copy frame data to timestamp
 	copy(time.RawTimestamp[:], frame.Data[:])
 	time.RxNew = true
 
@@ -40,6 +39,7 @@ func (time *TIME) Init(entry1012 *Entry, busManager *BusManager, producerInterva
 	cobIdTimestamp := uint32(0)
 	ret := entry1012.GetUint32(0, &cobIdTimestamp)
 	if ret != nil {
+		log.Errorf("[TIME][%x|%x] reading cob id timestamp failed : %v", ret)
 		return CO_ERROR_OD_PARAMETERS
 	}
 	time.ExtensionEntry1012.Object = time
@@ -51,7 +51,6 @@ func (time *TIME) Init(entry1012 *Entry, busManager *BusManager, producerInterva
 	time.IsConsumer = (cobIdTimestamp & 0x80000000) != 0
 	time.IsProducer = (cobIdTimestamp & 0x40000000) != 0
 	time.RxNew = false
-	log.Infof("[TIME] producer : %v | consumer : %v", time.IsProducer, time.IsConsumer)
 	var err error
 	if time.IsConsumer {
 		_, err = busManager.InsertRxBuffer(
@@ -74,10 +73,10 @@ func (time *TIME) Init(entry1012 *Entry, busManager *BusManager, producerInterva
 	if time.TxBuffer == nil || err != nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
-	// Set internal
 	time.SetInternalTime()
 	time.ProducerIntervalMs = producerIntervalMs
 	time.ProducerTimerMs = producerIntervalMs
+	log.Infof("[TIME] initialized time object | producer : %v, consumer : %v", time.IsProducer, time.IsConsumer)
 	if time.IsProducer {
 		log.Infof("[TIME] publish period is %v ms", producerIntervalMs)
 	}
@@ -136,5 +135,6 @@ func (time_obj *TIME) SetInternalTime() {
 	time_obj.ResidualUs = 0
 	time_obj.Ms = uint32(ms)
 	time_obj.Days = days
+	log.Infof("[TIME] setting the date to %v", time.Now())
 	log.Infof("[TIME] days since 01/01/1984 : %v | ms since 00:00 : %v", days, ms)
 }
