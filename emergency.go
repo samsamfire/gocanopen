@@ -510,10 +510,11 @@ func (emergency *EM) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32
 				)
 			}
 			fifoPpPtr += 1
-			if fifoPpPtr >= uint8(len(emergency.Fifo)) {
+			if int(fifoPpPtr) < len(emergency.Fifo) {
+				emergency.FifoPpPtr = fifoPpPtr
+			} else {
 				emergency.FifoPpPtr = 0
 			}
-			emergency.FifoPpPtr = fifoPpPtr
 			if emergency.FifoOverflow == 1 {
 				emergency.FifoOverflow = 2
 				emergency.ErrorReport(CO_EM_EMERGENCY_BUFFER_FULL, CO_EMC_GENERIC, 0)
