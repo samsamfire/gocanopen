@@ -1,6 +1,6 @@
 package canopen
 
-// This file regroups special functions that are executed when reading or writing to object dictionary
+// This file regroups OD extensions that are executed when reading or writing to object dictionary
 
 import (
 	"encoding/binary"
@@ -203,7 +203,7 @@ func WriteEntry1014(stream *Stream, data []byte, countWritten *uint16) error {
 
 	if newEnabled {
 		var err error
-		em.CANTxBuff, err = em.CANmodule.UpdateTxBuffer(
+		em.CANTxBuff, err = em.busManager.UpdateTxBuffer(
 			int(em.TxBufferIdx),
 			newCanId,
 			false,
