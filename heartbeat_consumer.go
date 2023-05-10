@@ -20,14 +20,14 @@ type HBConsumerNode struct {
 	HBState      uint8
 	TimeoutTimer uint32
 	TimeUs       uint32
-	RxNew        bool
+	rxNew        bool
 	RxBufferIdx  int
 }
 
 type HBConsumer struct {
 	em                        *EM
-	MonitoredNodes            []HBConsumerNode
-	NbMonitoredNodes          uint8
+	monitoredNodes            []HBConsumerNode
+	nbMonitoredNodes          uint8
 	AllMonitoredActive        bool
 	AllMonitoredOperational   bool
 	NMTisPreOrOperationalPrev bool
@@ -36,34 +36,33 @@ type HBConsumer struct {
 }
 
 // Handle hearbeat reception specific to a node
-func (node_consumer *HBConsumerNode) Handle(frame Frame) {
+func (nodeConsumer *HBConsumerNode) Handle(frame Frame) {
 	if frame.DLC != 1 {
 		return
 	}
-	node_consumer.NMTState = int16(frame.Data[0])
-	node_consumer.RxNew = true
+	nodeConsumer.NMTState = int16(frame.Data[0])
+	nodeConsumer.rxNew = true
 
 }
 
 // Initialize hearbeat consumer
 func (consumer *HBConsumer) Init(em *EM, entry1016 *Entry, busManager *BusManager) error {
-	if entry1016 == nil || busManager == nil {
+	if entry1016 == nil || busManager == nil || em == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	consumer.em = em
-
 	consumer.busManager = busManager
 
 	// Get real number of monitored nodes
-	consumer.NbMonitoredNodes = uint8(entry1016.SubEntriesCount() - 1)
-	log.Debugf("[HB consumer] %v possible entries for nodes to monitor", consumer.NbMonitoredNodes)
-	consumer.MonitoredNodes = make([]HBConsumerNode, consumer.NbMonitoredNodes)
-	for index := range consumer.MonitoredNodes {
-		monitoredNode := &consumer.MonitoredNodes[index]
+	consumer.nbMonitoredNodes = uint8(entry1016.SubEntriesCount() - 1)
+	log.Debugf("[HB CONSUMER] %v possible entries for nodes to monitor", consumer.nbMonitoredNodes)
+	consumer.monitoredNodes = make([]HBConsumerNode, consumer.nbMonitoredNodes)
+	for index := range consumer.monitoredNodes {
+		monitoredNode := &consumer.monitoredNodes[index]
 		var hbConsValue uint32
 		odRet := entry1016.GetUint32(uint8(index)+1, &hbConsValue)
 		if odRet != nil {
-			log.Errorf("Error accessing OD for HB consumer object because : %v", odRet)
+			log.Errorf("[HB CONSUMER][%x|%x] reading %v failed : %v", entry1016.Index, index+1, entry1016.Name, odRet)
 			return CO_ERROR_OD_PARAMETERS
 		}
 		nodeId := (hbConsValue >> 16) & 0xFF
@@ -71,17 +70,19 @@ func (consumer *HBConsumer) Init(em *EM, entry1016 *Entry, busManager *BusManage
 		// Set the buffer index before initializing
 		monitoredNode.RxBufferIdx = -1
 		ret := consumer.InitEntry(uint8(index), uint8(nodeId), time)
-		log.Debugf("[HB Consumer] added x%x to list of monitored nodes | timeout %v", nodeId, time)
-		if ret != nil {
-			// Exit only if more than a param problem
-			if ret != CO_ERROR_OD_PARAMETERS {
-				log.Errorf("Error when initializing HB consumer object for node x%x %v", nodeId, ret)
-				return ret
-			}
-			log.Warnf("Error (ignoring) when initializing HB consumer object for node x%x", nodeId)
+		log.Debugf("[HB CONSUMER] added x%x to list of monitored nodes | timeout %v", nodeId, time)
+		if ret != nil && ret != CO_ERROR_OD_PARAMETERS {
+			log.Errorf("[HB CONSUMER] initializing HB consumer object %v failed : %v", index, ret)
+			return ret
+		} else if ret == CO_ERROR_OD_PARAMETERS {
+			log.Warnf("[HB CONSUMER] initializing HB consumer object %v failed, ignoring : %v", index, ret)
 		}
-
 	}
+
+	consumer.ExtensionEntry1016.Object = consumer
+	consumer.ExtensionEntry1016.Read = ReadEntryOriginal
+	consumer.ExtensionEntry1016.Write = WriteEntry1016
+	entry1016.AddExtension(&consumer.ExtensionEntry1016)
 
 	return nil
 
@@ -91,26 +92,25 @@ func (consumer *HBConsumer) Init(em *EM, entry1016 *Entry, busManager *BusManage
 func (consumer *HBConsumer) InitEntry(index uint8, nodeId uint8, consumerTimeMs uint16) error {
 
 	var ret error
-	if index >= consumer.NbMonitoredNodes {
+	if index >= consumer.nbMonitoredNodes {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	// Check duplicate entries
 	if consumerTimeMs != 0 && nodeId != 0 {
-		for i, consumer_node := range consumer.MonitoredNodes {
+		for i, consumer_node := range consumer.monitoredNodes {
 			if int(index) != i && consumer_node.TimeUs != 0 && consumer_node.NodeId == nodeId {
 				return CO_ERROR_ILLEGAL_ARGUMENT
 			}
 		}
 	}
 	// Configure one monitored node
-	monitoredNode := &consumer.MonitoredNodes[index]
+	monitoredNode := &consumer.monitoredNodes[index]
 	monitoredNode.NodeId = nodeId
 	monitoredNode.TimeUs = uint32(consumerTimeMs) * 1000
 	monitoredNode.NMTState = NMT_UNKNOWN
 	monitoredNode.NMTStatePrev = NMT_UNKNOWN
-	monitoredNode.RxNew = false
+	monitoredNode.rxNew = false
 
-	// Is it used ?
 	var cobId uint16
 	if monitoredNode.NodeId != 0 && monitoredNode.TimeUs != 0 {
 		cobId = uint16(monitoredNode.NodeId) + HEARTBEAT_SERVICE_ID
@@ -122,6 +122,7 @@ func (consumer *HBConsumer) InitEntry(index uint8, nodeId uint8, consumerTimeMs 
 	}
 	// Configure RX buffer for hearbeat reception
 	if monitoredNode.HBState != HB_UNCONFIGURED {
+		log.Debugf("[HB CONSUMER] adding consumer for id %v | timeout %v us", monitoredNode.NodeId, monitoredNode.TimeUs)
 		if monitoredNode.RxBufferIdx == -1 {
 			// Never been configured
 			monitoredNode.RxBufferIdx, ret = consumer.busManager.InsertRxBuffer(uint32(cobId), 0x7FF, false, monitoredNode)
@@ -139,31 +140,27 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 	allMonitoredActiveCurrent := true
 	allMonitoredOperationalCurrent := true
 	if nmtIsPreOrOperational && consumer.NMTisPreOrOperationalPrev {
-		for i := range consumer.MonitoredNodes {
-			monitoredNode := &consumer.MonitoredNodes[i]
+		for i := range consumer.monitoredNodes {
+			monitoredNode := &consumer.monitoredNodes[i]
 			timeDifferenceUsCopy := timeDifferenceUs
 			// If unconfigured skip to next iteration
 			if monitoredNode.HBState == HB_UNCONFIGURED {
 				continue
 			}
-
-			if monitoredNode.RxNew {
+			if monitoredNode.rxNew {
 				if monitoredNode.NMTState == int16(NMT_INITIALIZING) {
-					log.Debugf("monitored node state %v", monitoredNode.NMTState)
-					//Boot up message
+					// Boot up message is an error if previously received (means reboot)
 					if monitoredNode.HBState == HB_ACTIVE {
 						consumer.em.ErrorReport(CO_EM_HB_CONSUMER_REMOTE_RESET, CO_EMC_HEARTBEAT, uint32(i))
 					}
 					monitoredNode.HBState = HB_UNKNOWN
 				} else {
-					log.Debugf("monitored node state %v", monitoredNode.NMTState)
 					// Heartbeat message
 					monitoredNode.HBState = HB_ACTIVE
-					// Reset timer
 					monitoredNode.TimeoutTimer = 0
 					timeDifferenceUsCopy = 0
 				}
-				monitoredNode.RxNew = false
+				monitoredNode.rxNew = false
 			}
 			// Check timeout
 			if monitoredNode.HBState == HB_ACTIVE {
@@ -190,16 +187,15 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 
 			if monitoredNode.NMTState != monitoredNode.NMTStatePrev {
 				monitoredNode.NMTStatePrev = monitoredNode.NMTState
-				// TODO maybe add callbacks
 			}
 		}
 	} else if nmtIsPreOrOperational || consumer.NMTisPreOrOperationalPrev {
 		// pre or operational state changed, clear vars
-		for i := range consumer.MonitoredNodes {
-			monitoredNode := &consumer.MonitoredNodes[i]
+		for i := range consumer.monitoredNodes {
+			monitoredNode := &consumer.monitoredNodes[i]
 			monitoredNode.NMTState = NMT_UNKNOWN
 			monitoredNode.NMTStatePrev = NMT_UNKNOWN
-			monitoredNode.RxNew = false
+			monitoredNode.rxNew = false
 			if monitoredNode.HBState != HB_UNCONFIGURED {
 				monitoredNode.HBState = HB_UNKNOWN
 			}
@@ -209,9 +205,10 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 	}
 
 	// Clear emergencies when all monitored nodes become active
-	// if !consumer.AllMonitoredActive && allMonitoredActiveCurrent {
-	// 	// TODO send emergency frame
-	// }
+	if !consumer.AllMonitoredActive && allMonitoredActiveCurrent {
+		consumer.em.ErrorReset(CO_EM_HEARTBEAT_CONSUMER, 0)
+		consumer.em.ErrorReset(CO_EM_HB_CONSUMER_REMOTE_RESET, 0)
+	}
 	consumer.AllMonitoredActive = allMonitoredActiveCurrent
 	consumer.AllMonitoredOperational = allMonitoredOperationalCurrent
 	consumer.NMTisPreOrOperationalPrev = nmtIsPreOrOperational

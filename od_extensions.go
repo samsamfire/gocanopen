@@ -241,10 +241,13 @@ func WriteEntry1016(stream *Stream, data []byte, countWritten *uint16) error {
 		return ODR_DEV_INCOMPAT
 	}
 
-	if stream == nil || stream.Subindex < 1 || int(stream.Subindex) > len(consumer.MonitoredNodes) {
+	if stream == nil || stream.Subindex < 1 ||
+		int(stream.Subindex) > len(consumer.monitoredNodes) ||
+		len(data) != 4 {
 		return ODR_DEV_INCOMPAT
 	}
-	var hbConsValue uint32
+
+	hbConsValue := binary.LittleEndian.Uint32(data)
 	nodeId := uint8(hbConsValue>>16) & 0xFF
 	time := hbConsValue & 0xFFFF
 	ret := consumer.InitEntry(stream.Subindex-1, nodeId, uint16(time))
