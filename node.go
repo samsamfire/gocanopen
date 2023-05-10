@@ -205,9 +205,10 @@ func (node *Node) Init(
 
 	// Initialize HB consumer
 	hbCons := &HBConsumer{}
-	err = hbCons.Init(emergency, od.Index(0x1016), node.BusManager)
+	err = hbCons.Init(node.EM, od.Index(0x1016), node.BusManager)
 	if err != nil {
 		log.Errorf("[HB Consumer] error when initializing HB consummers %v", err)
+		return err
 	} else {
 		node.HBConsumer = hbCons
 	}
