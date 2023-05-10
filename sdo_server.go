@@ -195,7 +195,7 @@ func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uin
 
 }
 
-func (server *SDOServer) InitRxTx(canModule *BusManager, idRx uint16, idTx uint16, cobIdClientToServer uint32, cobIdServerToClient uint32) error {
+func (server *SDOServer) InitRxTx(busManager *BusManager, idRx uint16, idTx uint16, cobIdClientToServer uint32, cobIdServerToClient uint32) error {
 	var ret error
 	// Only proceed if parameters change (i.e. different client)
 	if cobIdServerToClient == server.CobIdServerToClient && cobIdClientToServer == server.CobIdClientToServer {
