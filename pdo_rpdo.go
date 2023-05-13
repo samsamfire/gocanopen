@@ -193,9 +193,9 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 		rpdo.RxNew[bufNo] = false
 		for i := 0; i < int(pdo.MappedObjectsCount); i++ {
 			streamer := &pdo.Streamers[i]
-			dataOffset := &streamer.Stream.DataOffset
+			dataOffset := &streamer.stream.DataOffset
 			mappedLength := *dataOffset
-			dataLength := streamer.Stream.DataLength
+			dataLength := streamer.stream.DataLength
 			if dataLength > uint32(MAX_PDO_LENGTH) {
 				dataLength = uint32(MAX_PDO_LENGTH)
 			}
@@ -206,9 +206,8 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 				// Append zeroes up to 8 bytes
 				buffer = append(buffer, make([]byte, int(MAX_PDO_LENGTH)-len(buffer))...)
 			}
-			var countWritten uint16
 			*dataOffset = 0
-			err := streamer.Write(buffer, &countWritten)
+			_, err := streamer.Write(buffer)
 			if err != nil {
 				log.Warnf("[RPDO][%x] failed to write to OD on RPDO reception because %v", rpdo.PDO.ConfiguredIdent, err)
 			}
