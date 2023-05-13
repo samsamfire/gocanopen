@@ -27,9 +27,9 @@ type SDOServer struct {
 	State                      uint8
 	TimeoutTimeUs              uint32
 	TimeoutTimer               uint32
-	Buffer                     []byte
-	BufferOffsetWrite          uint32
-	BufferOffsetRead           uint32
+	buffer                     []byte
+	bufWriteOffset             uint32
+	bufReadOffset              uint32
 	RxNew                      bool
 	Response                   SDOResponse
 	Toggle                     uint8
@@ -60,7 +60,7 @@ func (server *SDOServer) Handle(frame Frame) {
 		server.State = CO_SDO_ST_IDLE
 	} else if server.State == CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ {
 		// Condition should always pass but check
-		if int(server.BufferOffsetWrite) <= (len(server.Buffer) - (7 + 2)) {
+		if int(server.bufWriteOffset) <= (len(server.buffer) - (7 + 2)) {
 			// Block download, copy data in handle
 			state := CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ
 			seqno := frame.Data[0] & 0x7F
@@ -70,8 +70,8 @@ func (server *SDOServer) Handle(frame Frame) {
 			if seqno <= server.BlockSize && seqno == (server.BlockSequenceNb+1) {
 				server.BlockSequenceNb = seqno
 				// Copy data
-				copy(server.Buffer[server.BufferOffsetWrite:], frame.Data[1:])
-				server.BufferOffsetWrite += 7
+				copy(server.buffer[server.bufWriteOffset:], frame.Data[1:])
+				server.bufWriteOffset += 7
 				server.SizeTransferred += 7
 				// Check if last segment
 				if (frame.Data[0] & 0x80) != 0 {
@@ -126,9 +126,9 @@ func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uin
 	}
 	server.OD = od
 	server.Streamer = &ObjectStreamer{}
-	server.Buffer = make([]byte, 1000)
-	server.BufferOffsetRead = 0
-	server.BufferOffsetWrite = 0
+	server.buffer = make([]byte, 1000)
+	server.bufReadOffset = 0
+	server.bufWriteOffset = 0
 	server.NodeId = nodeId
 	server.TimeoutTimeUs = uint32(timeoutTimeMs) * 1000
 	server.TimeoutTimeBlockTransferUs = uint32(timeoutTimeMs) * 700
@@ -241,7 +241,7 @@ func (server *SDOServer) InitRxTx(busManager *BusManager, idRx uint16, idTx uint
 
 func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOperation uint, crcClient uint16) bool {
 
-	bufferOffsetWriteOriginal := server.BufferOffsetWrite
+	bufferOffsetWriteOriginal := server.bufWriteOffset
 
 	if server.Finished {
 		// Check size
@@ -260,13 +260,13 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 		varSizeInOd := server.Streamer.Stream.DataLength
 		if server.Streamer.Stream.Attribute&ODA_STR != 0 &&
 			(varSizeInOd == 0 || server.SizeTransferred < varSizeInOd) &&
-			int(server.BufferOffsetWrite+2) <= len(server.Buffer) {
-			server.Buffer[server.BufferOffsetWrite] = 0x00
-			server.BufferOffsetWrite++
+			int(server.bufWriteOffset+2) <= len(server.buffer) {
+			server.buffer[server.bufWriteOffset] = 0x00
+			server.bufWriteOffset++
 			server.SizeTransferred++
 			if varSizeInOd == 0 || server.SizeTransferred < varSizeInOd {
-				server.Buffer[server.BufferOffsetWrite] = 0x00
-				server.BufferOffsetWrite++
+				server.buffer[server.bufWriteOffset] = 0x00
+				server.bufWriteOffset++
 				server.SizeTransferred++
 			}
 			server.Streamer.Stream.DataLength = server.SizeTransferred
@@ -295,7 +295,7 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 
 	// Calculate CRC
 	if server.BlockCRCEnabled && crcOperation > 0 {
-		server.BlockCRC.ccitt_block(server.Buffer[:bufferOffsetWriteOriginal])
+		server.BlockCRC.ccitt_block(server.buffer[:bufferOffsetWriteOriginal])
 		if crcOperation == 2 && crcClient != server.BlockCRC.crc {
 			*abortCode = CO_SDO_AB_CRC
 			server.State = CO_SDO_ST_ABORT
@@ -306,8 +306,8 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 
 	// Write the data
 	var countWritten uint16 = 0
-	ret := server.Streamer.Write(server.Buffer[:server.BufferOffsetWrite], &countWritten)
-	server.BufferOffsetWrite = 0
+	ret := server.Streamer.Write(server.buffer[:server.bufWriteOffset], &countWritten)
+	server.bufWriteOffset = 0
 	if ret != nil && ret != ODR_PARTIAL {
 		*abortCode = ret.(ODR).GetSDOAbordCode()
 		server.State = CO_SDO_ST_ABORT
@@ -326,14 +326,16 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 }
 
 func (server *SDOServer) readObjectDictionary(abortCode *SDOAbortCode, countMinimum uint32, calculateCRC bool) bool {
-	remainingCount := server.BufferOffsetWrite - server.BufferOffsetRead
-	if !server.Finished && remainingCount < countMinimum {
-		copy(server.Buffer, server.Buffer[server.BufferOffsetRead:server.BufferOffsetRead+remainingCount])
-		server.BufferOffsetRead = 0
-		server.BufferOffsetWrite = remainingCount
+	buffered := server.bufWriteOffset - server.bufReadOffset
+	if !server.Finished && buffered < countMinimum {
+		// Move buffered bytes to begining
+		copy(server.buffer, server.buffer[server.bufReadOffset:server.bufReadOffset+buffered])
+		server.bufReadOffset = 0
+		server.bufWriteOffset = buffered
 
 		var countRd uint16 = 0
-		err := server.Streamer.Read(server.Buffer[remainingCount:], &countRd)
+		// Read from OD into the buffer
+		err := server.Streamer.Read(server.buffer[buffered:], &countRd)
 
 		if err != nil && err != ODR_PARTIAL {
 			*abortCode = err.(ODR).GetSDOAbordCode()
@@ -343,9 +345,9 @@ func (server *SDOServer) readObjectDictionary(abortCode *SDOAbortCode, countMini
 
 		// Stop sending at null termination if string
 		if countRd > 0 && (server.Streamer.Stream.Attribute&ODA_STR) != 0 {
-			server.Buffer[countRd+uint16(remainingCount)] = 0
+			server.buffer[countRd+uint16(buffered)] = 0
 			countStr := server.Streamer.Stream.DataLength
-			for i, v := range server.Buffer[remainingCount:] {
+			for i, v := range server.buffer[buffered:] {
 				if v == 0 {
 					countStr = uint32(i)
 					break
@@ -362,20 +364,21 @@ func (server *SDOServer) readObjectDictionary(abortCode *SDOAbortCode, countMini
 			}
 		}
 
-		server.BufferOffsetWrite = remainingCount + uint32(countRd)
-		if server.BufferOffsetWrite == 0 || err == ODR_PARTIAL {
+		server.bufWriteOffset = buffered + uint32(countRd) // Move offset write by countRd (number of read bytes)
+		if server.bufWriteOffset == 0 || err == ODR_PARTIAL {
 			server.Finished = false
-			if server.BufferOffsetWrite < countMinimum {
+			if server.bufWriteOffset < countMinimum {
 				*abortCode = CO_SDO_AB_DEVICE_INCOMPAT
 				server.State = CO_SDO_ST_ABORT
-				server.ErrorExtraInfo = fmt.Errorf("buffer offset write %v is less than the minimum count %v", server.BufferOffsetWrite, countMinimum)
+				server.ErrorExtraInfo = fmt.Errorf("buffer offset write %v is less than the minimum count %v", server.bufWriteOffset, countMinimum)
 				return false
 			}
 		} else {
 			server.Finished = true
 		}
 		if calculateCRC && server.BlockCRCEnabled {
-			server.BlockCRC.ccitt_block(server.Buffer[remainingCount : remainingCount+uint32(countRd)])
+			// Calculate CRC for the read data
+			server.BlockCRC.ccitt_block(server.buffer[buffered:server.bufWriteOffset])
 		}
 
 	}
@@ -441,17 +444,17 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			}
 			// Load data from OD
 			if upload && abortCode == CO_SDO_AB_NONE {
-				server.BufferOffsetRead = 0
-				server.BufferOffsetWrite = 0
+				server.bufReadOffset = 0
+				server.bufWriteOffset = 0
 				server.SizeTransferred = 0
 				server.Finished = false
 				if server.readObjectDictionary(&abortCode, 7, false) {
 					if server.Finished {
 						server.SizeIndicated = server.Streamer.Stream.DataLength
 						if server.SizeIndicated == 0 {
-							server.SizeIndicated = server.BufferOffsetWrite
-						} else if server.SizeIndicated != server.BufferOffsetWrite {
-							server.ErrorExtraInfo = fmt.Errorf("size indicated %v != to buffer write offset %v", server.SizeIndicated, server.BufferOffsetWrite)
+							server.SizeIndicated = server.bufWriteOffset
+						} else if server.SizeIndicated != server.bufWriteOffset {
+							server.ErrorExtraInfo = fmt.Errorf("size indicated %v != to buffer write offset %v", server.SizeIndicated, server.bufWriteOffset)
 							abortCode = CO_SDO_AB_DEVICE_INCOMPAT
 							server.State = CO_SDO_ST_ABORT
 						}
@@ -551,8 +554,8 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					}
 					// Get size and write to buffer
 					count := 7 - ((response.raw[0] >> 1) & 0x07)
-					copy(server.Buffer[server.BufferOffsetWrite:], response.raw[1:1+count])
-					server.BufferOffsetWrite += uint32(count)
+					copy(server.buffer[server.bufWriteOffset:], response.raw[1:1+count])
+					server.bufWriteOffset += uint32(count)
 					server.SizeTransferred += uint32(count)
 
 					if server.Streamer.Stream.DataLength > 0 && server.SizeTransferred > server.Streamer.Stream.DataLength {
@@ -560,7 +563,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 						server.State = CO_SDO_ST_ABORT
 						break
 					}
-					if server.Finished || (len(server.Buffer)-int(server.BufferOffsetWrite) < (7 + 2)) {
+					if server.Finished || (len(server.buffer)-int(server.bufWriteOffset) < (7 + 2)) {
 						if !server.writeObjectDictionary(&abortCode, 0, 0) {
 							break
 						}
@@ -634,14 +637,14 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				//Get number of data bytes in last segment, that do not
 				//contain data. Then reduce buffer
 				noData := (response.raw[0] >> 2) & 0x07
-				if server.BufferOffsetWrite <= uint32(noData) {
+				if server.bufWriteOffset <= uint32(noData) {
 					server.ErrorExtraInfo = fmt.Errorf("internal buffer and end of block download are inconsitent")
 					abortCode = CO_SDO_AB_DEVICE_INCOMPAT
 					server.State = CO_SDO_ST_ABORT
 					break
 				}
 				server.SizeTransferred -= uint32(noData)
-				server.BufferOffsetWrite -= uint32(noData)
+				server.bufWriteOffset -= uint32(noData)
 				var crcClient uint16 = 0
 				if server.BlockCRCEnabled {
 					crcClient = response.GetCRCClient()
@@ -661,7 +664,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				if (response.raw[0] & 0x04) != 0 {
 					server.BlockCRCEnabled = true
 					server.BlockCRC = CRC16{0}
-					server.BlockCRC.ccitt_block(server.Buffer[:server.BufferOffsetWrite])
+					server.BlockCRC.ccitt_block(server.buffer[:server.bufWriteOffset])
 				} else {
 					server.BlockCRCEnabled = false
 				}
@@ -675,7 +678,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				}
 
 				// Check that we have enough data for sending a complete sub-block with the requested size
-				if !server.Finished && server.BufferOffsetWrite < uint32(server.BlockSize)*7 {
+				if !server.Finished && server.bufWriteOffset < uint32(server.BlockSize)*7 {
 					abortCode = CO_SDO_AB_BLOCK_SIZE
 					server.State = CO_SDO_ST_ABORT
 					break
@@ -715,7 +718,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					// Some error occurd, re-transmit missing chunks
 					cntFailed := server.BlockSequenceNb - response.raw[1]
 					cntFailed = cntFailed*7 - server.BlockNoData
-					server.BufferOffsetRead -= uint32(cntFailed)
+					server.bufReadOffset -= uint32(cntFailed)
 					server.SizeTransferred -= uint32(cntFailed)
 				} else if response.raw[1] > server.BlockSequenceNb {
 					abortCode = CO_SDO_AB_CMD
@@ -727,7 +730,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					break
 				}
 
-				if server.BufferOffsetWrite == server.BufferOffsetRead {
+				if server.bufWriteOffset == server.bufReadOffset {
 					server.State = CO_SDO_ST_UPLOAD_BLK_END_SREQ
 				} else {
 					server.BlockSequenceNb = 0
@@ -799,8 +802,8 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				log.Debugf("[SERVER][TX] DOWNLOAD SEGMENT INIT | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 				server.Toggle = 0x00
 				server.SizeTransferred = 0
-				server.BufferOffsetWrite = 0
-				server.BufferOffsetRead = 0
+				server.bufWriteOffset = 0
+				server.bufReadOffset = 0
 				server.State = CO_SDO_ST_DOWNLOAD_SEGMENT_REQ
 			}
 
@@ -820,7 +823,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 		case CO_SDO_ST_UPLOAD_INITIATE_RSP:
 			if server.SizeIndicated > 0 && server.SizeIndicated <= 4 {
 				server.CANtxBuff.Data[0] = 0x43 | ((4 - byte(server.SizeIndicated)) << 2)
-				copy(server.CANtxBuff.Data[4:], server.Buffer[:server.SizeIndicated])
+				copy(server.CANtxBuff.Data[4:], server.buffer[:server.SizeIndicated])
 				server.State = CO_SDO_ST_IDLE
 				ret = CO_SDO_RT_ok_communicationEnd
 				log.Debugf("[SERVER][TX] UPLOAD EXPEDITED | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
@@ -851,7 +854,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			}
 			server.CANtxBuff.Data[0] = server.Toggle
 			server.Toggle ^= 0x10
-			count := server.BufferOffsetWrite - server.BufferOffsetRead
+			count := server.bufWriteOffset - server.bufReadOffset
 			// Check if last segment
 			if count < 7 || (server.Finished && count == 7) {
 				server.CANtxBuff.Data[0] |= (byte((7 - count) << 1)) | 0x01
@@ -862,8 +865,8 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.State = CO_SDO_ST_UPLOAD_SEGMENT_REQ
 				count = 7
 			}
-			copy(server.CANtxBuff.Data[1:], server.Buffer[server.BufferOffsetRead:server.BufferOffsetRead+count])
-			server.BufferOffsetRead += count
+			copy(server.CANtxBuff.Data[1:], server.buffer[server.bufReadOffset:server.bufReadOffset+count])
+			server.bufReadOffset += count
 			server.SizeTransferred += count
 			// Check if too shor or too large in last segment
 			if server.SizeIndicated > 0 {
@@ -887,7 +890,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.CANtxBuff.Data[2] = byte(server.Index >> 8)
 			server.CANtxBuff.Data[3] = server.Subindex
 			// Calculate blocks from free space
-			count := (len(server.Buffer) - 2) / 7
+			count := (len(server.buffer) - 2) / 7
 			if count > 127 {
 				count = 127
 			}
@@ -896,8 +899,8 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			// Reset variables
 			server.SizeTransferred = 0
 			server.Finished = false
-			server.BufferOffsetRead = 0
-			server.BufferOffsetWrite = 0
+			server.bufReadOffset = 0
+			server.bufWriteOffset = 0
 			server.BlockSequenceNb = 0
 			server.BlockCRC = CRC16{0}
 			server.TimeoutTimer = 0
@@ -917,15 +920,15 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.State = CO_SDO_ST_DOWNLOAD_BLK_END_REQ
 			} else {
 				// Calclate from free buffer space
-				count := (len(server.Buffer) - 2 - int(server.BufferOffsetWrite)) / 7
+				count := (len(server.buffer) - 2 - int(server.bufWriteOffset)) / 7
 				if count > 127 {
 					count = 127
-				} else if server.BufferOffsetWrite > 0 {
+				} else if server.bufWriteOffset > 0 {
 					// Empty buffer
 					if !server.writeObjectDictionary(&abortCode, 1, 0) {
 						break
 					}
-					count = (len(server.Buffer) - 2 - int(server.BufferOffsetWrite)) / 7
+					count = (len(server.buffer) - 2 - int(server.bufWriteOffset)) / 7
 					if count > 127 {
 						count = 127
 					}
@@ -977,15 +980,15 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			// Write header & gend current count
 			server.BlockSequenceNb += 1
 			server.CANtxBuff.Data[0] = server.BlockSequenceNb
-			count := server.BufferOffsetWrite - server.BufferOffsetRead
+			count := server.bufWriteOffset - server.bufReadOffset
 			// Check if last segment
 			if count < 7 || (server.Finished && count == 7) {
 				server.CANtxBuff.Data[0] |= 0x80
 			} else {
 				count = 7
 			}
-			copy(server.CANtxBuff.Data[1:], server.Buffer[server.BufferOffsetRead:server.BufferOffsetRead+count])
-			server.BufferOffsetRead += count
+			copy(server.CANtxBuff.Data[1:], server.buffer[server.bufReadOffset:server.bufReadOffset+count])
+			server.bufReadOffset += count
 			server.BlockNoData = byte(7 - count)
 			server.SizeTransferred += count
 			// Check if too short or too large in last segment
@@ -994,14 +997,14 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					abortCode = CO_SDO_AB_DATA_LONG
 					server.State = CO_SDO_ST_ABORT
 					break
-				} else if server.BufferOffsetRead == server.BufferOffsetWrite && server.SizeTransferred < server.SizeIndicated {
+				} else if server.bufReadOffset == server.bufWriteOffset && server.SizeTransferred < server.SizeIndicated {
 					abortCode = CO_SDO_AB_DATA_SHORT
 					server.State = CO_SDO_ST_ABORT
 					break
 				}
 			}
 			// Check if last segment or all segments in current block transferred
-			if server.BufferOffsetWrite == server.BufferOffsetRead || server.BlockSequenceNb >= server.BlockSize {
+			if server.bufWriteOffset == server.bufReadOffset || server.BlockSequenceNb >= server.BlockSize {
 				server.State = CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_CRSP
 				log.Debugf("[SERVER][TX] BLOCK UPLOAD END SUB-BLOCK | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			} else {
