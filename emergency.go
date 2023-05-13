@@ -6,11 +6,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-/*
-	TODOs:
-
-- error register
-*/
 const CO_CONFIG_EM_ERR_STATUS_BITS_COUNT = 80
 
 // Error register values
