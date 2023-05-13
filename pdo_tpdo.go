@@ -253,17 +253,20 @@ func (tpdo *TPDO) Send() error {
 	dataTPDO := make([]byte, 0)
 	for i := 0; i < int(pdo.MappedObjectsCount); i++ {
 		streamer := &pdo.Streamers[i]
-		mappedLength := streamer.Stream.DataOffset
-		dataLength := int(streamer.Stream.DataLength)
+		mappedLength := streamer.stream.DataOffset
+		dataLength := int(streamer.stream.DataLength)
 		if dataLength > int(MAX_PDO_LENGTH) {
 			dataLength = int(MAX_PDO_LENGTH)
 		}
 
-		streamer.Stream.DataOffset = 0
-		countRead := uint16(0)
+		streamer.stream.DataOffset = 0
 		buffer := make([]byte, dataLength)
-		streamer.Read(buffer, &countRead)
-		streamer.Stream.DataOffset = mappedLength
+		_, err := streamer.Read(buffer)
+		if err != nil {
+			log.Warnf("[TPDO]sending TPDO cob id %x failed : %v", pdo.ConfiguredIdent, err)
+			return err
+		}
+		streamer.stream.DataOffset = mappedLength
 		// Add to tpdo frame only up to mapped length
 		dataTPDO = append(dataTPDO, buffer[:mappedLength]...)
 

@@ -566,8 +566,8 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 		}
 		for i := 0; i < int(mappedObjectsCount); i++ {
 			streamer := pdo.Streamers[i]
-			dataLength := streamer.Stream.DataLength
-			mappedLength := streamer.Stream.DataOffset
+			dataLength := streamer.stream.DataLength
+			mappedLength := streamer.stream.DataOffset
 			if mappedLength > dataLength {
 				return ODR_NO_MAP
 			}

@@ -73,8 +73,8 @@ func (pdo *PDOCommon) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInd
 	}
 	// Dummy entries map to "fake" entries
 	if index < 0x20 && subindex == 0 {
-		streamer.Stream.Data = make([]byte, mappedLength)
-		streamer.Stream.DataOffset = uint32(mappedLength)
+		streamer.stream.Data = make([]byte, mappedLength)
+		streamer.stream.DataOffset = uint32(mappedLength)
 		streamer.write = WriteDummy
 		streamer.read = ReadDummy
 		return nil
@@ -89,20 +89,20 @@ func (pdo *PDOCommon) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInd
 
 	// Check correct attribute, length, and alignment
 	switch {
-	case streamerCopy.Stream.Attribute&pdo.attribute() == 0:
+	case streamerCopy.stream.Attribute&pdo.attribute() == 0:
 		log.Warnf("[%v][%x|%x] mapping failed : attribute error", pdo.Type(), index, subindex, ret)
 		return ODR_NO_MAP
 	case (mappedLengthBits & 0x07) != 0:
 		log.Warnf("[%v][%x|%x] mapping failed : alignment error", pdo.Type(), index, subindex, ret)
 		return ODR_NO_MAP
-	case streamerCopy.Stream.DataLength < uint32(mappedLength):
+	case streamerCopy.stream.DataLength < uint32(mappedLength):
 		log.Warnf("[%v][%x|%x] mapping failed : length error", pdo.Type(), index, subindex, ret)
 		return ODR_NO_MAP
 	default:
 	}
 
 	streamer = streamerCopy
-	streamer.Stream.DataOffset = uint32(mappedLength)
+	streamer.stream.DataOffset = uint32(mappedLength)
 
 	if isRPDO {
 		return nil
@@ -144,14 +144,14 @@ func (pdo *PDOCommon) InitMapping(od *ObjectDictionary, entry *Entry, isRPDO boo
 		ret = pdo.ConfigureMap(od, mapParam, uint32(i), isRPDO)
 		if ret != nil {
 			// Init failed, but not critical
-			streamer.Stream.Data = make([]byte, 0)
-			streamer.Stream.DataOffset = 0xFF
+			streamer.stream.Data = make([]byte, 0)
+			streamer.stream.DataOffset = 0xFF
 			if *erroneoursMap == 0 {
 				*erroneoursMap = mapParam
 			}
 		}
 		if i < int(mappedObjectsCount) {
-			pdoDataLength += streamer.Stream.DataOffset
+			pdoDataLength += streamer.stream.DataOffset
 		}
 	}
 
