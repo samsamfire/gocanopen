@@ -78,7 +78,6 @@ func TestRead(t *testing.T) {
 	if entry == nil {
 		t.Error()
 	}
-	_, err = entry.CreateStreamer(0, true)
 
 	var data uint16
 	entry.GetUint16(0, &data)
@@ -126,13 +125,12 @@ func TestReadWriteDisabled(t *testing.T) {
 	if err != nil {
 		t.Error()
 	}
-	var countRead uint16
-	err = streamer.Read([]byte{0}, &countRead)
+	_, err = streamer.Read([]byte{0})
 	if err != ODR_UNSUPP_ACCESS {
 		t.Error(err)
 	}
 	var countWrite uint16
-	err = streamer.read(&streamer.Stream, []byte{0}, &countWrite)
+	err = streamer.read(&streamer.stream, []byte{0}, &countWrite)
 	if err != ODR_UNSUPP_ACCESS {
 		t.Error(err)
 	}
