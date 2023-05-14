@@ -290,10 +290,8 @@ func WriteEntryOriginal(stream *Stream, data []byte, countWritten *uint16) error
 	count := len(data)
 	var err error
 
-	/* If previous write was partial or OD variable length is larger than
-	 * current buffer size, then data was (will be) written in several
-	 * segments */
-
+	// If writing already started or not enough space in buffer, read
+	// in several calls
 	if stream.DataOffset > 0 || dataLenToCopy > count {
 		if stream.DataOffset >= uint32(dataLenToCopy) {
 			return ODR_DEV_INCOMPAT
@@ -403,18 +401,33 @@ func (entry *Entry) CreateStreamer(subindex uint8, origin bool) (*ObjectStreamer
 	return streamer, nil
 }
 
-// Read value inside buffer
-// Under the hood, this uses
-func (entry *Entry) Get(subIndex uint8, buffer []byte, length uint16, origin bool) error {
+// Read exactly len(b) bytes from OD at (index,subindex)
+// Origin parameter controls extension usage if exists
+func (entry *Entry) readSubExactly(subIndex uint8, b []byte, origin bool) error {
 	streamer, err := entry.CreateStreamer(subIndex, origin)
 	if err != nil {
 		return err
 	}
-	if int(streamer.stream.DataLength) != int(length) {
+	if int(streamer.stream.DataLength) != len(b) {
 		return ODR_TYPE_MISMATCH
 	}
-	_, err = streamer.Read(buffer)
+	_, err = streamer.Read(b)
 	return err
+}
+
+// Write exactly len(b) bytes to OD at (index,subindex)
+// Origin parameter controls extension usage if exists
+func (entry *Entry) writeSubExactly(subIndex uint8, b []byte, origin bool) error {
+	streamer, err := entry.CreateStreamer(subIndex, origin)
+	if err != nil {
+		return err
+	}
+	if int(streamer.stream.DataLength) != len(b) {
+		return ODR_TYPE_MISMATCH
+	}
+	_, err = streamer.Write(b)
+	return err
+
 }
 
 // Getptr inside OD, similar to read
@@ -429,69 +442,54 @@ func (entry *Entry) GetPtr(subIndex uint8, length uint16) (*[]byte, error) {
 	return &streamer.stream.Data, nil
 }
 
-// Set value inside OD and write it into data
-func (entry *Entry) Set(subIndex uint8, buffer []byte, length uint16, origin bool) error {
-	streamer, err := entry.CreateStreamer(subIndex, origin)
-	if err != nil {
-		return err
-	}
-	if int(streamer.stream.DataLength) != int(length) {
-		return ODR_TYPE_MISMATCH
-	}
-	_, err = streamer.Write(buffer)
-	return err
-
-}
-
 // Read Uint8 inside object dictionary
 func (entry *Entry) GetUint8(subIndex uint8, data *uint8) error {
-	buffer := make([]byte, 1)
-	err := entry.Get(subIndex, buffer, 1, true)
+	b := make([]byte, 1)
+	err := entry.readSubExactly(subIndex, b, true)
 	if err != nil {
 		return err
 	}
-	*data = buffer[0]
+	*data = b[0]
 	return nil
 }
 
 // Read Uint16 inside object dictionary
 func (entry *Entry) GetUint16(subIndex uint8, data *uint16) error {
-	buffer := make([]byte, 2)
-	err := entry.Get(subIndex, buffer, 2, true)
+	b := make([]byte, 2)
+	err := entry.readSubExactly(subIndex, b, true)
 	if err != nil {
-		log.Errorf("Error %v", err)
 		return err
 	}
-	*data = binary.LittleEndian.Uint16(buffer)
+	*data = binary.LittleEndian.Uint16(b)
 	return nil
 }
 
 // Read Uint32 inside object dictionary
 func (entry *Entry) GetUint32(subIndex uint8, data *uint32) error {
-	buffer := make([]byte, 4)
-	err := entry.Get(subIndex, buffer, 4, true)
+	b := make([]byte, 4)
+	err := entry.readSubExactly(subIndex, b, true)
 	if err != nil {
 		return err
 	}
-	*data = binary.LittleEndian.Uint32(buffer)
+	*data = binary.LittleEndian.Uint32(b)
 	return nil
 }
 
 // Read Uint64 inside object dictionary
 func (entry *Entry) GetUint64(subIndex uint8, data *uint64) error {
-	buffer := make([]byte, 8)
-	err := entry.Get(subIndex, buffer, 8, true)
+	b := make([]byte, 8)
+	err := entry.readSubExactly(subIndex, b, true)
 	if err != nil {
 		return err
 	}
-	*data = binary.LittleEndian.Uint64(buffer)
+	*data = binary.LittleEndian.Uint64(b)
 	return nil
 }
 
 // Set Uint8, 16 , 32 , 64
 func (entry *Entry) SetUint8(subIndex uint8, data uint8, origin bool) error {
-	buffer := []byte{data}
-	err := entry.Set(subIndex, buffer, 1, origin)
+	b := []byte{data}
+	err := entry.writeSubExactly(subIndex, b, origin)
 	if err != nil {
 		return err
 	}
@@ -499,9 +497,9 @@ func (entry *Entry) SetUint8(subIndex uint8, data uint8, origin bool) error {
 }
 
 func (entry *Entry) SetUint16(subIndex uint8, data uint16, origin bool) error {
-	buffer := make([]byte, 2)
-	binary.LittleEndian.PutUint16(buffer, data)
-	err := entry.Set(subIndex, buffer, 2, origin)
+	b := make([]byte, 2)
+	binary.LittleEndian.PutUint16(b, data)
+	err := entry.writeSubExactly(subIndex, b, origin)
 	if err != nil {
 		return err
 	}
@@ -509,9 +507,9 @@ func (entry *Entry) SetUint16(subIndex uint8, data uint16, origin bool) error {
 }
 
 func (entry *Entry) SetUint32(subIndex uint8, data uint32, origin bool) error {
-	buffer := make([]byte, 4)
-	binary.LittleEndian.PutUint32(buffer, data)
-	err := entry.Set(subIndex, buffer, 4, origin)
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, data)
+	err := entry.writeSubExactly(subIndex, b, origin)
 	if err != nil {
 		return err
 	}
@@ -519,9 +517,9 @@ func (entry *Entry) SetUint32(subIndex uint8, data uint32, origin bool) error {
 }
 
 func (entry *Entry) SetUint64(subIndex uint8, data uint64, origin bool) error {
-	buffer := make([]byte, 8)
-	binary.LittleEndian.PutUint64(buffer, data)
-	err := entry.Set(subIndex, buffer, 8, origin)
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, data)
+	err := entry.writeSubExactly(subIndex, b, origin)
 	if err != nil {
 		return err
 	}
