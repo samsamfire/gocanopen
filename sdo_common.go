@@ -38,102 +38,73 @@ const (
 )
 
 const (
-	CO_SDO_AB_NONE               SDOAbortCode = 0x00000000
-	CO_SDO_AB_TOGGLE_BIT         SDOAbortCode = 0x05030000
-	CO_SDO_AB_TIMEOUT            SDOAbortCode = 0x05040000
-	CO_SDO_AB_CMD                SDOAbortCode = 0x05040001
-	CO_SDO_AB_BLOCK_SIZE         SDOAbortCode = 0x05040002
-	CO_SDO_AB_SEQ_NUM            SDOAbortCode = 0x05040003
-	CO_SDO_AB_CRC                SDOAbortCode = 0x05040004
-	CO_SDO_AB_OUT_OF_MEM         SDOAbortCode = 0x05040005
-	CO_SDO_AB_UNSUPPORTED_ACCESS SDOAbortCode = 0x06010000
-	CO_SDO_AB_WRITEONLY          SDOAbortCode = 0x06010001
-	CO_SDO_AB_READONLY           SDOAbortCode = 0x06010002
-	CO_SDO_AB_NOT_EXIST          SDOAbortCode = 0x06020000
-	CO_SDO_AB_NO_MAP             SDOAbortCode = 0x06040041
-	CO_SDO_AB_MAP_LEN            SDOAbortCode = 0x06040042
-	CO_SDO_AB_PRAM_INCOMPAT      SDOAbortCode = 0x06040043
-	CO_SDO_AB_DEVICE_INCOMPAT    SDOAbortCode = 0x06040047
-	CO_SDO_AB_HW                 SDOAbortCode = 0x06060000
-	CO_SDO_AB_TYPE_MISMATCH      SDOAbortCode = 0x06070010
-	CO_SDO_AB_DATA_LONG          SDOAbortCode = 0x06070012
-	CO_SDO_AB_DATA_SHORT         SDOAbortCode = 0x06070013
-	CO_SDO_AB_SUB_UNKNOWN        SDOAbortCode = 0x06090011
-	CO_SDO_AB_INVALID_VALUE      SDOAbortCode = 0x06090030
-	CO_SDO_AB_VALUE_HIGH         SDOAbortCode = 0x06090031
-	CO_SDO_AB_VALUE_LOW          SDOAbortCode = 0x06090032
-	CO_SDO_AB_MAX_LESS_MIN       SDOAbortCode = 0x06090036
-	CO_SDO_AB_NO_RESOURCE        SDOAbortCode = 0x060A0023
-	CO_SDO_AB_GENERAL            SDOAbortCode = 0x08000000
-	CO_SDO_AB_DATA_TRANSF        SDOAbortCode = 0x08000020
-	CO_SDO_AB_DATA_LOC_CTRL      SDOAbortCode = 0x08000021
-	CO_SDO_AB_DATA_DEV_STATE     SDOAbortCode = 0x08000022
-	CO_SDO_AB_DATA_OD            SDOAbortCode = 0x08000023
-	CO_SDO_AB_NO_DATA            SDOAbortCode = 0x08000024
+	SDO_ABORT_NONE               SDOAbortCode = 0x00000000
+	SDO_ABORT_TOGGLE_BIT         SDOAbortCode = 0x05030000
+	SDO_ABORT_TIMEOUT            SDOAbortCode = 0x05040000
+	SDO_ABORT_CMD                SDOAbortCode = 0x05040001
+	SDO_ABORT_BLOCK_SIZE         SDOAbortCode = 0x05040002
+	SDO_ABORT_SEQ_NUM            SDOAbortCode = 0x05040003
+	SDO_ABORT_CRC                SDOAbortCode = 0x05040004
+	SDO_ABORT_OUT_OF_MEM         SDOAbortCode = 0x05040005
+	SDO_ABORT_UNSUPPORTED_ACCESS SDOAbortCode = 0x06010000
+	SDO_ABORT_WRITEONLY          SDOAbortCode = 0x06010001
+	SDO_ABORT_READONLY           SDOAbortCode = 0x06010002
+	SDO_ABORT_NOT_EXIST          SDOAbortCode = 0x06020000
+	SDO_ABORT_NO_MAP             SDOAbortCode = 0x06040041
+	SDO_ABORT_MAP_LEN            SDOAbortCode = 0x06040042
+	SDO_ABORT_PRAM_INCOMPAT      SDOAbortCode = 0x06040043
+	SDO_ABORT_DEVICE_INCOMPAT    SDOAbortCode = 0x06040047
+	SDO_ABORT_HW                 SDOAbortCode = 0x06060000
+	SDO_ABORT_TYPE_MISMATCH      SDOAbortCode = 0x06070010
+	SDO_ABORT_DATA_LONG          SDOAbortCode = 0x06070012
+	SDO_ABORT_DATA_SHORT         SDOAbortCode = 0x06070013
+	SDO_ABORT_SUB_UNKNOWN        SDOAbortCode = 0x06090011
+	SDO_ABORT_INVALID_VALUE      SDOAbortCode = 0x06090030
+	SDO_ABORT_VALUE_HIGH         SDOAbortCode = 0x06090031
+	SDO_ABORT_VALUE_LOW          SDOAbortCode = 0x06090032
+	SDO_ABORT_MAX_LESS_MIN       SDOAbortCode = 0x06090036
+	SDO_ABORT_NO_RESOURCE        SDOAbortCode = 0x060A0023
+	SDO_ABORT_GENERAL            SDOAbortCode = 0x08000000
+	SDO_ABORT_DATA_TRANSF        SDOAbortCode = 0x08000020
+	SDO_ABORT_DATA_LOC_CTRL      SDOAbortCode = 0x08000021
+	SDO_ABORT_DATA_DEV_STATE     SDOAbortCode = 0x08000022
+	SDO_ABORT_DATA_OD            SDOAbortCode = 0x08000023
+	SDO_ABORT_NO_DATA            SDOAbortCode = 0x08000024
 )
 
 var SDO_ABORT_EXPLANATION_MAP = map[SDOAbortCode]string{
-	CO_SDO_AB_NONE:               "No abort",
-	CO_SDO_AB_TOGGLE_BIT:         "Toggle bit not altered",
-	CO_SDO_AB_TIMEOUT:            "SDO protocol timed out",
-	CO_SDO_AB_CMD:                "Command specifier not valid or unknown",
-	CO_SDO_AB_BLOCK_SIZE:         "Invalid block size in block mode",
-	CO_SDO_AB_SEQ_NUM:            "Invalid sequence number in block mode",
-	CO_SDO_AB_CRC:                "CRC error (block mode only)",
-	CO_SDO_AB_OUT_OF_MEM:         "Out of memory",
-	CO_SDO_AB_UNSUPPORTED_ACCESS: "Unsupported access to an object",
-	CO_SDO_AB_WRITEONLY:          "Attempt to read a write only object",
-	CO_SDO_AB_READONLY:           "Attempt to write a read only object",
-	CO_SDO_AB_NOT_EXIST:          "Object does not exist in the object dictionary",
-	CO_SDO_AB_NO_MAP:             "Object cannot be mapped to the PDO",
-	CO_SDO_AB_MAP_LEN:            "Num and len of object to be mapped exceeds PDO len",
-	CO_SDO_AB_PRAM_INCOMPAT:      "General parameter incompatibility reasons",
-	CO_SDO_AB_DEVICE_INCOMPAT:    "General internal incompatibility in device",
-	CO_SDO_AB_HW:                 "Access failed due to hardware error",
-	CO_SDO_AB_TYPE_MISMATCH:      "Data type does not match, length does not match",
-	CO_SDO_AB_DATA_LONG:          "Data type does not match, length too high",
-	CO_SDO_AB_DATA_SHORT:         "Data type does not match, length too short",
-	CO_SDO_AB_SUB_UNKNOWN:        "Sub index does not exist",
-	CO_SDO_AB_INVALID_VALUE:      "Invalid value for parameter (download only)",
-	CO_SDO_AB_VALUE_HIGH:         "Value range of parameter written too high",
-	CO_SDO_AB_VALUE_LOW:          "Value range of parameter written too low",
-	CO_SDO_AB_MAX_LESS_MIN:       "Maximum value is less than minimum value.",
-	CO_SDO_AB_NO_RESOURCE:        "Resource not available: SDO connection",
-	CO_SDO_AB_GENERAL:            "General error",
-	CO_SDO_AB_DATA_TRANSF:        "Data cannot be transferred or stored to application",
-	CO_SDO_AB_DATA_LOC_CTRL:      "Data cannot be transferred because of local control",
-	CO_SDO_AB_DATA_DEV_STATE:     "Data cannot be tran. because of present device state",
-	CO_SDO_AB_DATA_OD:            "Object dict. not present or dynamic generation fails",
-	CO_SDO_AB_NO_DATA:            "No data available",
-}
-
-var SDO_ABORT_MAP = map[ODR]SDOAbortCode{
-	0:  CO_SDO_AB_NONE,               /* No abort */
-	1:  CO_SDO_AB_OUT_OF_MEM,         /* Out of memory */
-	2:  CO_SDO_AB_UNSUPPORTED_ACCESS, /* Unsupported access to an object */
-	3:  CO_SDO_AB_WRITEONLY,          /* Attempt to read a write only object */
-	4:  CO_SDO_AB_READONLY,           /* Attempt to write a read only object */
-	5:  CO_SDO_AB_NOT_EXIST,          /* Object does not exist in the object dictionary */
-	6:  CO_SDO_AB_NO_MAP,             /* Object cannot be mapped to the PDO */
-	7:  CO_SDO_AB_MAP_LEN,            /* Num and len of object to be mapped exceeds PDO len */
-	8:  CO_SDO_AB_PRAM_INCOMPAT,      /* General parameter incompatibility reasons */
-	9:  CO_SDO_AB_DEVICE_INCOMPAT,    /* General internal incompatibility in device */
-	10: CO_SDO_AB_HW,                 /* Access failed due to hardware error */
-	11: CO_SDO_AB_TYPE_MISMATCH,      /* Data type does not match, length does not match */
-	12: CO_SDO_AB_DATA_LONG,          /* Data type does not match, length too high */
-	13: CO_SDO_AB_DATA_SHORT,         /* Data type does not match, length too short */
-	14: CO_SDO_AB_SUB_UNKNOWN,        /* Sub index does not exist */
-	15: CO_SDO_AB_INVALID_VALUE,      /* Invalid value for parameter (download only). */
-	16: CO_SDO_AB_VALUE_HIGH,         /* Value range of parameter written too high */
-	17: CO_SDO_AB_VALUE_LOW,          /* Value range of parameter written too low */
-	18: CO_SDO_AB_MAX_LESS_MIN,       /* Maximum value is less than minimum value. */
-	19: CO_SDO_AB_NO_RESOURCE,        /* Resource not available: SDO connection */
-	20: CO_SDO_AB_GENERAL,            /* General error */
-	21: CO_SDO_AB_DATA_TRANSF,        /* Data cannot be transferred or stored to application */
-	22: CO_SDO_AB_DATA_LOC_CTRL,      /* Data cannot be transferred because of local control */
-	23: CO_SDO_AB_DATA_DEV_STATE,     /* Data cannot be tran. because of present device state */
-	24: CO_SDO_AB_DATA_OD,            /* Object dict. not present or dynamic generation fails */
-	25: CO_SDO_AB_NO_DATA,            /* No data available */
+	SDO_ABORT_NONE:               "No abort",
+	SDO_ABORT_TOGGLE_BIT:         "Toggle bit not altered",
+	SDO_ABORT_TIMEOUT:            "SDO protocol timed out",
+	SDO_ABORT_CMD:                "Command specifier not valid or unknown",
+	SDO_ABORT_BLOCK_SIZE:         "Invalid block size in block mode",
+	SDO_ABORT_SEQ_NUM:            "Invalid sequence number in block mode",
+	SDO_ABORT_CRC:                "CRC error (block mode only)",
+	SDO_ABORT_OUT_OF_MEM:         "Out of memory",
+	SDO_ABORT_UNSUPPORTED_ACCESS: "Unsupported access to an object",
+	SDO_ABORT_WRITEONLY:          "Attempt to read a write only object",
+	SDO_ABORT_READONLY:           "Attempt to write a read only object",
+	SDO_ABORT_NOT_EXIST:          "Object does not exist in the object dictionary",
+	SDO_ABORT_NO_MAP:             "Object cannot be mapped to the PDO",
+	SDO_ABORT_MAP_LEN:            "Num and len of object to be mapped exceeds PDO len",
+	SDO_ABORT_PRAM_INCOMPAT:      "General parameter incompatibility reasons",
+	SDO_ABORT_DEVICE_INCOMPAT:    "General internal incompatibility in device",
+	SDO_ABORT_HW:                 "Access failed due to hardware error",
+	SDO_ABORT_TYPE_MISMATCH:      "Data type does not match, length does not match",
+	SDO_ABORT_DATA_LONG:          "Data type does not match, length too high",
+	SDO_ABORT_DATA_SHORT:         "Data type does not match, length too short",
+	SDO_ABORT_SUB_UNKNOWN:        "Sub index does not exist",
+	SDO_ABORT_INVALID_VALUE:      "Invalid value for parameter (download only)",
+	SDO_ABORT_VALUE_HIGH:         "Value range of parameter written too high",
+	SDO_ABORT_VALUE_LOW:          "Value range of parameter written too low",
+	SDO_ABORT_MAX_LESS_MIN:       "Maximum value is less than minimum value.",
+	SDO_ABORT_NO_RESOURCE:        "Resource not available: SDO connection",
+	SDO_ABORT_GENERAL:            "General error",
+	SDO_ABORT_DATA_TRANSF:        "Data cannot be transferred or stored to application",
+	SDO_ABORT_DATA_LOC_CTRL:      "Data cannot be transferred because of local control",
+	SDO_ABORT_DATA_DEV_STATE:     "Data cannot be tran. because of present device state",
+	SDO_ABORT_DATA_OD:            "Object dict. not present or dynamic generation fails",
+	SDO_ABORT_NO_DATA:            "No data available",
 }
 
 func (abort SDOAbortCode) Error() string {
@@ -143,7 +114,7 @@ func (abort SDOAbortCode) Error() string {
 		return err_string
 	} else {
 		log.Errorf("Abort is %x", uint32(abort))
-		return SDO_ABORT_EXPLANATION_MAP[CO_SDO_AB_GENERAL]
+		return SDO_ABORT_EXPLANATION_MAP[SDO_ABORT_GENERAL]
 	}
 }
 

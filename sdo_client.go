@@ -245,7 +245,7 @@ func (client *SDOClient) DownloadBufWrite(buffer []byte) int {
 // Write value to OD locally
 // func (client *SDOClient) DownloadLocal(bufferPartial bool, timerNextUs *uint32) {
 // 	ret := CO_SDO_RT_waitingResponse
-// 	var abortCode SDOAbortCode = CO_SDO_AB_NONE
+// 	var abortCode SDOAbortCode = SDO_ABORT_NONE
 
 // 	if client.Streamer.Write == nil {
 // 		log.Info("Downloading via local transfer")
@@ -256,13 +256,13 @@ func (client *SDOClient) DownloadBufWrite(buffer []byte) int {
 // 			abortCode = odr_err.GetSDOAbordCode()
 // 			ret = CO_SDO_RT_endedWithClientAbort
 // 		} else if (client.Streamer.Stream.Attribute & ODA_SDO_RW) == 0 {
-// 			abortCode = CO_SDO_AB_UNSUPPORTED_ACCESS
+// 			abortCode = SDO_ABORT_UNSUPPORTED_ACCESS
 // 			ret = CO_SDO_RT_endedWithClientAbort
 // 		} else if (client.Streamer.Stream.Attribute & ODA_SDO_W) == 0 {
-// 			abortCode = CO_SDO_AB_READONLY
+// 			abortCode = SDO_ABORT_READONLY
 // 			ret = CO_SDO_RT_endedWithClientAbort
 // 		} else if client.Streamer.Write == nil {
-// 			abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+// 			abortCode = SDO_ABORT_DEVICE_INCOMPAT
 // 			ret = CO_SDO_RT_endedWithClientAbort
 // 		}
 // 	} else {
@@ -272,16 +272,16 @@ func (client *SDOClient) DownloadBufWrite(buffer []byte) int {
 // 		client.SizeTransferred += uint32(count)
 // 		// No data error
 // 		if count == 0 {
-// 			abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+// 			abortCode = SDO_ABORT_DEVICE_INCOMPAT
 // 			ret = CO_SDO_RT_endedWithClientAbort
 // 			// Size transferred is too large
 // 		} else if client.SizeIndicated > 0 && client.SizeTransferred > client.SizeIndicated {
 // 			client.SizeTransferred -= uint32(count)
-// 			abortCode = CO_SDO_AB_DATA_LONG
+// 			abortCode = SDO_ABORT_DATA_LONG
 // 			ret = CO_SDO_RT_endedWithClientAbort
 // 			// Size transferred is too small (check on last call)
 // 		} else if !bufferPartial && client.SizeIndicated > 0 && client.SizeTransferred < client.SizeIndicated {
-// 			abortCode = CO_SDO_AB_DATA_SHORT
+// 			abortCode = SDO_ABORT_DATA_SHORT
 // 			ret = CO_SDO_RT_endedWithClientAbort
 // 			// Last part of data !
 // 		} else if !bufferPartial {
@@ -295,20 +295,20 @@ func (client *SDOClient) DownloadBufWrite(buffer []byte) int {
 // 					buffer = append(buffer, byte(0))
 // 				} else if odVarSize == 0 {
 // 					log.Warn("odvarsize 0 case not handled for now")
-// 					abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+// 					abortCode = SDO_ABORT_DEVICE_INCOMPAT
 // 					ret = CO_SDO_RT_endedWithClientAbort
 
 // 				} else if client.SizeTransferred > uint32(odVarSize) {
-// 					abortCode = CO_SDO_AB_DATA_LONG
+// 					abortCode = SDO_ABORT_DATA_LONG
 // 					ret = CO_SDO_RT_endedWithClientAbort
 // 				} else if client.SizeTransferred < uint32(odVarSize) {
-// 					abortCode = CO_SDO_AB_DATA_SHORT
+// 					abortCode = SDO_ABORT_DATA_SHORT
 // 					ret = CO_SDO_RT_endedWithClientAbort
 // 				}
 // 			}
 // 		}
 
-// 		if abortCode == CO_SDO_AB_NONE {
+// 		if abortCode == SDO_ABORT_NONE {
 // 			var countWritten uint16 = 0
 // 			// TODO l
 // 			//lock := client.Streamer.Stream.Mappable()
@@ -320,12 +320,12 @@ func (client *SDOClient) DownloadBufWrite(buffer []byte) int {
 // 				ret = CO_SDO_RT_endedWithClientAbort
 // 				// Error if written completely but download still has data
 // 			} else if bufferPartial && err == nil {
-// 				abortCode = CO_SDO_AB_DATA_LONG
+// 				abortCode = SDO_ABORT_DATA_LONG
 // 				ret = CO_SDO_RT_endedWithClientAbort
 // 			} else if !bufferPartial {
 // 				// Error if not written completely but download end
 // 				if odr_err == ODR_PARTIAL {
-// 					abortCode = CO_SDO_AB_DATA_SHORT
+// 					abortCode = SDO_ABORT_DATA_SHORT
 // 					ret = CO_SDO_RT_endedWithClientAbort
 // 				} else {
 // 					ret = CO_SDO_RT_ok_communicationEnd
@@ -352,7 +352,7 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 	var abortCode error
 
 	if !client.Valid {
-		abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+		abortCode = SDO_ABORT_DEVICE_INCOMPAT
 		err = ErrSDOInvalidArguments
 	} else if client.State == CO_SDO_ST_IDLE {
 		ret = SDO_SUCCESS
@@ -370,7 +370,7 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 			// Abort from the client
 		} else if abort {
 			if sdoAbortCode == nil {
-				abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+				abortCode = SDO_ABORT_DEVICE_INCOMPAT
 			} else {
 				abortCode = *sdoAbortCode
 			}
@@ -380,7 +380,7 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 		} else if !response.isResponseValid(client.State) {
 			log.Warnf("Unexpected response code from server : %x", response.raw[0])
 			client.State = CO_SDO_ST_ABORT
-			abortCode = CO_SDO_AB_CMD
+			abortCode = SDO_ABORT_CMD
 
 		} else {
 			switch client.State {
@@ -389,7 +389,7 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 				index := response.GetIndex()
 				subIndex := response.GetSubindex()
 				if index != client.Index || subIndex != client.Subindex {
-					abortCode = CO_SDO_AB_PRAM_INCOMPAT
+					abortCode = SDO_ABORT_PRAM_INCOMPAT
 					client.State = CO_SDO_ST_ABORT
 					break
 				}
@@ -410,7 +410,7 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 				// Verify and alternate toggle bit
 				toggle := response.GetToggle()
 				if toggle != client.Toggle {
-					abortCode = CO_SDO_AB_TOGGLE_BIT
+					abortCode = SDO_ABORT_TOGGLE_BIT
 					client.State = CO_SDO_ST_ABORT
 					break
 				}
@@ -428,7 +428,7 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 				index := response.GetIndex()
 				subIndex := response.GetSubindex()
 				if index != client.Index || subIndex != client.Subindex {
-					abortCode = CO_SDO_AB_PRAM_INCOMPAT
+					abortCode = SDO_ABORT_PRAM_INCOMPAT
 					client.State = CO_SDO_ST_ABORT
 					break
 				}
@@ -449,7 +449,7 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 					client.Finished = false
 
 				} else if response.GetNumberOfSegments() > client.BlockSequenceNb {
-					abortCode = CO_SDO_AB_CMD
+					abortCode = SDO_ABORT_CMD
 					client.State = CO_SDO_ST_ABORT
 					break
 				}
@@ -480,7 +480,7 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 
 	} else if abort {
 		if sdoAbortCode == nil {
-			abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+			abortCode = SDO_ABORT_DEVICE_INCOMPAT
 		} else {
 			abortCode = *sdoAbortCode
 		}
@@ -493,7 +493,7 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 			client.TimeoutTimer += timeDifferenceUs
 		}
 		if client.TimeoutTimer >= client.TimeoutTimeUs {
-			abortCode = CO_SDO_AB_TIMEOUT
+			abortCode = SDO_ABORT_TIMEOUT
 			client.State = CO_SDO_ST_ABORT
 		} else if timerNextUs != nil {
 			diff := client.TimeoutTimeUs - client.TimeoutTimer
@@ -574,7 +574,7 @@ func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, da
 	err := client.Setup(uint32(SDO_CLIENT_ID)+uint32(nodeId), uint32(SDO_SERVER_ID)+uint32(nodeId), nodeId)
 	if err != nil {
 		log.Errorf("Error when setting up SDO client reason : %v", err)
-		return CO_SDO_AB_GENERAL
+		return SDO_ABORT_GENERAL
 	}
 	err = client.DownloadInitiate(index, subindex, uint32(len(data)), 1000, false)
 	if err != nil {
@@ -588,20 +588,20 @@ func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, da
 		log.Info("Not enough space in buffer so using buffer partial")
 	}
 	var timeDifferenceUs uint32 = 10000
-	abortCode := CO_SDO_AB_NONE
+	abortCode := SDO_ABORT_NONE
 
 	for {
 		ret, err := client.Download(timeDifferenceUs, false, bufferPartial, &abortCode, nil, nil, &forceSegmented)
 		if err != nil {
 			log.Errorf("SDO write failed : %v", ret)
-			return CO_SDO_AB_GENERAL
+			return SDO_ABORT_GENERAL
 		} else if uint8(ret) == 0 {
 			break
 		}
 		time.Sleep(time.Duration(timeDifferenceUs) * time.Microsecond)
 	}
 
-	return CO_SDO_AB_NONE
+	return SDO_ABORT_NONE
 }
 
 // Helpers functions for different SDO messages
@@ -619,7 +619,7 @@ func (client *SDOClient) InitiateDownload(forceSegmented bool) error {
 		// Check length
 		if count == 0 || (client.SizeIndicated > 0 && client.SizeIndicated != count) {
 			client.State = CO_SDO_ST_IDLE
-			return CO_SDO_AB_TYPE_MISMATCH
+			return SDO_ABORT_TYPE_MISMATCH
 		}
 		if client.SizeIndicated > 0 {
 			client.CANtxBuff.Data[0] |= byte(0x01 | ((4 - count) << 2))
@@ -652,14 +652,14 @@ func (client *SDOClient) DownloadSegmented(bufferPartial bool) error {
 	client.SizeTransferred += count
 	if client.SizeIndicated > 0 && client.SizeTransferred > client.SizeIndicated {
 		client.SizeTransferred -= count
-		return CO_SDO_AB_DATA_LONG
+		return SDO_ABORT_DATA_LONG
 	}
 
 	//Command specifier
 	client.CANtxBuff.Data[0] = uint8(uint32(client.Toggle) | ((7 - count) << 1))
 	if client.Fifo.GetOccupied() == 0 && !bufferPartial {
 		if client.SizeIndicated > 0 && client.SizeTransferred < client.SizeIndicated {
-			return CO_SDO_AB_DATA_SHORT
+			return SDO_ABORT_DATA_SHORT
 		}
 		client.CANtxBuff.Data[0] |= 0x01
 		client.Finished = true
@@ -720,7 +720,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 	var abortCode error
 
 	if !client.Valid {
-		abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+		abortCode = SDO_ABORT_DEVICE_INCOMPAT
 		err = ErrSDOInvalidArguments
 	} else if client.State == CO_SDO_ST_IDLE {
 		ret = SDO_SUCCESS
@@ -736,7 +736,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			// Abort from the client
 		} else if abort {
 			if sdoAbortCode == nil {
-				abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+				abortCode = SDO_ABORT_DEVICE_INCOMPAT
 			} else {
 				abortCode = *sdoAbortCode
 			}
@@ -746,7 +746,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 		} else if !response.isResponseValid(client.State) {
 			log.Warnf("Unexpected response code from server : %x", response.raw[0])
 			client.State = CO_SDO_ST_ABORT
-			abortCode = CO_SDO_AB_CMD
+			abortCode = SDO_ABORT_CMD
 
 		} else {
 			switch client.State {
@@ -754,7 +754,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				index := response.GetIndex()
 				subIndex := response.GetSubindex()
 				if index != client.Index || subIndex != client.Subindex {
-					abortCode = CO_SDO_AB_PRAM_INCOMPAT
+					abortCode = SDO_ABORT_PRAM_INCOMPAT
 					client.State = CO_SDO_ST_ABORT
 					break
 				}
@@ -787,7 +787,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				log.Debugf("<==Rx (x%x) | UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
 				toggle := response.GetToggle()
 				if toggle != client.Toggle {
-					abortCode = CO_SDO_AB_TOGGLE_BIT
+					abortCode = SDO_ABORT_TOGGLE_BIT
 					client.State = CO_SDO_ST_ABORT
 					break
 				}
@@ -797,14 +797,14 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				client.SizeTransferred += uint32(countWr)
 				// Check enough space if fifo
 				if countWr != int(count) {
-					abortCode = CO_SDO_AB_OUT_OF_MEM
+					abortCode = SDO_ABORT_OUT_OF_MEM
 					client.State = CO_SDO_ST_ABORT
 					break
 				}
 
 				//Check size uploaded
 				if client.SizeIndicated > 0 && client.SizeTransferred > client.SizeIndicated {
-					abortCode = CO_SDO_AB_DATA_LONG
+					abortCode = SDO_ABORT_DATA_LONG
 					client.State = CO_SDO_ST_ABORT
 					break
 				}
@@ -813,7 +813,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				if (response.raw[0] & 0x01) != 0 {
 					// Check size uploaded
 					if client.SizeIndicated > 0 && client.SizeTransferred < client.SizeIndicated {
-						abortCode = CO_SDO_AB_DATA_LONG
+						abortCode = SDO_ABORT_DATA_LONG
 						client.State = CO_SDO_ST_ABORT
 					} else {
 						client.State = CO_SDO_ST_IDLE
@@ -828,7 +828,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				index := response.GetIndex()
 				subindex := response.GetSubindex()
 				if index != client.Index || subindex != client.Subindex {
-					abortCode = CO_SDO_AB_PRAM_INCOMPAT
+					abortCode = SDO_ABORT_PRAM_INCOMPAT
 					client.State = CO_SDO_ST_ABORT
 					break
 				}
@@ -877,18 +877,18 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				client.SizeTransferred += uint32(7 - noData)
 
 				if client.SizeIndicated > 0 && client.SizeTransferred > client.SizeIndicated {
-					abortCode = CO_SDO_AB_DATA_LONG
+					abortCode = SDO_ABORT_DATA_LONG
 					client.State = CO_SDO_ST_ABORT
 					break
 				} else if client.SizeIndicated > 0 && client.SizeTransferred < client.SizeIndicated {
-					abortCode = CO_SDO_AB_DATA_SHORT
+					abortCode = SDO_ABORT_DATA_SHORT
 					client.State = CO_SDO_ST_ABORT
 					break
 				}
 				if client.BlockCRCEnabled {
 					crcServer := binary.LittleEndian.Uint16(response.raw[1:3])
 					if crcServer != client.BlockCRC.crc {
-						abortCode = CO_SDO_AB_CRC
+						abortCode = SDO_ABORT_CRC
 						client.State = CO_SDO_ST_ABORT
 						break
 					}
@@ -897,7 +897,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				log.Debugf("<==Rx (x%x) | BLOCK UPLOAD END | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
 
 			default:
-				abortCode = CO_SDO_AB_CMD
+				abortCode = SDO_ABORT_CMD
 				client.State = CO_SDO_ST_ABORT
 			}
 
@@ -907,7 +907,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 		client.RxNew = false
 	} else if abort {
 		if sdoAbortCode == nil {
-			abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+			abortCode = SDO_ABORT_DEVICE_INCOMPAT
 		} else {
 			abortCode = *sdoAbortCode
 		}
@@ -920,9 +920,9 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 		}
 		if client.TimeoutTimer >= client.TimeoutTimeUs {
 			if client.State == CO_SDO_ST_UPLOAD_SEGMENT_REQ || client.State == CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_CRSP {
-				abortCode = CO_SDO_AB_GENERAL
+				abortCode = SDO_ABORT_GENERAL
 			} else {
-				abortCode = CO_SDO_AB_TIMEOUT
+				abortCode = SDO_ABORT_TIMEOUT
 			}
 			client.State = CO_SDO_ST_ABORT
 
@@ -986,7 +986,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			if count >= 127 {
 				count = 127
 			} else if count == 0 {
-				abortCode = CO_SDO_AB_OUT_OF_MEM
+				abortCode = SDO_ABORT_OUT_OF_MEM
 				client.State = CO_SDO_ST_ABORT
 				break
 			}
@@ -1018,7 +1018,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			} else {
 				// Check size too large
 				if client.SizeIndicated > 0 && client.SizeTransferred > client.SizeIndicated {
-					abortCode = CO_SDO_AB_DATA_LONG
+					abortCode = SDO_ABORT_DATA_LONG
 					client.State = CO_SDO_ST_ABORT
 					break
 				}
@@ -1102,15 +1102,15 @@ func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, dat
 	err := client.Setup(uint32(SDO_CLIENT_ID)+uint32(nodeId), uint32(SDO_SERVER_ID)+uint32(nodeId), nodeId)
 	if err != nil {
 		log.Errorf("Error when setting up SDO client reason : %v", err)
-		return 0, CO_SDO_AB_GENERAL
+		return 0, SDO_ABORT_GENERAL
 	}
 	err = client.UploadInitiate(index, subindex, 1000, false)
 
 	if err != nil {
-		return 0, CO_SDO_AB_GENERAL
+		return 0, SDO_ABORT_GENERAL
 	}
 	var timeDifferenceUs uint32 = 10000
-	abortCode := CO_SDO_AB_NONE
+	abortCode := SDO_ABORT_NONE
 
 	for {
 		ret, err := client.Upload(timeDifferenceUs, false, &abortCode, nil, nil, nil)
@@ -1139,16 +1139,16 @@ func (reader *BlockReader) ReadAll() (data []byte, err error) {
 	err = client.Setup(uint32(SDO_CLIENT_ID)+uint32(reader.NodeIdServer), uint32(SDO_SERVER_ID)+uint32(reader.NodeIdServer), reader.NodeIdServer)
 	if err != nil {
 		log.Errorf("Error when setting up SDO client reason : %v", err)
-		return nil, CO_SDO_AB_GENERAL
+		return nil, SDO_ABORT_GENERAL
 	}
 	err = client.UploadInitiate(reader.Index, reader.SubIndex, 1000, true)
 
 	if err != nil {
-		return nil, CO_SDO_AB_GENERAL
+		return nil, SDO_ABORT_GENERAL
 	}
 
 	var timeDifferenceUs uint32 = 10000
-	abortCode := CO_SDO_AB_NONE
+	abortCode := SDO_ABORT_NONE
 	buffer := make([]byte, 1000)
 	single_read := 0
 
