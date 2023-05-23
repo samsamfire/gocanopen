@@ -8,33 +8,34 @@ import (
 
 // Common defines to both SDO server and SDO client
 type SDOAbortCode uint32
+type SDOState uint8
 
 const (
-	CO_SDO_ST_IDLE                      uint8 = 0x00
-	CO_SDO_ST_ABORT                     uint8 = 0x0
-	CO_SDO_ST_DOWNLOAD_LOCAL_TRANSFER   uint8 = 0x10
-	CO_SDO_ST_DOWNLOAD_INITIATE_REQ     uint8 = 0x11
-	CO_SDO_ST_DOWNLOAD_INITIATE_RSP     uint8 = 0x12
-	CO_SDO_ST_DOWNLOAD_SEGMENT_REQ      uint8 = 0x13
-	CO_SDO_ST_DOWNLOAD_SEGMENT_RSP      uint8 = 0x14
-	CO_SDO_ST_UPLOAD_LOCAL_TRANSFER     uint8 = 0x20
-	CO_SDO_ST_UPLOAD_INITIATE_REQ       uint8 = 0x21
-	CO_SDO_ST_UPLOAD_INITIATE_RSP       uint8 = 0x22
-	CO_SDO_ST_UPLOAD_SEGMENT_REQ        uint8 = 0x23
-	CO_SDO_ST_UPLOAD_SEGMENT_RSP        uint8 = 0x24
-	CO_SDO_ST_DOWNLOAD_BLK_INITIATE_REQ uint8 = 0x51
-	CO_SDO_ST_DOWNLOAD_BLK_INITIATE_RSP uint8 = 0x52
-	CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ uint8 = 0x53
-	CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_RSP uint8 = 0x54
-	CO_SDO_ST_DOWNLOAD_BLK_END_REQ      uint8 = 0x55
-	CO_SDO_ST_DOWNLOAD_BLK_END_RSP      uint8 = 0x56
-	CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ   uint8 = 0x61
-	CO_SDO_ST_UPLOAD_BLK_INITIATE_RSP   uint8 = 0x62
-	CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ2  uint8 = 0x63
-	CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ  uint8 = 0x64
-	CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_CRSP  uint8 = 0x65
-	CO_SDO_ST_UPLOAD_BLK_END_SREQ       uint8 = 0x66
-	CO_SDO_ST_UPLOAD_BLK_END_CRSP       uint8 = 0x67
+	SDO_STATE_IDLE                      SDOState = 0x00
+	SDO_STATE_ABORT                     SDOState = 0x0
+	SDO_STATE_DOWNLOAD_LOCAL_TRANSFER   SDOState = 0x10
+	SDO_STATE_DOWNLOAD_INITIATE_REQ     SDOState = 0x11
+	SDO_STATE_DOWNLOAD_INITIATE_RSP     SDOState = 0x12
+	SDO_STATE_DOWNLOAD_SEGMENT_REQ      SDOState = 0x13
+	SDO_STATE_DOWNLOAD_SEGMENT_RSP      SDOState = 0x14
+	SDO_STATE_UPLOAD_LOCAL_TRANSFER     SDOState = 0x20
+	SDO_STATE_UPLOAD_INITIATE_REQ       SDOState = 0x21
+	SDO_STATE_UPLOAD_INITIATE_RSP       SDOState = 0x22
+	SDO_STATE_UPLOAD_SEGMENT_REQ        SDOState = 0x23
+	SDO_STATE_UPLOAD_SEGMENT_RSP        SDOState = 0x24
+	SDO_STATE_DOWNLOAD_BLK_INITIATE_REQ SDOState = 0x51
+	SDO_STATE_DOWNLOAD_BLK_INITIATE_RSP SDOState = 0x52
+	SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_REQ SDOState = 0x53
+	SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_RSP SDOState = 0x54
+	SDO_STATE_DOWNLOAD_BLK_END_REQ      SDOState = 0x55
+	SDO_STATE_DOWNLOAD_BLK_END_RSP      SDOState = 0x56
+	SDO_STATE_UPLOAD_BLK_INITIATE_REQ   SDOState = 0x61
+	SDO_STATE_UPLOAD_BLK_INITIATE_RSP   SDOState = 0x62
+	SDO_STATE_UPLOAD_BLK_INITIATE_REQ2  SDOState = 0x63
+	SDO_STATE_UPLOAD_BLK_SUBBLOCK_SREQ  SDOState = 0x64
+	SDO_STATE_UPLOAD_BLK_SUBBLOCK_CRSP  SDOState = 0x65
+	SDO_STATE_UPLOAD_BLK_END_SREQ       SDOState = 0x66
+	SDO_STATE_UPLOAD_BLK_END_CRSP       SDOState = 0x67
 )
 
 const (
@@ -122,49 +123,49 @@ type SDOResponse struct {
 	raw [8]byte
 }
 
-func (response *SDOResponse) isResponseValid(state uint8) bool {
+func (response *SDOResponse) isResponseValid(state SDOState) bool {
 	switch state {
 
 	// Download
-	case CO_SDO_ST_DOWNLOAD_INITIATE_RSP:
+	case SDO_STATE_DOWNLOAD_INITIATE_RSP:
 		if response.raw[0] == 0x60 {
 			return true
 		}
 		return false
-	case CO_SDO_ST_DOWNLOAD_SEGMENT_RSP:
+	case SDO_STATE_DOWNLOAD_SEGMENT_RSP:
 		if (response.raw[0] & 0xEF) == 0x20 {
 			return true
 		}
-	case CO_SDO_ST_DOWNLOAD_BLK_INITIATE_RSP:
+	case SDO_STATE_DOWNLOAD_BLK_INITIATE_RSP:
 		if (response.raw[0] & 0xFB) == 0xA0 {
 			return true
 		}
 
-	case CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ, CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_RSP:
+	case SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_REQ, SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_RSP:
 		if response.raw[0] == 0xA2 {
 			return true
 		}
-	case CO_SDO_ST_DOWNLOAD_BLK_END_RSP:
+	case SDO_STATE_DOWNLOAD_BLK_END_RSP:
 		if response.raw[0] == 0xA1 {
 			return true
 		}
-	case CO_SDO_ST_UPLOAD_INITIATE_RSP:
+	case SDO_STATE_UPLOAD_INITIATE_RSP:
 		if (response.raw[0] & 0xF0) == 0x40 {
 			return true
 		}
-	case CO_SDO_ST_UPLOAD_SEGMENT_RSP:
+	case SDO_STATE_UPLOAD_SEGMENT_RSP:
 		if (response.raw[0] & 0xE0) == 0x00 {
 			return true
 		}
-	case CO_SDO_ST_UPLOAD_BLK_INITIATE_RSP:
+	case SDO_STATE_UPLOAD_BLK_INITIATE_RSP:
 		if (response.raw[0]&0xF9) == 0xC0 || (response.raw[0]&0xF0) == 0x40 {
 			return true
 		}
-	case CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ:
+	case SDO_STATE_UPLOAD_BLK_SUBBLOCK_SREQ:
 		//TODO but not checked in normal upload function
 		return true
 
-	case CO_SDO_ST_UPLOAD_BLK_END_SREQ:
+	case SDO_STATE_UPLOAD_BLK_END_SREQ:
 		if (response.raw[0] & 0xE3) == 0xC1 {
 			return true
 		}
