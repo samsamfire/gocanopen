@@ -246,11 +246,11 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 	if server.Finished {
 		// Check size
 		if server.SizeIndicated > 0 && server.SizeTransferred > server.SizeIndicated {
-			*abortCode = CO_SDO_AB_DATA_LONG
+			*abortCode = SDO_ABORT_DATA_LONG
 			server.State = CO_SDO_ST_ABORT
 			return false
 		} else if server.SizeIndicated > 0 && server.SizeTransferred < server.SizeIndicated {
-			*abortCode = CO_SDO_AB_DATA_SHORT
+			*abortCode = SDO_ABORT_DATA_SHORT
 			server.State = CO_SDO_ST_ABORT
 			return false
 		}
@@ -274,11 +274,11 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 			server.Streamer.stream.DataLength = server.SizeTransferred
 		} else if server.SizeTransferred != varSizeInOd {
 			if server.SizeTransferred > varSizeInOd {
-				*abortCode = CO_SDO_AB_DATA_LONG
+				*abortCode = SDO_ABORT_DATA_LONG
 				server.State = CO_SDO_ST_ABORT
 				return false
 			} else if server.SizeTransferred < varSizeInOd {
-				*abortCode = CO_SDO_AB_DATA_SHORT
+				*abortCode = SDO_ABORT_DATA_SHORT
 				server.State = CO_SDO_ST_ABORT
 				return false
 			}
@@ -287,7 +287,7 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 	} else {
 		// Still check if not bigger than max size
 		if server.SizeIndicated > 0 && server.SizeTransferred > server.SizeIndicated {
-			*abortCode = CO_SDO_AB_DATA_LONG
+			*abortCode = SDO_ABORT_DATA_LONG
 			server.State = CO_SDO_ST_ABORT
 			return false
 		}
@@ -297,7 +297,7 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 	if server.BlockCRCEnabled && crcOperation > 0 {
 		server.BlockCRC.ccitt_block(server.buffer[:bufferOffsetWriteOriginal])
 		if crcOperation == 2 && crcClient != server.BlockCRC.crc {
-			*abortCode = CO_SDO_AB_CRC
+			*abortCode = SDO_ABORT_CRC
 			server.State = CO_SDO_ST_ABORT
 			server.ErrorExtraInfo = fmt.Errorf("server was expecting %v but got %v", server.BlockCRC.crc, crcClient)
 			return false
@@ -312,11 +312,11 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 		server.State = CO_SDO_ST_ABORT
 		return false
 	} else if server.Finished && ret == ODR_PARTIAL {
-		*abortCode = CO_SDO_AB_DATA_SHORT
+		*abortCode = SDO_ABORT_DATA_SHORT
 		server.State = CO_SDO_ST_ABORT
 		return false
 	} else if !server.Finished && ret == nil {
-		*abortCode = CO_SDO_AB_DATA_LONG
+		*abortCode = SDO_ABORT_DATA_LONG
 		server.State = CO_SDO_ST_ABORT
 		return false
 	}
@@ -366,7 +366,7 @@ func (server *SDOServer) readObjectDictionary(abortCode *SDOAbortCode, countMini
 		if server.bufWriteOffset == 0 || err == ODR_PARTIAL {
 			server.Finished = false
 			if server.bufWriteOffset < countMinimum {
-				*abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+				*abortCode = SDO_ABORT_DEVICE_INCOMPAT
 				server.State = CO_SDO_ST_ABORT
 				server.ErrorExtraInfo = fmt.Errorf("buffer offset write %v is less than the minimum count %v", server.bufWriteOffset, countMinimum)
 				return false
@@ -398,14 +398,14 @@ func updateStateFromRequest(stateReq uint8, state *uint8, upload *bool) SDOAbort
 		*state = CO_SDO_ST_UPLOAD_BLK_INITIATE_REQ
 	} else {
 		*state = CO_SDO_ST_ABORT
-		return CO_SDO_AB_CMD
+		return SDO_ABORT_CMD
 	}
-	return CO_SDO_AB_NONE
+	return SDO_ABORT_NONE
 }
 
 func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs uint32, timerNextUs *uint32) (err error) {
 	ret := SDO_WAITING_RESPONSE
-	abortCode := CO_SDO_AB_NONE
+	abortCode := SDO_ABORT_NONE
 	if server.Valid && server.State == CO_SDO_ST_IDLE && !server.RxNew {
 		ret = SDO_SUCCESS
 	} else if !nmtIsPreOrOperationnal || !server.Valid {
@@ -419,7 +419,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			abortCode = updateStateFromRequest(response.raw[0], &server.State, &upload)
 
 			// Check object exists and accessible
-			if abortCode == CO_SDO_AB_NONE {
+			if abortCode == SDO_ABORT_NONE {
 				var err error
 				server.Index = response.GetIndex()
 				server.Subindex = response.GetSubindex()
@@ -429,19 +429,19 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					server.State = CO_SDO_ST_ABORT
 				} else {
 					if server.Streamer.stream.Attribute&ODA_SDO_RW == 0 {
-						abortCode = CO_SDO_AB_UNSUPPORTED_ACCESS
+						abortCode = SDO_ABORT_UNSUPPORTED_ACCESS
 						server.State = CO_SDO_ST_ABORT
 					} else if upload && (server.Streamer.stream.Attribute&ODA_SDO_R) == 0 {
-						abortCode = CO_SDO_AB_WRITEONLY
+						abortCode = SDO_ABORT_WRITEONLY
 						server.State = CO_SDO_ST_ABORT
 					} else if !upload && (server.Streamer.stream.Attribute&ODA_SDO_W) == 0 {
-						abortCode = CO_SDO_AB_READONLY
+						abortCode = SDO_ABORT_READONLY
 						server.State = CO_SDO_ST_ABORT
 					}
 				}
 			}
 			// Load data from OD
-			if upload && abortCode == CO_SDO_AB_NONE {
+			if upload && abortCode == SDO_ABORT_NONE {
 				server.bufReadOffset = 0
 				server.bufWriteOffset = 0
 				server.SizeTransferred = 0
@@ -453,7 +453,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 							server.SizeIndicated = server.bufWriteOffset
 						} else if server.SizeIndicated != server.bufWriteOffset {
 							server.ErrorExtraInfo = fmt.Errorf("size indicated %v != to buffer write offset %v", server.SizeIndicated, server.bufWriteOffset)
-							abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+							abortCode = SDO_ABORT_DEVICE_INCOMPAT
 							server.State = CO_SDO_ST_ABORT
 						}
 					} else {
@@ -497,9 +497,9 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 						server.Streamer.stream.DataLength = uint32(dataSizeToWrite)
 					} else if dataSizeToWrite != int(varSizeInOd) {
 						if dataSizeToWrite > int(varSizeInOd) {
-							abortCode = CO_SDO_AB_DATA_LONG
+							abortCode = SDO_ABORT_DATA_LONG
 						} else {
-							abortCode = CO_SDO_AB_DATA_SHORT
+							abortCode = SDO_ABORT_DATA_SHORT
 						}
 						server.State = CO_SDO_ST_ABORT
 						break
@@ -523,11 +523,11 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 						// Check if size matches
 						if sizeInOd > 0 {
 							if server.SizeIndicated > uint32(sizeInOd) {
-								abortCode = CO_SDO_AB_DATA_LONG
+								abortCode = SDO_ABORT_DATA_LONG
 								server.State = CO_SDO_ST_ABORT
 								break
 							} else if server.SizeIndicated < uint32(sizeInOd) && (server.Streamer.stream.Attribute&ODA_STR) == 0 {
-								abortCode = CO_SDO_AB_DATA_SHORT
+								abortCode = SDO_ABORT_DATA_SHORT
 								server.State = CO_SDO_ST_ABORT
 								break
 							}
@@ -545,7 +545,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					server.Finished = (response.raw[0] & 0x01) != 0
 					toggle := response.GetToggle()
 					if toggle != server.Toggle {
-						abortCode = CO_SDO_AB_TOGGLE_BIT
+						abortCode = SDO_ABORT_TOGGLE_BIT
 						server.State = CO_SDO_ST_ABORT
 						break
 					}
@@ -556,7 +556,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					server.SizeTransferred += uint32(count)
 
 					if server.Streamer.stream.DataLength > 0 && server.SizeTransferred > server.Streamer.stream.DataLength {
-						abortCode = CO_SDO_AB_DATA_LONG
+						abortCode = SDO_ABORT_DATA_LONG
 						server.State = CO_SDO_ST_ABORT
 						break
 					}
@@ -567,7 +567,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					}
 					server.State = CO_SDO_ST_DOWNLOAD_SEGMENT_RSP
 				} else {
-					abortCode = CO_SDO_AB_CMD
+					abortCode = SDO_ABORT_CMD
 					server.State = CO_SDO_ST_ABORT
 				}
 
@@ -578,13 +578,13 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			case CO_SDO_ST_UPLOAD_SEGMENT_REQ:
 				log.Debugf("[SERVER][RX] UPLOAD SEGMENTED | x%x:x%x %v", server.Index, server.Subindex, response.raw)
 				if (response.raw[0] & 0xEF) != 0x60 {
-					abortCode = CO_SDO_AB_CMD
+					abortCode = SDO_ABORT_CMD
 					server.State = CO_SDO_ST_ABORT
 					break
 				}
 				toggle := response.GetToggle()
 				if toggle != server.Toggle {
-					abortCode = CO_SDO_AB_TOGGLE_BIT
+					abortCode = SDO_ABORT_TOGGLE_BIT
 					server.State = CO_SDO_ST_ABORT
 					break
 				}
@@ -599,11 +599,11 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					// Check if size matches
 					if sizeInOd > 0 {
 						if server.SizeIndicated > uint32(sizeInOd) {
-							abortCode = CO_SDO_AB_DATA_LONG
+							abortCode = SDO_ABORT_DATA_LONG
 							server.State = CO_SDO_ST_ABORT
 							break
 						} else if server.SizeIndicated < uint32(sizeInOd) && (server.Streamer.stream.Attribute&ODA_STR) == 0 {
-							abortCode = CO_SDO_AB_DATA_SHORT
+							abortCode = SDO_ABORT_DATA_SHORT
 							server.State = CO_SDO_ST_ABORT
 							break
 						}
@@ -627,7 +627,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			case CO_SDO_ST_DOWNLOAD_BLK_END_REQ:
 				log.Debugf("[SERVER][RX] BLOCK DOWNLOAD END | x%x:x%x %v", server.Index, server.Subindex, response.raw)
 				if (response.raw[0] & 0xE3) != 0xC1 {
-					abortCode = CO_SDO_AB_CMD
+					abortCode = SDO_ABORT_CMD
 					server.State = CO_SDO_ST_ABORT
 					break
 				}
@@ -636,7 +636,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				noData := (response.raw[0] >> 2) & 0x07
 				if server.bufWriteOffset <= uint32(noData) {
 					server.ErrorExtraInfo = fmt.Errorf("internal buffer and end of block download are inconsitent")
-					abortCode = CO_SDO_AB_DEVICE_INCOMPAT
+					abortCode = SDO_ABORT_DEVICE_INCOMPAT
 					server.State = CO_SDO_ST_ABORT
 					break
 				}
@@ -669,14 +669,14 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.BlockSize = response.GetBlockSize()
 				log.Debugf("[SERVER][RX] UPLOAD BLOCK INIT | x%x:x%x %v | crc : %v, blksize :%v", server.Index, server.Subindex, response.raw, server.BlockCRCEnabled, server.BlockSize)
 				if server.BlockSize < 1 || server.BlockSize > 127 {
-					abortCode = CO_SDO_AB_BLOCK_SIZE
+					abortCode = SDO_ABORT_BLOCK_SIZE
 					server.State = CO_SDO_ST_ABORT
 					break
 				}
 
 				// Check that we have enough data for sending a complete sub-block with the requested size
 				if !server.Finished && server.bufWriteOffset < uint32(server.BlockSize)*7 {
-					abortCode = CO_SDO_AB_BLOCK_SIZE
+					abortCode = SDO_ABORT_BLOCK_SIZE
 					server.State = CO_SDO_ST_ABORT
 					break
 				}
@@ -687,13 +687,13 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					server.BlockSequenceNb = 0
 					server.State = CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ
 				} else {
-					abortCode = CO_SDO_AB_CMD
+					abortCode = SDO_ABORT_CMD
 					server.State = CO_SDO_ST_ABORT
 				}
 
 			case CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ, CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_CRSP:
 				if response.raw[0] != 0xA2 {
-					abortCode = CO_SDO_AB_CMD
+					abortCode = SDO_ABORT_CMD
 					server.State = CO_SDO_ST_ABORT
 					break
 				}
@@ -706,7 +706,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				// Check block size
 				server.BlockSize = response.raw[2]
 				if server.BlockSize < 1 || server.BlockSize > 127 {
-					abortCode = CO_SDO_AB_BLOCK_SIZE
+					abortCode = SDO_ABORT_BLOCK_SIZE
 					server.State = CO_SDO_ST_ABORT
 					break
 				}
@@ -718,7 +718,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					server.bufReadOffset -= uint32(cntFailed)
 					server.SizeTransferred -= uint32(cntFailed)
 				} else if response.raw[1] > server.BlockSequenceNb {
-					abortCode = CO_SDO_AB_CMD
+					abortCode = SDO_ABORT_CMD
 					server.State = CO_SDO_ST_ABORT
 					break
 				}
@@ -735,7 +735,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				}
 
 			default:
-				abortCode = CO_SDO_AB_CMD
+				abortCode = SDO_ABORT_CMD
 				server.State = CO_SDO_ST_ABORT
 
 			}
@@ -750,7 +750,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.TimeoutTimer += timeDifferenceUs
 		}
 		if server.TimeoutTimer >= server.TimeoutTimeUs {
-			abortCode = CO_SDO_AB_TIMEOUT
+			abortCode = SDO_ABORT_TIMEOUT
 			server.State = CO_SDO_ST_ABORT
 			log.Errorf("[SERVER] TIMEOUT %v, State : %v", server.TimeoutTimer, server.State)
 
@@ -868,11 +868,11 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			// Check if too shor or too large in last segment
 			if server.SizeIndicated > 0 {
 				if server.SizeTransferred > server.SizeIndicated {
-					abortCode = CO_SDO_AB_DATA_LONG
+					abortCode = SDO_ABORT_DATA_LONG
 					server.State = CO_SDO_ST_ABORT
 					break
 				} else if ret == SDO_SUCCESS && server.SizeTransferred < server.SizeIndicated {
-					abortCode = CO_SDO_AB_DATA_SHORT
+					abortCode = SDO_ABORT_DATA_SHORT
 					ret = SDO_WAITING_RESPONSE
 					server.State = CO_SDO_ST_ABORT
 					break
@@ -991,11 +991,11 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			// Check if too short or too large in last segment
 			if server.SizeIndicated > 0 {
 				if server.SizeTransferred > server.SizeIndicated {
-					abortCode = CO_SDO_AB_DATA_LONG
+					abortCode = SDO_ABORT_DATA_LONG
 					server.State = CO_SDO_ST_ABORT
 					break
 				} else if server.bufReadOffset == server.bufWriteOffset && server.SizeTransferred < server.SizeIndicated {
-					abortCode = CO_SDO_AB_DATA_SHORT
+					abortCode = SDO_ABORT_DATA_SHORT
 					server.State = CO_SDO_ST_ABORT
 					break
 				}
