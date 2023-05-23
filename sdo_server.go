@@ -403,15 +403,15 @@ func updateStateFromRequest(stateReq uint8, state *uint8, upload *bool) SDOAbort
 	return CO_SDO_AB_NONE
 }
 
-func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs uint32, timerNextUs *uint32) SDOReturn {
-	ret := CO_SDO_RT_waitingResponse
+func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs uint32, timerNextUs *uint32) (err error) {
+	ret := SDO_WAITING_RESPONSE
 	abortCode := CO_SDO_AB_NONE
 	if server.Valid && server.State == CO_SDO_ST_IDLE && !server.RxNew {
-		ret = CO_SDO_RT_ok_communicationEnd
+		ret = SDO_SUCCESS
 	} else if !nmtIsPreOrOperationnal || !server.Valid {
 		server.State = CO_SDO_ST_IDLE
 		server.RxNew = false
-		ret = CO_SDO_RT_ok_communicationEnd
+		ret = SDO_SUCCESS
 	} else if server.RxNew {
 		response := server.Response
 		if server.State == CO_SDO_ST_IDLE {
@@ -745,7 +745,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 		server.RxNew = false
 	}
 
-	if ret == CO_SDO_RT_waitingResponse {
+	if ret == SDO_WAITING_RESPONSE {
 		if server.TimeoutTimer < server.TimeoutTimeUs {
 			server.TimeoutTimer += timeDifferenceUs
 		}
@@ -776,11 +776,11 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			}
 		}
 		if server.CANtxBuff.BufferFull {
-			ret = CO_SDO_RT_transmittBufferFull
+			ret = SDO_TRANSMIT_BUFFER_FULL
 		}
 	}
 
-	if ret == CO_SDO_RT_waitingResponse {
+	if ret == SDO_WAITING_RESPONSE {
 		server.CANtxBuff.Data = [8]byte{0}
 
 		switch server.State {
@@ -794,7 +794,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			if server.Finished {
 				log.Debugf("[SERVER][TX] DOWNLOAD EXPEDITED | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 				server.State = CO_SDO_ST_IDLE
-				ret = CO_SDO_RT_ok_communicationEnd
+				ret = SDO_SUCCESS
 			} else {
 				log.Debugf("[SERVER][TX] DOWNLOAD SEGMENT INIT | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 				server.Toggle = 0x00
@@ -812,7 +812,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.BusManager.Send(*server.CANtxBuff)
 			if server.Finished {
 				server.State = CO_SDO_ST_IDLE
-				ret = CO_SDO_RT_ok_communicationEnd
+				ret = SDO_SUCCESS
 			} else {
 				server.State = CO_SDO_ST_DOWNLOAD_SEGMENT_REQ
 			}
@@ -822,7 +822,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.CANtxBuff.Data[0] = 0x43 | ((4 - byte(server.SizeIndicated)) << 2)
 				copy(server.CANtxBuff.Data[4:], server.buffer[:server.SizeIndicated])
 				server.State = CO_SDO_ST_IDLE
-				ret = CO_SDO_RT_ok_communicationEnd
+				ret = SDO_SUCCESS
 				log.Debugf("[SERVER][TX] UPLOAD EXPEDITED | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			} else {
 				// Segmented transfer
@@ -856,7 +856,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			if count < 7 || (server.Finished && count == 7) {
 				server.CANtxBuff.Data[0] |= (byte((7 - count) << 1)) | 0x01
 				server.State = CO_SDO_ST_IDLE
-				ret = CO_SDO_RT_ok_communicationEnd
+				ret = SDO_SUCCESS
 			} else {
 				server.TimeoutTimer = 0
 				server.State = CO_SDO_ST_UPLOAD_SEGMENT_REQ
@@ -871,9 +871,9 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					abortCode = CO_SDO_AB_DATA_LONG
 					server.State = CO_SDO_ST_ABORT
 					break
-				} else if ret == CO_SDO_RT_ok_communicationEnd && server.SizeTransferred < server.SizeIndicated {
+				} else if ret == SDO_SUCCESS && server.SizeTransferred < server.SizeIndicated {
 					abortCode = CO_SDO_AB_DATA_SHORT
-					ret = CO_SDO_RT_waitingResponse
+					ret = SDO_WAITING_RESPONSE
 					server.State = CO_SDO_ST_ABORT
 					break
 				}
@@ -955,7 +955,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			log.Debugf("[SERVER][TX] BLOCK DOWNLOAD END | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			server.BusManager.Send(*server.CANtxBuff)
 			server.State = CO_SDO_ST_IDLE
-			ret = CO_SDO_RT_ok_communicationEnd
+			ret = SDO_SUCCESS
 
 		case CO_SDO_ST_UPLOAD_BLK_INITIATE_RSP:
 			server.CANtxBuff.Data[0] = 0xC4
@@ -1029,19 +1029,19 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 
 	}
 
-	if ret == CO_SDO_RT_waitingResponse {
+	if ret == SDO_WAITING_RESPONSE {
 		switch server.State {
 		case CO_SDO_ST_ABORT:
 			server.Abort(abortCode)
 			server.State = CO_SDO_ST_IDLE
-			ret = CO_SDO_RT_endedWithServerAbort
+			err = ErrSDOEndedWithServerAbort
 		case CO_SDO_ST_DOWNLOAD_BLK_SUBBLOCK_REQ:
-			ret = CO_SDO_RT_blockDownldInProgress
+			ret = SDO_BLOCK_DOWNLOAD_IN_PROGRESS
 		case CO_SDO_ST_UPLOAD_BLK_SUBBLOCK_SREQ:
-			ret = CO_SDO_RT_blockUploadInProgress
+			ret = SDO_BLOCK_UPLOAD_IN_PROGRESS
 		}
 	}
-	return ret
+	return
 }
 
 // Create & send abort on bus
