@@ -58,7 +58,6 @@ func main() {
 	appState := INIT
 	nodeState := canopen.RESET_NOT
 	var node canopen.Node
-	//NODE_STATE := canopen.RESET_NOT
 	quit := make(chan bool)
 	// These are timer values and can be adjusted
 	startBackground := time.Now()
@@ -87,6 +86,7 @@ func main() {
 				for {
 					select {
 					case <-quit:
+						log.Info("Quitting go routine")
 						return
 					default:
 						elapsed := time.Since(startBackground)
