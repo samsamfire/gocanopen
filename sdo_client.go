@@ -27,7 +27,7 @@ type SDOClient struct {
 	CANtxBuff                  *BufferTxFrame
 	CobIdClientToServer        uint32
 	CobIdServerToClient        uint32
-	ExtensionEntry1280         *Extension
+	ExtensionEntry1280         Extension
 	NodeIdServer               uint8
 	Valid                      bool
 	Index                      uint16
@@ -72,7 +72,7 @@ const (
 func (client *SDOClient) Init(od *ObjectDictionary, entry1280 *Entry, nodeId uint8, busManager *BusManager) error {
 
 	if entry1280.Index < 0x1280 || entry1280.Index > (0x1280+0x7F) {
-		log.Errorf("[SDO CLIENT][%x|%x] invalid index for sdo client : x%v", entry1280.Index)
+		log.Errorf("[SDO CLIENT] invalid index for sdo client : x%v", entry1280.Index)
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	if entry1280 == nil || busManager == nil || od == nil {
@@ -100,7 +100,7 @@ func (client *SDOClient) Init(od *ObjectDictionary, entry1280 *Entry, nodeId uin
 	client.ExtensionEntry1280.Object = client
 	client.ExtensionEntry1280.Read = ReadEntryOriginal
 	client.ExtensionEntry1280.Write = WriteEntry1280
-	entry1280.AddExtension(client.ExtensionEntry1280)
+	entry1280.AddExtension(&client.ExtensionEntry1280)
 	client.CobIdClientToServer = 0
 	client.CobIdServerToClient = 0
 
@@ -109,7 +109,6 @@ func (client *SDOClient) Init(od *ObjectDictionary, entry1280 *Entry, nodeId uin
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	return nil
-
 }
 
 // Setup the client for a new communication
