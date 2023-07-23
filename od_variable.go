@@ -20,7 +20,9 @@ func buildVariable(
 ) (*Variable, error) {
 
 	variable := &Variable{
-		Name: name,
+		Name:     name,
+		SubIndex: subindex,
+		Index:    index,
 	}
 
 	// Get AccessType
