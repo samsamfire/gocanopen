@@ -683,7 +683,7 @@ func (client *SDOClient) Abort(abortCode SDOAbortCode) {
 	client.CANtxBuff.Data[2] = uint8(client.Index >> 8)
 	client.CANtxBuff.Data[3] = client.Subindex
 	binary.LittleEndian.PutUint32(client.CANtxBuff.Data[4:], code)
-	log.Warnf("[CLIENT][TX][x%x] CLIENT ABORT | x%x:x%x | %v (%v)", client.NodeIdServer, client.Index, client.Subindex, abortCode, code)
+	log.Warnf("[CLIENT][TX][x%x] CLIENT ABORT | x%x:x%x | %v (x%x)", client.NodeIdServer, client.Index, client.Subindex, abortCode, code)
 	client.BusManager.Send(*client.CANtxBuff)
 
 }
