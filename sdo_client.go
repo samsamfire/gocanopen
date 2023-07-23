@@ -70,12 +70,11 @@ const (
 )
 
 func (client *SDOClient) Init(od *ObjectDictionary, entry1280 *Entry, nodeId uint8, busManager *BusManager) error {
-
-	if entry1280.Index < 0x1280 || entry1280.Index > (0x1280+0x7F) {
-		log.Errorf("[SDO CLIENT] invalid index for sdo client : x%v", entry1280.Index)
+	if busManager == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
-	if entry1280 == nil || busManager == nil || od == nil {
+	if entry1280 != nil && (entry1280.Index < 0x1280 || entry1280.Index > (0x1280+0x7F)) {
+		log.Errorf("[SDO CLIENT] invalid index for sdo client : x%v", entry1280.Index)
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	client.OD = od
@@ -86,21 +85,27 @@ func (client *SDOClient) Init(od *ObjectDictionary, entry1280 *Entry, nodeId uin
 	fifo := NewFifo(300)
 	client.Fifo = fifo
 
-	var maxSubindex, nodeIdServer uint8
+	var nodeIdServer uint8
 	var CobIdClientToServer, CobIdServerToClient uint32
-	err1 := entry1280.GetUint8(0, &maxSubindex)
-	err2 := entry1280.GetUint32(1, &CobIdClientToServer)
-	err3 := entry1280.GetUint32(2, &CobIdServerToClient)
-	err4 := entry1280.GetUint8(3, &nodeIdServer)
-	if err1 != nil || err2 != nil || err3 != nil || err4 != nil || maxSubindex != 3 {
-		log.Errorf("[SDO CLIENT] error when reading SDO client parameters in OD 0:%v,1:%v,2:%v,3:%v,max sub-index(should be 3) : %v", err1, err2, err3, err4, maxSubindex)
-		return CO_ERROR_OD_PARAMETERS
+	if entry1280 != nil {
+		var maxSubindex uint8
+		err1 := entry1280.GetUint8(0, &maxSubindex)
+		err2 := entry1280.GetUint32(1, &CobIdClientToServer)
+		err3 := entry1280.GetUint32(2, &CobIdServerToClient)
+		err4 := entry1280.GetUint8(3, &nodeIdServer)
+		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || maxSubindex != 3 {
+			log.Errorf("[SDO CLIENT] error when reading SDO client parameters in OD 0:%v,1:%v,2:%v,3:%v,max sub-index(should be 3) : %v", err1, err2, err3, err4, maxSubindex)
+			return CO_ERROR_OD_PARAMETERS
+		}
+	} else {
+		nodeIdServer = 0
 	}
-
-	client.ExtensionEntry1280.Object = client
-	client.ExtensionEntry1280.Read = ReadEntryOriginal
-	client.ExtensionEntry1280.Write = WriteEntry1280
-	entry1280.AddExtension(&client.ExtensionEntry1280)
+	if entry1280 != nil {
+		client.ExtensionEntry1280.Object = client
+		client.ExtensionEntry1280.Read = ReadEntryOriginal
+		client.ExtensionEntry1280.Write = WriteEntry1280
+		entry1280.AddExtension(&client.ExtensionEntry1280)
+	}
 	client.CobIdClientToServer = 0
 	client.CobIdServerToClient = 0
 
@@ -1094,8 +1099,6 @@ func (client *SDOClient) UploadBufRead(buffer []byte) int {
 	}
 	return client.Fifo.Read(buffer, nil)
 }
-
-// func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, data []byte, forceSegmented bool) error {
 
 func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, data []byte) (int, error) {
 	err := client.Setup(uint32(SDO_CLIENT_ID)+uint32(nodeId), uint32(SDO_SERVER_ID)+uint32(nodeId), nodeId)
