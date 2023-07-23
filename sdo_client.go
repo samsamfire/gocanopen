@@ -182,7 +182,7 @@ func (client *SDOClient) Handle(frame Frame) {
 					client.Fifo.Write(frame.Data[1:], &client.BlockCRC)
 					client.SizeTransferred += 7
 					if seqno == client.BlockSize {
-						log.Debugf("<==Rx (x%x) | BLOCK UPLOAD | Last sub-block received (%v)", client.NodeIdServer, seqno)
+						log.Debugf("[CLIENT][RX][x%x] BLOCK UPLOAD END SUB-BLOCK | x%x:x%x | %v", client.NodeIdServer, client.Index, client.Subindex, frame.Data)
 						state = SDO_STATE_UPLOAD_BLK_SUBBLOCK_CRSP
 					}
 				}
@@ -368,7 +368,7 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 		response := client.Response
 		if response.IsAbort() {
 			abortCode = response.GetAbortCode()
-			log.Debugf("<==Rx (x%x) | SERVER ABORT | %v (x%x)", client.NodeIdServer, abortCode, uint32(response.GetAbortCode()))
+			log.Debugf("[CLIENT][RX][x%x] SERVER ABORT | x%x:x%x | %v (x%x)", client.NodeIdServer, client.Index, client.Subindex, abortCode, uint32(response.GetAbortCode()))
 			client.State = SDO_STATE_IDLE
 			err = ErrSDOEndedWithServerAbort
 			// Abort from the client
@@ -401,12 +401,12 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 				if client.Finished {
 					client.State = SDO_STATE_IDLE
 					ret = SDO_SUCCESS
-					log.Debugf("<==Rx (x%x) | DOWNLOAD EXPEDITED | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
+					log.Debugf("[CLIENT][RX][x%x] DOWNLOAD EXPEDITED | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
 					// Segmented transfer
 				} else {
 					client.Toggle = 0x00
 					client.State = SDO_STATE_DOWNLOAD_SEGMENT_REQ
-					log.Debugf("<==Rx (x%x) | DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
+					log.Debugf("[CLIENT][RX][x%x] DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
 				}
 
 			case SDO_STATE_DOWNLOAD_SEGMENT_RSP:
@@ -425,7 +425,7 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 				} else {
 					client.State = SDO_STATE_DOWNLOAD_SEGMENT_REQ
 				}
-				log.Debugf("<==Rx (x%x) | DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
+				log.Debugf("[CLIENT][RX][x%x] DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
 
 			case SDO_STATE_DOWNLOAD_BLK_INITIATE_RSP:
 
@@ -632,7 +632,7 @@ func (client *SDOClient) InitiateDownload(forceSegmented bool) error {
 		count = uint32(client.Fifo.Read(client.CANtxBuff.Data[4:], nil))
 		client.SizeTransferred = count
 		client.Finished = true
-		log.Debugf("==>Tx (x%x) | DOWNLOAD EXPEDITED | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
+		log.Debugf("[CLIENT][TX][x%x] DOWNLOAD EXPEDITED | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
 
 	} else {
 		/* segmented transfer, indicate data size */
@@ -641,7 +641,7 @@ func (client *SDOClient) InitiateDownload(forceSegmented bool) error {
 			client.CANtxBuff.Data[0] |= 0x01
 			binary.LittleEndian.PutUint32(client.CANtxBuff.Data[4:], size)
 		}
-		log.Debugf("==>Tx (x%x) | DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
+		log.Debugf("[CLIENT][TX][x%x] DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
 	}
 	client.TimeoutTimer = 0
 	client.BusManager.Bus.Send(*client.CANtxBuff)
@@ -670,7 +670,7 @@ func (client *SDOClient) DownloadSegmented(bufferPartial bool) error {
 	}
 
 	client.TimeoutTimer = 0
-	log.Debugf("==>Tx (x%x) | DOWNLOAD SEGMENT | x%x:x%x %v | %v%%", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data, ((float64(client.SizeTransferred) / float64(client.SizeIndicated)) * 100))
+	log.Debugf("[CLIENT][TX][x%x] DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
 	client.BusManager.Send(*client.CANtxBuff)
 	return nil
 }
@@ -683,7 +683,7 @@ func (client *SDOClient) Abort(abortCode SDOAbortCode) {
 	client.CANtxBuff.Data[2] = uint8(client.Index >> 8)
 	client.CANtxBuff.Data[3] = client.Subindex
 	binary.LittleEndian.PutUint32(client.CANtxBuff.Data[4:], code)
-	log.Warnf("[CLIENT]==>Tx (x%x) | CLIENT ABORT | %v (x%x)", client.NodeIdServer, abortCode, code)
+	log.Warnf("[CLIENT][TX][x%x] CLIENT ABORT | x%x:x%x | %v (%v)", client.NodeIdServer, client.Index, client.Subindex, abortCode, code)
 	client.BusManager.Send(*client.CANtxBuff)
 
 }
@@ -734,17 +734,15 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 		response := client.Response
 		if response.IsAbort() {
 			abortCode = response.GetAbortCode()
-			log.Debugf("<==Rx (x%x) | SERVER ABORT | %v (x%x)", client.NodeIdServer, abortCode, uint32(response.GetAbortCode()))
+			log.Debugf("[CLIENT][RX][x%x] SERVER ABORT | x%x:x%x | %v (x%x)", client.NodeIdServer, abortCode, client.Index, client.Subindex, uint32(response.GetAbortCode()))
 			client.State = SDO_STATE_IDLE
 			err = ErrSDOEndedWithServerAbort
-			// Abort from the client
 		} else if abort {
 			if sdoAbortCode == nil {
 				abortCode = SDO_ABORT_DEVICE_INCOMPAT
 			} else {
 				abortCode = *sdoAbortCode
 			}
-			log.Warnf("Client is aborting : %x", abortCode)
 			client.State = SDO_STATE_ABORT
 
 		} else if !response.isResponseValid(client.State) {
@@ -773,7 +771,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 					client.SizeTransferred = count
 					client.State = SDO_STATE_IDLE
 					ret = SDO_SUCCESS
-					log.Debugf("<==Rx (x%x) | UPLOAD EXPEDITED | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
+					log.Debugf("[CLIENT][RX][x%x] UPLOAD EXPEDITED | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
 					// Segmented
 				} else {
 					// Size indicated ?
@@ -782,13 +780,13 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 					}
 					client.Toggle = 0
 					client.State = SDO_STATE_UPLOAD_SEGMENT_REQ
-					log.Debugf("<==Rx (x%x) | UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
+					log.Debugf("[CLIENT][RX][x%x] UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
 
 				}
 
 			case SDO_STATE_UPLOAD_SEGMENT_RSP:
 				// Verify and alternate toggle bit
-				log.Debugf("<==Rx (x%x) | UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
+				log.Debugf("[CLIENT][RX][x%x] UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
 				toggle := response.GetToggle()
 				if toggle != client.Toggle {
 					abortCode = SDO_ABORT_TOGGLE_BIT
@@ -843,7 +841,14 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 						client.SizeIndicated = uint32(response.GetBlockSize())
 					}
 					client.State = SDO_STATE_UPLOAD_BLK_INITIATE_REQ2
-					log.Debugf("<==Rx (x%x) | BLOCK UPLOAD (CRC : %v) | x%x:x%x %v", client.NodeIdServer, response.IsCRCEnabled(), client.Index, client.Subindex, response.raw)
+					log.Debugf("[CLIENT][RX][x%x] BLOCK UPLOAD INIT | x%x:x%x | crc enabled : %v expected size : %v | %v",
+						client.NodeIdServer,
+						client.Index,
+						client.Subindex,
+						response.IsCRCEnabled(),
+						client.SizeIndicated,
+						response.raw,
+					)
 
 					//Switch to normal transfer
 				} else if (response.raw[0] & 0xF0) == 0x40 {
@@ -857,7 +862,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 						client.SizeTransferred = uint32(count)
 						client.State = SDO_STATE_IDLE
 						ret = SDO_SUCCESS
-						log.Debugf("<==Rx (x%x) | BLOCK UPLOAD SWITCHING to EXPEDITED | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
+						log.Debugf("[CLIENT][RX][x%x] BLOCK UPLOAD SWITCHING EXPEDITED | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
 
 					} else {
 						if (response.raw[0] & 0x01) != 0 {
@@ -865,7 +870,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 						}
 						client.Toggle = 0x00
 						client.State = SDO_STATE_UPLOAD_SEGMENT_REQ
-						log.Debugf("<==Rx (x%x) | BLOCK UPLOAD SWITCHING to SEGMENTED | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
+						log.Debugf("[CLIENT][RX][x%x] BLOCK UPLOAD SWITCHING SEGMENTED | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
 					}
 
 				}
@@ -898,7 +903,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 					}
 				}
 				client.State = SDO_STATE_UPLOAD_BLK_END_CRSP
-				log.Debugf("<==Rx (x%x) | BLOCK UPLOAD END | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
+				log.Debugf("[CLIENT][RX][x%x] BLOCK UPLOAD END | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, response.raw)
 
 			default:
 				abortCode = SDO_ABORT_CMD
@@ -967,7 +972,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.TimeoutTimer = 0
 			client.BusManager.Send(*client.CANtxBuff)
 			client.State = SDO_STATE_UPLOAD_INITIATE_RSP
-			log.Debugf("==>Tx (x%x) | UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
+			log.Debugf("[CLIENT][TX][x%x] UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
 
 		case SDO_STATE_UPLOAD_SEGMENT_REQ:
 			if client.Fifo.GetSpace() < 7 {
@@ -978,7 +983,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.TimeoutTimer = 0
 			client.BusManager.Send(*client.CANtxBuff)
 			client.State = SDO_STATE_UPLOAD_SEGMENT_RSP
-			log.Debugf("==>Tx (x%x) | UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
+			log.Debugf("[CLIENT][TX][x%x] UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
 
 		case SDO_STATE_UPLOAD_BLK_INITIATE_REQ:
 			client.CANtxBuff.Data[0] = 0xA4
@@ -1000,7 +1005,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.TimeoutTimer = 0
 			client.BusManager.Send(*client.CANtxBuff)
 			client.State = SDO_STATE_UPLOAD_BLK_INITIATE_RSP
-			log.Debugf("==>Tx (x%x) | BLOCK UPLOAD INITIATE | x%x:x%x %v blksize : %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data, client.BlockSize)
+			log.Debugf("[CLIENT][TX][x%x] BLOCK UPLOAD INITIATE | x%x:x%x %v blksize : %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data, client.BlockSize)
 
 		case SDO_STATE_UPLOAD_BLK_INITIATE_REQ2:
 			client.CANtxBuff.Data[0] = 0xA3
