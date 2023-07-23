@@ -108,34 +108,47 @@ const (
 
 // Object dictionary contains all node data
 type ObjectDictionary struct {
-	entries map[uint16]*Entry
+	entriesByIndexValue map[uint16]*Entry
+	entriesByIndexName  map[string]*Entry
 }
 
 // An entry can be any object type : variable, array, record or domain
 type Entry struct {
-	Index     uint16
-	Name      string
-	Object    any
-	Extension *Extension
+	Index             uint16
+	Name              string
+	Object            any
+	Extension         *Extension
+	subEntriesNameMap map[string]uint8
 }
 
 // Add a new entry to OD
 func (od *ObjectDictionary) AddEntry(entry *Entry) {
-	_, ok := od.entries[entry.Index]
-	if ok {
-		log.Warnf("[OD] overwritting entry %x", entry.Index)
+	_, entryIndexValueExists := od.entriesByIndexValue[entry.Index]
+	if entryIndexValueExists {
+		log.Warnf("[OD] overwritting entry index %x", entry.Index)
 	}
-	od.entries[entry.Index] = entry
+	od.entriesByIndexValue[entry.Index] = entry
+	od.entriesByIndexName[entry.Name] = entry
 }
 
-// Get the entry corresponding to the given index
-func (od *ObjectDictionary) Index(index uint16) *Entry {
-	entry, ok := od.entries[index]
-	if ok {
-		return entry
-	} else {
+// Get an entry corresponding to a given index
+// Index can either be a string, int or uint16
+// This method does not return an error for chaining
+func (od *ObjectDictionary) Index(index any) *Entry {
+	var entry *Entry
+	switch ind := index.(type) {
+	case string:
+		entry = od.entriesByIndexName[ind]
+	case int:
+		entry = od.entriesByIndexValue[uint16(ind)]
+	case uint:
+		entry = od.entriesByIndexValue[uint16(ind)]
+	case uint16:
+		entry = od.entriesByIndexValue[ind]
+	default:
 		return nil
 	}
+	return entry
 }
 
 type Stream struct {
@@ -186,59 +199,6 @@ func (streamer *ObjectStreamer) Write(b []byte) (n int, err error) {
 	return int(countWritten), err
 }
 
-// Add a member to Entry, this is only possible for Array or Record objects
-func (entry *Entry) AddMember(section *ini.Section, name string, nodeId uint8, subindex uint8) error {
-
-	switch object := entry.Object.(type) {
-	case Variable:
-		return fmt.Errorf("cannot add a member to variable type")
-	case Array:
-		variable, err := buildVariable(section, name, nodeId, entry.Index, subindex)
-		if err != nil {
-			return err
-		}
-		object.Variables[subindex] = *variable
-		entry.Object = object
-		return nil
-
-	case []Record:
-		variable, err := buildVariable(section, name, nodeId, entry.Index, subindex)
-		if err != nil {
-			return err
-		}
-		entry.Object = append(object, Record{Subindex: subindex, Variable: *variable})
-		return nil
-
-	default:
-		return fmt.Errorf("add member not supported for %T", object)
-	}
-}
-
-// Add or replace an extension to the Entry
-func (entry *Entry) AddExtension(extension *Extension) error {
-	entry.Extension = extension
-	return nil
-}
-
-// Get number of sub entries. Depends on type
-func (entry *Entry) SubEntriesCount() int {
-
-	switch object := entry.Object.(type) {
-	case Variable:
-		return 1
-	case Array:
-		return len(object.Variables)
-
-	case []Record:
-		return len(object)
-
-	default:
-		// This is not normal
-		log.Errorf("The entry %v has an invalid type", entry)
-		return 1
-	}
-}
-
 type FileInfo struct {
 	FileName         string
 	FileVersion      string
@@ -254,7 +214,7 @@ type FileInfo struct {
 	ModifiedBy       string
 }
 
-/*Object for basic OD variable */
+// OD variable object used for holding any sub object
 type Variable struct {
 	Data            []byte
 	DataLength      uint32 //Can be different than len(Data) for strings
@@ -266,6 +226,8 @@ type Variable struct {
 	StorageLocation string
 	LowLimit        int
 	HighLimit       int
+	Index           uint16
+	SubIndex        uint8
 }
 
 type Array struct {
@@ -357,8 +319,174 @@ func WriteEntryDisabled(stream *Stream, data []byte, countWritten *uint16) error
 	return ODR_UNSUPP_ACCESS
 }
 
-// Create an object streamer for a given (index,subindex)
-func (entry *Entry) CreateStreamer(subindex uint8, origin bool) (*ObjectStreamer, error) {
+// Add a member to Entry, this is only possible for Array or Record objects
+func (entry *Entry) AddMember(section *ini.Section, name string, nodeId uint8, subIndex uint8) error {
+
+	switch object := entry.Object.(type) {
+	case Variable:
+		return fmt.Errorf("cannot add a member to variable type")
+	case Array:
+		variable, err := buildVariable(section, name, nodeId, entry.Index, subIndex)
+		if err != nil {
+			return err
+		}
+		object.Variables[subIndex] = *variable
+		entry.Object = object
+		entry.subEntriesNameMap[name] = subIndex
+		return nil
+
+	case []Record:
+		variable, err := buildVariable(section, name, nodeId, entry.Index, subIndex)
+		if err != nil {
+			return err
+		}
+		entry.Object = append(object, Record{Subindex: subIndex, Variable: *variable})
+		entry.subEntriesNameMap[name] = subIndex
+		return nil
+
+	default:
+		return fmt.Errorf("add member not supported for %T", object)
+	}
+}
+
+// Add or replace an extension to the Entry
+func (entry *Entry) AddExtension(extension *Extension) error {
+	entry.Extension = extension
+	return nil
+}
+
+// Get variable from given sub index
+// Subindex can either be a string or an int, or uint8
+func (entry *Entry) SubIndex(subIndex any) (v *Variable, e error) {
+	if entry == nil {
+		return nil, ODR_IDX_NOT_EXIST
+	}
+	switch object := entry.Object.(type) {
+	case Variable:
+		if subIndex != 0 && subIndex != "" {
+			return nil, ODR_SUB_NOT_EXIST
+		}
+		return &object, nil
+	case Array:
+		subEntriesCount := len(object.Variables)
+		switch sub := subIndex.(type) {
+		case string:
+			subIndexInt, ok := entry.subEntriesNameMap[sub]
+			if ok {
+				return &object.Variables[subIndexInt], nil
+			}
+			return nil, ODR_SUB_NOT_EXIST
+		case int:
+			if uint8(sub) >= uint8(subEntriesCount) {
+				return nil, ODR_SUB_NOT_EXIST
+			}
+			return &object.Variables[uint8(sub)], nil
+		case uint8:
+			if sub >= uint8(subEntriesCount) {
+				return nil, ODR_SUB_NOT_EXIST
+			}
+			return &object.Variables[sub], nil
+		default:
+			return nil, ODR_DEV_INCOMPAT
+		}
+	case []Record:
+		records := object
+		var record *Record
+		switch sub := subIndex.(type) {
+		case string:
+			subIndexInt, ok := entry.subEntriesNameMap[sub]
+			if ok {
+				for i := range records {
+					if records[i].Subindex == subIndexInt {
+						record = &records[i]
+						return &record.Variable, nil
+					}
+				}
+			}
+			return nil, ODR_SUB_NOT_EXIST
+		case int:
+			for i := range records {
+				if records[i].Subindex == uint8(sub) {
+					record = &records[i]
+					return &record.Variable, nil
+				}
+			}
+			return nil, ODR_SUB_NOT_EXIST
+		case uint8:
+			for i := range records {
+				if records[i].Subindex == sub {
+					record = &records[i]
+					return &record.Variable, nil
+				}
+			}
+			return nil, ODR_SUB_NOT_EXIST
+		default:
+			return nil, ODR_DEV_INCOMPAT
+
+		}
+	default:
+		// This is not normal
+		return nil, ODR_DEV_INCOMPAT
+	}
+
+}
+
+// Get sub object type
+func (entry *Entry) GetSubEntryDataType(subIndex uint8) (dataType byte, e error) {
+	switch object := entry.Object.(type) {
+	case Variable:
+		if subIndex != 0 {
+			return 0, ODR_SUB_NOT_EXIST
+		}
+		return object.DataType, e
+	case Array:
+		subEntriesCount := len(object.Variables)
+		if subIndex >= uint8(subEntriesCount) {
+			return 0, ODR_SUB_NOT_EXIST
+		}
+		return object.Variables[subIndex].DataType, e
+
+	case []Record:
+		records := object
+		var record *Record
+		for i := range records {
+			if records[i].Subindex == subIndex {
+				record = &records[i]
+				break
+			}
+		}
+		if record == nil {
+			return 0, ODR_SUB_NOT_EXIST
+		} else {
+			return record.Variable.DataType, e
+		}
+	default:
+		// This is not normal
+		return 0, fmt.Errorf("the entry accessed %v has an invalid type", entry)
+	}
+}
+
+// Get number of sub entries. Depends on type
+func (entry *Entry) SubEntriesCount() int {
+
+	switch object := entry.Object.(type) {
+	case Variable:
+		return 1
+	case Array:
+		return len(object.Variables)
+
+	case []Record:
+		return len(object)
+
+	default:
+		// This is not normal
+		log.Errorf("The entry %v has an invalid type", entry)
+		return 1
+	}
+}
+
+// Create an object streamer for a given (index,subIndex)
+func (entry *Entry) CreateStreamer(subIndex uint8, origin bool) (*ObjectStreamer, error) {
 
 	if entry == nil || entry.Object == nil {
 		return nil, ODR_IDX_NOT_EXIST
@@ -368,7 +496,7 @@ func (entry *Entry) CreateStreamer(subindex uint8, origin bool) (*ObjectStreamer
 	// attribute, dataOrig and dataLength, depends on object type
 	switch object := object.(type) {
 	case Variable:
-		if subindex > 0 {
+		if subIndex > 0 {
 			return nil, ODR_SUB_NOT_EXIST
 		}
 		streamer.stream.Attribute = object.Attribute
@@ -377,18 +505,18 @@ func (entry *Entry) CreateStreamer(subindex uint8, origin bool) (*ObjectStreamer
 
 	case Array:
 		subEntriesCount := len(object.Variables)
-		if subindex >= uint8(subEntriesCount) {
+		if subIndex >= uint8(subEntriesCount) {
 			return nil, ODR_SUB_NOT_EXIST
 		}
-		streamer.stream.Attribute = object.Variables[subindex].Attribute
-		streamer.stream.Data = object.Variables[subindex].Data
-		streamer.stream.DataLength = uint32(len(object.Variables[subindex].Data))
+		streamer.stream.Attribute = object.Variables[subIndex].Attribute
+		streamer.stream.Data = object.Variables[subIndex].Data
+		streamer.stream.DataLength = uint32(len(object.Variables[subIndex].Data))
 
 	case []Record:
 		records := object
 		var record *Record
 		for i := range records {
-			if records[i].Subindex == subindex {
+			if records[i].Subindex == subIndex {
 				record = &records[i]
 				break
 			}
@@ -410,7 +538,7 @@ func (entry *Entry) CreateStreamer(subindex uint8, origin bool) (*ObjectStreamer
 		streamer.write = WriteEntryOriginal
 		streamer.stream.Object = nil
 		streamer.stream.DataOffset = 0
-		streamer.stream.Subindex = subindex
+		streamer.stream.Subindex = subIndex
 		return streamer, nil
 	}
 	// Add extension reader / writer for object
@@ -426,11 +554,11 @@ func (entry *Entry) CreateStreamer(subindex uint8, origin bool) (*ObjectStreamer
 	}
 	streamer.stream.Object = entry.Extension.Object
 	streamer.stream.DataOffset = 0
-	streamer.stream.Subindex = subindex
+	streamer.stream.Subindex = subIndex
 	return streamer, nil
 }
 
-// Read exactly len(b) bytes from OD at (index,subindex)
+// Read exactly len(b) bytes from OD at (index,subIndex)
 // Origin parameter controls extension usage if exists
 func (entry *Entry) readSubExactly(subIndex uint8, b []byte, origin bool) error {
 	streamer, err := entry.CreateStreamer(subIndex, origin)
@@ -444,7 +572,7 @@ func (entry *Entry) readSubExactly(subIndex uint8, b []byte, origin bool) error 
 	return err
 }
 
-// Write exactly len(b) bytes to OD at (index,subindex)
+// Write exactly len(b) bytes to OD at (index,subIndex)
 // Origin parameter controls extension usage if exists
 func (entry *Entry) writeSubExactly(subIndex uint8, b []byte, origin bool) error {
 	streamer, err := entry.CreateStreamer(subIndex, origin)
@@ -565,16 +693,5 @@ func isIDRestricted(canId uint16) bool {
 }
 
 func NewOD() ObjectDictionary {
-	return ObjectDictionary{entries: make(map[uint16]*Entry)}
-}
-
-/* Create a new Object dictionary Entry of Variable type */
-func NewVariableEntry(index uint16, data []byte, attribute ODA) *Entry {
-	Object := Variable{Data: data, Attribute: attribute}
-	return &Entry{Index: index, Object: Object, Extension: nil}
-}
-
-/* Create a new Object dictionary Entry of Record type, Object is an empty slice of Record elements */
-func NewRecordEntry(index uint16, records []Record) *Entry {
-	return &Entry{Index: index, Object: records, Extension: nil}
+	return ObjectDictionary{entriesByIndexValue: make(map[uint16]*Entry), entriesByIndexName: make(map[string]*Entry)}
 }
