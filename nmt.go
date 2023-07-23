@@ -105,7 +105,7 @@ func (nmt *NMT) Init(
 	var HBprodTime_ms uint16
 	err := entry1017.GetUint16(0, &HBprodTime_ms)
 	if err != nil {
-		log.Errorf("[NMT][%x|%x] reading producer heartbeat failed : %v", err)
+		log.Errorf("[NMT][%x|%x] reading producer heartbeat failed : %v", 0x1017, 0x0, err)
 		return CO_ERROR_OD_PARAMETERS
 	}
 	nmt.hearbeatProducerTimeUs = uint32(HBprodTime_ms) * 1000
