@@ -1,14 +1,16 @@
 package canopen
 
 import (
+	"encoding/binary"
 	"fmt"
 )
 
 type Network struct {
-	nodes      []Node
-	bus        *Bus
-	busManager *BusManager
-	SDOClient  *SDOClient // Network master has an sdo client to read/write nodes on network
+	nodes           []Node
+	bus             *Bus
+	busManager      *BusManager
+	sdoClient       *SDOClient // Network master has an sdo client to read/write nodes on network
+	nmtMasterTxBuff *BufferTxFrame
 	// An sdo client does not have to be linked to a specific node
 	odMap map[uint8]*ObjectDictionaryInformation
 }
@@ -55,7 +57,12 @@ func (network *Network) ConnectAndProcess(can_interface any, channel any, bitrat
 	// Add SDO client to network by default
 	client := &SDOClient{}
 	e = client.Init(nil, nil, 0, busManager)
-	network.SDOClient = client
+	if e != nil {
+		return e
+	}
+	network.sdoClient = client
+	// Add NMT tx buffer, for sending NMT commands
+	network.nmtMasterTxBuff, _, e = busManager.InsertTxBuffer(uint32(NMT_SERVICE_ID), false, 2, false)
 	if e != nil {
 		return e
 	}
@@ -91,15 +98,81 @@ func (network *Network) Read(nodeId uint8, index any, subindex any) (value any, 
 	if !odLoaded {
 		return nil, ODR_OD_MISSING
 	}
+	// Find corresponding Variable inside OD
+	// This will be used to determine information on the expected value
 	odVar, e := odInfo.od.Index(index).SubIndex(subindex)
 	if e != nil {
 		return nil, e
 	}
 	data := make([]byte, 10)
-	_, e = network.SDOClient.ReadRaw(nodeId, odVar.Index, odVar.SubIndex, data)
+	_, e = network.sdoClient.ReadRaw(nodeId, odVar.Index, odVar.SubIndex, data)
 	if e == SDO_ABORT_NONE {
 		return data, nil
 	}
 	return data, e
 
+}
+
+// Write an entry to a remote node
+// index and subindex can either be strings or integers
+// this method requires the corresponding node OD to be loaded
+// value should correspond to the expected datatype
+func (network *Network) Write(nodeId uint8, index any, subindex any, value any) error {
+	odInfo, odLoaded := network.odMap[nodeId]
+	if !odLoaded {
+		return ODR_OD_MISSING
+	}
+	// Find corresponding Variable inside OD
+	// This will be used to determine information on the expected value
+	odVar, e := odInfo.od.Index(index).SubIndex(subindex)
+	if e != nil {
+		return e
+	}
+	// TODO : maybe check data type with the current OD ?
+	var encoded []byte
+	switch val := value.(type) {
+	case uint8:
+		encoded = []byte{val}
+	case int8:
+		encoded = []byte{byte(val)}
+	case uint16:
+		encoded = make([]byte, 2)
+		binary.LittleEndian.PutUint16(encoded, val)
+	case int16:
+		encoded = make([]byte, 2)
+		binary.LittleEndian.PutUint16(encoded, uint16(val))
+	case uint32:
+		encoded = make([]byte, 4)
+		binary.LittleEndian.PutUint32(encoded, val)
+	case int32:
+		encoded = make([]byte, 4)
+		binary.LittleEndian.PutUint32(encoded, uint32(val))
+	case uint64:
+		encoded = make([]byte, 8)
+		binary.LittleEndian.PutUint64(encoded, val)
+	case int64:
+		encoded = make([]byte, 8)
+		binary.LittleEndian.PutUint64(encoded, uint64(val))
+	case string:
+		encoded = []byte(val)
+	default:
+		return ODR_TYPE_MISMATCH
+	}
+	e = network.sdoClient.WriteRaw(nodeId, odVar.Index, odVar.SubIndex, encoded, false)
+	if e == SDO_ABORT_NONE {
+		return nil
+	}
+	return e
+
+}
+
+// Send NMT commands to remote nodes
+// Id 0 is used as a broadcast command i.e. affects all nodes
+func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
+	if nodeId > 127 {
+		return CO_ERROR_OD_PARAMETERS
+	}
+	network.nmtMasterTxBuff.Data[0] = uint8(nmtCommand)
+	network.nmtMasterTxBuff.Data[1] = nodeId
+	return network.busManager.Send((*network.nmtMasterTxBuff))
 }

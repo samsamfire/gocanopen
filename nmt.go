@@ -34,16 +34,18 @@ var NMT_STATE_MAP = map[uint8]string{
 	NMT_STOPPED:         "STOPPED",
 }
 
+type NMTCommand uint8
+
 const (
-	NMT_NO_COMMAND            uint8 = 0
-	NMT_ENTER_OPERATIONAL     uint8 = 1
-	NMT_ENTER_STOPPED         uint8 = 2
-	NMT_ENTER_PRE_OPERATIONAL uint8 = 128
-	NMT_RESET_NODE            uint8 = 129
-	NMT_RESET_COMMUNICATION   uint8 = 130
+	NMT_NO_COMMAND            NMTCommand = 0
+	NMT_ENTER_OPERATIONAL     NMTCommand = 1
+	NMT_ENTER_STOPPED         NMTCommand = 2
+	NMT_ENTER_PRE_OPERATIONAL NMTCommand = 128
+	NMT_RESET_NODE            NMTCommand = 129
+	NMT_RESET_COMMUNICATION   NMTCommand = 130
 )
 
-var NMT_COMMAND_MAP = map[uint8]string{
+var NMT_COMMAND_MAP = map[NMTCommand]string{
 	NMT_ENTER_OPERATIONAL:     "ENTER-OPERATIONAL",
 	NMT_ENTER_STOPPED:         "ENTER-STOPPED",
 	NMT_ENTER_PRE_OPERATIONAL: "ENTER-PREOPERATIONAL",
@@ -54,7 +56,7 @@ var NMT_COMMAND_MAP = map[uint8]string{
 type NMT struct {
 	operatingState         uint8
 	operatingStatePrev     uint8
-	internalCommand        uint8
+	internalCommand        NMTCommand
 	nodeId                 uint8
 	control                uint16
 	hearbeatProducerTimeUs uint32
@@ -73,7 +75,7 @@ func (nmt *NMT) Handle(frame Frame) {
 	if dlc != 2 {
 		return
 	}
-	command := data[0]
+	command := NMTCommand(data[0])
 	nodeId := data[1]
 	if nodeId == 0 || nodeId == nmt.nodeId {
 		nmt.internalCommand = command
@@ -251,21 +253,20 @@ func (nmt *NMT) GetInternalState() uint8 {
 
 // Send NMT command to self, don't send on network
 func (nmt *NMT) SendInternalCommand(command uint8) {
-	nmt.internalCommand = command
+	nmt.internalCommand = NMTCommand(command)
 }
 
 // Send an NMT command to the network
-func (nmt *NMT) SendCommand(command uint8, node_id uint8) error {
+func (nmt *NMT) SendCommand(command NMTCommand, node_id uint8) error {
 	if nmt == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	// Also apply to node if concerned
 	if node_id == 0 || node_id == nmt.nodeId {
-		nmt.internalCommand = command
+		nmt.internalCommand = NMTCommand(command)
 	}
 	// Send NMT command
-	nmt.nmtTxBuff.Data[0] = command
+	nmt.nmtTxBuff.Data[0] = uint8(command)
 	nmt.nmtTxBuff.Data[1] = node_id
-	nmt.busManager.Send((*nmt.nmtTxBuff))
-	return nil
+	return nmt.busManager.Send((*nmt.nmtTxBuff))
 }
