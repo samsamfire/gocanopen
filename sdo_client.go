@@ -200,8 +200,6 @@ func (client *SDOClient) Handle(frame Frame) {
 			}
 
 		}
-	} else {
-		log.Debugf("Ignoring response x%x %v; Client state : x%x", frame.ID, frame.Data, client.State)
 	}
 
 }
