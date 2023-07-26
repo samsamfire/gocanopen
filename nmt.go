@@ -257,16 +257,16 @@ func (nmt *NMT) SendInternalCommand(command uint8) {
 }
 
 // Send an NMT command to the network
-func (nmt *NMT) SendCommand(command NMTCommand, node_id uint8) error {
+func (nmt *NMT) SendCommand(command NMTCommand, nodeId uint8) error {
 	if nmt == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	// Also apply to node if concerned
-	if node_id == 0 || node_id == nmt.nodeId {
+	if nodeId == 0 || nodeId == nmt.nodeId {
 		nmt.internalCommand = NMTCommand(command)
 	}
 	// Send NMT command
 	nmt.nmtTxBuff.Data[0] = uint8(command)
-	nmt.nmtTxBuff.Data[1] = node_id
+	nmt.nmtTxBuff.Data[1] = nodeId
 	return nmt.busManager.Send((*nmt.nmtTxBuff))
 }
