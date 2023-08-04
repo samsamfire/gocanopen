@@ -13,8 +13,6 @@ type SDOServer struct {
 	NodeId                     uint8
 	BusManager                 *BusManager
 	CANtxBuff                  *BufferTxFrame
-	idRxBuff                   int
-	idTxBuff                   int
 	CobIdClientToServer        uint32
 	CobIdServerToClient        uint32
 	ExtensionEntry1200         *Extension
@@ -187,15 +185,13 @@ func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uin
 	}
 	server.RxNew = false
 	server.BusManager = busManager
-	server.idRxBuff = 0
-	server.idTxBuff = 0
 	server.CobIdClientToServer = 0
 	server.CobIdServerToClient = 0
-	return server.InitRxTx(server.BusManager, 0, 0, uint32(canIdClientToServer), uint32(canIdServerToClient))
+	return server.InitRxTx(server.BusManager, uint32(canIdClientToServer), uint32(canIdServerToClient))
 
 }
 
-func (server *SDOServer) InitRxTx(busManager *BusManager, idRx uint16, idTx uint16, cobIdClientToServer uint32, cobIdServerToClient uint32) error {
+func (server *SDOServer) InitRxTx(busManager *BusManager, cobIdClientToServer uint32, cobIdServerToClient uint32) error {
 	var ret error
 	// Only proceed if parameters change (i.e. different client)
 	if cobIdServerToClient == server.CobIdServerToClient && cobIdClientToServer == server.CobIdClientToServer {
@@ -224,16 +220,15 @@ func (server *SDOServer) InitRxTx(busManager *BusManager, idRx uint16, idTx uint
 		server.Valid = false
 	}
 	// Configure buffers, if initializing then insert in buffer, otherwise, update
-	if idRx == idTx && idTx == 0 {
-		ret = server.BusManager.InsertRxBuffer(uint32(CanIdC2S), 0x7FF, false, server)
-		server.CANtxBuff, server.idTxBuff, _ = server.BusManager.InsertTxBuffer(uint32(CanIdS2C), false, 8, false)
-	} else {
-		ret = server.BusManager.InsertRxBuffer(uint32(CanIdC2S), 0x7FF, false, server)
-		server.CANtxBuff, _ = server.BusManager.UpdateTxBuffer(server.idTxBuff, uint32(CanIdS2C), false, 8, false)
-	}
-	if server.CANtxBuff == nil {
-		ret = CO_ERROR_ILLEGAL_ARGUMENT
+	ret = server.BusManager.InsertRxBuffer(uint32(CanIdC2S), 0x7FF, false, server)
+	if ret != nil {
 		server.Valid = false
+		return ret
+	}
+	server.CANtxBuff, ret = server.BusManager.InsertTxBuffer(uint32(CanIdS2C), false, 8, false)
+	if ret != nil {
+		server.Valid = false
+		return ret
 	}
 	return ret
 

@@ -108,8 +108,8 @@ func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 		if sync.CounterOverflowValue != 0 {
 			frameSize = 1
 		}
-		sync.CANTxBuff, err = sync.BusManager.UpdateTxBuffer(sync.CANTxBuffIndex, uint32(canId), false, frameSize, false)
-		if sync.CANTxBuff == nil || err != nil {
+		sync.txBuffer, err = sync.BusManager.InsertTxBuffer(uint32(canId), false, frameSize, false)
+		if sync.txBuffer == nil || err != nil {
 			return ODR_DEV_INCOMPAT
 		}
 		sync.Ident = canId
@@ -203,14 +203,13 @@ func WriteEntry1014(stream *Stream, data []byte, countWritten *uint16) error {
 
 	if newEnabled {
 		var err error
-		em.CANTxBuff, err = em.busManager.UpdateTxBuffer(
-			int(em.TxBufferIdx),
+		em.txBuffer, err = em.busManager.InsertTxBuffer(
 			newCanId,
 			false,
 			8,
 			false,
 		)
-		if em.CANTxBuff == nil || err != nil {
+		if em.txBuffer == nil || err != nil {
 			return ODR_DEV_INCOMPAT
 		}
 	}
@@ -293,8 +292,8 @@ func WriteEntry1019(stream *Stream, data []byte, countWritten *uint16) error {
 		nbBytes = 1
 	}
 	var err error
-	sync.CANTxBuff, err = sync.BusManager.UpdateTxBuffer(sync.CANTxBuffIndex, uint32(sync.Ident), false, nbBytes, false)
-	if sync.CANTxBuff == nil || err != nil {
+	sync.txBuffer, err = sync.BusManager.InsertTxBuffer(uint32(sync.Ident), false, nbBytes, false)
+	if sync.txBuffer == nil || err != nil {
 		sync.IsProducer = false
 		return ODR_DEV_INCOMPAT
 	}
@@ -329,8 +328,6 @@ func WriteEntry1201(stream *Stream, data []byte, countWritten *uint16) error {
 		}
 		server.InitRxTx(
 			server.BusManager,
-			uint16(server.idRxBuff),
-			uint16(server.idTxBuff),
 			cobId,
 			server.CobIdServerToClient,
 		)
@@ -347,8 +344,6 @@ func WriteEntry1201(stream *Stream, data []byte, countWritten *uint16) error {
 		}
 		server.InitRxTx(
 			server.BusManager,
-			uint16(server.idRxBuff),
-			uint16(server.idTxBuff),
 			server.CobIdClientToServer,
 			cobId,
 		)
@@ -632,16 +627,16 @@ func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 			if !valid {
 				canId = 0
 			}
-			txBuffer, err := pdo.busManager.UpdateTxBuffer(
-				pdo.BufferIdx,
+			var err error
+			tpdo.txBuffer, err = pdo.busManager.InsertTxBuffer(
 				canId,
 				false,
 				uint8(pdo.DataLength),
-				tpdo.TransmissionType <= TRANSMISSION_TYPE_SYNC_240)
-			if txBuffer == nil || err != nil {
+				tpdo.TransmissionType <= TRANSMISSION_TYPE_SYNC_240,
+			)
+			if tpdo.txBuffer == nil || err != nil {
 				return ODR_DEV_INCOMPAT
 			}
-			tpdo.TxBuffer = txBuffer
 			pdo.Valid = valid
 			pdo.ConfiguredIdent = uint16(canId)
 		}
@@ -652,7 +647,7 @@ func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 		if transmissionType > TRANSMISSION_TYPE_SYNC_240 && transmissionType < TRANSMISSION_TYPE_SYNC_EVENT_LO {
 			return ODR_INVALID_VALUE
 		}
-		tpdo.TxBuffer.SyncFlag = transmissionType <= TRANSMISSION_TYPE_SYNC_240
+		tpdo.txBuffer.SyncFlag = transmissionType <= TRANSMISSION_TYPE_SYNC_240
 		tpdo.SyncCounter = 255
 		tpdo.TransmissionType = transmissionType
 		tpdo.SendRequest = true

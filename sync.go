@@ -19,8 +19,7 @@ type SYNC struct {
 	OD1006Period         *[]byte
 	OD1007Window         *[]byte
 	IsProducer           bool
-	CANTxBuff            *BufferTxFrame
-	CANTxBuffIndex       int
+	txBuffer             *BufferTxFrame
 	BusManager           *BusManager
 	Ident                uint16
 	ExtensionEntry1005   Extension
@@ -130,11 +129,11 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	if syncCounterOverflow != 0 {
 		frameSize = 1
 	}
-	sync.CANTxBuff, sync.CANTxBuffIndex, err2 = sync.BusManager.InsertTxBuffer(uint32(sync.Ident), false, frameSize, false)
+	sync.txBuffer, err2 = sync.BusManager.InsertTxBuffer(uint32(sync.Ident), false, frameSize, false)
 	if err2 != nil {
 		return err2
 	}
-	if sync.CANTxBuff == nil {
+	if sync.txBuffer == nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	log.Infof("[SYNC] Initialisation finished")
@@ -148,8 +147,8 @@ func (sync *SYNC) sendSync() {
 	}
 	sync.Timer = 0
 	sync.RxToggle = !sync.RxToggle
-	sync.CANTxBuff.Data[0] = sync.Counter
-	sync.BusManager.Send(*sync.CANTxBuff)
+	sync.txBuffer.Data[0] = sync.Counter
+	sync.BusManager.Send(*sync.txBuffer)
 }
 
 func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
