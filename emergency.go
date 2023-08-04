@@ -259,7 +259,6 @@ type EM struct {
 	NodeId              byte
 	CANTxBuff           *BufferTxFrame
 	TxBufferIdx         int
-	RxBufferIdx         int
 	ProducerIdent       uint16
 	InhibitEmTimeUs     uint32
 	InhibitEmTimer      uint32
@@ -402,8 +401,7 @@ func (emergency *EM) Init(
 		entryStatusBits.AddExtension(&emergency.ExtensionStatusBits)
 	}
 
-	emergency.RxBufferIdx, err = busManager.InsertRxBuffer(uint32(EMERGENCY_SERVICE_ID), 0x780, false, emergency)
-	return err
+	return busManager.InsertRxBuffer(uint32(EMERGENCY_SERVICE_ID), 0x780, false, emergency)
 }
 
 func (emergency *EM) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {

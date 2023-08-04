@@ -54,7 +54,7 @@ func (server *SDOServer) Handle(frame Frame) {
 		server.State = SDO_STATE_IDLE
 	} else if server.RxNew {
 		// Ignore message if previous message not processed
-		log.Info("Ignoring because already received message")
+		log.Info("[SERVER][RX] ignoring message because still processing")
 	} else if server.State == SDO_STATE_UPLOAD_BLK_END_CRSP && frame.Data[0] == 0xA1 {
 		// Block transferred ! go to idle
 		server.State = SDO_STATE_IDLE
@@ -225,10 +225,10 @@ func (server *SDOServer) InitRxTx(busManager *BusManager, idRx uint16, idTx uint
 	}
 	// Configure buffers, if initializing then insert in buffer, otherwise, update
 	if idRx == idTx && idTx == 0 {
-		server.idRxBuff, ret = server.BusManager.InsertRxBuffer(uint32(CanIdC2S), 0x7FF, false, server)
+		ret = server.BusManager.InsertRxBuffer(uint32(CanIdC2S), 0x7FF, false, server)
 		server.CANtxBuff, server.idTxBuff, _ = server.BusManager.InsertTxBuffer(uint32(CanIdS2C), false, 8, false)
 	} else {
-		ret = server.BusManager.UpdateRxBuffer(server.idRxBuff, uint32(CanIdC2S), 0x7FF, false, server)
+		ret = server.BusManager.InsertRxBuffer(uint32(CanIdC2S), 0x7FF, false, server)
 		server.CANtxBuff, _ = server.BusManager.UpdateTxBuffer(server.idTxBuff, uint32(CanIdS2C), false, 8, false)
 	}
 	if server.CANtxBuff == nil {

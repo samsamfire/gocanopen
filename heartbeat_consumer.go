@@ -21,7 +21,6 @@ type HBConsumerNode struct {
 	TimeoutTimer uint32
 	TimeUs       uint32
 	rxNew        bool
-	RxBufferIdx  int
 }
 
 type HBConsumer struct {
@@ -58,7 +57,6 @@ func (consumer *HBConsumer) Init(em *EM, entry1016 *Entry, busManager *BusManage
 	log.Debugf("[HB CONSUMER] %v possible entries for nodes to monitor", consumer.nbMonitoredNodes)
 	consumer.monitoredNodes = make([]HBConsumerNode, consumer.nbMonitoredNodes)
 	for index := range consumer.monitoredNodes {
-		monitoredNode := &consumer.monitoredNodes[index]
 		var hbConsValue uint32
 		odRet := entry1016.GetUint32(uint8(index)+1, &hbConsValue)
 		if odRet != nil {
@@ -68,7 +66,6 @@ func (consumer *HBConsumer) Init(em *EM, entry1016 *Entry, busManager *BusManage
 		nodeId := (hbConsValue >> 16) & 0xFF
 		time := uint16(hbConsValue & 0xFFFF)
 		// Set the buffer index before initializing
-		monitoredNode.RxBufferIdx = -1
 		ret := consumer.InitEntry(uint8(index), uint8(nodeId), time)
 		log.Debugf("[HB CONSUMER] added x%x to list of monitored nodes | timeout %v", nodeId, time)
 		if ret != nil && ret != CO_ERROR_OD_PARAMETERS {
@@ -123,13 +120,7 @@ func (consumer *HBConsumer) InitEntry(index uint8, nodeId uint8, consumerTimeMs 
 	// Configure RX buffer for hearbeat reception
 	if monitoredNode.HBState != HB_UNCONFIGURED {
 		log.Debugf("[HB CONSUMER] adding consumer for id %v | timeout %v us", monitoredNode.NodeId, monitoredNode.TimeUs)
-		if monitoredNode.RxBufferIdx == -1 {
-			// Never been configured
-			monitoredNode.RxBufferIdx, ret = consumer.busManager.InsertRxBuffer(uint32(cobId), 0x7FF, false, monitoredNode)
-		} else {
-			//Only update
-			ret = consumer.busManager.UpdateRxBuffer(monitoredNode.RxBufferIdx, uint32(cobId), 0x7FF, false, monitoredNode)
-		}
+		ret = consumer.busManager.InsertRxBuffer(uint32(cobId), 0x7FF, false, monitoredNode)
 	}
 	return ret
 

@@ -1,9 +1,5 @@
 package canopen
 
-import (
-	log "github.com/sirupsen/logrus"
-)
-
 // A CAN Bus interface that implements sending
 type Bus interface {
 	Send(frame BufferTxFrame) error    // Send a frame on the bus
@@ -104,12 +100,12 @@ const (
 type BufferRxFrame struct {
 	Ident      uint32
 	Mask       uint32
-	Object     FrameHandler // Object implements frame handler can be any canopen object type
+	handler    FrameHandler
 	CANifindex int
 }
 
 func NewBufferRxFrame(ident uint32, mask uint32, object FrameHandler, CANifindex int) BufferRxFrame {
-	return BufferRxFrame{Ident: ident, Mask: mask, Object: object, CANifindex: CANifindex}
+	return BufferRxFrame{Ident: ident, Mask: mask, handler: object, CANifindex: CANifindex}
 }
 
 /* Transmit message object */
@@ -130,7 +126,8 @@ func NewBufferTxFrame(ident uint32, length uint8, syncFlag bool, CANifindex int)
 // It has interal buffers etc
 type BusManager struct {
 	Bus               Bus // Bus interface that can be adapted
-	RxArray           []BufferRxFrame
+	txBuffer          map[uint32]BufferTxFrame
+	rxBuffer          map[uint32]BufferRxFrame
 	TxArray           []BufferTxFrame
 	CANerrorstatus    uint16
 	CANnormal         bool
@@ -143,9 +140,8 @@ type BusManager struct {
 
 /* Create a New BusManager object */
 func NewBusManager(bus Bus, rxArray []BufferRxFrame, txArray []BufferTxFrame) *BusManager {
-	bus_manager := &BusManager{
+	busManager := &BusManager{
 		Bus:               bus,
-		RxArray:           rxArray,
 		TxArray:           txArray,
 		CANerrorstatus:    0,
 		CANnormal:         false,
@@ -156,77 +152,66 @@ func NewBusManager(bus Bus, rxArray []BufferRxFrame, txArray []BufferTxFrame) *B
 		ErrOld:            0,
 	}
 
-	return bus_manager
+	return busManager
 }
 
-func (bus_manager *BusManager) Init(bus Bus) {
-	bus_manager.Bus = bus
-	bus_manager.RxArray = []BufferRxFrame{}
-	bus_manager.TxArray = []BufferTxFrame{}
-	bus_manager.CANerrorstatus = 0
-	bus_manager.CANnormal = false
-	bus_manager.UseCANrxFilters = false
-	bus_manager.BufferInhibitFlag = false
-	bus_manager.FirstCANtxMessage = false
-	bus_manager.CANtxCount = 0
-	bus_manager.ErrOld = 0
-
-	// For now ignore rx filters but initialize everything inside rxBuffer
-	for _, rxBuffer := range bus_manager.RxArray {
-		rxBuffer.Ident = 0
-		rxBuffer.Mask = 0xFFFFFFFF
-		rxBuffer.Object = nil
-		rxBuffer.CANifindex = 0
-	}
-
+func (busManager *BusManager) Init(bus Bus) {
+	busManager.Bus = bus
+	busManager.rxBuffer = make(map[uint32]BufferRxFrame)
+	busManager.TxArray = []BufferTxFrame{}
+	busManager.CANerrorstatus = 0
+	busManager.CANnormal = false
+	busManager.UseCANrxFilters = false
+	busManager.BufferInhibitFlag = false
+	busManager.FirstCANtxMessage = false
+	busManager.CANtxCount = 0
+	busManager.ErrOld = 0
 }
 
 // Implements CAN package handle interface for processing a CAN message
-func (bus_manager *BusManager) Handle(frame Frame) {
-	// Feed the frame to the correct callback
-	// TODO this could probably be quicker if it was sorted or we had a map
-	for _, framebBuffer := range bus_manager.RxArray {
-		if (frame.ID^framebBuffer.Ident)&framebBuffer.Mask == 0 {
-			// Callback for the specific CANopen object (PDO, SDO, NMT, HB, etc)
-			framebBuffer.Object.Handle(frame)
-		}
+// This feeds the frame to the correct CANopen object
+func (busManager *BusManager) Handle(frame Frame) {
+	frameBuffer, ok := busManager.rxBuffer[frame.ID]
+	if !ok {
+		return
 	}
+	frameBuffer.handler.Handle(frame)
 }
 
 /* Update rx filters in buffer */
-func (bus_manager *BusManager) SetRxFilters() {
+func (busManager *BusManager) SetRxFilters() {
 	// TODO
 }
 
 /* Send CAN messages in buffer */
 // Error handling is very limited right now
 
-func (bus_manager *BusManager) Send(buf BufferTxFrame) error {
-	return bus_manager.Bus.Send(buf)
+func (busManager *BusManager) Send(buf BufferTxFrame) error {
+	return busManager.Bus.Send(buf)
 }
 
-func (bus_manager *BusManager) ClearSyncPDOs() (result COResult) {
+func (busManager *BusManager) ClearSyncPDOs() (result COResult) {
 	// TODO
 	return 0
 }
 
 /* This should be called cyclically to update errors & process unsent messages*/
-func (bus_manager *BusManager) Process() error {
+func (busManager *BusManager) Process() error {
 	// TODO get bus state error
-	bus_manager.CANerrorstatus = 0
+	busManager.CANerrorstatus = 0
 	/*Loop through tx array and send unsent messages*/
-	if bus_manager.CANtxCount > 0 {
+	if busManager.CANtxCount > 0 {
 		found := false
-		for _, buffer := range bus_manager.TxArray {
+		for _, buffer := range busManager.TxArray {
 			if buffer.BufferFull {
 				buffer.BufferFull = false
-				bus_manager.CANtxCount -= 1
-				bus_manager.Send(buffer)
+				busManager.CANtxCount -= 1
+				busManager.Send(buffer)
 				found = true
 			}
 		}
 		if !found {
-			bus_manager.CANtxCount = 0
+			busManager.CANtxCount = 0
 		}
 	}
 	return nil
@@ -235,61 +220,36 @@ func (bus_manager *BusManager) Process() error {
 
 // Initialize transmit buffer append it to existing transmit buffer array and return it
 // Return buffer, index of buffer
-func (bus_manager *BusManager) InsertTxBuffer(ident uint32, rtr bool, length uint8, syncFlag bool) (*BufferTxFrame, int, error) {
+func (busManager *BusManager) InsertTxBuffer(ident uint32, rtr bool, length uint8, syncFlag bool) (*BufferTxFrame, int, error) {
 	// This is specific to socketcan
 	ident = ident & CAN_SFF_MASK
 	if rtr {
 		ident |= CAN_RTR_FLAG
 	}
-	bus_manager.TxArray = append(bus_manager.TxArray, NewBufferTxFrame(ident, length, syncFlag, 0))
-	return &bus_manager.TxArray[len(bus_manager.TxArray)-1], len(bus_manager.TxArray) - 1, nil
+	busManager.TxArray = append(busManager.TxArray, NewBufferTxFrame(ident, length, syncFlag, 0))
+	return &busManager.TxArray[len(busManager.TxArray)-1], len(busManager.TxArray) - 1, nil
 }
 
 // Update an already present buffer instead of appending
-func (bus_manager *BusManager) UpdateTxBuffer(index int, ident uint32, rtr bool, length uint8, syncFlag bool) (*BufferTxFrame, error) {
+func (busManager *BusManager) UpdateTxBuffer(index int, ident uint32, rtr bool, length uint8, syncFlag bool) (*BufferTxFrame, error) {
 	// This is specific to socketcan
 	ident = ident & CAN_SFF_MASK
 	if rtr {
 		ident |= CAN_RTR_FLAG
 	}
-	bus_manager.TxArray[index] = NewBufferTxFrame(ident, length, syncFlag, 0)
-	return &bus_manager.TxArray[index], nil
+	busManager.TxArray[index] = NewBufferTxFrame(ident, length, syncFlag, 0)
+	return &busManager.TxArray[index], nil
 }
 
 // Initialize receive buffer append it to existing receive buffer
 // Return the index of the added buffer
-func (bus_manager *BusManager) InsertRxBuffer(ident uint32, mask uint32, rtr bool, object FrameHandler) (int, error) {
-
-	if object == nil {
-		log.Error("Rx buffer needs a frame handler")
-		return 0, CO_ERROR_ILLEGAL_ARGUMENT
-	}
+func (busManager *BusManager) InsertRxBuffer(ident uint32, mask uint32, rtr bool, object FrameHandler) error {
 	// This part is specific to socketcan
 	ident = ident & CAN_SFF_MASK
 	if rtr {
 		ident |= CAN_RTR_FLAG
 	}
 	mask = (mask & CAN_SFF_MASK) | CAN_EFF_FLAG | CAN_RTR_FLAG
-
-	bus_manager.RxArray = append(bus_manager.RxArray, NewBufferRxFrame(ident, mask, object, 0))
-
-	// TODO handle RX filters smhw
-	return len(bus_manager.RxArray) - 1, nil
-}
-
-// Update an already present buffer instead of appending
-func (bus_manager *BusManager) UpdateRxBuffer(index int, ident uint32, mask uint32, rtr bool, object FrameHandler) error {
-	if object == nil {
-		log.Error("Rx buffer needs a frame handler")
-		return CO_ERROR_ILLEGAL_ARGUMENT
-	}
-	// This part is specific to socketcan
-	ident = ident & CAN_SFF_MASK
-	if rtr {
-		ident |= CAN_RTR_FLAG
-	}
-	mask = (mask & CAN_SFF_MASK) | CAN_EFF_FLAG | CAN_RTR_FLAG
-	// Here, accessing an invalid is worse than panicing
-	bus_manager.RxArray[index] = NewBufferRxFrame(ident, mask, object, 0)
+	busManager.rxBuffer[ident] = NewBufferRxFrame(ident, mask, object, 0)
 	return nil
 }

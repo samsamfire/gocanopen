@@ -21,7 +21,6 @@ type SYNC struct {
 	IsProducer           bool
 	CANTxBuff            *BufferTxFrame
 	CANTxBuffIndex       int
-	CANRxBuffIndex       int
 	BusManager           *BusManager
 	Ident                uint16
 	ExtensionEntry1005   Extension
@@ -122,8 +121,7 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	sync.Ident = uint16(cobIdSync) & 0x7FF
 	sync.BusManager = busManager
 
-	var err1 error
-	sync.CANRxBuffIndex, err1 = sync.BusManager.InsertRxBuffer(uint32(sync.Ident), 0x7FF, false, sync)
+	err1 := sync.BusManager.InsertRxBuffer(uint32(sync.Ident), 0x7FF, false, sync)
 	if err1 != nil {
 		return err1
 	}
