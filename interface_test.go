@@ -10,16 +10,7 @@ var BaseObjectDictionaryParsed ObjectDictionary
 
 func createOD() ObjectDictionary {
 	od := NewOD()
-	od.entries[0x1016] = NewVariableEntry(0x1016, []byte{0x10, 0x20, 0x10, 0x20}, ODA_SDO_R|ODA_SDO_W)
-	od.entries[0x1017] = NewVariableEntry(0x1017, []byte{0x10, 0x20, 0x10, 0x20}, ODA_SDO_R|ODA_SDO_W)
-	od.entries[0x1018] = NewVariableEntry(0x1018, []byte{0x10, 0x20, 0x10, 0x20}, ODA_SDO_R|ODA_SDO_W)
-	od.entries[0x1019] = NewVariableEntry(0x1019, []byte{0x10, 0x20, 0x10, 0x20}, ODA_SDO_R|ODA_SDO_W)
-	od.entries[0x1030] = NewRecordEntry(0x1030, []Record{
-		{Variable: Variable{Data: []byte{0x10, 0x20}, Attribute: ODA_SDO_R | ODA_SDO_W}, Subindex: 0},
-		{Variable: Variable{Data: []byte{0x10, 0x20}, Attribute: ODA_SDO_R | ODA_SDO_W}, Subindex: 0},
-		{Variable: Variable{Data: []byte{0x10, 0x20}, Attribute: ODA_SDO_R | ODA_SDO_W}, Subindex: 0},
-	})
-
+	od.AddVariable(0x1016, "entry1016", Variable{Data: []byte{0x10, 0x20}, Attribute: ODA_SDO_R | ODA_SDO_W})
 	return od
 }
 
