@@ -104,12 +104,12 @@ func (network *Network) Read(nodeId uint8, index any, subindex any) (value any, 
 	if e != nil {
 		return nil, e
 	}
-	data := make([]byte, 10)
-	_, e = network.sdoClient.ReadRaw(nodeId, odVar.Index, odVar.SubIndex, data)
-	if e == SDO_ABORT_NONE {
-		return data, nil
+	data := make([]byte, 1000)
+	nbRead, e := network.sdoClient.ReadRaw(nodeId, odVar.Index, odVar.SubIndex, data)
+	if e != SDO_ABORT_NONE {
+		return nil, e
 	}
-	return data, e
+	return decode(data[:nbRead], odVar.DataType)
 
 }
 
@@ -169,8 +169,12 @@ func (network *Network) Write(nodeId uint8, index any, subindex any, value any) 
 // Send NMT commands to remote nodes
 // Id 0 is used as a broadcast command i.e. affects all nodes
 func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
-	if nodeId > 127 {
-		return CO_ERROR_OD_PARAMETERS
+	if nodeId > 127 || (nmtCommand != NMT_ENTER_OPERATIONAL &&
+		nmtCommand != NMT_ENTER_PRE_OPERATIONAL &&
+		nmtCommand != NMT_ENTER_STOPPED &&
+		nmtCommand != NMT_RESET_COMMUNICATION &&
+		nmtCommand != NMT_RESET_NODE) {
+		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	network.nmtMasterTxBuff.Data[0] = uint8(nmtCommand)
 	network.nmtMasterTxBuff.Data[1] = nodeId
