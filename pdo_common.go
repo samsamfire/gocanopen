@@ -90,13 +90,13 @@ func (pdo *PDOCommon) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInd
 	// Check correct attribute, length, and alignment
 	switch {
 	case streamerCopy.stream.Attribute&pdo.attribute() == 0:
-		log.Warnf("[%v][%x|%x] mapping failed : attribute error", pdo.Type(), index, subindex, ret)
+		log.Warnf("[%v][%x|%x] mapping failed : attribute error", pdo.Type(), index, subindex)
 		return ODR_NO_MAP
 	case (mappedLengthBits & 0x07) != 0:
-		log.Warnf("[%v][%x|%x] mapping failed : alignment error", pdo.Type(), index, subindex, ret)
+		log.Warnf("[%v][%x|%x] mapping failed : alignment error", pdo.Type(), index, subindex)
 		return ODR_NO_MAP
 	case streamerCopy.stream.DataLength < uint32(mappedLength):
-		log.Warnf("[%v][%x|%x] mapping failed : length error", pdo.Type(), index, subindex, ret)
+		log.Warnf("[%v][%x|%x] mapping failed : length error", pdo.Type(), index, subindex)
 		return ODR_NO_MAP
 	default:
 	}

@@ -42,10 +42,10 @@ const (
 )
 
 var OBJ_NAME_MAP = map[byte]string{
-	OBJ_DOMAIN: "DOMAIN",
+	OBJ_DOMAIN: "DOMAIN  ",
 	OBJ_VAR:    "VARIABLE",
-	OBJ_ARR:    "ARRAY",
-	OBJ_RECORD: "RECORD",
+	OBJ_ARR:    "ARRAY   ",
+	OBJ_RECORD: "RECORD  ",
 }
 
 // Parse an EDS and file and return an ObjectDictionary
@@ -115,7 +115,7 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 				return nil, fmt.Errorf("[OD] unknown object type whilst parsing EDS %T", objType)
 			}
 
-			log.Debugf("[OD] adding new entry %v %v at %x", OBJ_NAME_MAP[objectType], name, index)
+			log.Debugf("[OD] %v | %v at %x", OBJ_NAME_MAP[objectType], name, index)
 
 		}
 

@@ -39,7 +39,7 @@ func (time *TIME) Init(entry1012 *Entry, busManager *BusManager, producerInterva
 	cobIdTimestamp := uint32(0)
 	ret := entry1012.GetUint32(0, &cobIdTimestamp)
 	if ret != nil {
-		log.Errorf("[TIME][%x|%x] reading cob id timestamp failed : %v", ret)
+		log.Errorf("[TIME][%x|%x] reading cob id timestamp failed : %v", entry1012.Index, 0x0, ret)
 		return CO_ERROR_OD_PARAMETERS
 	}
 	time.ExtensionEntry1012.Object = time

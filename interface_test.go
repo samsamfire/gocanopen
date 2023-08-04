@@ -11,6 +11,9 @@ var BaseObjectDictionaryParsed ObjectDictionary
 func createOD() ObjectDictionary {
 	od := NewOD()
 	od.AddVariable(0x1016, "entry1016", Variable{Data: []byte{0x10, 0x20}, Attribute: ODA_SDO_R | ODA_SDO_W})
+	od.AddVariable(0x1017, "entry1017", Variable{Data: []byte{0x10, 0x20}, Attribute: ODA_SDO_R | ODA_SDO_W})
+	od.AddVariable(0x1018, "entry1018", Variable{Data: []byte{0x10, 0x20}, Attribute: ODA_SDO_R | ODA_SDO_W})
+	od.AddRecord(0x1030, "entry1030", []Record{{Variable{Data: []byte{0x10, 0x20}, Attribute: ODA_SDO_R | ODA_SDO_W}, 0}})
 	return od
 }
 
@@ -33,7 +36,7 @@ func TestSub(t *testing.T) {
 	od := createOD()
 	entry := od.Index(0x1018)
 	if entry == nil {
-		t.Errorf("Entry %d should exist", 0x1018)
+		t.Errorf("Entry %x should exist", 0x1018)
 	}
 	// Test access to subindex > 1 for variable
 	_, err := entry.CreateStreamer(1, true)
@@ -61,18 +64,18 @@ func TestSub(t *testing.T) {
 
 // Test reading OD variables
 func TestRead(t *testing.T) {
-	BaseObjectDictionaryParsed, err := ParseEDS("base.eds", 0x10)
+	BaseObjectDictionaryParsed, err := ParseEDS("testdata/base.eds", 0x10)
 	if err != nil {
 		t.Error(err)
 	}
-	entry := BaseObjectDictionaryParsed.Index(0x2001)
+	entry := BaseObjectDictionaryParsed.Index(0x2003)
 	if entry == nil {
 		t.Error()
 	}
 
 	var data uint16
 	entry.GetUint16(0, &data)
-	if data != 0x1555 {
+	if data != 0x4444 {
 		t.Errorf("Wrong value : %x", data)
 	}
 	var data2 uint8
@@ -85,7 +88,7 @@ func TestRead(t *testing.T) {
 
 // Test reading SDO client parameter entry
 func TestReadSDO1280(t *testing.T) {
-	BaseObjectDictionaryParsed, err := ParseEDS("base.eds", 0x10)
+	BaseObjectDictionaryParsed, err := ParseEDS("testdata/base.eds", 0x10)
 	if err != nil {
 		t.Error(err)
 	}
@@ -105,7 +108,7 @@ func TestReadSDO1280(t *testing.T) {
 // Test reader writer disabled
 func TestReadWriteDisabled(t *testing.T) {
 	//var streamer ObjectStreamer
-	BaseObjectDictionaryParsed, _ := ParseEDS("base.eds", 0x10)
+	BaseObjectDictionaryParsed, _ := ParseEDS("testdata/base.eds", 0x10)
 	entry := BaseObjectDictionaryParsed.Index(0x2001)
 	if entry == nil {
 		t.Error("Empty entry")
