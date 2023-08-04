@@ -257,8 +257,7 @@ type EM struct {
 	FifoCount           byte
 	ProducerEnabled     bool
 	NodeId              byte
-	CANTxBuff           *BufferTxFrame
-	TxBufferIdx         int
+	txBuffer            *BufferTxFrame
 	ProducerIdent       uint16
 	InhibitEmTimeUs     uint32
 	InhibitEmTimer      uint32
@@ -375,8 +374,8 @@ func (emergency *EM) Init(
 	}
 	// Configure Tx buffer
 	emergency.NodeId = nodeId
-	emergency.CANTxBuff, emergency.TxBufferIdx, err = emergency.busManager.InsertTxBuffer(producerCanId, false, 8, false)
-	if emergency.CANTxBuff == nil || err != nil {
+	emergency.txBuffer, err = emergency.busManager.InsertTxBuffer(producerCanId, false, 8, false)
+	if emergency.txBuffer == nil || err != nil {
 		return CO_ERROR_ILLEGAL_ARGUMENT
 	}
 	emergency.InhibitEmTimeUs = 0
@@ -484,13 +483,13 @@ func (emergency *EM) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32
 			emergency.InhibitEmTimer += timeDifferenceUs
 		}
 		if fifoPpPtr != emergency.FifoWrPtr &&
-			!emergency.CANTxBuff.BufferFull &&
+			!emergency.txBuffer.BufferFull &&
 			emergency.InhibitEmTimer >= emergency.InhibitEmTimeUs {
 			emergency.InhibitEmTimer = 0
 
 			emergency.Fifo[fifoPpPtr].msg |= uint32(errorRegister) << 16
-			binary.LittleEndian.PutUint32(emergency.CANTxBuff.Data[:4], emergency.Fifo[fifoPpPtr].msg)
-			emergency.busManager.Send(*emergency.CANTxBuff)
+			binary.LittleEndian.PutUint32(emergency.txBuffer.Data[:4], emergency.Fifo[fifoPpPtr].msg)
+			emergency.busManager.Send(*emergency.txBuffer)
 			// Also report own emergency message
 			if emergency.EmergencyRxCallback != nil {
 				errMsg := uint32(emergency.Fifo[fifoPpPtr].msg)

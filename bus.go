@@ -118,17 +118,16 @@ type BufferTxFrame struct {
 	CANifindex int
 }
 
-func NewBufferTxFrame(ident uint32, length uint8, syncFlag bool, CANifindex int) BufferTxFrame {
-	return BufferTxFrame{Ident: ident, DLC: length, BufferFull: false, SyncFlag: syncFlag, CANifindex: CANifindex}
+func NewBufferTxFrame(ident uint32, length uint8, syncFlag bool, CANifindex int) *BufferTxFrame {
+	return &BufferTxFrame{Ident: ident, DLC: length, BufferFull: false, SyncFlag: syncFlag, CANifindex: CANifindex}
 }
 
 // Bus manager is responsible for using the Bus
 // It has interal buffers etc
 type BusManager struct {
 	Bus               Bus // Bus interface that can be adapted
-	txBuffer          map[uint32]BufferTxFrame
+	txBuffer          map[uint32]*BufferTxFrame
 	rxBuffer          map[uint32]BufferRxFrame
-	TxArray           []BufferTxFrame
 	CANerrorstatus    uint16
 	CANnormal         bool
 	UseCANrxFilters   bool
@@ -139,10 +138,9 @@ type BusManager struct {
 }
 
 /* Create a New BusManager object */
-func NewBusManager(bus Bus, rxArray []BufferRxFrame, txArray []BufferTxFrame) *BusManager {
+func NewBusManager(bus Bus) *BusManager {
 	busManager := &BusManager{
 		Bus:               bus,
-		TxArray:           txArray,
 		CANerrorstatus:    0,
 		CANnormal:         false,
 		UseCANrxFilters:   false,
@@ -158,7 +156,7 @@ func NewBusManager(bus Bus, rxArray []BufferRxFrame, txArray []BufferTxFrame) *B
 func (busManager *BusManager) Init(bus Bus) {
 	busManager.Bus = bus
 	busManager.rxBuffer = make(map[uint32]BufferRxFrame)
-	busManager.TxArray = []BufferTxFrame{}
+	busManager.txBuffer = make(map[uint32]*BufferTxFrame)
 	busManager.CANerrorstatus = 0
 	busManager.CANnormal = false
 	busManager.UseCANrxFilters = false
@@ -202,11 +200,11 @@ func (busManager *BusManager) Process() error {
 	/*Loop through tx array and send unsent messages*/
 	if busManager.CANtxCount > 0 {
 		found := false
-		for _, buffer := range busManager.TxArray {
+		for _, buffer := range busManager.txBuffer {
 			if buffer.BufferFull {
 				buffer.BufferFull = false
 				busManager.CANtxCount -= 1
-				busManager.Send(buffer)
+				busManager.Send(*buffer)
 				found = true
 			}
 		}
@@ -218,31 +216,16 @@ func (busManager *BusManager) Process() error {
 
 }
 
-// Initialize transmit buffer append it to existing transmit buffer array and return it
-// Return buffer, index of buffer
-func (busManager *BusManager) InsertTxBuffer(ident uint32, rtr bool, length uint8, syncFlag bool) (*BufferTxFrame, int, error) {
+func (busManager *BusManager) InsertTxBuffer(ident uint32, rtr bool, length uint8, syncFlag bool) (*BufferTxFrame, error) {
 	// This is specific to socketcan
 	ident = ident & CAN_SFF_MASK
 	if rtr {
 		ident |= CAN_RTR_FLAG
 	}
-	busManager.TxArray = append(busManager.TxArray, NewBufferTxFrame(ident, length, syncFlag, 0))
-	return &busManager.TxArray[len(busManager.TxArray)-1], len(busManager.TxArray) - 1, nil
+	busManager.txBuffer[ident] = NewBufferTxFrame(ident, length, syncFlag, 0)
+	return busManager.txBuffer[ident], nil
 }
 
-// Update an already present buffer instead of appending
-func (busManager *BusManager) UpdateTxBuffer(index int, ident uint32, rtr bool, length uint8, syncFlag bool) (*BufferTxFrame, error) {
-	// This is specific to socketcan
-	ident = ident & CAN_SFF_MASK
-	if rtr {
-		ident |= CAN_RTR_FLAG
-	}
-	busManager.TxArray[index] = NewBufferTxFrame(ident, length, syncFlag, 0)
-	return &busManager.TxArray[index], nil
-}
-
-// Initialize receive buffer append it to existing receive buffer
-// Return the index of the added buffer
 func (busManager *BusManager) InsertRxBuffer(ident uint32, mask uint32, rtr bool, object FrameHandler) error {
 	// This part is specific to socketcan
 	ident = ident & CAN_SFF_MASK

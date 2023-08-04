@@ -24,7 +24,7 @@ type SDOClient struct {
 	Streamer                   *ObjectStreamer
 	NodeId                     uint8
 	BusManager                 *BusManager
-	CANtxBuff                  *BufferTxFrame
+	txBuffer                   *BufferTxFrame
 	CobIdClientToServer        uint32
 	CobIdServerToClient        uint32
 	ExtensionEntry1280         Extension
@@ -148,7 +148,7 @@ func (client *SDOClient) Setup(cobIdClientToServer uint32, cobIdServerToClient u
 	}
 	err1 := client.BusManager.InsertRxBuffer(uint32(CanIdS2C), 0x7FF, false, client)
 	var err2 error
-	client.CANtxBuff, _, err2 = client.BusManager.InsertTxBuffer(uint32(CanIdC2S), false, 8, false)
+	client.txBuffer, err2 = client.BusManager.InsertTxBuffer(uint32(CanIdC2S), false, 8, false)
 	if err2 != nil {
 		client.Valid = false
 	}
@@ -503,14 +503,14 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 				*timerNextUs = diff
 			}
 		}
-		if client.CANtxBuff.BufferFull {
+		if client.txBuffer.BufferFull {
 			ret = SDO_TRANSMIT_BUFFER_FULL
 		}
 	}
 
 	if ret == SDO_WAITING_RESPONSE {
 
-		client.CANtxBuff.Data = [8]byte{0}
+		client.txBuffer.Data = [8]byte{0}
 		switch client.State {
 		case SDO_STATE_DOWNLOAD_INITIATE_REQ:
 			if forceSegmented == nil {
@@ -610,39 +610,39 @@ func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, da
 // Valid for both expedited and segmented
 func (client *SDOClient) InitiateDownload(forceSegmented bool) error {
 
-	client.CANtxBuff.Data[0] = 0x20
-	client.CANtxBuff.Data[1] = byte(client.Index)
-	client.CANtxBuff.Data[2] = byte(client.Index >> 8)
-	client.CANtxBuff.Data[3] = client.Subindex
+	client.txBuffer.Data[0] = 0x20
+	client.txBuffer.Data[1] = byte(client.Index)
+	client.txBuffer.Data[2] = byte(client.Index >> 8)
+	client.txBuffer.Data[3] = client.Subindex
 
 	count := uint32(client.Fifo.GetOccupied())
 	if (client.SizeIndicated == 0 && count <= 4) || (client.SizeIndicated > 0 && client.SizeIndicated <= 4) && !forceSegmented {
-		client.CANtxBuff.Data[0] |= 0x02
+		client.txBuffer.Data[0] |= 0x02
 		// Check length
 		if count == 0 || (client.SizeIndicated > 0 && client.SizeIndicated != count) {
 			client.State = SDO_STATE_IDLE
 			return SDO_ABORT_TYPE_MISMATCH
 		}
 		if client.SizeIndicated > 0 {
-			client.CANtxBuff.Data[0] |= byte(0x01 | ((4 - count) << 2))
+			client.txBuffer.Data[0] |= byte(0x01 | ((4 - count) << 2))
 		}
 		// Copy the data in queue and add the count
-		count = uint32(client.Fifo.Read(client.CANtxBuff.Data[4:], nil))
+		count = uint32(client.Fifo.Read(client.txBuffer.Data[4:], nil))
 		client.SizeTransferred = count
 		client.Finished = true
-		log.Debugf("[CLIENT][TX][x%x] DOWNLOAD EXPEDITED | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
+		log.Debugf("[CLIENT][TX][x%x] DOWNLOAD EXPEDITED | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data)
 
 	} else {
 		/* segmented transfer, indicate data size */
 		if client.SizeIndicated > 0 {
 			size := client.SizeIndicated
-			client.CANtxBuff.Data[0] |= 0x01
-			binary.LittleEndian.PutUint32(client.CANtxBuff.Data[4:], size)
+			client.txBuffer.Data[0] |= 0x01
+			binary.LittleEndian.PutUint32(client.txBuffer.Data[4:], size)
 		}
-		log.Debugf("[CLIENT][TX][x%x] DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
+		log.Debugf("[CLIENT][TX][x%x] DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data)
 	}
 	client.TimeoutTimer = 0
-	client.BusManager.Bus.Send(*client.CANtxBuff)
+	client.BusManager.Bus.Send(*client.txBuffer)
 	return nil
 
 }
@@ -650,7 +650,7 @@ func (client *SDOClient) InitiateDownload(forceSegmented bool) error {
 // Called for each segment
 func (client *SDOClient) DownloadSegmented(bufferPartial bool) error {
 	// Fill data part
-	count := uint32(client.Fifo.Read(client.CANtxBuff.Data[1:], nil))
+	count := uint32(client.Fifo.Read(client.txBuffer.Data[1:], nil))
 	client.SizeTransferred += count
 	if client.SizeIndicated > 0 && client.SizeTransferred > client.SizeIndicated {
 		client.SizeTransferred -= count
@@ -658,31 +658,31 @@ func (client *SDOClient) DownloadSegmented(bufferPartial bool) error {
 	}
 
 	//Command specifier
-	client.CANtxBuff.Data[0] = uint8(uint32(client.Toggle) | ((7 - count) << 1))
+	client.txBuffer.Data[0] = uint8(uint32(client.Toggle) | ((7 - count) << 1))
 	if client.Fifo.GetOccupied() == 0 && !bufferPartial {
 		if client.SizeIndicated > 0 && client.SizeTransferred < client.SizeIndicated {
 			return SDO_ABORT_DATA_SHORT
 		}
-		client.CANtxBuff.Data[0] |= 0x01
+		client.txBuffer.Data[0] |= 0x01
 		client.Finished = true
 	}
 
 	client.TimeoutTimer = 0
-	log.Debugf("[CLIENT][TX][x%x] DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
-	client.BusManager.Send(*client.CANtxBuff)
+	log.Debugf("[CLIENT][TX][x%x] DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data)
+	client.BusManager.Send(*client.txBuffer)
 	return nil
 }
 
 // Create & send abort on bus
 func (client *SDOClient) Abort(abortCode SDOAbortCode) {
 	code := uint32(abortCode)
-	client.CANtxBuff.Data[0] = 0x80
-	client.CANtxBuff.Data[1] = uint8(client.Index)
-	client.CANtxBuff.Data[2] = uint8(client.Index >> 8)
-	client.CANtxBuff.Data[3] = client.Subindex
-	binary.LittleEndian.PutUint32(client.CANtxBuff.Data[4:], code)
+	client.txBuffer.Data[0] = 0x80
+	client.txBuffer.Data[1] = uint8(client.Index)
+	client.txBuffer.Data[2] = uint8(client.Index >> 8)
+	client.txBuffer.Data[3] = client.Subindex
+	binary.LittleEndian.PutUint32(client.txBuffer.Data[4:], code)
 	log.Warnf("[CLIENT][TX][x%x] CLIENT ABORT | x%x:x%x | %v (x%x)", client.NodeIdServer, client.Index, client.Subindex, abortCode, code)
-	client.BusManager.Send(*client.CANtxBuff)
+	client.BusManager.Send(*client.txBuffer)
 
 }
 
@@ -954,40 +954,40 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				}
 			}
 		}
-		if client.CANtxBuff.BufferFull {
+		if client.txBuffer.BufferFull {
 			ret = SDO_TRANSMIT_BUFFER_FULL
 		}
 	}
 
 	if ret == SDO_WAITING_RESPONSE {
-		client.CANtxBuff.Data = [8]byte{0}
+		client.txBuffer.Data = [8]byte{0}
 		switch client.State {
 		case SDO_STATE_UPLOAD_INITIATE_REQ:
-			client.CANtxBuff.Data[0] = 0x40
-			client.CANtxBuff.Data[1] = byte(client.Index)
-			client.CANtxBuff.Data[2] = byte(client.Index >> 8)
-			client.CANtxBuff.Data[3] = client.Subindex
+			client.txBuffer.Data[0] = 0x40
+			client.txBuffer.Data[1] = byte(client.Index)
+			client.txBuffer.Data[2] = byte(client.Index >> 8)
+			client.txBuffer.Data[3] = client.Subindex
 			client.TimeoutTimer = 0
-			client.BusManager.Send(*client.CANtxBuff)
+			client.BusManager.Send(*client.txBuffer)
 			client.State = SDO_STATE_UPLOAD_INITIATE_RSP
-			log.Debugf("[CLIENT][TX][x%x] UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
+			log.Debugf("[CLIENT][TX][x%x] UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data)
 
 		case SDO_STATE_UPLOAD_SEGMENT_REQ:
 			if client.Fifo.GetSpace() < 7 {
 				ret = SDO_UPLOAD_DATA_FULL
 				break
 			}
-			client.CANtxBuff.Data[0] = 0x60 | client.Toggle
+			client.txBuffer.Data[0] = 0x60 | client.Toggle
 			client.TimeoutTimer = 0
-			client.BusManager.Send(*client.CANtxBuff)
+			client.BusManager.Send(*client.txBuffer)
 			client.State = SDO_STATE_UPLOAD_SEGMENT_RSP
-			log.Debugf("[CLIENT][TX][x%x] UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data)
+			log.Debugf("[CLIENT][TX][x%x] UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data)
 
 		case SDO_STATE_UPLOAD_BLK_INITIATE_REQ:
-			client.CANtxBuff.Data[0] = 0xA4
-			client.CANtxBuff.Data[1] = byte(client.Index)
-			client.CANtxBuff.Data[2] = byte(client.Index >> 8)
-			client.CANtxBuff.Data[3] = client.Subindex
+			client.txBuffer.Data[0] = 0xA4
+			client.txBuffer.Data[1] = byte(client.Index)
+			client.txBuffer.Data[2] = byte(client.Index >> 8)
+			client.txBuffer.Data[3] = client.Subindex
 			// Calculate number of block segments from free space
 			count := client.Fifo.GetSpace() / 7
 			if count >= 127 {
@@ -998,26 +998,26 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				break
 			}
 			client.BlockSize = uint8(count)
-			client.CANtxBuff.Data[4] = client.BlockSize
-			client.CANtxBuff.Data[5] = CO_CONFIG_SDO_CLI_PST
+			client.txBuffer.Data[4] = client.BlockSize
+			client.txBuffer.Data[5] = CO_CONFIG_SDO_CLI_PST
 			client.TimeoutTimer = 0
-			client.BusManager.Send(*client.CANtxBuff)
+			client.BusManager.Send(*client.txBuffer)
 			client.State = SDO_STATE_UPLOAD_BLK_INITIATE_RSP
-			log.Debugf("[CLIENT][TX][x%x] BLOCK UPLOAD INITIATE | x%x:x%x %v blksize : %v", client.NodeIdServer, client.Index, client.Subindex, client.CANtxBuff.Data, client.BlockSize)
+			log.Debugf("[CLIENT][TX][x%x] BLOCK UPLOAD INITIATE | x%x:x%x %v blksize : %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data, client.BlockSize)
 
 		case SDO_STATE_UPLOAD_BLK_INITIATE_REQ2:
-			client.CANtxBuff.Data[0] = 0xA3
+			client.txBuffer.Data[0] = 0xA3
 			client.TimeoutTimer = 0
 			client.TimeoutTimerBlock = 0
 			client.BlockSequenceNb = 0
 			client.BlockCRC = CRC16{0}
 			client.State = SDO_STATE_UPLOAD_BLK_SUBBLOCK_SREQ
 			client.RxNew = false
-			client.BusManager.Send(*client.CANtxBuff)
+			client.BusManager.Send(*client.txBuffer)
 
 		case SDO_STATE_UPLOAD_BLK_SUBBLOCK_CRSP:
-			client.CANtxBuff.Data[0] = 0xA2
-			client.CANtxBuff.Data[1] = client.BlockSequenceNb
+			client.txBuffer.Data[0] = 0xA2
+			client.txBuffer.Data[1] = client.BlockSequenceNb
 			transferShort := client.BlockSequenceNb != client.BlockSize
 			seqnoStart := client.BlockSequenceNb
 			if client.Finished {
@@ -1050,16 +1050,16 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				client.State = SDO_STATE_UPLOAD_BLK_SUBBLOCK_SREQ
 				client.RxNew = false
 			}
-			client.CANtxBuff.Data[2] = client.BlockSize
+			client.txBuffer.Data[2] = client.BlockSize
 			client.TimeoutTimerBlock = 0
-			client.BusManager.Send(*client.CANtxBuff)
+			client.BusManager.Send(*client.txBuffer)
 			if transferShort && !client.Finished {
 				log.Warnf("sub-block restarted: seqnoPrev=%v, blksize=%v", seqnoStart, client.BlockSize)
 			}
 
 		case SDO_STATE_UPLOAD_BLK_END_CRSP:
-			client.CANtxBuff.Data[0] = 0xA1
-			client.BusManager.Send(*client.CANtxBuff)
+			client.txBuffer.Data[0] = 0xA1
+			client.BusManager.Send(*client.txBuffer)
 			client.State = SDO_STATE_IDLE
 			ret = SDO_SUCCESS
 

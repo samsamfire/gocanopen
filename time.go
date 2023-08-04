@@ -64,7 +64,7 @@ func (time *TIME) Init(entry1012 *Entry, busManager *BusManager, producerInterva
 		}
 	}
 	time.busManager = busManager
-	time.TxBuffer, _, err = busManager.InsertTxBuffer(
+	time.TxBuffer, err = busManager.InsertTxBuffer(
 		cobId,
 		false,
 		6,

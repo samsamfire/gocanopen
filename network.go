@@ -62,7 +62,7 @@ func (network *Network) ConnectAndProcess(can_interface any, channel any, bitrat
 	}
 	network.sdoClient = client
 	// Add NMT tx buffer, for sending NMT commands
-	network.nmtMasterTxBuff, _, e = busManager.InsertTxBuffer(uint32(NMT_SERVICE_ID), false, 2, false)
+	network.nmtMasterTxBuff, e = busManager.InsertTxBuffer(uint32(NMT_SERVICE_ID), false, 2, false)
 	if e != nil {
 		return e
 	}

@@ -127,11 +127,11 @@ func (nmt *NMT) Init(
 	if err != nil {
 		return err
 	}
-	nmt.nmtTxBuff, _, err = busManager.InsertTxBuffer(uint32(canIdNmtTx), false, 2, false)
+	nmt.nmtTxBuff, err = busManager.InsertTxBuffer(uint32(canIdNmtTx), false, 2, false)
 	if err != nil {
 		return err
 	}
-	nmt.hbTxBuff, _, err = busManager.InsertTxBuffer(uint32(canIdHbTx), false, 1, false)
+	nmt.hbTxBuff, err = busManager.InsertTxBuffer(uint32(canIdHbTx), false, 1, false)
 	if err != nil {
 		return err
 	}
