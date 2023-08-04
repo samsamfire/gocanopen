@@ -3,6 +3,7 @@ package canopen
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -134,6 +135,80 @@ func encode(variable string, datatype uint8, nodeId uint8) ([]byte, error) {
 	}
 
 	return data, nil
+}
+
+// Helper function for checking consistency between size and datatype
+func checkSize(data []byte, dataType uint8) error {
+	switch dataType {
+	case BOOLEAN, UNSIGNED8, INTEGER8:
+		if len(data) < 1 {
+			return ODR_DATA_SHORT
+		} else if len(data) > 1 {
+			return ODR_DATA_LONG
+		}
+	case UNSIGNED16, INTEGER16:
+		if len(data) < 2 {
+			return ODR_DATA_SHORT
+		} else if len(data) > 2 {
+			return ODR_DATA_LONG
+		}
+
+	case UNSIGNED32, INTEGER32, REAL32:
+		if len(data) < 4 {
+			return ODR_DATA_SHORT
+		} else if len(data) > 4 {
+			return ODR_DATA_LONG
+		}
+	case UNSIGNED64, INTEGER64, REAL64:
+		if len(data) < 8 {
+			return ODR_DATA_SHORT
+		} else if len(data) > 8 {
+			return ODR_DATA_LONG
+		}
+	// All other datatypes, no size check
+	default:
+		return nil
+	}
+	return nil
+
+}
+
+// Decode byte array given the CANopen data type
+// Function will return either string, int64, uint64, or float64
+func decode(data []byte, dataType uint8) (v any, e error) {
+	e = checkSize(data, dataType)
+	if e != nil {
+		return nil, e
+	}
+	// Cast to correct type
+	switch dataType {
+	case BOOLEAN, UNSIGNED8:
+		return uint64(data[0]), nil
+	case INTEGER8:
+		return int64(data[0]), nil
+	case UNSIGNED16:
+		return uint64(binary.LittleEndian.Uint16(data)), nil
+	case INTEGER16:
+		return int64(int16(binary.LittleEndian.Uint16(data))), nil
+	case UNSIGNED32:
+		return uint64(binary.LittleEndian.Uint32(data)), nil
+	case INTEGER32:
+		return int64(int32(binary.LittleEndian.Uint32(data))), nil
+	case UNSIGNED64:
+		return uint64(binary.LittleEndian.Uint64(data)), nil
+	case INTEGER64:
+		return int64(binary.LittleEndian.Uint64(data)), nil
+	case REAL32:
+		parsed := binary.LittleEndian.Uint32(data)
+		return math.Float64frombits(uint64(parsed)), nil
+	case REAL64:
+		parsed := binary.LittleEndian.Uint64(data)
+		return math.Float64frombits(parsed), nil
+	case VISIBLE_STRING:
+		return string(data), nil
+	default:
+		return nil, ODR_TYPE_MISMATCH
+	}
 }
 
 // Calculate the attribute in function of the of attribute type and pdo mapping for EDS entry
