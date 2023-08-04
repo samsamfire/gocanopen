@@ -94,13 +94,13 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 				if err != nil {
 					return nil, err
 				}
-				od.AddEntry(&Entry{Index: index, Name: name, Object: *variable, Extension: nil, subEntriesNameMap: map[string]uint8{}})
+				od.AddVariable(index, name, *variable)
 			case OBJ_DOMAIN:
 				variable, err := buildVariable(section, name, nodeId, index, 0)
 				if err != nil {
 					return nil, err
 				}
-				od.AddEntry(&Entry{Index: index, Name: name, Object: *variable, Extension: nil, subEntriesNameMap: map[string]uint8{}})
+				od.AddVariable(index, name, *variable)
 			case OBJ_ARR:
 				// Get number of elements inside array
 				subNumber, err := strconv.ParseUint(section.Key("SubNumber").Value(), 0, 8)
@@ -108,10 +108,9 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 					return nil, err
 				}
 				array := Array{Variables: make([]Variable, subNumber)}
-				od.AddEntry(&Entry{Index: uint16(index), Name: name, Object: array, Extension: nil, subEntriesNameMap: map[string]uint8{}})
+				od.AddArray(index, name, array)
 			case OBJ_RECORD:
-				od.AddEntry(&Entry{Index: index, Name: name, Object: make([]Record, 0), Extension: nil, subEntriesNameMap: map[string]uint8{}})
-
+				od.AddRecord(index, name, make([]Record, 0))
 			default:
 				return nil, fmt.Errorf("[OD] unknown object type whilst parsing EDS %T", objType)
 			}

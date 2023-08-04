@@ -121,11 +121,26 @@ type Entry struct {
 	subEntriesNameMap map[string]uint8
 }
 
-// Add a new entry to OD
-func (od *ObjectDictionary) AddEntry(entry *Entry) {
+// Add a record to OD
+func (od *ObjectDictionary) AddRecord(index uint16, name string, record []Record) {
+	od.addEntry(&Entry{Index: index, Name: name, Object: record, Extension: nil, subEntriesNameMap: map[string]uint8{}})
+}
+
+// Add an array to OD
+func (od *ObjectDictionary) AddArray(index uint16, name string, array Array) {
+	od.addEntry(&Entry{Index: index, Name: name, Object: array, Extension: nil, subEntriesNameMap: map[string]uint8{}})
+}
+
+// Add a variable to OD
+func (od *ObjectDictionary) AddVariable(index uint16, name string, variable Variable) {
+	od.addEntry(&Entry{Index: index, Name: name, Object: variable, Extension: nil, subEntriesNameMap: map[string]uint8{}})
+}
+
+// Add an entry to OD, existing entry will be replaced
+func (od *ObjectDictionary) addEntry(entry *Entry) {
 	_, entryIndexValueExists := od.entriesByIndexValue[entry.Index]
 	if entryIndexValueExists {
-		log.Warnf("[OD] overwritting entry index %x", entry.Index)
+		log.Warnf("[OD] overwritting entry index x%x", entry.Index)
 	}
 	od.entriesByIndexValue[entry.Index] = entry
 	od.entriesByIndexName[entry.Name] = entry
