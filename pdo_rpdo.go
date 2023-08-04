@@ -86,7 +86,7 @@ func (rpdo *RPDO) configureCOBID(entry14xx *Entry, predefinedIdent uint32, erron
 	if canId != 0 && canId == (predefinedIdent&0xFF80) {
 		canId = predefinedIdent
 	}
-	pdo.BufferIdx, ret = pdo.busManager.InsertRxBuffer(canId, 0x7FF, false, rpdo)
+	ret = pdo.busManager.InsertRxBuffer(canId, 0x7FF, false, rpdo)
 	if ret != nil {
 		return 0, ret
 	}
