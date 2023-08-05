@@ -1,6 +1,6 @@
 package canopen
 
-var crc16_ccitt_table = [256]uint16{
+var crc16CcitTable = [256]CRC16{
 	0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50A5, 0x60C6, 0x70E7,
 	0x8108, 0x9129, 0xA14A, 0xB16B, 0xC18C, 0xD1AD, 0xE1CE, 0xF1EF,
 	0x1231, 0x0210, 0x3273, 0x2252, 0x52B5, 0x4294, 0x72F7, 0x62D6,
@@ -35,19 +35,17 @@ var crc16_ccitt_table = [256]uint16{
 	0x6E17, 0x7E36, 0x4E55, 0x5E74, 0x2E93, 0x3EB2, 0x0ED1, 0x1EF0,
 }
 
-type CRC16 struct {
-	crc uint16
+type CRC16 uint16
+
+func (crc *CRC16) ccittSingle(chr uint8) {
+	tmp := uint8(*crc>>8) ^ chr
+	*crc = (*crc << 8) ^ crc16CcitTable[tmp]
 }
 
-func (crc *CRC16) ccitt_single(chr uint8) {
-	tmp := uint8(crc.crc>>8) ^ chr
-	crc.crc = (crc.crc << 8) ^ crc16_ccitt_table[tmp]
-}
-
-func (crc *CRC16) ccitt_block(block []uint8) {
+func (crc *CRC16) ccittBlock(block []uint8) {
 	for i := range block {
-		tmp := uint8(crc.crc>>8) ^ block[i]
-		crc.crc = (crc.crc << 8) ^ crc16_ccitt_table[tmp]
+		tmp := uint8(*crc>>8) ^ block[i]
+		*crc = (*crc << 8) ^ crc16CcitTable[tmp]
 	}
 }
 
@@ -101,7 +99,7 @@ func (fifo *Fifo) Write(buffer []byte, crc *CRC16) int {
 		fifo.buffer[fifo.writePos] = element
 		writeCounter += 1
 		if crc != nil {
-			crc.ccitt_single(element)
+			crc.ccittSingle(element)
 		}
 		if writePosNext == len(fifo.buffer) {
 			fifo.writePos = 0
@@ -165,7 +163,7 @@ func (fifo *Fifo) AltFinish(crc *CRC16) {
 	}
 	for fifo.readPos != fifo.altReadPos {
 		bufSrc := fifo.buffer[fifo.readPos]
-		crc.ccitt_single(bufSrc)
+		crc.ccittSingle(bufSrc)
 		fifo.readPos++
 		if fifo.readPos == len(fifo.buffer) {
 			fifo.readPos = 0
