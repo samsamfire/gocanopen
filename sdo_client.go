@@ -434,7 +434,7 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 					client.State = SDO_STATE_ABORT
 					break
 				}
-				client.BlockCRC = CRC16{0}
+				client.BlockCRC = CRC16(0)
 				client.BlockSize = response.GetBlockSize()
 				if client.BlockSize < 1 || client.BlockSize > 127 {
 					client.BlockSize = 127
@@ -893,8 +893,8 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 					break
 				}
 				if client.BlockCRCEnabled {
-					crcServer := binary.LittleEndian.Uint16(response.raw[1:3])
-					if crcServer != client.BlockCRC.crc {
+					crcServer := CRC16(binary.LittleEndian.Uint16(response.raw[1:3]))
+					if crcServer != client.BlockCRC {
 						abortCode = SDO_ABORT_CRC
 						client.State = SDO_STATE_ABORT
 						break
@@ -1010,7 +1010,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.TimeoutTimer = 0
 			client.TimeoutTimerBlock = 0
 			client.BlockSequenceNb = 0
-			client.BlockCRC = CRC16{0}
+			client.BlockCRC = CRC16(0)
 			client.State = SDO_STATE_UPLOAD_BLK_SUBBLOCK_SREQ
 			client.RxNew = false
 			client.BusManager.Send(*client.txBuffer)

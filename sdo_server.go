@@ -234,7 +234,7 @@ func (server *SDOServer) InitRxTx(busManager *BusManager, cobIdClientToServer ui
 
 }
 
-func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOperation uint, crcClient uint16) bool {
+func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOperation uint, crcClient CRC16) bool {
 
 	bufferOffsetWriteOriginal := server.bufWriteOffset
 
@@ -290,11 +290,11 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 
 	// Calculate CRC
 	if server.BlockCRCEnabled && crcOperation > 0 {
-		server.BlockCRC.ccitt_block(server.buffer[:bufferOffsetWriteOriginal])
-		if crcOperation == 2 && crcClient != server.BlockCRC.crc {
+		server.BlockCRC.ccittBlock(server.buffer[:bufferOffsetWriteOriginal])
+		if crcOperation == 2 && crcClient != server.BlockCRC {
 			*abortCode = SDO_ABORT_CRC
 			server.State = SDO_STATE_ABORT
-			server.ErrorExtraInfo = fmt.Errorf("server was expecting %v but got %v", server.BlockCRC.crc, crcClient)
+			server.ErrorExtraInfo = fmt.Errorf("server was expecting %v but got %v", server.BlockCRC, crcClient)
 			return false
 		}
 	}
@@ -371,7 +371,7 @@ func (server *SDOServer) readObjectDictionary(abortCode *SDOAbortCode, countMini
 		}
 		if calculateCRC && server.BlockCRCEnabled {
 			// Calculate CRC for the read data
-			server.BlockCRC.ccitt_block(server.buffer[buffered:server.bufWriteOffset])
+			server.BlockCRC.ccittBlock(server.buffer[buffered:server.bufWriteOffset])
 		}
 
 	}
@@ -637,7 +637,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				}
 				server.SizeTransferred -= uint32(noData)
 				server.bufWriteOffset -= uint32(noData)
-				var crcClient uint16 = 0
+				var crcClient = CRC16(0)
 				if server.BlockCRCEnabled {
 					crcClient = response.GetCRCClient()
 				}
@@ -655,8 +655,8 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				}
 				if (response.raw[0] & 0x04) != 0 {
 					server.BlockCRCEnabled = true
-					server.BlockCRC = CRC16{0}
-					server.BlockCRC.ccitt_block(server.buffer[:server.bufWriteOffset])
+					server.BlockCRC = CRC16(0)
+					server.BlockCRC.ccittBlock(server.buffer[:server.bufWriteOffset])
 				} else {
 					server.BlockCRCEnabled = false
 				}
@@ -894,7 +894,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.bufReadOffset = 0
 			server.bufWriteOffset = 0
 			server.BlockSequenceNb = 0
-			server.BlockCRC = CRC16{0}
+			server.BlockCRC = CRC16(0)
 			server.TimeoutTimer = 0
 			server.TimeoutTimerBlock = 0
 			server.State = SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_REQ
@@ -1011,8 +1011,8 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 
 		case SDO_STATE_UPLOAD_BLK_END_SREQ:
 			server.CANtxBuff.Data[0] = 0xC1 | (server.BlockNoData << 2)
-			server.CANtxBuff.Data[1] = byte(server.BlockCRC.crc)
-			server.CANtxBuff.Data[2] = byte(server.BlockCRC.crc >> 8)
+			server.CANtxBuff.Data[1] = byte(server.BlockCRC)
+			server.CANtxBuff.Data[2] = byte(server.BlockCRC >> 8)
 			server.TimeoutTimer = 0
 			log.Debugf("[SERVER][TX] BLOCK UPLOAD END | x%x:x%x %v", server.Index, server.Subindex, server.CANtxBuff.Data)
 			server.BusManager.Send(*server.CANtxBuff)

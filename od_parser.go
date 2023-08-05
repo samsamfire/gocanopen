@@ -115,7 +115,7 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 				return nil, fmt.Errorf("[OD] unknown object type whilst parsing EDS %T", objType)
 			}
 
-			log.Debugf("[OD] %v | %v at %x", OBJ_NAME_MAP[objectType], name, index)
+			log.Debugf("[OD] adding %v | %v at %x", OBJ_NAME_MAP[objectType], name, index)
 
 		}
 
