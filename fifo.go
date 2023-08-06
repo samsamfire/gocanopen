@@ -189,3 +189,11 @@ func (fifo *Fifo) AltRead(buffer []byte) int {
 	}
 	return readCounter
 }
+
+func (fifo *Fifo) AltGetOccupied() int {
+	sizeOccupied := fifo.writePos - fifo.altReadPos
+	if sizeOccupied < 0 {
+		sizeOccupied += len(fifo.buffer)
+	}
+	return sizeOccupied
+}
