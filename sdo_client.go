@@ -347,7 +347,7 @@ func (client *SDOClient) DownloadBufWrite(buffer []byte) int {
 
 // }
 
-func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPartial bool, sdoAbortCode *SDOAbortCode, sizeTransferred *uint32, timerNextUs *uint32, forceSegmented *bool) (uint8, error) {
+func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPartial bool, sdoAbortCode *SDOAbortCode, sizeTransferred *uint32, timerNextUs *uint32, forceSegmented bool) (uint8, error) {
 
 	ret := SDO_WAITING_RESPONSE
 	var err error
@@ -513,11 +513,7 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 		client.txBuffer.Data = [8]byte{0}
 		switch client.State {
 		case SDO_STATE_DOWNLOAD_INITIATE_REQ:
-			if forceSegmented == nil {
-				abortCode = client.InitiateDownload(false)
-			} else {
-				abortCode = client.InitiateDownload(*forceSegmented)
-			}
+			abortCode = client.downloadInitiate(forceSegmented)
 			if abortCode != nil {
 				client.State = SDO_STATE_IDLE
 				err = ErrSDOEndedWithClientAbort
@@ -526,13 +522,28 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 			client.State = SDO_STATE_DOWNLOAD_INITIATE_RSP
 
 		case SDO_STATE_DOWNLOAD_SEGMENT_REQ:
-			// Fill data part
-			abortCode = client.DownloadSegmented(bufferPartial)
+			abortCode = client.downloadSegment(bufferPartial)
 			if abortCode != nil {
 				client.State = SDO_STATE_ABORT
+				err = ErrSDOEndedWithClientAbort
 				break
 			}
 			client.State = SDO_STATE_DOWNLOAD_SEGMENT_RSP
+
+		case SDO_STATE_DOWNLOAD_BLK_INITIATE_REQ:
+			client.downloadBlockInitiate()
+			client.State = SDO_STATE_DOWNLOAD_BLK_INITIATE_RSP
+
+		case SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_REQ:
+			abortCode = client.downloadBlock(bufferPartial, timerNextUs)
+			if abortCode != nil {
+				client.State = SDO_STATE_ABORT
+			}
+
+		case SDO_STATE_DOWNLOAD_BLK_END_REQ:
+			client.downloadBlockEnd()
+			client.State = SDO_STATE_DOWNLOAD_BLK_END_RSP
+
 		default:
 			break
 
@@ -593,7 +604,7 @@ func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, da
 	abortCode := SDO_ABORT_NONE
 
 	for {
-		ret, err := client.Download(timeDifferenceUs, false, bufferPartial, &abortCode, nil, nil, &forceSegmented)
+		ret, err := client.Download(timeDifferenceUs, false, bufferPartial, &abortCode, nil, nil, forceSegmented)
 		if err != nil {
 			log.Errorf("SDO write failed : %v", ret)
 			return SDO_ABORT_GENERAL
@@ -606,9 +617,9 @@ func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, da
 	return SDO_ABORT_NONE
 }
 
-// Helpers functions for different SDO messages
-// Valid for both expedited and segmented
-func (client *SDOClient) InitiateDownload(forceSegmented bool) error {
+// Helper function for starting download
+// Valid for expedited or segmented transfer
+func (client *SDOClient) downloadInitiate(forceSegmented bool) error {
 
 	client.txBuffer.Data[0] = 0x20
 	client.txBuffer.Data[1] = byte(client.Index)
@@ -647,8 +658,8 @@ func (client *SDOClient) InitiateDownload(forceSegmented bool) error {
 
 }
 
-// Called for each segment
-func (client *SDOClient) DownloadSegmented(bufferPartial bool) error {
+// Helper function for downloading a segement of segmented transfer
+func (client *SDOClient) downloadSegment(bufferPartial bool) error {
 	// Fill data part
 	count := uint32(client.Fifo.Read(client.txBuffer.Data[1:], nil))
 	client.SizeTransferred += count
@@ -671,6 +682,66 @@ func (client *SDOClient) DownloadSegmented(bufferPartial bool) error {
 	log.Debugf("[CLIENT][TX][x%x] DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data)
 	client.BusManager.Send(*client.txBuffer)
 	return nil
+}
+
+// Helper function for initiating a block download
+func (client *SDOClient) downloadBlockInitiate() error {
+	client.txBuffer.Data[0] = 0xC4
+	client.txBuffer.Data[1] = byte(client.Index)
+	client.txBuffer.Data[2] = byte(client.Index >> 8)
+	client.txBuffer.Data[3] = client.Subindex
+	if client.SizeIndicated > 0 {
+		client.txBuffer.Data[0] |= 0x02
+		binary.LittleEndian.PutUint32(client.txBuffer.Data[4:], client.SizeIndicated)
+	}
+	client.TimeoutTimer = 0
+	client.BusManager.Send(*client.txBuffer)
+	return nil
+
+}
+
+// Helper function for downloading a sub-block
+func (client *SDOClient) downloadBlock(bufferPartial bool, timerNext *uint32) error {
+	if client.Fifo.AltGetOccupied() < 7 && bufferPartial {
+		// No data yet
+		return nil
+	}
+	client.BlockSequenceNb++
+	client.txBuffer.Data[0] = client.BlockSequenceNb
+	count := uint32(client.Fifo.AltRead(client.txBuffer.Data[1:]))
+	client.BlockNoData = uint8(7 - count)
+	client.SizeTransferred += count
+	if client.SizeIndicated > 0 && client.SizeTransferred > client.SizeIndicated {
+		client.SizeTransferred -= count
+		return SDO_ABORT_DATA_LONG
+	}
+	if client.Fifo.AltGetOccupied() == 0 && !bufferPartial {
+		if client.SizeIndicated > 0 && client.SizeTransferred < client.SizeIndicated {
+			return SDO_ABORT_DATA_SHORT
+		}
+		client.txBuffer.Data[0] |= 0x80
+		client.Finished = true
+		client.State = SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_RSP
+	} else if client.BlockSequenceNb >= client.BlockSize {
+		client.State = SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_RSP
+	} else {
+		if timerNext != nil {
+			*timerNext = 0
+		}
+	}
+	client.TimeoutTimer = 0
+	client.BusManager.Send(*client.txBuffer)
+	return nil
+
+}
+
+// Helper function for end of block
+func (client *SDOClient) downloadBlockEnd() {
+	client.txBuffer.Data[0] = 0xC1 | (client.BlockNoData << 2)
+	client.txBuffer.Data[1] = byte(client.BlockCRC)
+	client.txBuffer.Data[2] = byte(client.BlockCRC >> 8)
+	client.TimeoutTimer = 0
+	client.BusManager.Send(*client.txBuffer)
 }
 
 // Create & send abort on bus
