@@ -90,17 +90,22 @@ func (network *Network) LoadOD(nodeId uint8, edsPath string, edsCustomStorageCal
 	return nil
 }
 
+// Check if OD exists for the given node
+func (network *Network) IsODLoaded(nodeId uint8) bool {
+	_, odLoaded := network.odMap[nodeId]
+	return odLoaded
+}
+
 // Read an entry from a remote node
 // index and subindex can either be strings or integers
 // this method requires the corresponding node OD to be loaded
 func (network *Network) Read(nodeId uint8, index any, subindex any) (value any, e error) {
-	odInfo, odLoaded := network.odMap[nodeId]
-	if !odLoaded {
+	if !network.IsODLoaded(nodeId) {
 		return nil, ODR_OD_MISSING
 	}
 	// Find corresponding Variable inside OD
 	// This will be used to determine information on the expected value
-	odVar, e := odInfo.od.Index(index).SubIndex(subindex)
+	odVar, e := network.odMap[nodeId].od.Index(index).SubIndex(subindex)
 	if e != nil {
 		return nil, e
 	}
@@ -110,7 +115,6 @@ func (network *Network) Read(nodeId uint8, index any, subindex any) (value any, 
 		return nil, e
 	}
 	return decode(data[:nbRead], odVar.DataType)
-
 }
 
 // Read an entry from a remote node
@@ -126,13 +130,12 @@ func (network *Network) ReadRaw(nodeId uint8, index uint16, subIndex uint8, data
 // this method requires the corresponding node OD to be loaded
 // value should correspond to the expected datatype
 func (network *Network) Write(nodeId uint8, index any, subindex any, value any) error {
-	odInfo, odLoaded := network.odMap[nodeId]
-	if !odLoaded {
+	if !network.IsODLoaded(nodeId) {
 		return ODR_OD_MISSING
 	}
 	// Find corresponding Variable inside OD
 	// This will be used to determine information on the expected value
-	odVar, e := odInfo.od.Index(index).SubIndex(subindex)
+	odVar, e := network.odMap[nodeId].od.Index(index).SubIndex(subindex)
 	if e != nil {
 		return e
 	}
@@ -171,7 +174,6 @@ func (network *Network) Write(nodeId uint8, index any, subindex any, value any) 
 		return nil
 	}
 	return e
-
 }
 
 // Write an entry to a remote node
