@@ -113,7 +113,7 @@ func (fifo *Fifo) Write(buffer []byte, crc *CRC16) int {
 
 }
 
-// Read data from fifo
+// Read data from fifo and return number of bytes read
 func (fifo *Fifo) Read(buffer []byte, eof *bool) int {
 	var readCounter int = 0
 

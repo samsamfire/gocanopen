@@ -104,13 +104,21 @@ func (network *Network) Read(nodeId uint8, index any, subindex any) (value any, 
 	if e != nil {
 		return nil, e
 	}
-	data := make([]byte, 1000)
+	data := make([]byte, odVar.DataLength)
 	nbRead, e := network.sdoClient.ReadRaw(nodeId, odVar.Index, odVar.SubIndex, data)
 	if e != SDO_ABORT_NONE {
 		return nil, e
 	}
 	return decode(data[:nbRead], odVar.DataType)
 
+}
+
+// Read an entry from a remote node
+// this method does not require corresponding OD to be loaded
+// value will be read as a raw byte slice
+// does not support block transfer
+func (network *Network) ReadRaw(nodeId uint8, index uint16, subIndex uint8, data []byte) (int, error) {
+	return network.sdoClient.ReadRaw(nodeId, index, subIndex, data)
 }
 
 // Write an entry to a remote node
@@ -164,6 +172,14 @@ func (network *Network) Write(nodeId uint8, index any, subindex any, value any) 
 	}
 	return e
 
+}
+
+// Write an entry to a remote node
+// this method does not require corresponding OD to be loaded
+// value will be written as a raw byte slice
+// does not support block transfer
+func (network *Network) WriteRaw(nodeId uint8, index uint16, subIndex uint8, data []byte) error {
+	return network.sdoClient.WriteRaw(nodeId, index, subIndex, data, false)
 }
 
 // Send NMT commands to remote nodes
