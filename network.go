@@ -3,6 +3,8 @@ package canopen
 import (
 	"encoding/binary"
 	"fmt"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type Network struct {
@@ -196,5 +198,6 @@ func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
 	}
 	network.nmtMasterTxBuff.Data[0] = uint8(nmtCommand)
 	network.nmtMasterTxBuff.Data[1] = nodeId
+	log.Debugf("[NMT] sending nmt command : %v to node(s) %v (x%x)", NMT_COMMAND_MAP[nmtCommand], nodeId, nodeId)
 	return network.busManager.Send((*network.nmtMasterTxBuff))
 }

@@ -614,7 +614,7 @@ func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, da
 		time.Sleep(time.Duration(timeDifferenceUs) * time.Microsecond)
 	}
 
-	return SDO_ABORT_NONE
+	return nil
 }
 
 // Helper function for starting download
@@ -803,7 +803,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 		response := client.Response
 		if response.IsAbort() {
 			abortCode = response.GetAbortCode()
-			log.Debugf("[CLIENT][RX][x%x] SERVER ABORT | x%x:x%x | %v (x%x)", client.NodeIdServer, abortCode, client.Index, client.Subindex, uint32(response.GetAbortCode()))
+			log.Debugf("[CLIENT][RX][x%x] SERVER ABORT | x%x:x%x | %v (x%x)", client.NodeIdServer, client.Index, client.Subindex, abortCode, uint32(response.GetAbortCode()))
 			client.State = SDO_STATE_IDLE
 			err = ErrSDOEndedWithServerAbort
 		} else if abort {
@@ -1186,7 +1186,7 @@ func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, dat
 		return 0, SDO_ABORT_GENERAL
 	}
 	var timeDifferenceUs uint32 = 10000
-	abortCode := SDO_ABORT_NONE
+	var abortCode SDOAbortCode
 
 	for {
 		ret, err := client.Upload(timeDifferenceUs, false, &abortCode, nil, nil, nil)
@@ -1197,6 +1197,9 @@ func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, dat
 			break
 		}
 		time.Sleep(time.Duration(timeDifferenceUs) * time.Microsecond)
+	}
+	if abortCode == SDO_ABORT_NONE {
+		return client.UploadBufRead(data), nil
 	}
 	return client.UploadBufRead(data), abortCode
 }
