@@ -66,7 +66,7 @@ func (rpdo *RPDO) configureCOBID(entry14xx *Entry, predefinedIdent uint32, erron
 	}
 	valid := (cobId & 0x80000000) == 0
 	canId = cobId & 0x7FF
-	if valid && pdo.MappedObjectsCount == 0 || canId == 0 {
+	if valid && (pdo.MappedObjectsCount == 0 || canId == 0) {
 		valid = false
 		if erroneousMap == 0 {
 			erroneousMap = 1
