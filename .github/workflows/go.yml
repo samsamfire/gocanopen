@@ -21,10 +21,6 @@ jobs:
 
     - name: Set up virtual CAN interface
       run: |
-        # Load the can and vcan kernel modules
-        sudo modprobe can
-        sudo modprobe vcan
-
         # Create a virtual CAN interface (vcan0)
         sudo ip link add dev vcan0 type vcan
         sudo ip link set up vcan0
