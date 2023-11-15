@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
+        with:
+          set-safe-directory: '*'
         
       - name: Build
         run: go build -v ./...
