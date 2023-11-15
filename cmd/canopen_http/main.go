@@ -3,9 +3,6 @@ package main
 import (
 	"canopen"
 	"flag"
-
-	"net/http"
-
 	"fmt"
 
 	log "github.com/sirupsen/logrus"
@@ -13,17 +10,13 @@ import (
 
 var DEFAULT_NODE_ID = 0x20
 var DEFAULT_CAN_INTERFACE = "vcan0"
+var DEFAULT_HTTP_PORT = 8090
 
 const (
 	INIT     = 0
 	RUNNING  = 1
 	RESETING = 2
 )
-
-func gateway309_5(w http.ResponseWriter, req *http.Request) {
-	fmt.Print("hello endpoint called")
-	fmt.Fprintf(w, "<i>hello</i>\n")
-}
 
 func main() {
 	log.SetLevel(log.DebugLevel)
@@ -32,11 +25,12 @@ func main() {
 	flag.Parse()
 
 	network := canopen.NewNetwork(nil)
-	e := network.ConnectAndProcess("", *channel, 500000)
+	e := network.Connect("", *channel, 500000)
 	if e != nil {
 		panic(e)
 	}
+	go func() { network.Process() }()
 	gateway := canopen.NewGateway(1, 1, 100, &network)
-	gateway.ListenAndServe(":8090")
+	gateway.ListenAndServe(fmt.Sprintf(":%d", DEFAULT_HTTP_PORT))
 
 }
