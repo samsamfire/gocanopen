@@ -1774,7 +1774,7 @@ SupportedObjects=0
 ParameterName=BOOLEAN value
 ObjectType=0x7
 DataType=0x0001
-DefaultValue=0x10
+DefaultValue=0x1
 AccessType=rw
 PDOMapping=1
 
