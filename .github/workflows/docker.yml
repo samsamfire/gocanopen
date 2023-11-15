@@ -11,9 +11,12 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           set-safe-directory: '*'
+
+      - name: Update git config
+        run: git config --global --add safe.directory '*'
         
       - name: Build
         run: go build -v ./...
