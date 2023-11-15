@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: samsamfire/vcan-container:latest
-      options: --cap-add=NET_ADMIN --user root
+      options: --cap-add=NET_ADMIN --user 1001
 
     steps:
       - name: Checkout Repository
