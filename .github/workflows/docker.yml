@@ -1,4 +1,4 @@
-name: With docker
+name: Run Tests with virtual can interface using docker
 
 on: [push]
 
@@ -12,11 +12,11 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          set-safe-directory: '/__w/gocanopen/gocanopen'
 
-      - name: Update git config
-        run: git config --global --add safe.directory /__w/gocanopen/gocanopen
+      - name: Setup 
+        run: |
+          ip link add dev vcan0 type vcan
+          ip link set vcan0 up
         
       - name: Build
         run: go build -v ./...
