@@ -71,6 +71,65 @@ func (network *Network) ConnectAndProcess(can_interface any, channel any, bitrat
 	return e
 }
 
+// Process CANopen stack, this is blocking
+func (network *Network) Process() error {
+	var wg sync.WaitGroup
+	for id := range network.Nodes {
+		wg.Add(1)
+		log.Infof("[NETWORK][x%x] adding node to nodes being processed", id)
+		go func(node *Node) {
+			defer wg.Done()
+			// These are timer values and can be adjusted
+			startBackground := time.Now()
+			backgroundPeriod := time.Duration(10 * time.Millisecond)
+			startMain := time.Now()
+			mainPeriod := time.Duration(1 * time.Millisecond)
+			for {
+				switch node.State {
+				case NODE_INIT:
+					// TODO : init node
+					log.Infof("[NETWORK][x%x] starting node background process", node.id)
+					go func() {
+						for {
+							select {
+							case <-node.exit:
+								log.Infof("[NETWORK][x%x] exited node background process", node.id)
+								return
+							default:
+								elapsed := time.Since(startBackground)
+								startBackground = time.Now()
+								timeDifferenceUs := uint32(elapsed.Microseconds())
+								syncWas := node.ProcessSYNC(timeDifferenceUs, nil)
+								node.ProcessTPDO(syncWas, timeDifferenceUs, nil)
+								node.ProcessRPDO(syncWas, timeDifferenceUs, nil)
+								time.Sleep(backgroundPeriod)
+							}
+						}
+					}()
+					node.State = NODE_RUNNING
+
+				case NODE_RUNNING:
+					elapsed := time.Since(startMain)
+					startMain = time.Now()
+					timeDifferenceUs := uint32(elapsed.Microseconds())
+					state := node.Process(false, timeDifferenceUs, nil)
+					// <-- Add application code HERE
+					time.Sleep(mainPeriod)
+					if state == RESET_APP || state == RESET_COMM {
+						node.State = NODE_RESETING
+					}
+				case NODE_RESETING:
+					node.exit <- true
+					node.State = NODE_INIT
+
+				}
+			}
+		}(network.Nodes[id])
+	}
+	wg.Wait()
+	return nil
+}
+
 // This function will load and parse Object dictionnary (OD) into memory
 // If already present, OD will be overwritten
 // User can then access the node via OD naming
@@ -200,4 +259,29 @@ func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
 	network.nmtMasterTxBuff.Data[1] = nodeId
 	log.Debugf("[NMT] sending nmt command : %v to node(s) %v (x%x)", NMT_COMMAND_MAP[nmtCommand], nodeId, nodeId)
 	return network.busManager.Send((*network.nmtMasterTxBuff))
+}
+
+// Add a local node to the network given an Object Dictionary
+func (network *Network) AddNodeFromOD(nodeId uint8, objectDictionary *ObjectDictionary) error {
+	// Create and initialize a CANopen node
+	node := &Node{Config: nil, BusManager: network.busManager, NMT: nil}
+	err := node.Init(nil, nil, objectDictionary, nil, NMT_STARTUP_TO_OPERATIONAL, 500, 1000, 1000, true, nodeId)
+	if err != nil {
+		return err
+	}
+	err = node.InitPDO(objectDictionary, nodeId)
+	if err != nil {
+		return nil
+	}
+	network.Nodes[nodeId] = node
+	return nil
+}
+
+// Add a local node to the network given an EDS path
+func (network *Network) AddNodeFromEDS(nodeId uint8, eds string) error {
+	od, err := ParseEDS(eds, nodeId)
+	if err != nil {
+		return err
+	}
+	return network.AddNodeFromOD(nodeId, od)
 }
