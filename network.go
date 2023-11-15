@@ -3,12 +3,14 @@ package canopen
 import (
 	"encoding/binary"
 	"fmt"
+	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
 
 type Network struct {
-	nodes           []Node
+	Nodes           map[uint8]*Node
 	bus             *Bus
 	busManager      *BusManager
 	sdoClient       *SDOClient // Network master has an sdo client to read/write nodes on network
@@ -24,24 +26,23 @@ type ObjectDictionaryInformation struct {
 }
 
 func NewNetwork(bus Bus) Network {
-	return Network{nodes: make([]Node, 0), busManager: &BusManager{Bus: bus}, odMap: map[uint8]*ObjectDictionaryInformation{}}
+	return Network{Nodes: map[uint8]*Node{}, busManager: &BusManager{Bus: bus}, odMap: map[uint8]*ObjectDictionaryInformation{}}
 }
 
-// Connect and process canopen stack in background
-// This is the main method which should always be called
-func (network *Network) ConnectAndProcess(can_interface any, channel any, bitrate int) error {
+// Create bus instance and add basic functionality : SDO, NMT
+func (network *Network) Connect(canInterface any, channel any, bitrate int) error {
 	// If no bus was given during NewNetwork call, then default to socketcan
 	var bus Bus
 	busManager := network.busManager
 	if busManager.Bus == nil {
-		channel_str, ok := channel.(string)
+		channelStr, ok := channel.(string)
 		if !ok {
 			return fmt.Errorf("expecting a string for the can channel")
 		}
-		if can_interface != "socketcan" && can_interface != "" {
+		if canInterface != "socketcan" && canInterface != "" {
 			return fmt.Errorf("only socketcan is supported currently")
 		}
-		b, e := NewSocketcanBus(channel_str)
+		b, e := NewSocketcanBus(channelStr)
 		if e != nil {
 			return fmt.Errorf("could not connect to socketcan channel %v , because %v", channel, e)
 		}
