@@ -16,6 +16,9 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Prepare CAN
+      run: ip link add dev vcan0 type vcan && ip link set vcan0 up
+
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
