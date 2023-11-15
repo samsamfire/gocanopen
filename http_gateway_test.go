@@ -4,27 +4,55 @@ package canopen
 import (
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
 
+var NODE_ID_TEST uint8 = 0x30
+
 func init() {
 	// Set the logger to debug
-	log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.WarnLevel)
 }
 
 func createGateway() *HTTPGatewayServer {
 	network := NewNetwork(nil)
-	e := network.ConnectAndProcess("", "vcan0", 500000)
+	e := network.Connect("", "vcan0", 500000)
+	if e != nil {
+		panic(e)
+	}
+	e = network.AddNodeFromEDS(NODE_ID_TEST, "testdata/base.eds")
 	if e != nil {
 		panic(e)
 	}
 	gateway := NewGateway(1, 1, 100, &network)
+	go func() {
+		network.Process()
+	}()
 	return gateway
+}
+
+func createNetwork() *Network {
+	network := NewNetwork(nil)
+	e := network.Connect("", "vcan0", 500000)
+	if e != nil {
+		panic(e)
+	}
+	e = network.AddNodeFromEDS(NODE_ID_TEST, "testdata/base.eds")
+	if e != nil {
+		panic(e)
+	}
+	network.Process()
+	return &network
 }
 
 func TestHTTPRead(t *testing.T) {
 	gateway := createGateway()
+	go func() {
+		createNetwork()
+	}()
+	time.Sleep(1 * time.Second)
 	ts := httptest.NewServer(gateway.serveMux)
 	defer ts.Close()
 	client := NewHTTPGatewayClient(ts.URL, "1.0", 1)
@@ -39,7 +67,7 @@ func TestHTTPRead(t *testing.T) {
 	}{
 		{
 			name: "1",
-			args: args{0x2001, 0, "0x0"},
+			args: args{0x2001, 0, "0x01"},
 		},
 		{
 			name: "2",
@@ -56,7 +84,7 @@ func TestHTTPRead(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			data, _, err := client.Read(16, tt.args.index, tt.args.subindex)
+			data, _, err := client.Read(NODE_ID_TEST, tt.args.index, tt.args.subindex)
 			if err != nil {
 				t.Fatalf(tt.name)
 			}
