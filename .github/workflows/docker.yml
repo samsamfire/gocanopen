@@ -13,10 +13,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          set-safe-directory: '*'
+          set-safe-directory: '/__w/gocanopen/gocanopen'
 
       - name: Update git config
-        run: git config --global --add safe.directory '*'
+        run: git config --global --add safe.directory /__w/gocanopen/gocanopen
         
       - name: Build
         run: go build -v ./...
