@@ -1,0 +1,22 @@
+name: With docker
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: samsamfire/vcan-container:latest
+      options: --cap-add=NET_ADMIN --mount type=bind,source=$(pwd),target=/app
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+      - name: Navigate to mounted repo
+        run : |
+          cd /app
+      - name: Build
+        run: go build -v ./...
+  
+      - name: Test
+        run: go test -v ./...
