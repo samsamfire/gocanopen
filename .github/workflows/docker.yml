@@ -12,9 +12,7 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
-      - name: Navigate to mounted repo
-        run : |
-          cd /app
+        
       - name: Build
         run: go build -v ./...
   
