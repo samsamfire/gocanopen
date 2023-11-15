@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: samsamfire/vcan-container:latest
-      options: --cap-add=NET_ADMIN --mount type=bind,source=$(pwd),target=/app
+      options: --cap-add=NET_ADMIN --mount type=bind,source=${GITHUB_WORKSPACE},target=/app
 
     steps:
       - name: Checkout Repository
