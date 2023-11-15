@@ -12,9 +12,16 @@ const (
 	SDO_CLIENT_ID        uint16 = 0x600
 )
 
+const (
+	NODE_INIT     uint8 = 0
+	NODE_RUNNING  uint8 = 1
+	NODE_RESETING uint8 = 2
+)
+
 type Node struct {
 	Config             *Configuration
 	BusManager         *BusManager
+	NodeIdUnconfigured bool
 	NMT                *NMT
 	HBConsumer         *HBConsumer
 	SDOclients         []*SDOClient
@@ -24,7 +31,10 @@ type Node struct {
 	SYNC               *SYNC
 	EM                 *EM
 	TIME               *TIME
-	NodeIdUnconfigured bool
+	MainCallback       func(args ...any)
+	State              uint8
+	id                 uint8
+	exit               chan bool
 }
 
 /* Create a new canopen management object */
@@ -148,7 +158,7 @@ func (node *Node) InitPDO(od *ObjectDictionary, nodeId uint8) error {
 	return nil
 }
 
-/*Initialize CANopen stack */
+// Initialize CANopen specifics for the node
 func (node *Node) Init(
 	nmt *NMT,
 	emergency *EM,
@@ -164,6 +174,9 @@ func (node *Node) Init(
 ) error {
 	var err error
 	node.NodeIdUnconfigured = false
+	node.exit = make(chan bool)
+	node.id = nodeId
+	node.State = NODE_INIT
 
 	if emergency == nil {
 		node.EM = &EM{}
