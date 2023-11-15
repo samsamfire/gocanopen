@@ -606,7 +606,6 @@ func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, da
 	for {
 		ret, err := client.Download(timeDifferenceUs, false, bufferPartial, &abortCode, nil, nil, forceSegmented)
 		if err != nil {
-			log.Errorf("SDO write failed : %v", ret)
 			return SDO_ABORT_GENERAL
 		} else if uint8(ret) == 0 {
 			break
@@ -1191,7 +1190,6 @@ func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, dat
 	for {
 		ret, err := client.Upload(timeDifferenceUs, false, &abortCode, nil, nil, nil)
 		if err != nil {
-			log.Errorf("SDO write failed : %v", ret)
 			return 0, abortCode
 		} else if ret == 0 {
 			break
@@ -1234,7 +1232,6 @@ func (reader *BlockReader) ReadAll() (data []byte, err error) {
 	for {
 		ret, err := client.Upload(timeDifferenceUs, false, &abortCode, nil, nil, nil)
 		if err != nil {
-			log.Errorf("SDO write failed : %v", ret)
 			return nil, abortCode
 		} else if uint8(ret) == 0 {
 			break
