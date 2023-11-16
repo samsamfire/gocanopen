@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: samsamfire/vcan-container:latest
-      options: --privileged --user 1001
+      options: --privileged --cap-add=ALL --user 1001
 
     steps:
       - name: Checkout Repository
