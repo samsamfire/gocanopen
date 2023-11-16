@@ -7,16 +7,16 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: samsamfire/vcan-container:latest
-      options: --privileged --cap-add=ALL --user 1001 -it
+      options: --privileged --cap-add=NET_ADMIN --user root
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
       - name: Setup 
         run: |
           ip link add dev vcan0 type vcan
           ip link set vcan0 up
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
         
       - name: Build
         run: go build -v ./...
