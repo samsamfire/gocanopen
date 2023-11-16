@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: samsamfire/vcan-container:latest
-      options: --privileged --cap-add=ALL --user 1001
+      options: --privileged --cap-add=ALL --user 1001 -it
 
     steps:
       - name: Checkout Repository
@@ -15,7 +15,7 @@ jobs:
 
       - name: Setup 
         run: |
-          sudo ip link add dev vcan0 type vcan
+          ip link add dev vcan0 type vcan
           ip link set vcan0 up
         
       - name: Build
