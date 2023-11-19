@@ -47,7 +47,7 @@ func (nodeConsumer *HBConsumerNode) Handle(frame Frame) {
 // Initialize hearbeat consumer
 func (consumer *HBConsumer) Init(em *EM, entry1016 *Entry, busManager *BusManager) error {
 	if entry1016 == nil || busManager == nil || em == nil {
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return ErrIllegalArgument
 	}
 	consumer.em = em
 	consumer.busManager = busManager
@@ -61,17 +61,17 @@ func (consumer *HBConsumer) Init(em *EM, entry1016 *Entry, busManager *BusManage
 		odRet := entry1016.GetUint32(uint8(index)+1, &hbConsValue)
 		if odRet != nil {
 			log.Errorf("[HB CONSUMER][%x|%x] reading %v failed : %v", entry1016.Index, index+1, entry1016.Name, odRet)
-			return CO_ERROR_OD_PARAMETERS
+			return ErrOdParameters
 		}
 		nodeId := (hbConsValue >> 16) & 0xFF
 		time := uint16(hbConsValue & 0xFFFF)
 		// Set the buffer index before initializing
 		ret := consumer.InitEntry(uint8(index), uint8(nodeId), time)
 		log.Debugf("[HB CONSUMER] added x%x to list of monitored nodes | timeout %v", nodeId, time)
-		if ret != nil && ret != CO_ERROR_OD_PARAMETERS {
+		if ret != nil && ret != ErrOdParameters {
 			log.Errorf("[HB CONSUMER] initializing HB consumer object %v failed : %v", index, ret)
 			return ret
-		} else if ret == CO_ERROR_OD_PARAMETERS {
+		} else if ret == ErrOdParameters {
 			log.Warnf("[HB CONSUMER] initializing HB consumer object %v failed, ignoring : %v", index, ret)
 		}
 	}
@@ -90,13 +90,13 @@ func (consumer *HBConsumer) InitEntry(index uint8, nodeId uint8, consumerTimeMs 
 
 	var ret error
 	if index >= consumer.nbMonitoredNodes {
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return ErrIllegalArgument
 	}
 	// Check duplicate entries
 	if consumerTimeMs != 0 && nodeId != 0 {
 		for i, consumer_node := range consumer.monitoredNodes {
 			if int(index) != i && consumer_node.TimeUs != 0 && consumer_node.NodeId == nodeId {
-				return CO_ERROR_ILLEGAL_ARGUMENT
+				return ErrIllegalArgument
 			}
 		}
 	}

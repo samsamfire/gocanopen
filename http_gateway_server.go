@@ -54,32 +54,32 @@ var ERROR_GATEWAY_DESCRIPTION_MAP = map[int]string{
 }
 
 var (
-	ErrRequestNotSupported         = &HTTPGatewayError{Code: 100}
-	ErrSyntaxError                 = &HTTPGatewayError{Code: 101}
-	ErrRequestNotProcessed         = &HTTPGatewayError{Code: 102}
-	ErrTimeout                     = &HTTPGatewayError{Code: 103}
-	ErrNoDefaultNetSet             = &HTTPGatewayError{Code: 104}
-	ErrNoDefaultNodeSet            = &HTTPGatewayError{Code: 105}
-	ErrUnsupportedNet              = &HTTPGatewayError{Code: 106}
-	ErrUnsupportedNode             = &HTTPGatewayError{Code: 107}
-	ErrCommandCancellationFailed   = &HTTPGatewayError{Code: 108}
-	ErrEmergencyConsumerNotEnabled = &HTTPGatewayError{Code: 109}
-	ErrWrongNMTState               = &HTTPGatewayError{Code: 204}
-	ErrWrongPassword               = &HTTPGatewayError{Code: 300}
-	ErrSuperUsersExceeded          = &HTTPGatewayError{Code: 301}
-	ErrNodeAccessDenied            = &HTTPGatewayError{Code: 302}
-	ErrNoSessionAvailable          = &HTTPGatewayError{Code: 303}
-	ErrPDOAlreadyUsed              = &HTTPGatewayError{Code: 400}
-	ErrPDOLengthExceeded           = &HTTPGatewayError{Code: 401}
-	ErrLSSImplementationError      = &HTTPGatewayError{Code: 501}
-	ErrLSSNodeIDNotSupported       = &HTTPGatewayError{Code: 502}
-	ErrLSSBitRateNotSupported      = &HTTPGatewayError{Code: 503}
-	ErrLSSParameterStoringFailed   = &HTTPGatewayError{Code: 504}
-	ErrLSSCommandFailed            = &HTTPGatewayError{Code: 505}
-	ErrRunningOutOfMemory          = &HTTPGatewayError{Code: 600}
-	ErrCANInterfaceNotAvailable    = &HTTPGatewayError{Code: 601}
-	ErrSizeLowerThanSDOBufferSize  = &HTTPGatewayError{Code: 602}
-	ErrManufacturerSpecificError   = &HTTPGatewayError{Code: 900}
+	ErrGwRequestNotSupported         = &HTTPGatewayError{Code: 100}
+	ErrGwSyntaxError                 = &HTTPGatewayError{Code: 101}
+	ErrGwRequestNotProcessed         = &HTTPGatewayError{Code: 102}
+	ErrGwTimeout                     = &HTTPGatewayError{Code: 103}
+	ErrGwNoDefaultNetSet             = &HTTPGatewayError{Code: 104}
+	ErrGwNoDefaultNodeSet            = &HTTPGatewayError{Code: 105}
+	ErrGwUnsupportedNet              = &HTTPGatewayError{Code: 106}
+	ErrGwUnsupportedNode             = &HTTPGatewayError{Code: 107}
+	ErrGwCommandCancellationFailed   = &HTTPGatewayError{Code: 108}
+	ErrGwEmergencyConsumerNotEnabled = &HTTPGatewayError{Code: 109}
+	ErrGwWrongNMTState               = &HTTPGatewayError{Code: 204}
+	ErrGwWrongPassword               = &HTTPGatewayError{Code: 300}
+	ErrGwSuperUsersExceeded          = &HTTPGatewayError{Code: 301}
+	ErrGwNodeAccessDenied            = &HTTPGatewayError{Code: 302}
+	ErrGwNoSessionAvailable          = &HTTPGatewayError{Code: 303}
+	ErrGwPDOAlreadyUsed              = &HTTPGatewayError{Code: 400}
+	ErrGwPDOLengthExceeded           = &HTTPGatewayError{Code: 401}
+	ErrGwLSSImplementationError      = &HTTPGatewayError{Code: 501}
+	ErrGwLSSNodeIDNotSupported       = &HTTPGatewayError{Code: 502}
+	ErrGwLSSBitRateNotSupported      = &HTTPGatewayError{Code: 503}
+	ErrGwLSSParameterStoringFailed   = &HTTPGatewayError{Code: 504}
+	ErrGwLSSCommandFailed            = &HTTPGatewayError{Code: 505}
+	ErrGwRunningOutOfMemory          = &HTTPGatewayError{Code: 600}
+	ErrGwCANInterfaceNotAvailable    = &HTTPGatewayError{Code: 601}
+	ErrGwSizeLowerThanSDOBufferSize  = &HTTPGatewayError{Code: 602}
+	ErrGwManufacturerSpecificError   = &HTTPGatewayError{Code: 900}
 )
 
 var HTTP_DATATYPE_MAP = map[string]uint8{
@@ -142,22 +142,22 @@ type GWSDOReadResponse struct {
 // Returns index & subindex to be written/read
 func parseSdoCommand(command []string) (index uint64, subindex uint64, err *HTTPGatewayError) {
 	if len(command) != 3 {
-		return 0, 0, ErrSyntaxError
+		return 0, 0, ErrGwSyntaxError
 	}
 	indexStr := command[1]
 	subIndexStr := command[2]
 	// Unclear if this is "supported" not really specified in 309-5
 	if indexStr == "all" {
 		// Read all OD ?
-		return 0, 0, ErrRequestNotSupported
+		return 0, 0, ErrGwRequestNotSupported
 	}
 	index, e := strconv.ParseUint(indexStr, 0, 64)
 	if e != nil {
-		return 0, 0, ErrSyntaxError
+		return 0, 0, ErrGwSyntaxError
 	}
 	subIndex, e := strconv.ParseUint(subIndexStr, 0, 64)
 	if e != nil {
-		return 0, 0, ErrSyntaxError
+		return 0, 0, ErrGwSyntaxError
 	}
 	return index, subIndex, nil
 }
@@ -167,17 +167,17 @@ func parseNetworkParam(defaultNetwork uint16, network string) (net uint64, gwErr
 	case "default", "none":
 		return uint64(defaultNetwork), nil
 	case "all":
-		return 0, ErrUnsupportedNet
+		return 0, ErrGwUnsupportedNet
 
 	}
 	// This automatically treats 0x,0X,... correctly
 	// which is allowed in the spec
 	net, err := strconv.ParseUint(network, 0, 64)
 	if err != nil {
-		return 0, ErrSyntaxError
+		return 0, ErrGwSyntaxError
 	}
 	if net == 0 || net > 0xFFFF {
-		return 0, ErrSyntaxError
+		return 0, ErrGwSyntaxError
 	}
 	return net, nil
 }
@@ -187,16 +187,16 @@ func parseNodeParam(defaultNode uint8, nodeStr string) (node uint64, gwError *HT
 	case "default", "none":
 		return uint64(defaultNode), nil
 	case "all":
-		return 0, ErrUnsupportedNode
+		return 0, ErrGwUnsupportedNode
 	}
 	// This automatically treats 0x,0X,... correctly
 	// which is allowed in the spec
 	node, err := strconv.ParseUint(nodeStr, 0, 64)
 	if err != nil {
-		return 0, ErrSyntaxError
+		return 0, ErrGwSyntaxError
 	}
 	if node == 0 || (node > 127 && node != 255) {
-		return 0, ErrSyntaxError
+		return 0, ErrGwSyntaxError
 	}
 	return node, nil
 }
@@ -209,17 +209,17 @@ func (gateway *HTTPGatewayServer) handleRequest(w http.ResponseWriter, r *http.R
 		// hole match + 5 submatches
 		if len(match) != 6 {
 			log.Errorf("[HTTP][SERVER] request does not match a command")
-			return 0, ErrSyntaxError
+			return 0, ErrGwSyntaxError
 		}
 		apiVersion := match[1]
 		if apiVersion != API_VERSION {
 			log.Errorf("[HTTP][SERVER] api version is not supported")
-			return 0, ErrRequestNotSupported
+			return 0, ErrGwRequestNotSupported
 		}
 		sequence, err := strconv.Atoi(match[2])
 		if err != nil || sequence > MAX_SEQUENCE_NB {
 			log.Errorf("[HTTP][SERVER] error processing sequence number")
-			return 0, ErrSyntaxError
+			return 0, ErrGwSyntaxError
 		}
 		netStr := match[3]
 		net, gwError := parseNetworkParam(gateway.defaultNetworkId, netStr)
@@ -238,7 +238,7 @@ func (gateway *HTTPGatewayServer) handleRequest(w http.ResponseWriter, r *http.R
 		err = json.NewDecoder(r.Body).Decode(&parameters)
 		if err != nil && err != io.EOF {
 			log.Warnf("[HTTP][SERVER] failed to unmarshal request body : %v", err)
-			return sequence, ErrSyntaxError
+			return sequence, ErrGwSyntaxError
 		}
 
 		request := &HTTPGatewayRequest{nodeId: uint8(node), networkId: uint16(net), command: match[5], sequence: uint32(sequence), parameters: parameters}
@@ -284,13 +284,13 @@ func (gateway *HTTPGatewayServer) processCANopenRequest(w http.ResponseWriter, r
 		!strings.HasPrefix(request.command, "read") &&
 		!strings.HasPrefix(request.command, "w/") &&
 		!strings.HasPrefix(request.command, "write") {
-		return ErrRequestNotSupported
+		return ErrGwRequestNotSupported
 	}
 	// Try SDO or PDO command patterns
 	matchSDO := regSDO.FindStringSubmatch(request.command)
 	matchPDO := regPDO.FindStringSubmatch(request.command)
 	if len(matchSDO) < 2 && len(matchPDO) < 2 {
-		return ErrSyntaxError
+		return ErrGwSyntaxError
 	}
 	if len(matchSDO) >= 2 {
 		// SDO pattern
@@ -312,26 +312,26 @@ func (gateway *HTTPGatewayServer) processCANopenRequest(w http.ResponseWriter, r
 			resp := GWSDOReadResponse{Sequence: strconv.Itoa(int(request.sequence)), Response: "OK", Data: "0x" + hex.EncodeToString(gateway.sdoUploadBuffer[:n])}
 			respRaw, err := json.Marshal(resp)
 			if err != nil {
-				return ErrRequestNotProcessed
+				return ErrGwRequestNotProcessed
 			}
 			_, err = w.Write(respRaw)
 			if err != nil {
-				return ErrRequestNotProcessed
+				return ErrGwRequestNotProcessed
 			}
 			return nil
 		case "w", "write":
 			var sdoWrite SDOWrite
 			err := json.Unmarshal(request.parameters, &sdoWrite)
 			if err != nil {
-				return ErrSyntaxError
+				return ErrGwSyntaxError
 			}
 			datatypeValue, ok := HTTP_DATATYPE_MAP[sdoWrite.Datatype]
 			if !ok {
-				return ErrRequestNotSupported
+				return ErrGwRequestNotSupported
 			}
 			encodedValue, err := encode(sdoWrite.Value, datatypeValue, 0)
 			if err != nil {
-				return ErrSyntaxError
+				return ErrGwSyntaxError
 			}
 			err = network.WriteRaw(request.nodeId, uint16(index), uint8(subindex), encodedValue)
 			if err != nil {
@@ -344,7 +344,7 @@ func (gateway *HTTPGatewayServer) processCANopenRequest(w http.ResponseWriter, r
 			return nil
 
 		default:
-			return ErrSyntaxError
+			return ErrGwSyntaxError
 		}
 	}
 	if len(matchPDO) <= 2 {
@@ -352,7 +352,7 @@ func (gateway *HTTPGatewayServer) processCANopenRequest(w http.ResponseWriter, r
 	}
 
 	log.Errorf("[HTTP][SERVER] request did not match any of the known commands, probably a syntax error")
-	return ErrSyntaxError
+	return ErrGwSyntaxError
 
 }
 

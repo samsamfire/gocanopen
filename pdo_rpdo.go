@@ -62,7 +62,7 @@ func (rpdo *RPDO) configureCOBID(entry14xx *Entry, predefinedIdent uint32, erron
 	ret := entry14xx.GetUint32(1, &cobId)
 	if ret != nil {
 		log.Errorf("[RPDO][%x|%x] reading %v failed : %v", entry14xx.Index, 1, entry14xx.Name, ret)
-		return 0, CO_ERROR_OD_PARAMETERS
+		return 0, ErrOdParameters
 	}
 	valid := (cobId & 0x80000000) == 0
 	canId = cobId & 0x7FF
@@ -103,7 +103,7 @@ func (rpdo *RPDO) Init(od *ObjectDictionary,
 	busManager *BusManager) error {
 	pdo := &rpdo.PDO
 	if od == nil || em == nil || entry14xx == nil || entry16xx == nil || busManager == nil {
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return ErrIllegalArgument
 	}
 
 	// Reset RPDO entirely
@@ -127,7 +127,7 @@ func (rpdo *RPDO) Init(od *ObjectDictionary,
 	ret = entry14xx.GetUint8(2, &transmissionType)
 	if ret != nil {
 		log.Errorf("[RPDO][%x|%x] reading transmission type failed : %v", entry14xx.Index, 2, ret)
-		return CO_ERROR_OD_PARAMETERS
+		return ErrOdParameters
 	}
 	rpdo.Sync = sync
 	rpdo.Synchronous = transmissionType <= TRANSMISSION_TYPE_SYNC_240

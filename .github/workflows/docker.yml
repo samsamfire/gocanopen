@@ -1,0 +1,25 @@
+name: Run Tests with virtual can interface using docker
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: samsamfire/vcan-container:latest
+      options: --privileged --cap-add=NET_ADMIN --user root
+
+    steps:
+      - name: Setup 
+        run: |
+          ip link add dev vcan0 type vcan
+          ip link set vcan0 up
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        
+      - name: Build
+        run: go build -v ./...
+  
+      - name: Test
+        run: go test -v ./...

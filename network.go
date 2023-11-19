@@ -26,7 +26,7 @@ type ObjectDictionaryInformation struct {
 }
 
 func NewNetwork(bus Bus) Network {
-	return Network{Nodes: map[uint8]*Node{}, busManager: &BusManager{Bus: bus}, odMap: map[uint8]*ObjectDictionaryInformation{}}
+	return Network{Nodes: map[uint8]*Node{}, busManager: NewBusManager(bus), odMap: map[uint8]*ObjectDictionaryInformation{}}
 }
 
 // Create bus instance and add basic functionality : SDO, NMT
@@ -51,7 +51,6 @@ func (network *Network) Connect(canInterface any, channel any, bitrate int) erro
 		bus = busManager.Bus
 	}
 	// Init bus, connect and subscribe to CAN message reception
-	busManager.Init(bus)
 	bus.Subscribe(busManager)
 	e := bus.Connect()
 	if e != nil {
@@ -254,7 +253,7 @@ func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
 		nmtCommand != NMT_ENTER_STOPPED &&
 		nmtCommand != NMT_RESET_COMMUNICATION &&
 		nmtCommand != NMT_RESET_NODE) {
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return ErrIllegalArgument
 	}
 	network.nmtMasterTxBuff.Data[0] = uint8(nmtCommand)
 	network.nmtMasterTxBuff.Data[1] = nodeId
