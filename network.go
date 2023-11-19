@@ -51,15 +51,16 @@ func (network *Network) Connect(canInterface any, channel any, bitrate int) erro
 		if err != nil {
 			return fmt.Errorf("could not connect to can channel %v , because %v", channel, err)
 		}
+		busManager.Bus = bus
 	} else {
 		bus = busManager.Bus
 	}
 	// Init bus, connect and subscribe to CAN message reception
-	bus.Subscribe(busManager)
 	e := bus.Connect()
 	if e != nil {
 		return e
 	}
+	bus.Subscribe(busManager)
 	// Add SDO client to network by default
 	client := &SDOClient{}
 	e = client.Init(nil, nil, 0, busManager)
