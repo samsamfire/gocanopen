@@ -120,7 +120,7 @@ func (server *SDOServer) Handle(frame Frame) {
 
 func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uint8, timeoutTimeMs uint16, busManager *BusManager) error {
 	if od == nil || busManager == nil {
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return ErrIllegalArgument
 	}
 	server.OD = od
 	server.Streamer = &ObjectStreamer{}
@@ -136,7 +136,7 @@ func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uin
 		/*Configure sdo channel*/
 		if nodeId < 1 || nodeId > 127 {
 			log.Errorf("SDO server node id is not valid : %x", nodeId)
-			return CO_ERROR_ILLEGAL_ARGUMENT
+			return ErrIllegalArgument
 		}
 		canIdClientToServer = SDO_CLIENT_ID + uint16(nodeId)
 		canIdServerToClient = SDO_SERVER_ID + uint16(nodeId)
@@ -146,7 +146,7 @@ func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uin
 			// Default channels
 			if nodeId < 1 || nodeId > 127 {
 				log.Errorf("SDO server node id is not valid : %x", nodeId)
-				return CO_ERROR_ILLEGAL_ARGUMENT
+				return ErrIllegalArgument
 			}
 			canIdClientToServer = SDO_CLIENT_ID + uint16(nodeId)
 			canIdServerToClient = SDO_SERVER_ID + uint16(nodeId)
@@ -163,7 +163,7 @@ func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uin
 			if err0 != nil || (maxSubIndex != 2 && maxSubIndex != 3) ||
 				err1 != nil || err2 != nil {
 				log.Errorf("Error when retreiving sdo server parameters : %v, %v, %v, %v", err0, err1, err2, maxSubIndex)
-				return CO_ERROR_OD_PARAMETERS
+				return ErrOdParameters
 			}
 			if (cobIdClientToServer32 & 0x80000000) == 0 {
 				canIdClientToServer = uint16(cobIdClientToServer32 & 0x7FF)
@@ -180,7 +180,7 @@ func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uin
 			server.ExtensionEntry1200.Write = WriteEntryOriginal
 
 		} else {
-			return CO_ERROR_ILLEGAL_ARGUMENT
+			return ErrIllegalArgument
 		}
 	}
 	server.RxNew = false

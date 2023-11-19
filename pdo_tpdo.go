@@ -21,7 +21,7 @@ func (tpdo *TPDO) configureTransmissionType(entry18xx *Entry) error {
 	ret := entry18xx.GetUint8(2, &transmissionType)
 	if ret != nil {
 		log.Errorf("[TPDO][%x|%x] reading %v failed : %v", entry18xx.Index, 2, entry18xx.Name, ret)
-		return CO_ERROR_OD_PARAMETERS
+		return ErrOdParameters
 	}
 	if transmissionType < TRANSMISSION_TYPE_SYNC_EVENT_LO && transmissionType > TRANSMISSION_TYPE_SYNC_240 {
 		transmissionType = TRANSMISSION_TYPE_SYNC_EVENT_LO
@@ -37,7 +37,7 @@ func (tpdo *TPDO) configureCOBID(entry18xx *Entry, predefinedIdent uint16, erron
 	ret := entry18xx.GetUint32(1, &cobId)
 	if ret != nil {
 		log.Errorf("[TPDO][%x|%x] reading %v failed : %v", entry18xx.Index, 1, entry18xx.Name, ret)
-		return 0, CO_ERROR_OD_PARAMETERS
+		return 0, ErrOdParameters
 	}
 	valid := (cobId & 0x80000000) == 0
 	canId = uint16(cobId & 0x7FF)
@@ -64,7 +64,7 @@ func (tpdo *TPDO) configureCOBID(entry18xx *Entry, predefinedIdent uint16, erron
 	var err error
 	tpdo.txBuffer, _ = pdo.busManager.InsertTxBuffer(uint32(canId), false, uint8(pdo.DataLength), tpdo.TransmissionType <= TRANSMISSION_TYPE_SYNC_240)
 	if tpdo.txBuffer == nil || err != nil {
-		return 0, CO_ERROR_ILLEGAL_ARGUMENT
+		return 0, ErrIllegalArgument
 	}
 	pdo.Valid = valid
 	return canId, nil
@@ -83,7 +83,7 @@ func (tpdo *TPDO) Init(
 
 	pdo := &tpdo.PDO
 	if od == nil || em == nil || entry18xx == nil || entry1Axx == nil || busManager == nil {
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return ErrIllegalArgument
 	}
 
 	// Reset TPDO entirely

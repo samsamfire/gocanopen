@@ -112,9 +112,9 @@ func (node *Node) Process(enableGateway bool, timeDifferenceUs uint32, timerNext
 func (node *Node) InitPDO(od *ObjectDictionary, nodeId uint8) error {
 	if nodeId < 1 || nodeId > 127 || node.NodeIdUnconfigured {
 		if node.NodeIdUnconfigured {
-			return CO_ERROR_NODE_ID_UNCONFIGURED_LSS
+			return ErrNodeIdUnconfiguredLSS
 		} else {
-			return CO_ERROR_ILLEGAL_ARGUMENT
+			return ErrIllegalArgument
 		}
 	}
 	// Iterate over all the possible entries : there can be a maximum of 512 maps
@@ -194,7 +194,7 @@ func (node *Node) Init(
 	)
 	if err != nil {
 		log.Errorf("[EMERGENCY producer] error when initializing emergency producer %v", err)
-		return CO_ERROR_OD_PARAMETERS
+		return ErrOdParameters
 	}
 
 	// NMT object can either be supplied or created with OD entry
@@ -206,7 +206,7 @@ func (node *Node) Init(
 	// Initialize NMT
 	entry1017 := od.Index(0x1017)
 	if entry1017 == nil {
-		return CO_ERROR_OD_PARAMETERS
+		return ErrOdParameters
 	}
 	err = node.NMT.Init(entry1017, nil, nodeId, nmtControl, firstHbTimeMs, node.BusManager, NMT_SERVICE_ID, NMT_SERVICE_ID, HEARTBEAT_SERVICE_ID+uint16(nodeId))
 	if err != nil {

@@ -1,11 +1,8 @@
 package canopen
 
-// A CAN Bus interface that implements sending
-type Bus interface {
-	Send(frame BufferTxFrame) error    // Send a frame on the bus
-	Subscribe(subscriber FrameHandler) // Subscribe to can frames
-	Connect(...any) error
-}
+const CAN_RTR_FLAG uint32 = 0x40000000
+const CAN_SFF_MASK uint32 = 0x000007FF
+const CAN_EFF_FLAG uint32 = 0x80000000
 
 // A CAN frame
 type Frame struct {
@@ -15,72 +12,16 @@ type Frame struct {
 	Flags uint8
 }
 
+// A CAN Bus interface that implements sending
+type Bus interface {
+	Send(frame BufferTxFrame) error    // Send a frame on the bus
+	Subscribe(subscriber FrameHandler) // Subscribe to can frames
+	Connect(...any) error
+}
+
 // Interface used for handling a CAN frame, implementation depends on the CAN object type
 type FrameHandler interface {
 	Handle(frame Frame)
-}
-
-type COResult int8
-
-const CAN_RTR_FLAG uint32 = 0x40000000
-const CAN_SFF_MASK uint32 = 0x000007FF
-const CAN_EFF_FLAG uint32 = 0x80000000
-
-type CANopenError int8
-
-func (error CANopenError) Error() string {
-	error_str, ok := CANOPEN_ERRORS[error]
-	if ok {
-		return error_str
-	}
-	return "Unknown error"
-}
-
-const (
-	CO_ERROR_NO                       CANopenError = 0
-	CO_ERROR_ILLEGAL_ARGUMENT         CANopenError = -1
-	CO_ERROR_OUT_OF_MEMORY            CANopenError = -2
-	CO_ERROR_TIMEOUT                  CANopenError = -3
-	CO_ERROR_ILLEGAL_BAUDRATE         CANopenError = -4
-	CO_ERROR_RX_OVERFLOW              CANopenError = -5
-	CO_ERROR_RX_PDO_OVERFLOW          CANopenError = -6
-	CO_ERROR_RX_MSG_LENGTH            CANopenError = -7
-	CO_ERROR_RX_PDO_LENGTH            CANopenError = -8
-	CO_ERROR_TX_OVERFLOW              CANopenError = -9
-	CO_ERROR_TX_PDO_WINDOW            CANopenError = -10
-	CO_ERROR_TX_UNCONFIGURED          CANopenError = -11
-	CO_ERROR_OD_PARAMETERS            CANopenError = -12
-	CO_ERROR_DATA_CORRUPT             CANopenError = -13
-	CO_ERROR_CRC                      CANopenError = -14
-	CO_ERROR_TX_BUSY                  CANopenError = -15
-	CO_ERROR_WRONG_NMT_STATE          CANopenError = -16
-	CO_ERROR_SYSCALL                  CANopenError = -17
-	CO_ERROR_INVALID_STATE            CANopenError = -18
-	CO_ERROR_NODE_ID_UNCONFIGURED_LSS CANopenError = -19
-)
-
-// A map between the errors and the description
-var CANOPEN_ERRORS = map[CANopenError]string{
-	CO_ERROR_NO:                       "Operation completed successfully",
-	CO_ERROR_ILLEGAL_ARGUMENT:         "Error in function arguments",
-	CO_ERROR_OUT_OF_MEMORY:            "Memory allocation failed",
-	CO_ERROR_TIMEOUT:                  "Function timeout",
-	CO_ERROR_ILLEGAL_BAUDRATE:         "Illegal baudrate passed to function",
-	CO_ERROR_RX_OVERFLOW:              "Previous message was not processed yet",
-	CO_ERROR_RX_PDO_OVERFLOW:          "Previous PDO was not processed yet",
-	CO_ERROR_RX_MSG_LENGTH:            "Wrong receive message length",
-	CO_ERROR_RX_PDO_LENGTH:            "Wrong receive PDO length",
-	CO_ERROR_TX_OVERFLOW:              "Previous message is still waiting, buffer full",
-	CO_ERROR_TX_PDO_WINDOW:            "Synchronous TPDO is outside window",
-	CO_ERROR_TX_UNCONFIGURED:          "Transmit buffer was not configured properly",
-	CO_ERROR_OD_PARAMETERS:            "Error in Object Dictionary parameters",
-	CO_ERROR_DATA_CORRUPT:             "Stored data are corrupt",
-	CO_ERROR_CRC:                      "CRC does not match",
-	CO_ERROR_TX_BUSY:                  "Sending rejected because driver is busy. Try again",
-	CO_ERROR_WRONG_NMT_STATE:          "Command can't be processed in current state",
-	CO_ERROR_SYSCALL:                  "Syscall failed",
-	CO_ERROR_INVALID_STATE:            "Driver not ready",
-	CO_ERROR_NODE_ID_UNCONFIGURED_LSS: "Node-id is in LSS unconfigured state. If objects are handled properly,this may not be an error.",
 }
 
 // CAN bus errors
@@ -188,8 +129,8 @@ func (busManager *BusManager) Send(buf BufferTxFrame) error {
 	return busManager.Bus.Send(buf)
 }
 
-func (busManager *BusManager) ClearSyncPDOs() (result COResult) {
-	// TODO
+func (busManager *BusManager) ClearSyncPDOs() error {
+	// TODO abort pending TPDOs
 	return 0
 }
 

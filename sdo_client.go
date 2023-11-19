@@ -71,11 +71,11 @@ const (
 
 func (client *SDOClient) Init(od *ObjectDictionary, entry1280 *Entry, nodeId uint8, busManager *BusManager) error {
 	if busManager == nil {
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return ErrIllegalArgument
 	}
 	if entry1280 != nil && (entry1280.Index < 0x1280 || entry1280.Index > (0x1280+0x7F)) {
 		log.Errorf("[SDO CLIENT] invalid index for sdo client : x%v", entry1280.Index)
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return ErrIllegalArgument
 	}
 	client.OD = od
 	client.NodeId = nodeId
@@ -95,7 +95,7 @@ func (client *SDOClient) Init(od *ObjectDictionary, entry1280 *Entry, nodeId uin
 		err4 := entry1280.GetUint8(3, &nodeIdServer)
 		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || maxSubindex != 3 {
 			log.Errorf("[SDO CLIENT] error when reading SDO client parameters in OD 0:%v,1:%v,2:%v,3:%v,max sub-index(should be 3) : %v", err1, err2, err3, err4, maxSubindex)
-			return CO_ERROR_OD_PARAMETERS
+			return ErrOdParameters
 		}
 	} else {
 		nodeIdServer = 0
@@ -111,7 +111,7 @@ func (client *SDOClient) Init(od *ObjectDictionary, entry1280 *Entry, nodeId uin
 
 	err := client.Setup(CobIdClientToServer, CobIdServerToClient, nodeIdServer)
 	if err != nil {
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return ErrIllegalArgument
 	}
 	return nil
 }
