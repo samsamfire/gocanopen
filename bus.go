@@ -20,9 +20,9 @@ const (
 // A CAN frame
 type Frame struct {
 	ID    uint32
+	Flags uint8
 	DLC   uint8
 	Data  [8]byte
-	Flags uint8
 }
 
 // RX Buffer struct for receiving specific CAN frame ID
