@@ -94,7 +94,7 @@ func (nmt *NMT) Init(
 	canIdHbTx uint16,
 ) error {
 	if entry1017 == nil || busManager == nil {
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return ErrIllegalArgument
 	}
 
 	nmt.operatingState = NMT_INITIALIZING
@@ -108,7 +108,7 @@ func (nmt *NMT) Init(
 	err := entry1017.GetUint16(0, &HBprodTime_ms)
 	if err != nil {
 		log.Errorf("[NMT][%x|%x] reading producer heartbeat failed : %v", 0x1017, 0x0, err)
-		return CO_ERROR_OD_PARAMETERS
+		return ErrOdParameters
 	}
 	nmt.hearbeatProducerTimeUs = uint32(HBprodTime_ms) * 1000
 	// Extension needs to be initialized
@@ -259,7 +259,7 @@ func (nmt *NMT) SendInternalCommand(command uint8) {
 // Send an NMT command to the network
 func (nmt *NMT) SendCommand(command NMTCommand, nodeId uint8) error {
 	if nmt == nil {
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return ErrIllegalArgument
 	}
 	// Also apply to node if concerned
 	if nodeId == 0 || nodeId == nmt.nodeId {

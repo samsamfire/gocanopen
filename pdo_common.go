@@ -126,7 +126,7 @@ func (pdo *PDOCommon) InitMapping(od *ObjectDictionary, entry *Entry, isRPDO boo
 	ret := entry.GetUint8(0, &mappedObjectsCount)
 	if ret != nil {
 		log.Errorf("[%v][%x|%x] reading nb mapped objects failed : %v", pdo.Type(), entry.Index, 0, ret)
-		return CO_ERROR_OD_PARAMETERS
+		return ErrOdParameters
 	}
 
 	// Iterate over all the mapping objects
@@ -139,7 +139,7 @@ func (pdo *PDOCommon) InitMapping(od *ObjectDictionary, entry *Entry, isRPDO boo
 		}
 		if ret != nil {
 			log.Errorf("[%v][%x|%x] reading mapped object failed : %v", pdo.Type(), entry.Index, i+1, ret)
-			return CO_ERROR_OD_PARAMETERS
+			return ErrOdParameters
 		}
 		ret = pdo.ConfigureMap(od, mapParam, uint32(i), isRPDO)
 		if ret != nil {

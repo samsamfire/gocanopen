@@ -57,13 +57,13 @@ func (sync *SYNC) Handle(frame Frame) {
 
 func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1007 *Entry, entry1019 *Entry, busManager *BusManager) error {
 	if emergency == nil || entry1005 == nil {
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return ErrIllegalArgument
 	}
 	var cobIdSync uint32 = 0
 	res := entry1005.GetUint32(0, &cobIdSync)
 	if res != nil {
 		log.Errorf("[SYNC][%x] %v read error", entry1005.Index, entry1005.Name)
-		return CO_ERROR_OD_PARAMETERS
+		return ErrOdParameters
 	}
 
 	sync.ExtensionEntry1005.Object = sync
@@ -75,23 +75,23 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 
 	if entry1006 == nil {
 		log.Errorf("[SYNC][1006] COMM CYCLE PERIOD not found")
-		return CO_ERROR_OD_PARAMETERS
+		return ErrOdParameters
 	} else if entry1007 == nil {
 		log.Errorf("[SYNC][1007] SYNCHRONOUS WINDOW LENGTH not found")
-		return CO_ERROR_OD_PARAMETERS
+		return ErrOdParameters
 	}
 
 	sync.OD1006Period, err = entry1006.GetPtr(0, 4)
 	if err != nil {
 		log.Errorf("[SYNC][%x] %v read error", entry1006.Index, entry1006.Name)
-		return CO_ERROR_OD_PARAMETERS
+		return ErrOdParameters
 	}
 	log.Infof("[SYNC][%x] %v : %v", entry1006.Index, entry1006.Name, binary.LittleEndian.Uint32(*sync.OD1006Period))
 
 	sync.OD1007Window, err = entry1007.GetPtr(0, 4)
 	if err != nil {
 		log.Errorf("[SYNC][%x] %v read error", entry1007.Index, entry1007.Name)
-		return CO_ERROR_OD_PARAMETERS
+		return ErrOdParameters
 	}
 	log.Infof("[SYNC][%x] %v : %v", entry1007.Index, entry1007.Name, binary.LittleEndian.Uint32(*sync.OD1007Window))
 
@@ -101,7 +101,7 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 		err = entry1019.GetUint8(0, &syncCounterOverflow)
 		if err != nil {
 			log.Errorf("[SYNC][%x] %v read error", entry1019.Index, entry1019.Name)
-			return CO_ERROR_OD_PARAMETERS
+			return ErrOdParameters
 		}
 		if syncCounterOverflow == 1 {
 			syncCounterOverflow = 2
@@ -134,7 +134,7 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 		return err2
 	}
 	if sync.txBuffer == nil {
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return ErrIllegalArgument
 	}
 	log.Infof("[SYNC] Initialisation finished")
 	return nil
