@@ -155,7 +155,7 @@ func (client *VirtualCanBus) handleReception() {
 func (client *VirtualCanBus) Close() error {
 	client.mu.Lock()
 	defer client.mu.Unlock()
-	if !client.errSubscriber {
+	if !client.errSubscriber && client.isRunning {
 		client.stopChan <- true
 		client.wg.Wait()
 	}
