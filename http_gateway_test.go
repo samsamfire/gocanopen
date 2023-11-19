@@ -18,7 +18,7 @@ func init() {
 
 func createGateway() *HTTPGatewayServer {
 	network := NewNetwork(nil)
-	e := network.Connect("", "vcan0", 500000)
+	e := network.Connect("virtualcan", "localhost:18888", 500000)
 	if e != nil {
 		panic(e)
 	}
@@ -35,7 +35,7 @@ func createGateway() *HTTPGatewayServer {
 
 func createNetwork() *Network {
 	network := NewNetwork(nil)
-	e := network.Connect("", "vcan0", 500000)
+	e := network.Connect("virtualcan", "localhost:18888", 500000)
 	if e != nil {
 		panic(e)
 	}

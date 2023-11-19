@@ -15,8 +15,7 @@ jobs:
 
       - name: Start virtual can
         run: |
-          ./virtualcan --port 18888
-
+          /app/virtualcan --port 18888
         
       - name: Build
         run: go build -v ./...

@@ -38,7 +38,7 @@ func (socketcan *SocketcanBus) Handle(frame can.Frame) {
 	socketcan.frameHandler.Handle(Frame{ID: frame.ID, DLC: frame.Length, Flags: frame.Flags, Data: frame.Data})
 }
 
-func NewSocketcanBus(name string) (SocketcanBus, error) {
+func NewSocketcanBus(name string) (*SocketcanBus, error) {
 	bus, err := can.NewBusForInterfaceWithName(name)
-	return SocketcanBus{bus: bus}, err
+	return &SocketcanBus{bus: bus}, err
 }
