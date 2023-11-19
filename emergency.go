@@ -340,7 +340,7 @@ func (emergency *EM) Init(
 		nodeId < 1 || nodeId > 127 ||
 		entry1003 == nil {
 		log.Debugf("%v", emergency)
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return ErrIllegalArgument
 
 	}
 	var err error
@@ -356,7 +356,7 @@ func (emergency *EM) Init(
 	if ret != nil || (cobIdEmergency&0x7FFFF800) != 0 {
 		// Don't break if only value is wrong
 		if ret != nil {
-			return CO_ERROR_OD_PARAMETERS
+			return ErrOdParameters
 		}
 	}
 	producerCanId := cobIdEmergency & 0x7FF
@@ -366,7 +366,7 @@ func (emergency *EM) Init(
 	emergency.ExtensionEntry1014.Write = WriteEntry1014
 	err = entry1014.AddExtension(&emergency.ExtensionEntry1014)
 	if err != nil {
-		return CO_ERROR_OD_PARAMETERS
+		return ErrOdParameters
 	}
 	emergency.ProducerIdent = uint16(producerCanId)
 	if producerCanId == uint32(EMERGENCY_SERVICE_ID) {
@@ -376,7 +376,7 @@ func (emergency *EM) Init(
 	emergency.NodeId = nodeId
 	emergency.txBuffer, err = emergency.busManager.InsertTxBuffer(producerCanId, false, 8, false)
 	if emergency.txBuffer == nil || err != nil {
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return ErrIllegalArgument
 	}
 	emergency.InhibitEmTimeUs = 0
 	emergency.InhibitEmTimer = 0

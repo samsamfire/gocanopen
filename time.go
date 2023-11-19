@@ -33,14 +33,14 @@ func (time *TIME) Handle(frame Frame) {
 
 func (time *TIME) Init(entry1012 *Entry, busManager *BusManager, producerIntervalMs uint32) error {
 	if time == nil || entry1012 == nil || busManager == nil {
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return ErrIllegalArgument
 	}
 	// Read param from OD
 	cobIdTimestamp := uint32(0)
 	ret := entry1012.GetUint32(0, &cobIdTimestamp)
 	if ret != nil {
 		log.Errorf("[TIME][%x|%x] reading cob id timestamp failed : %v", entry1012.Index, 0x0, ret)
-		return CO_ERROR_OD_PARAMETERS
+		return ErrOdParameters
 	}
 	time.ExtensionEntry1012.Object = time
 	time.ExtensionEntry1012.Read = ReadEntryOriginal
@@ -60,7 +60,7 @@ func (time *TIME) Init(entry1012 *Entry, busManager *BusManager, producerInterva
 			time,
 		)
 		if err != nil {
-			return CO_ERROR_ILLEGAL_ARGUMENT
+			return ErrIllegalArgument
 		}
 	}
 	time.busManager = busManager
@@ -71,7 +71,7 @@ func (time *TIME) Init(entry1012 *Entry, busManager *BusManager, producerInterva
 		false,
 	)
 	if time.TxBuffer == nil || err != nil {
-		return CO_ERROR_ILLEGAL_ARGUMENT
+		return ErrIllegalArgument
 	}
 	time.SetInternalTime()
 	time.ProducerIntervalMs = producerIntervalMs
