@@ -13,13 +13,11 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Start virtual can
-        run: |
-          RUNNER_TRACKING_ID="" && /app/virtualcan --port 18888 &
         
       - name: Build
         run: go build -v ./...
   
       - name: Test
-        run: go test -v ./...
+        run: |
+          /app/virtualcan --port 18888 &
+          go test -v ./...
