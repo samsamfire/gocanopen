@@ -72,8 +72,7 @@ func (node *Node) ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32) bool
 		syncProcess := sync.Process(nmtIsPreOrOperational, timeDifferenceUs, timerNextUs)
 
 		switch syncProcess {
-		case CO_SYNC_NONE:
-		case CO_SYNC_RX_TX:
+		case CO_SYNC_NONE, CO_SYNC_RX_TX:
 			syncWas = true
 		case CO_SYNC_PASSED_WINDOW:
 			node.BusManager.ClearSyncPDOs()
