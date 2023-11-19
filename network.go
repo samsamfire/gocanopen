@@ -39,14 +39,18 @@ func (network *Network) Connect(canInterface any, channel any, bitrate int) erro
 		if !ok {
 			return fmt.Errorf("expecting a string for the can channel")
 		}
-		if canInterface != "socketcan" && canInterface != "" {
-			return fmt.Errorf("only socketcan is supported currently")
+		var err error
+		switch canInterface {
+		case "socketcan", "":
+			bus, err = NewSocketcanBus(channelStr)
+		case "virtualcan":
+			bus = NewVirtualCanBus(channelStr)
+		default:
+			return fmt.Errorf("%v is not a supported bus interface :(", err)
 		}
-		b, e := NewSocketcanBus(channelStr)
-		if e != nil {
-			return fmt.Errorf("could not connect to socketcan channel %v , because %v", channel, e)
+		if err != nil {
+			return fmt.Errorf("could not connect to can channel %v , because %v", channel, err)
 		}
-		bus = &b
 	} else {
 		bus = busManager.Bus
 	}
