@@ -25,14 +25,6 @@ type Frame struct {
 	Data  [8]byte
 }
 
-// RX Buffer struct for receiving specific CAN frame ID
-type BufferRxFrame struct {
-	Ident      uint32
-	Mask       uint32
-	handler    FrameListener
-	CANifindex int
-}
-
 // TX Buffer struct for sending specific CAN frame ID
 type BufferTxFrame struct {
 	Ident      uint32
@@ -129,7 +121,6 @@ func (busManager *BusManager) Subscribe(ident uint32, mask uint32, rtr bool, cal
 	if rtr {
 		ident |= CAN_RTR_FLAG
 	}
-	mask = (mask & CAN_SFF_MASK) | CAN_EFF_FLAG | CAN_RTR_FLAG
 	_, ok := busManager.frameListeners[ident]
 	if !ok {
 		busManager.frameListeners[ident] = []FrameListener{callback}
@@ -149,10 +140,6 @@ func (busManager *BusManager) SetRxFilters() {
 func (busManager *BusManager) ClearSyncPDOs() error {
 	// TODO
 	return nil
-}
-
-func NewBufferRxFrame(ident uint32, mask uint32, object FrameListener, CANifindex int) BufferRxFrame {
-	return BufferRxFrame{Ident: ident, Mask: mask, handler: object, CANifindex: CANifindex}
 }
 
 func NewBufferTxFrame(ident uint32, length uint8, syncFlag bool, CANifindex int) *BufferTxFrame {
