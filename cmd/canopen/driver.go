@@ -11,10 +11,10 @@ import (
 // Adding a custom driver would be possible by changing the bellow implementations
 type SocketcanBus struct {
 	bus          *can.Bus
-	frameHandler canopen.FrameHandler
+	frameHandler canopen.FrameListener
 }
 
-func (socketcan *SocketcanBus) Subscribe(framehandler canopen.FrameHandler) {
+func (socketcan *SocketcanBus) Subscribe(framehandler canopen.FrameListener) {
 	// Socketcan will forward messages to frameHandler via Handle method
 	socketcan.frameHandler = framehandler
 	// brutella/can defines a "Handle" interface for handling received CAN frames

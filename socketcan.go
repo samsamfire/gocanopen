@@ -9,21 +9,8 @@ import (
 // Adding a custom driver would be possible by changing the bellow implementations
 
 type SocketcanBus struct {
-	bus          *can.Bus
-	frameHandler FrameHandler
-}
-
-// "Send" implementation of Bus interface
-func (socketcan *SocketcanBus) Send(frame BufferTxFrame) error {
-	new_frame := can.Frame{ID: frame.Ident, Length: frame.DLC, Flags: 0, Res0: 0, Res1: 0, Data: frame.Data}
-	return socketcan.bus.Publish(new_frame)
-}
-
-// "Subscribe" implementation of Bus interface
-func (socketcan *SocketcanBus) Subscribe(framehandler FrameHandler) {
-	socketcan.frameHandler = framehandler
-	// brutella/can defines a "Handle" interface for handling received CAN frames
-	socketcan.bus.Subscribe(socketcan)
+	bus        *can.Bus
+	rxCallback FrameListener
 }
 
 // "Connect" implementation of Bus interface
@@ -32,10 +19,36 @@ func (socketcan *SocketcanBus) Connect(...any) error {
 	return nil
 }
 
+// "Disconnect" implementation of Bus interface
+func (socketcan *SocketcanBus) Disconnect() error {
+	return socketcan.bus.Disconnect()
+}
+
+// "Send" implementation of Bus interface
+func (socketcan *SocketcanBus) Send(frame Frame) error {
+	return socketcan.bus.Publish(
+		can.Frame{
+			ID:     frame.ID,
+			Length: frame.DLC,
+			Flags:  frame.Flags,
+			Res0:   0,
+			Res1:   0,
+			Data:   frame.Data,
+		})
+}
+
+// "Subscribe" implementation of Bus interface
+func (socketcan *SocketcanBus) Subscribe(rxCallback FrameListener) error {
+	socketcan.rxCallback = rxCallback
+	// brutella/can defines a "Handle" interface for handling received CAN frames
+	socketcan.bus.Subscribe(socketcan)
+	return nil
+}
+
 // brutella/can specific "Handle" implementation
 func (socketcan *SocketcanBus) Handle(frame can.Frame) {
 	// Convert brutella frame to canopen frame
-	socketcan.frameHandler.Handle(Frame{ID: frame.ID, DLC: frame.Length, Flags: frame.Flags, Data: frame.Data})
+	socketcan.rxCallback.Handle(Frame{ID: frame.ID, DLC: frame.Length, Flags: frame.Flags, Data: frame.Data})
 }
 
 func NewSocketcanBus(name string) (*SocketcanBus, error) {

@@ -123,7 +123,7 @@ func (nmt *NMT) Init(
 
 	// Configure NMT specific tx/rx buffers
 	nmt.busManager = busManager
-	err = busManager.InsertRxBuffer(uint32(canIdNmtRx), 0x7FF, false, nmt)
+	err = busManager.Subscribe(uint32(canIdNmtRx), 0x7FF, false, nmt)
 	if err != nil {
 		return err
 	}

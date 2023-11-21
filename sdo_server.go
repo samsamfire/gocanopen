@@ -220,7 +220,7 @@ func (server *SDOServer) InitRxTx(busManager *BusManager, cobIdClientToServer ui
 		server.Valid = false
 	}
 	// Configure buffers, if initializing then insert in buffer, otherwise, update
-	ret = server.BusManager.InsertRxBuffer(uint32(CanIdC2S), 0x7FF, false, server)
+	ret = server.BusManager.Subscribe(uint32(CanIdC2S), 0x7FF, false, server)
 	if ret != nil {
 		server.Valid = false
 		return ret

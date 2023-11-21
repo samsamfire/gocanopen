@@ -120,7 +120,7 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	sync.Ident = uint16(cobIdSync) & 0x7FF
 	sync.BusManager = busManager
 
-	err1 := sync.BusManager.InsertRxBuffer(uint32(sync.Ident), 0x7FF, false, sync)
+	err1 := sync.BusManager.Subscribe(uint32(sync.Ident), 0x7FF, false, sync)
 	if err1 != nil {
 		return err1
 	}

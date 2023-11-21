@@ -120,7 +120,7 @@ func (consumer *HBConsumer) InitEntry(index uint8, nodeId uint8, consumerTimeMs 
 	// Configure RX buffer for hearbeat reception
 	if monitoredNode.HBState != HB_UNCONFIGURED {
 		log.Debugf("[HB CONSUMER] adding consumer for id %v | timeout %v us", monitoredNode.NodeId, monitoredNode.TimeUs)
-		ret = consumer.busManager.InsertRxBuffer(uint32(cobId), 0x7FF, false, monitoredNode)
+		ret = consumer.busManager.Subscribe(uint32(cobId), 0x7FF, false, monitoredNode)
 	}
 	return ret
 

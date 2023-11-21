@@ -100,7 +100,7 @@ func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 	}
 	// Reconfigure the receive and transmit buffers only if changed
 	if canId != sync.Ident {
-		err := sync.BusManager.InsertRxBuffer(uint32(canId), 0x7FF, false, sync)
+		err := sync.BusManager.Subscribe(uint32(canId), 0x7FF, false, sync)
 		if err != nil {
 			return ODR_DEV_INCOMPAT
 		}
@@ -457,7 +457,7 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 			if !valid {
 				canId = 0
 			}
-			err := pdo.busManager.InsertRxBuffer(
+			err := pdo.busManager.Subscribe(
 				canId,
 				0x7FF,
 				false,
