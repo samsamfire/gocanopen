@@ -8,27 +8,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// [RPDO][TPDO] write method that fakes writing an OD variable
-func WriteDummy(stream *Stream, data []byte, countWritten *uint16) error {
-	if countWritten != nil {
-		*countWritten = uint16(len(data))
-	}
-	return nil
-}
-
-// [RPDO][TPDO] read method that fakes reading an OD variable
-func ReadDummy(stream *Stream, data []byte, countRead *uint16) error {
-	if countRead == nil || data == nil || stream == nil {
-		return ODR_DEV_INCOMPAT
-	}
-	if len(data) > len(stream.Data) {
-		*countRead = uint16(len(stream.Data))
-	} else {
-		*countRead = uint16(len(data))
-	}
-	return nil
-}
-
 // [EMERGENCY] read emergency history
 func ReadEntry1003(stream *Stream, data []byte, countRead *uint16) error {
 	if stream == nil || data == nil || countRead == nil ||
@@ -679,4 +658,25 @@ func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 	}
 	return WriteEntryOriginal(stream, bufCopy, countWritten)
 
+}
+
+// [RPDO][TPDO] write method that fakes writing an OD variable
+func WriteDummy(stream *Stream, data []byte, countWritten *uint16) error {
+	if countWritten != nil {
+		*countWritten = uint16(len(data))
+	}
+	return nil
+}
+
+// [RPDO][TPDO] read method that fakes reading an OD variable
+func ReadDummy(stream *Stream, data []byte, countRead *uint16) error {
+	if countRead == nil || data == nil || stream == nil {
+		return ODR_DEV_INCOMPAT
+	}
+	if len(data) > len(stream.Data) {
+		*countRead = uint16(len(stream.Data))
+	} else {
+		*countRead = uint16(len(data))
+	}
+	return nil
 }
