@@ -53,35 +53,6 @@ type VirtualCanBus struct {
 	errSubscriber bool
 }
 
-// "Send" implementation of Bus interface
-func (client *VirtualCanBus) Send(buffer BufferTxFrame) error {
-	if client.conn == nil {
-		return errors.New("no active connection")
-	}
-	frame := Frame{ID: buffer.Ident, Flags: 0, DLC: buffer.DLC, Data: buffer.Data}
-	frameBytes, err := serializeFrame(frame)
-	if err != nil {
-		return err
-	}
-	_, err = client.conn.Write(frameBytes)
-	return err
-}
-
-// "Subscribe" implementation of Bus interface
-func (client *VirtualCanBus) Subscribe(framehandler FrameListener) {
-	client.mu.Lock()
-	defer client.mu.Unlock()
-	client.framehandler = framehandler
-	if client.isRunning {
-		return
-	}
-	// Start go routine that receives incoming trafic and passes it to frameHandler
-	client.wg.Add(1)
-	client.isRunning = true
-	client.errSubscriber = false
-	go client.handleReception()
-}
-
 // "Connect" to server e.g. localhost:18000
 func (client *VirtualCanBus) Connect(...any) error {
 	conn, err := net.Dial("tcp", client.channel)
@@ -95,6 +66,49 @@ func (client *VirtualCanBus) Connect(...any) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// "Disconnect" from server
+func (client *VirtualCanBus) Disconnect() error {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	if !client.errSubscriber && client.isRunning {
+		client.stopChan <- true
+		client.wg.Wait()
+	}
+	if client.conn != nil {
+		return client.conn.Close()
+	}
+	return nil
+}
+
+// "Send" implementation of Bus interface
+func (client *VirtualCanBus) Send(frame Frame) error {
+	if client.conn == nil {
+		return errors.New("no active connection")
+	}
+	frameBytes, err := serializeFrame(frame)
+	if err != nil {
+		return err
+	}
+	_, err = client.conn.Write(frameBytes)
+	return err
+}
+
+// "Subscribe" implementation of Bus interface
+func (client *VirtualCanBus) Subscribe(framehandler FrameListener) error {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	client.framehandler = framehandler
+	if client.isRunning {
+		return nil
+	}
+	// Start go routine that receives incoming trafic and passes it to frameHandler
+	client.wg.Add(1)
+	client.isRunning = true
+	client.errSubscriber = false
+	go client.handleReception()
 	return nil
 }
 
@@ -149,20 +163,6 @@ func (client *VirtualCanBus) handleReception() {
 			}
 		}
 	}
-}
-
-// Close connection
-func (client *VirtualCanBus) Close() error {
-	client.mu.Lock()
-	defer client.mu.Unlock()
-	if !client.errSubscriber && client.isRunning {
-		client.stopChan <- true
-		client.wg.Wait()
-	}
-	if client.conn != nil {
-		return client.conn.Close()
-	}
-	return nil
 }
 
 func NewVirtualCanBus(channel string) *VirtualCanBus {
