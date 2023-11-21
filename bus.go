@@ -29,7 +29,7 @@ type Frame struct {
 type BufferRxFrame struct {
 	Ident      uint32
 	Mask       uint32
-	handler    FrameHandler
+	handler    FrameListener
 	CANifindex int
 }
 
@@ -44,23 +44,25 @@ type BufferTxFrame struct {
 }
 
 // Interface used for handling a CAN frame, implementation specific : will depend on the bus type
-type FrameHandler interface {
+type FrameListener interface {
 	Handle(frame Frame)
 }
 
 // A CAN Bus interface
+// A custom implementation should implement all these methods
 type Bus interface {
-	Send(frame BufferTxFrame) error    // Send a frame on the bus
-	Subscribe(subscriber FrameHandler) // Subscribe to can frames
-	Connect(...any) error
+	Connect(...any) error                   // Connect to the actual bus
+	Disconnect() error                      // Disconnect from bus
+	Send(frame Frame) error                 // Send a frame on the bus
+	Subscribe(callback FrameListener) error // Subscribe to all can frames
 }
 
-// Bus manager is responsible for using the Bus
-// It has interal buffers etc
+// Bus manager is a wrapper around the CAN bus interface
+// Used by the CANopen stack to control errors, callbacks for specific IDs, etc.
 type BusManager struct {
 	Bus               Bus // Bus interface that can be adapted
 	txBuffer          map[uint32]*BufferTxFrame
-	rxBuffer          map[uint32]BufferRxFrame
+	frameListeners    map[uint32][]FrameListener
 	CANerrorstatus    uint16
 	CANnormal         bool
 	UseCANrxFilters   bool
@@ -70,21 +72,22 @@ type BusManager struct {
 	ErrOld            uint32
 }
 
-// Implements the CAN package "Handle" interface for handling a CAN message
-// This feeds a CAN frame to a handler
+// Implements the FrameListener interface
+// This handles all received CAN frames from Bus
 func (busManager *BusManager) Handle(frame Frame) {
-	frameBuffer, ok := busManager.rxBuffer[frame.ID]
+	listeners, ok := busManager.frameListeners[frame.ID]
 	if !ok {
 		return
 	}
-	frameBuffer.handler.Handle(frame)
+	for _, listener := range listeners {
+		listener.Handle(frame)
+	}
 }
 
-// Send CAN message from given buffer
-// Error handling is very limited right now
-
+// Send a CAN message from given buffer
+// Limited error handling
 func (busManager *BusManager) Send(buf BufferTxFrame) error {
-	return busManager.Bus.Send(buf)
+	return busManager.Bus.Send(Frame{ID: buf.Ident, Flags: 0, DLC: buf.DLC, Data: buf.Data})
 }
 
 // This should be called cyclically to update errors & process unsent messages
@@ -120,14 +123,20 @@ func (busManager *BusManager) InsertTxBuffer(ident uint32, rtr bool, length uint
 	return busManager.txBuffer[ident], nil
 }
 
-func (busManager *BusManager) InsertRxBuffer(ident uint32, mask uint32, rtr bool, object FrameHandler) error {
-	// This part is specific to socketcan
+// Subscribe to a specific CAN ID
+func (busManager *BusManager) Subscribe(ident uint32, mask uint32, rtr bool, callback FrameListener) error {
 	ident = ident & CAN_SFF_MASK
 	if rtr {
 		ident |= CAN_RTR_FLAG
 	}
 	mask = (mask & CAN_SFF_MASK) | CAN_EFF_FLAG | CAN_RTR_FLAG
-	busManager.rxBuffer[ident] = NewBufferRxFrame(ident, mask, object, 0)
+	_, ok := busManager.frameListeners[ident]
+	if !ok {
+		busManager.frameListeners[ident] = []FrameListener{callback}
+		return nil
+	}
+	// TODO add error if callback exists already
+	busManager.frameListeners[ident] = append(busManager.frameListeners[ident], callback)
 	return nil
 }
 
@@ -142,7 +151,7 @@ func (busManager *BusManager) ClearSyncPDOs() error {
 	return nil
 }
 
-func NewBufferRxFrame(ident uint32, mask uint32, object FrameHandler, CANifindex int) BufferRxFrame {
+func NewBufferRxFrame(ident uint32, mask uint32, object FrameListener, CANifindex int) BufferRxFrame {
 	return BufferRxFrame{Ident: ident, Mask: mask, handler: object, CANifindex: CANifindex}
 }
 
@@ -153,7 +162,7 @@ func NewBufferTxFrame(ident uint32, length uint8, syncFlag bool, CANifindex int)
 func NewBusManager(bus Bus) *BusManager {
 	busManager := &BusManager{
 		Bus:               bus,
-		rxBuffer:          make(map[uint32]BufferRxFrame),
+		frameListeners:    make(map[uint32][]FrameListener),
 		txBuffer:          make(map[uint32]*BufferTxFrame),
 		CANerrorstatus:    0,
 		CANnormal:         false,

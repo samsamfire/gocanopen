@@ -53,7 +53,7 @@ func (time *TIME) Init(entry1012 *Entry, busManager *BusManager, producerInterva
 	time.RxNew = false
 	var err error
 	if time.IsConsumer {
-		err = busManager.InsertRxBuffer(
+		err = busManager.Subscribe(
 			cobId,
 			0x7FF,
 			false,

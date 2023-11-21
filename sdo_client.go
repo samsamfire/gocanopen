@@ -146,7 +146,7 @@ func (client *SDOClient) Setup(cobIdClientToServer uint32, cobIdServerToClient u
 		CanIdS2C = 0
 		client.Valid = false
 	}
-	err1 := client.BusManager.InsertRxBuffer(uint32(CanIdS2C), 0x7FF, false, client)
+	err1 := client.BusManager.Subscribe(uint32(CanIdS2C), 0x7FF, false, client)
 	var err2 error
 	client.txBuffer, err2 = client.BusManager.InsertTxBuffer(uint32(CanIdC2S), false, 8, false)
 	if err2 != nil {
@@ -652,7 +652,7 @@ func (client *SDOClient) downloadInitiate(forceSegmented bool) error {
 		log.Debugf("[CLIENT][TX][x%x] DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data)
 	}
 	client.TimeoutTimer = 0
-	client.BusManager.Bus.Send(*client.txBuffer)
+	client.BusManager.Send(*client.txBuffer)
 	return nil
 
 }

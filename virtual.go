@@ -45,7 +45,7 @@ func deserializeFrame(buffer []byte) (*Frame, error) {
 type VirtualCanBus struct {
 	channel       string
 	conn          net.Conn
-	framehandler  FrameHandler
+	framehandler  FrameListener
 	stopChan      chan bool
 	mu            sync.Mutex
 	wg            sync.WaitGroup
@@ -68,7 +68,7 @@ func (client *VirtualCanBus) Send(buffer BufferTxFrame) error {
 }
 
 // "Subscribe" implementation of Bus interface
-func (client *VirtualCanBus) Subscribe(framehandler FrameHandler) {
+func (client *VirtualCanBus) Subscribe(framehandler FrameListener) {
 	client.mu.Lock()
 	defer client.mu.Unlock()
 	client.framehandler = framehandler

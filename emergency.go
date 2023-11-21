@@ -400,7 +400,7 @@ func (emergency *EM) Init(
 		entryStatusBits.AddExtension(&emergency.ExtensionStatusBits)
 	}
 
-	return busManager.InsertRxBuffer(uint32(EMERGENCY_SERVICE_ID), 0x780, false, emergency)
+	return busManager.Subscribe(uint32(EMERGENCY_SERVICE_ID), 0x780, false, emergency)
 }
 
 func (emergency *EM) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
