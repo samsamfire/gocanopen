@@ -57,6 +57,7 @@ func (network *Network) Connect(args ...any) error {
 		if err != nil {
 			return err
 		}
+		busManager.Bus = bus
 	} else {
 		bus = busManager.Bus
 	}
