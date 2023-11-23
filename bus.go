@@ -1,5 +1,7 @@
 package canopen
 
+import "fmt"
+
 const CAN_RTR_FLAG uint32 = 0x40000000
 const CAN_SFF_MASK uint32 = 0x000007FF
 const CAN_EFF_FLAG uint32 = 0x80000000
@@ -27,12 +29,12 @@ type Frame struct {
 
 // TX Buffer struct for sending specific CAN frame ID
 type BufferTxFrame struct {
-	Ident      uint32
+	ID         uint32
+	Flags      uint8
 	DLC        uint8
 	Data       [8]byte
 	BufferFull bool
 	SyncFlag   bool
-	CANifindex int
 }
 
 // Interface used for handling a CAN frame, implementation specific : will depend on the bus type
@@ -79,7 +81,7 @@ func (busManager *BusManager) Handle(frame Frame) {
 // Send a CAN message from given buffer
 // Limited error handling
 func (busManager *BusManager) Send(buf BufferTxFrame) error {
-	return busManager.Bus.Send(Frame{ID: buf.Ident, Flags: 0, DLC: buf.DLC, Data: buf.Data})
+	return busManager.Bus.Send(Frame{ID: buf.ID, Flags: buf.Flags, DLC: buf.DLC, Data: buf.Data})
 }
 
 // This should be called cyclically to update errors & process unsent messages
@@ -143,7 +145,7 @@ func (busManager *BusManager) ClearSyncPDOs() error {
 }
 
 func NewBufferTxFrame(ident uint32, length uint8, syncFlag bool, CANifindex int) *BufferTxFrame {
-	return &BufferTxFrame{Ident: ident, DLC: length, BufferFull: false, SyncFlag: syncFlag, CANifindex: CANifindex}
+	return &BufferTxFrame{ID: ident, DLC: length, BufferFull: false, SyncFlag: syncFlag}
 }
 
 func NewBusManager(bus Bus) *BusManager {
@@ -161,4 +163,23 @@ func NewBusManager(bus Bus) *BusManager {
 	}
 
 	return busManager
+}
+
+// Create Bus from local available buses
+// Currently supported : socketcan, virtualcan
+func createBusInternal(canInterface string, channel string, bitrate int) (Bus, error) {
+	var bus Bus
+	var err error
+	switch canInterface {
+	case "socketcan", "":
+		bus, err = NewSocketcanBus(channel)
+	case "virtualcan":
+		bus = NewVirtualCanBus(channel)
+	default:
+		err = fmt.Errorf("unsupported interface : %v", canInterface)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return bus, err
 }
