@@ -31,7 +31,7 @@ type HBConsumer struct {
 	AllMonitoredOperational   bool
 	NMTisPreOrOperationalPrev bool
 	busManager                *BusManager
-	ExtensionEntry1016        Extension
+	ExtensionEntry1016        *Extension
 }
 
 // Handle hearbeat reception specific to a node
@@ -75,12 +75,7 @@ func (consumer *HBConsumer) Init(em *EM, entry1016 *Entry, busManager *BusManage
 			log.Warnf("[HB CONSUMER] initializing HB consumer object %v failed, ignoring : %v", index, ret)
 		}
 	}
-
-	consumer.ExtensionEntry1016.Object = consumer
-	consumer.ExtensionEntry1016.Read = ReadEntryOriginal
-	consumer.ExtensionEntry1016.Write = WriteEntry1016
-	entry1016.AddExtension(&consumer.ExtensionEntry1016)
-
+	consumer.ExtensionEntry1016 = entry1016.AddExtension(consumer, ReadEntryOriginal, WriteEntry1016)
 	return nil
 
 }

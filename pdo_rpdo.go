@@ -143,14 +143,8 @@ func (rpdo *RPDO) Init(od *ObjectDictionary,
 	pdo.od = od
 	pdo.PreDefinedIdent = predefinedIdent
 	pdo.ConfiguredIdent = uint16(canId)
-	pdo.ExtensionCommunicationParam.Object = rpdo
-	pdo.ExtensionCommunicationParam.Read = ReadEntry14xxOr18xx
-	pdo.ExtensionCommunicationParam.Write = WriteEntry14xx
-	pdo.ExtensionMappingParam.Object = rpdo
-	pdo.ExtensionMappingParam.Read = ReadEntryOriginal
-	pdo.ExtensionMappingParam.Write = WriteEntry16xxOr1Axx
-	entry14xx.AddExtension(&pdo.ExtensionCommunicationParam)
-	entry16xx.AddExtension(&pdo.ExtensionMappingParam)
+	pdo.ExtensionCommunicationParam = entry14xx.AddExtension(rpdo, ReadEntry14xxOr18xx, WriteEntry14xx)
+	pdo.ExtensionMappingParam = entry16xx.AddExtension(rpdo, ReadEntryOriginal, WriteEntry16xxOr1Axx)
 	return nil
 }
 
