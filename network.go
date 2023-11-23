@@ -276,26 +276,26 @@ func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
 }
 
 // Add a local node to the network given an Object Dictionary
-func (network *Network) AddNodeFromOD(nodeId uint8, objectDictionary *ObjectDictionary) error {
+func (network *Network) AddNodeFromOD(nodeId uint8, objectDictionary *ObjectDictionary) (*Node, error) {
 	// Create and initialize a CANopen node
 	node := &Node{Config: nil, BusManager: network.busManager, NMT: nil}
 	err := node.Init(nil, nil, objectDictionary, nil, NMT_STARTUP_TO_OPERATIONAL, 500, 1000, 1000, true, nodeId)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	err = node.InitPDO(objectDictionary, nodeId)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	network.Nodes[nodeId] = node
-	return nil
+	return node, nil
 }
 
 // Add a local node to the network given an EDS path
-func (network *Network) AddNodeFromEDS(nodeId uint8, eds string) error {
+func (network *Network) AddNodeFromEDS(nodeId uint8, eds string) (*Node, error) {
 	od, err := ParseEDS(eds, nodeId)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	return network.AddNodeFromOD(nodeId, od)
 }

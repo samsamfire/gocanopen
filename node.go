@@ -19,6 +19,7 @@ const (
 )
 
 type Node struct {
+	OD                 *ObjectDictionary
 	Config             *Configuration
 	BusManager         *BusManager
 	NodeIdUnconfigured bool
@@ -173,6 +174,7 @@ func (node *Node) Init(
 ) error {
 	var err error
 	node.NodeIdUnconfigured = false
+	node.OD = od
 	node.exit = make(chan bool)
 	node.id = nodeId
 	node.State = NODE_INIT

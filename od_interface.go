@@ -146,6 +146,27 @@ func (od *ObjectDictionary) addEntry(entry *Entry) {
 	od.entriesByIndexName[entry.Name] = entry
 }
 
+// Add file like object entry to OD
+func (od *ObjectDictionary) AddFile(index uint16, indexName string, filePath string, mode int) error {
+	log.Infof("[OD] adding file object entry : %v at x%x", filePath, index)
+	fileObject := &FileObject{FilePath: filePath, ReadWriteMode: mode}
+	variable := Variable{
+		Data:           []byte{},
+		DataLength:     0,
+		Name:           indexName,
+		DataType:       DOMAIN,
+		Attribute:      ODA_SDO_RW,
+		ParameterValue: "",
+		DefaultValue:   []byte{},
+		Index:          index,
+		SubIndex:       0,
+	}
+	od.AddVariable(index, indexName, variable)
+	entry := od.Index(index)
+	extension := &Extension{Object: fileObject, Read: ReadEntryFileObject, Write: WriteEntryFileObject}
+	return entry.AddExtension(extension)
+}
+
 // Get an entry corresponding to a given index
 // Index can either be a string, int or uint16
 // This method does not return an error for chaining
