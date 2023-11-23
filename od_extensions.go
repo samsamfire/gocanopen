@@ -4,6 +4,8 @@ package canopen
 
 import (
 	"encoding/binary"
+	"io"
+	"os"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -679,4 +681,88 @@ func ReadDummy(stream *Stream, data []byte, countRead *uint16) error {
 		*countRead = uint16(len(data))
 	}
 	return nil
+}
+
+type FileObject struct {
+	FilePath      string
+	ReadWriteMode int
+	File          *os.File
+	Reader        *io.Reader
+	Writer        *io.Writer
+}
+
+// [SDO] Custom function for reading a file like object
+func ReadEntryFileObject(stream *Stream, data []byte, countRead *uint16) error {
+	if stream == nil || data == nil || countRead == nil || stream.Subindex != 0 || stream.Object == nil {
+		return ODR_DEV_INCOMPAT
+	}
+	fileObject, ok := stream.Object.(*FileObject)
+	if !ok {
+		stream.DataOffset = 0
+		return ODR_DEV_INCOMPAT
+	}
+	if stream.DataOffset == 0 {
+		var err error
+		log.Infof("[FILE EXTENSION] opening %v for reading", fileObject.FilePath)
+		fileObject.File, err = os.OpenFile(fileObject.FilePath, fileObject.ReadWriteMode, 0644)
+		if err != nil {
+			return ODR_DEV_INCOMPAT
+		}
+	}
+	countReadInt, err := io.ReadFull(fileObject.File, data)
+
+	switch err {
+	case nil:
+		*countRead = uint16(countReadInt)
+		stream.DataOffset += uint32(countReadInt)
+		return ODR_PARTIAL
+	case io.EOF, io.ErrUnexpectedEOF:
+		*countRead = uint16(countReadInt)
+		log.Infof("[FILE EXTENSION] finished reading %v", fileObject.FilePath)
+		fileObject.File.Close()
+		return nil
+	default:
+		//unexpected error
+		log.Errorf("[FILE EXTENSION] error reading file %v", err)
+		fileObject.File.Close()
+		return ODR_DEV_INCOMPAT
+
+	}
+}
+
+// [SDO] Custom function for writing a file like object
+func WriteEntryFileObject(stream *Stream, data []byte, countWritten *uint16) error {
+	if stream == nil || data == nil || countWritten == nil || stream.Subindex != 0 || stream.Object == nil {
+		return ODR_DEV_INCOMPAT
+	}
+	fileObject, ok := stream.Object.(*FileObject)
+	if !ok {
+		stream.DataOffset = 0
+		return ODR_DEV_INCOMPAT
+	}
+	if stream.DataOffset == 0 {
+		var err error
+		log.Infof("[FILE EXTENSION] opening %v for writing", fileObject.FilePath)
+		fileObject.File, err = os.OpenFile(fileObject.FilePath, fileObject.ReadWriteMode, 0644)
+		if err != nil {
+			return ODR_DEV_INCOMPAT
+		}
+	}
+
+	countWrittenInt, err := fileObject.File.Write(data)
+	if err == nil {
+		*countWritten = uint16(countWrittenInt)
+		stream.DataOffset += uint32(countWrittenInt)
+		if stream.DataLength == stream.DataOffset {
+			log.Infof("[FILE EXTENSION] finished writing %v", fileObject.FilePath)
+			return nil
+		} else {
+			return ODR_PARTIAL
+		}
+	} else {
+		log.Errorf("[FILE EXTENSION] error writing file %v", err)
+		fileObject.File.Close()
+		return ODR_DEV_INCOMPAT
+	}
+
 }
