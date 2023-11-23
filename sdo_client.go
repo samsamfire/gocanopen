@@ -27,7 +27,7 @@ type SDOClient struct {
 	txBuffer                   *BufferTxFrame
 	CobIdClientToServer        uint32
 	CobIdServerToClient        uint32
-	ExtensionEntry1280         Extension
+	ExtensionEntry1280         *Extension
 	NodeIdServer               uint8
 	Valid                      bool
 	Index                      uint16
@@ -101,10 +101,7 @@ func (client *SDOClient) Init(od *ObjectDictionary, entry1280 *Entry, nodeId uin
 		nodeIdServer = 0
 	}
 	if entry1280 != nil {
-		client.ExtensionEntry1280.Object = client
-		client.ExtensionEntry1280.Read = ReadEntryOriginal
-		client.ExtensionEntry1280.Write = WriteEntry1280
-		entry1280.AddExtension(&client.ExtensionEntry1280)
+		client.ExtensionEntry1280 = entry1280.AddExtension(client, ReadEntryOriginal, WriteEntry1280)
 	}
 	client.CobIdClientToServer = 0
 	client.CobIdServerToClient = 0

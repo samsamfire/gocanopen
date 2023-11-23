@@ -138,14 +138,8 @@ func (tpdo *TPDO) Init(
 	pdo.busManager = busManager
 	pdo.PreDefinedIdent = predefinedIdent
 	pdo.ConfiguredIdent = canId
-	pdo.ExtensionCommunicationParam.Object = tpdo
-	pdo.ExtensionCommunicationParam.Read = ReadEntry14xxOr18xx
-	pdo.ExtensionCommunicationParam.Write = WriteEntry18xx
-	pdo.ExtensionMappingParam.Object = tpdo
-	pdo.ExtensionMappingParam.Read = ReadEntryOriginal
-	pdo.ExtensionMappingParam.Write = WriteEntry16xxOr1Axx
-	entry18xx.AddExtension(&pdo.ExtensionCommunicationParam)
-	entry1Axx.AddExtension(&pdo.ExtensionMappingParam)
+	pdo.ExtensionCommunicationParam = entry18xx.AddExtension(tpdo, ReadEntry14xxOr18xx, WriteEntry18xx)
+	pdo.ExtensionMappingParam = entry1Axx.AddExtension(tpdo, ReadEntryOriginal, WriteEntry16xxOr1Axx)
 	log.Debugf("[TPDO][%x] Finished initializing | canId : %v | valid : %v | inhibit : %v | event timer : %v | transmission type : %v",
 		entry18xx.Index,
 		canId,

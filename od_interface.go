@@ -163,8 +163,8 @@ func (od *ObjectDictionary) AddFile(index uint16, indexName string, filePath str
 	}
 	od.AddVariable(index, indexName, variable)
 	entry := od.Index(index)
-	extension := &Extension{Object: fileObject, Read: ReadEntryFileObject, Write: WriteEntryFileObject}
-	return entry.AddExtension(extension)
+	entry.AddExtension(fileObject, ReadEntryFileObject, WriteEntryFileObject)
+	return nil
 }
 
 // Get an entry corresponding to a given index
@@ -205,10 +205,13 @@ func (stream *Stream) Mappable() bool {
 // Writer must be a custom reader for object
 type Extension struct {
 	Object   any
-	Read     func(stream *Stream, buffer []byte, countRead *uint16) error
-	Write    func(stream *Stream, buffer []byte, countWritten *uint16) error
+	Read     ExtensionReader
+	Write    ExtensionWriter
 	flagsPDO [OD_FLAGS_PDO_SIZE]uint8
 }
+
+type ExtensionReader func(stream *Stream, buffer []byte, countRead *uint16) error
+type ExtensionWriter func(stream *Stream, buffer []byte, countWritten *uint16) error
 
 /*
 ObjectStreamer is created before accessing an OD entry
@@ -385,10 +388,11 @@ func (entry *Entry) AddMember(section *ini.Section, name string, nodeId uint8, s
 	}
 }
 
-// Add or replace an extension to the Entry
-func (entry *Entry) AddExtension(extension *Extension) error {
+// Add an extension to entry and return created extension
+func (entry *Entry) AddExtension(object any, read ExtensionReader, write ExtensionWriter) *Extension {
+	extension := &Extension{Object: object, Read: read, Write: write}
 	entry.Extension = extension
-	return nil
+	return extension
 }
 
 // Get variable from given sub index

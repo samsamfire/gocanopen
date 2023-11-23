@@ -37,8 +37,8 @@ type PDOCommon struct {
 	IsRPDO                      bool
 	PreDefinedIdent             uint16
 	ConfiguredIdent             uint16
-	ExtensionMappingParam       Extension
-	ExtensionCommunicationParam Extension
+	ExtensionMappingParam       *Extension
+	ExtensionCommunicationParam *Extension
 	BufferIdx                   int
 }
 
