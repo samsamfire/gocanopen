@@ -2,6 +2,7 @@ package canopen
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -29,51 +30,58 @@ func NewNetwork(bus Bus) Network {
 	return Network{Nodes: map[uint8]*Node{}, busManager: NewBusManager(bus), odMap: map[uint8]*ObjectDictionaryInformation{}}
 }
 
-// Create bus instance and add basic functionality : SDO, NMT
-func (network *Network) Connect(canInterface any, channel any, bitrate int) error {
-	// If no bus was given during NewNetwork call, then default to socketcan
+// Connects to network and initialize master functionnality
+// Custom CAN backend is possible using "Bus" interface
+// Otherwise it expects an interface name, channel and bitrate
+func (network *Network) Connect(args ...any) error {
+	if len(args) != 3 && network.busManager.Bus == nil {
+		return errors.New("either provide custom backend, or provide interface, channel and bitrate")
+	}
 	var bus Bus
+	var err error
 	busManager := network.busManager
 	if busManager.Bus == nil {
-		channelStr, ok := channel.(string)
+		canInterface, ok := args[0].(string)
 		if !ok {
-			return fmt.Errorf("expecting a string for the can channel")
+			return fmt.Errorf("expecting string for interface got : %v", args[0])
 		}
-		var err error
-		switch canInterface {
-		case "socketcan", "":
-			bus, err = NewSocketcanBus(channelStr)
-		case "virtualcan":
-			bus = NewVirtualCanBus(channelStr)
-		default:
-			return fmt.Errorf("%v is not a supported bus interface :(", err)
+		channel, ok := args[1].(string)
+		if !ok {
+			return fmt.Errorf("expecting string for channel got : %v", args[1])
 		}
+		bitrate, ok := args[2].(int)
+		if !ok {
+			return fmt.Errorf("expecting int for bitrate got : %v", args[2])
+		}
+		bus, err = createBusInternal(canInterface, channel, bitrate)
 		if err != nil {
-			return fmt.Errorf("could not connect to can channel %v , because %v", channel, err)
+			return err
 		}
-		busManager.Bus = bus
 	} else {
 		bus = busManager.Bus
 	}
-	// Init bus, connect and subscribe to CAN message reception
-	e := bus.Connect()
-	if e != nil {
-		return e
+	// Connect to CAN bus and subscribe to CAN message reception
+	err = bus.Connect(args)
+	if err != nil {
+		return err
 	}
-	bus.Subscribe(busManager)
+	err = bus.Subscribe(busManager)
+	if err != nil {
+		return err
+	}
 	// Add SDO client to network by default
 	client := &SDOClient{}
-	e = client.Init(nil, nil, 0, busManager)
-	if e != nil {
-		return e
+	err = client.Init(nil, nil, 0, busManager)
+	if err != nil {
+		return err
 	}
 	network.sdoClient = client
 	// Add NMT tx buffer, for sending NMT commands
-	network.nmtMasterTxBuff, e = busManager.InsertTxBuffer(uint32(NMT_SERVICE_ID), false, 2, false)
-	if e != nil {
-		return e
+	network.nmtMasterTxBuff, err = busManager.InsertTxBuffer(uint32(NMT_SERVICE_ID), false, 2, false)
+	if err != nil {
+		return err
 	}
-	return e
+	return err
 }
 
 // Process CANopen stack, this is blocking
