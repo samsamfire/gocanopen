@@ -261,10 +261,10 @@ type EM struct {
 	ProducerIdent       uint16
 	InhibitEmTimeUs     uint32
 	InhibitEmTimer      uint32
-	ExtensionEntry1014  Extension
-	ExtensionEntry1015  Extension
-	ExtensionEntry1003  Extension
-	ExtensionStatusBits Extension
+	ExtensionEntry1014  *Extension
+	ExtensionEntry1015  *Extension
+	ExtensionEntry1003  *Extension
+	ExtensionStatusBits *Extension
 	EmergencyRxCallback func(ident uint16, errorCode uint16, errorRegister byte, errorBit byte, infoCode uint32)
 }
 
@@ -361,13 +361,7 @@ func (emergency *EM) Init(
 	}
 	producerCanId := cobIdEmergency & 0x7FF
 	emergency.ProducerEnabled = (cobIdEmergency&0x80000000) == 0 && producerCanId != 0
-	emergency.ExtensionEntry1014.Object = emergency
-	emergency.ExtensionEntry1014.Read = ReadEntry1014
-	emergency.ExtensionEntry1014.Write = WriteEntry1014
-	err = entry1014.AddExtension(&emergency.ExtensionEntry1014)
-	if err != nil {
-		return ErrOdParameters
-	}
+	emergency.ExtensionEntry1014 = entry1014.AddExtension(emergency, ReadEntry1014, WriteEntry1014)
 	emergency.ProducerIdent = uint16(producerCanId)
 	if producerCanId == uint32(EMERGENCY_SERVICE_ID) {
 		producerCanId += uint32(nodeId)
@@ -384,20 +378,11 @@ func (emergency *EM) Init(
 	ret = entry1015.GetUint16(0, &inhibitTime100us)
 	if ret == nil {
 		emergency.InhibitEmTimeUs = uint32(inhibitTime100us) * 100
-		emergency.ExtensionEntry1015.Object = emergency
-		emergency.ExtensionEntry1015.Write = WriteEntry1015
-		emergency.ExtensionEntry1015.Read = ReadEntryOriginal
-		entry1015.AddExtension(&emergency.ExtensionEntry1015)
+		emergency.ExtensionEntry1015 = entry1015.AddExtension(emergency, ReadEntryOriginal, WriteEntry1015)
 	}
-	emergency.ExtensionEntry1003.Object = emergency
-	emergency.ExtensionEntry1003.Read = ReadEntry1003
-	emergency.ExtensionEntry1003.Write = WriteEntry1003
-	entry1003.AddExtension(&emergency.ExtensionEntry1003)
+	emergency.ExtensionEntry1003 = entry1003.AddExtension(emergency, ReadEntry1003, WriteEntry1003)
 	if entryStatusBits != nil {
-		emergency.ExtensionStatusBits.Object = emergency
-		emergency.ExtensionStatusBits.Read = ReadEntryStatusBits
-		emergency.ExtensionStatusBits.Write = WriteEntryStatusBits
-		entryStatusBits.AddExtension(&emergency.ExtensionStatusBits)
+		emergency.ExtensionStatusBits = entryStatusBits.AddExtension(emergency, ReadEntryStatusBits, WriteEntryStatusBits)
 	}
 
 	return busManager.Subscribe(uint32(EMERGENCY_SERVICE_ID), 0x780, false, emergency)
