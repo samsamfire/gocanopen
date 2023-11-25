@@ -34,7 +34,7 @@ func NewNetwork(bus Bus) Network {
 // Custom CAN backend is possible using "Bus" interface
 // Otherwise it expects an interface name, channel and bitrate
 func (network *Network) Connect(args ...any) error {
-	if len(args) != 3 && network.busManager.Bus == nil {
+	if len(args) < 3 && network.busManager.Bus == nil {
 		return errors.New("either provide custom backend, or provide interface, channel and bitrate")
 	}
 	var bus Bus
@@ -83,6 +83,11 @@ func (network *Network) Connect(args ...any) error {
 		return err
 	}
 	return err
+}
+
+// Disconnects from CAN bus and stops cleanly everything
+func (network *Network) Disconnect() {
+
 }
 
 // Process CANopen stack, this is blocking
@@ -165,22 +170,39 @@ func (network *Network) LoadOD(nodeId uint8, edsPath string, edsCustomStorageCal
 	return nil
 }
 
-// Check if OD exists for the given node
-func (network *Network) IsODLoaded(nodeId uint8) bool {
+// Check if OD exists for given node id
+// will look in local and remote
+func (network *Network) ODLoaded(nodeId uint8) bool {
 	_, odLoaded := network.odMap[nodeId]
+
 	return odLoaded
+}
+
+// Get OD for a specific node id
+func (network *Network) GetOD(nodeId uint8) (*ObjectDictionary, error) {
+	_, odLoaded := network.odMap[nodeId]
+	if odLoaded {
+		return network.odMap[nodeId].od, nil
+	}
+	// Look in local nodes
+	_, odLoaded = network.Nodes[nodeId]
+	if odLoaded {
+		return network.Nodes[nodeId].OD, nil
+	}
+	return nil, ODR_OD_MISSING
 }
 
 // Read an entry from a remote node
 // index and subindex can either be strings or integers
 // this method requires the corresponding node OD to be loaded
 func (network *Network) Read(nodeId uint8, index any, subindex any) (value any, e error) {
-	if !network.IsODLoaded(nodeId) {
-		return nil, ODR_OD_MISSING
+	od, err := network.GetOD(nodeId)
+	if err != nil {
+		return nil, err
 	}
 	// Find corresponding Variable inside OD
 	// This will be used to determine information on the expected value
-	odVar, e := network.odMap[nodeId].od.Index(index).SubIndex(subindex)
+	odVar, e := od.Index(index).SubIndex(subindex)
 	if e != nil {
 		return nil, e
 	}
@@ -205,12 +227,13 @@ func (network *Network) ReadRaw(nodeId uint8, index uint16, subIndex uint8, data
 // this method requires the corresponding node OD to be loaded
 // value should correspond to the expected datatype
 func (network *Network) Write(nodeId uint8, index any, subindex any, value any) error {
-	if !network.IsODLoaded(nodeId) {
-		return ODR_OD_MISSING
+	od, err := network.GetOD(nodeId)
+	if err != nil {
+		return err
 	}
 	// Find corresponding Variable inside OD
 	// This will be used to determine information on the expected value
-	odVar, e := network.odMap[nodeId].od.Index(index).SubIndex(subindex)
+	odVar, e := od.Index(index).SubIndex(subindex)
 	if e != nil {
 		return e
 	}
@@ -275,15 +298,30 @@ func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
 	return network.busManager.Send((*network.nmtMasterTxBuff))
 }
 
-// Add a local node to the network given an Object Dictionary
-func (network *Network) AddNodeFromOD(nodeId uint8, objectDictionary *ObjectDictionary) (*Node, error) {
+// Create a local node with a given OD
+// Can be either a string : path to OD
+// Or it can be an OD object
+func (network *Network) CreateNode(nodeId uint8, od any) (*Node, error) {
+	var odNode *ObjectDictionary
+	var err error
+	switch odType := od.(type) {
+	case string:
+		odNode, err = ParseEDS(odType, nodeId)
+		if err != nil {
+			return nil, err
+		}
+	case ObjectDictionary:
+		odNode = &odType
+	default:
+		return nil, fmt.Errorf("expecting string or ObjectDictionary got : %T", od)
+	}
 	// Create and initialize a CANopen node
 	node := &Node{Config: nil, BusManager: network.busManager, NMT: nil}
-	err := node.Init(nil, nil, objectDictionary, nil, NMT_STARTUP_TO_OPERATIONAL, 500, 1000, 1000, true, nodeId)
+	err = node.Init(nil, nil, odNode, nil, NMT_STARTUP_TO_OPERATIONAL, 500, 1000, 1000, true, nodeId)
 	if err != nil {
 		return nil, err
 	}
-	err = node.InitPDO(objectDictionary, nodeId)
+	err = node.InitPDO()
 	if err != nil {
 		return nil, err
 	}
@@ -291,11 +329,33 @@ func (network *Network) AddNodeFromOD(nodeId uint8, objectDictionary *ObjectDict
 	return node, nil
 }
 
-// Add a local node to the network given an EDS path
-func (network *Network) AddNodeFromEDS(nodeId uint8, eds string) (*Node, error) {
-	od, err := ParseEDS(eds, nodeId)
-	if err != nil {
-		return nil, err
+// Add a remote node with a given OD
+// OD can be a path, ObjectDictionary or nil
+// This function will load and parse Object dictionnary (OD) into memory
+// If already present, OD will be overwritten
+// User can then access the node via OD naming
+// A same OD can be used for multiple nodes
+// Loading from node using object x1020 is not supported yet
+func (network *Network) AddNode(nodeId uint8, od any) error {
+	var odNode *ObjectDictionary
+	var err error
+	if nodeId < 1 || nodeId > 127 {
+		return fmt.Errorf("nodeId should be between 1 and 127, value given : %v", nodeId)
 	}
-	return network.AddNodeFromOD(nodeId, od)
+	switch odType := od.(type) {
+	case string:
+		odNode, err = ParseEDS(odType, nodeId)
+		if err != nil {
+			return err
+		}
+		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: odNode, edsPath: odType}
+	case ObjectDictionary:
+		odNode = &odType
+		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: odNode, edsPath: ""}
+	default:
+		return fmt.Errorf("expecting string or ObjectDictionary got : %T", od)
+	}
+
+	return nil
+
 }
