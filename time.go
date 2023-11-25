@@ -78,7 +78,7 @@ func (time *TIME) Init(entry1012 *Entry, busManager *BusManager, producerInterva
 	return nil
 }
 
-func (time *TIME) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) bool {
+func (time *TIME) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) bool {
 	timestampReceived := false
 	if nmtIsPreOrOperational && time.IsConsumer {
 		if time.RxNew {

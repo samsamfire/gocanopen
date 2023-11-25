@@ -148,7 +148,7 @@ func (rpdo *RPDO) Init(od *ObjectDictionary,
 	return nil
 }
 
-func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOperational bool, syncWas bool) {
+func (rpdo *RPDO) process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOperational bool, syncWas bool) {
 	pdo := &rpdo.PDO
 	if !pdo.Valid || !nmtIsOperational || (!syncWas && rpdo.Synchronous) {
 		// not valid and op, clear can receive flags & timeouttimer

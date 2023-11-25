@@ -142,7 +142,7 @@ func (sync *SYNC) sendSync() {
 	sync.BusManager.Send(*sync.txBuffer)
 }
 
-func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
+func (sync *SYNC) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
 	status := CO_SYNC_NONE
 	if !nmtIsPreOrOperational {
 		sync.RxNew = false
