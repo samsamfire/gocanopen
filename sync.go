@@ -22,8 +22,6 @@ type SYNC struct {
 	txBuffer             *BufferTxFrame
 	BusManager           *BusManager
 	Ident                uint16
-	ExtensionEntry1005   *Extension
-	ExtensionEntry1019   *Extension
 }
 
 const (
@@ -65,7 +63,7 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 		log.Errorf("[SYNC][%x] %v read error", entry1005.Index, entry1005.Name)
 		return ErrOdParameters
 	}
-	sync.ExtensionEntry1005 = entry1005.AddExtension(sync, ReadEntryOriginal, WriteEntry1005)
+	entry1005.AddExtension(sync, ReadEntryOriginal, WriteEntry1005)
 
 	var err error
 
@@ -104,7 +102,7 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 		} else if syncCounterOverflow > 240 {
 			syncCounterOverflow = 240
 		}
-		sync.ExtensionEntry1019 = entry1019.AddExtension(sync, ReadEntryOriginal, WriteEntry1019)
+		entry1019.AddExtension(sync, ReadEntryOriginal, WriteEntry1019)
 		log.Infof("[SYNC][%x] %v : %v", entry1019.Index, entry1019.Name, syncCounterOverflow)
 	}
 	sync.CounterOverflowValue = syncCounterOverflow
