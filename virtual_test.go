@@ -75,3 +75,22 @@ func TestSendAndSubscribe(t *testing.T) {
 		}
 	}
 }
+
+func TestReceiveOwn(t *testing.T) {
+	vcan1 := NewVirtualCanBus(VCAN_CHANNEL)
+	frameReceiver := FrameReceiver{frames: make([]Frame, 0)}
+	vcan1.Subscribe(&frameReceiver)
+	frame := Frame{0x111, 0, 8, [8]byte{0, 1, 2, 3, 4, 5, 6, 7}}
+	vcan1.Send(frame)
+	// Tiny sleep
+	time.Sleep(time.Millisecond * 10)
+	if len(frameReceiver.frames) != 0 {
+		t.Fatal("should have received zero frames")
+	}
+	// Activate receive own
+	vcan1.receiveOwn = true
+	vcan1.Send(frame)
+	if len(frameReceiver.frames) != 1 {
+		t.Fatal("should have received own frame")
+	}
+}
