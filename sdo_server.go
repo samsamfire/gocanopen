@@ -395,7 +395,7 @@ func updateStateFromRequest(stateReq uint8, state *SDOState, upload *bool) SDOAb
 	return SDO_ABORT_NONE
 }
 
-func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs uint32, timerNextUs *uint32) (err error) {
+func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs uint32, timerNextUs *uint32) (err error) {
 	ret := SDO_WAITING_RESPONSE
 	abortCode := SDO_ABORT_NONE
 	if server.Valid && server.State == SDO_STATE_IDLE && !server.RxNew {

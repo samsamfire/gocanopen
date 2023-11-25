@@ -135,7 +135,7 @@ func (nmt *NMT) Init(
 
 }
 
-func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
+func (nmt *NMT) process(internalState *uint8, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
 	nmtStateCopy := nmt.operatingState
 	resetCommand := RESET_NOT
 	nmtInit := nmtStateCopy == NMT_INITIALIZING

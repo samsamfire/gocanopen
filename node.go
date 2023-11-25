@@ -57,24 +57,24 @@ func (node *Node) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs
 	}
 }
 
-func (node *Node) ProcessRPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
+func (node *Node) processRPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
 	if node.NodeIdUnconfigured {
 		return
 	}
 	nmtIsOperational := node.NMT.GetInternalState() == NMT_OPERATIONAL
 	for _, rpdo := range node.RPDOs {
-		rpdo.Process(timeDifferenceUs, timerNextUs, nmtIsOperational, syncWas)
+		rpdo.process(timeDifferenceUs, timerNextUs, nmtIsOperational, syncWas)
 	}
 }
 
-func (node *Node) ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32) bool {
+func (node *Node) processSync(timeDifferenceUs uint32, timerNextUs *uint32) bool {
 	syncWas := false
 	sync := node.SYNC
 	if !node.NodeIdUnconfigured && sync != nil {
 
 		nmtState := node.NMT.GetInternalState()
 		nmtIsPreOrOperational := nmtState == NMT_PRE_OPERATIONAL || nmtState == NMT_OPERATIONAL
-		syncProcess := sync.Process(nmtIsPreOrOperational, timeDifferenceUs, timerNextUs)
+		syncProcess := sync.process(nmtIsPreOrOperational, timeDifferenceUs, timerNextUs)
 
 		switch syncProcess {
 		case CO_SYNC_NONE, CO_SYNC_RX_TX:
@@ -95,19 +95,19 @@ func (node *Node) Process(enableGateway bool, timeDifferenceUs uint32, timerNext
 
 	// CAN stuff to process
 	node.BusManager.Process()
-	node.EM.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
-	reset = node.NMT.Process(&NMTState, timeDifferenceUs, timerNextUs)
+	node.EM.process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
+	reset = node.NMT.process(&NMTState, timeDifferenceUs, timerNextUs)
 	// Update NMTisPreOrOperational
 	NMTisPreOrOperational = (NMTState == NMT_PRE_OPERATIONAL) || (NMTState == NMT_OPERATIONAL)
 
 	// Process SDO servers
 	for _, server := range node.SDOServers {
-		server.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
+		server.process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
 	}
 	// Process HB consumer
-	node.HBConsumer.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
+	node.HBConsumer.process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
 	// Process TIME object
-	node.TIME.Process(NMTisPreOrOperational, timeDifferenceUs)
+	node.TIME.process(NMTisPreOrOperational, timeDifferenceUs)
 
 	return reset
 
@@ -134,7 +134,7 @@ func (node *Node) InitPDO() error {
 		rpdo := RPDO{}
 		err := rpdo.Init(node.OD, node.EM, node.SYNC, preDefinedIdent, entry14xx, entry16xx, node.BusManager)
 		if err != nil {
-			log.Warnf("[RPDO] no more RPDO after RPDO %v", i-1)
+			log.Warnf("[NODE][RPDO] no more RPDO after RPDO %v", i-1)
 			break
 		} else {
 			node.RPDOs = append(node.RPDOs, &rpdo)
@@ -151,7 +151,7 @@ func (node *Node) InitPDO() error {
 		tpdo := TPDO{}
 		err := tpdo.Init(node.OD, node.EM, node.SYNC, preDefinedIdent, entry18xx, entry1Axx, node.BusManager)
 		if err != nil {
-			log.Warnf("[TPDO] no more TPDO after TPDO %v", i-1)
+			log.Warnf("[NODE][TPDO] no more TPDO after TPDO %v", i-1)
 			break
 		} else {
 			node.TPDOs = append(node.TPDOs, &tpdo)
@@ -199,7 +199,7 @@ func (node *Node) Init(
 		nodeId,
 	)
 	if err != nil {
-		log.Errorf("[EMERGENCY producer] error when initializing emergency producer %v", err)
+		log.Errorf("[NODE][EMERGENCY producer] error when initializing emergency producer %v", err)
 		return ErrOdParameters
 	}
 
@@ -216,74 +216,77 @@ func (node *Node) Init(
 	}
 	err = node.NMT.Init(entry1017, nil, nodeId, nmtControl, firstHbTimeMs, node.BusManager, NMT_SERVICE_ID, NMT_SERVICE_ID, HEARTBEAT_SERVICE_ID+uint16(nodeId))
 	if err != nil {
-		log.Errorf("[NMT] error when initializing NMT object %v", err)
+		log.Errorf("[NODE][NMT] error when initializing NMT object %v", err)
 		return err
 	}
-	log.Infof("[NMT] initialized for node x%x", nodeId)
+	log.Infof("[NODE][NMT] initialized for node x%x", nodeId)
 
 	// Initialize HB consumer
 	hbCons := &HBConsumer{}
 	err = hbCons.Init(node.EM, od.Index(0x1016), node.BusManager)
 	if err != nil {
-		log.Errorf("[HB Consumer] error when initializing HB consummers %v", err)
+		log.Errorf("[NODE][HB Consumer] error when initializing HB consummers %v", err)
 		return err
 	} else {
 		node.HBConsumer = hbCons
 	}
-	log.Infof("[HB Consumer] initialized for node x%x", nodeId)
+	log.Infof("[NODE][HB Consumer] initialized for node x%x", nodeId)
 
 	// Initialize SDO server
 	// For now only one server
 	entry1200 := od.Index(0x1200)
 	if entry1200 == nil {
-		log.Warnf("[SDO SERVER] no sdo servers initialized for node x%x", nodeId)
+		log.Warnf("[NODE][SDO SERVER] no sdo servers initialized for node x%x", nodeId)
 	} else {
 		node.SDOServers = make([]*SDOServer, 0)
 		server := &SDOServer{}
 		err = server.Init(od, entry1200, nodeId, sdoServerTimeoutMs, node.BusManager)
 		if err != nil {
-			log.Errorf("[SDO SERVER] error when initializing SDO server object %v", err)
+			log.Errorf("[NODE][SDO SERVER] error when initializing SDO server object %v", err)
 			return err
 		}
 		node.SDOServers = append(node.SDOServers, server)
-		log.Infof("[SDO SERVER] initialized for node x%x", nodeId)
+		log.Infof("[NODE][SDO SERVER] initialized for node x%x", nodeId)
 	}
 
 	// Initialize SDO clients if any
 	// For now only one client
 	entry1280 := od.Index(0x1280)
 	if entry1280 == nil {
-		log.Info("[SDO CLIENT] no SDO clients initialized for node")
+		log.Info("[NODE][SDO CLIENT] no SDO clients initialized for node")
 	} else {
 		node.SDOclients = make([]*SDOClient, 0)
 		client := &SDOClient{}
 		err = client.Init(od, entry1280, nodeId, node.BusManager)
 		if err != nil {
-			log.Errorf("[SDO CLIENT] error when initializing SDO client object %v", err)
+			log.Errorf("[NODE][SDO CLIENT] error when initializing SDO client object %v", err)
 		}
 		node.SDOclients = append(node.SDOclients, client)
-		log.Infof("[SDO CLIENT] initialized for node x%x", nodeId)
+		log.Infof("[NODE][SDO CLIENT] initialized for node x%x", nodeId)
 	}
 	//Initialize TIME
 	time := &TIME{}
 	node.TIME = time
 	err = time.Init(od.Index(0x1012), node.BusManager, 1000)
 	if err != nil {
-		log.Errorf("[TIME] error when initializing TIME object %v", err)
+		log.Errorf("[NODE][TIME] error when initializing TIME object %v", err)
+	} else {
+		node.TIME = time
 	}
 
 	//Initialize SYNC
 	sync := &SYNC{}
 	err = sync.Init(&EM{}, od.Index(0x1005), od.Index(0x1006), od.Index(0x1007), od.Index(0x1019), node.BusManager)
 	if err != nil {
-		log.Errorf("[SYNC] error when initialising SYNC object %v", err)
+		log.Errorf("[NODE][SYNC] error when initialising SYNC object %v", err)
+	} else {
+		node.SYNC = sync
 	}
-	node.SYNC = sync
 
 	//Add EDS storage if supported
 	edsEntry := od.Index(0x1021)
 	if edsEntry != nil {
-		log.Info("[EDS] EDS is downloadable via object 0x1021")
+		log.Info("[NODE][EDS] EDS is downloadable via object 0x1021")
 		od.AddFile(edsEntry.Index, edsEntry.Name, od.filePath, os.O_RDONLY)
 	}
 

@@ -118,9 +118,9 @@ func (network *Network) Process() error {
 								elapsed := time.Since(startBackground)
 								startBackground = time.Now()
 								timeDifferenceUs := uint32(elapsed.Microseconds())
-								syncWas := node.ProcessSYNC(timeDifferenceUs, nil)
+								syncWas := node.processSync(timeDifferenceUs, nil)
 								node.ProcessTPDO(syncWas, timeDifferenceUs, nil)
-								node.ProcessRPDO(syncWas, timeDifferenceUs, nil)
+								node.processRPDO(syncWas, timeDifferenceUs, nil)
 								time.Sleep(backgroundPeriod)
 							}
 						}

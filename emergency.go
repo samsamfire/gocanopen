@@ -384,7 +384,7 @@ func (emergency *EM) Init(
 	return busManager.Subscribe(uint32(EMERGENCY_SERVICE_ID), 0x780, false, emergency)
 }
 
-func (emergency *EM) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
+func (emergency *EM) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
 	// Check errors from driver
 	canErrStatus := emergency.busManager.CANerrorstatus
 	if canErrStatus != emergency.CANerrorStatusOld {
