@@ -108,6 +108,7 @@ const (
 
 // Object dictionary contains all node data
 type ObjectDictionary struct {
+	filePath            string
 	entriesByIndexValue map[uint16]*Entry
 	entriesByIndexName  map[string]*Entry
 }
