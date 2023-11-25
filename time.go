@@ -18,7 +18,7 @@ type TIME struct {
 	ProducerIntervalMs uint32
 	ProducerTimerMs    uint32
 	busManager         *BusManager
-	TxBuffer           *BufferTxFrame
+	cobId              uint32
 }
 
 func (time *TIME) Handle(frame Frame) {
@@ -46,28 +46,14 @@ func (time *TIME) Init(entry1012 *Entry, busManager *BusManager, producerInterva
 	time.IsConsumer = (cobIdTimestamp & 0x80000000) != 0
 	time.IsProducer = (cobIdTimestamp & 0x40000000) != 0
 	time.RxNew = false
-	var err error
+	time.cobId = cobId
 	if time.IsConsumer {
-		err = busManager.Subscribe(
-			cobId,
-			0x7FF,
-			false,
-			time,
-		)
+		err := busManager.Subscribe(cobId, 0x7FF, false, time)
 		if err != nil {
 			return ErrIllegalArgument
 		}
 	}
 	time.busManager = busManager
-	time.TxBuffer, err = busManager.InsertTxBuffer(
-		cobId,
-		false,
-		6,
-		false,
-	)
-	if time.TxBuffer == nil || err != nil {
-		return ErrIllegalArgument
-	}
 	time.SetInternalTime()
 	time.ProducerIntervalMs = producerIntervalMs
 	time.ProducerTimerMs = producerIntervalMs
@@ -105,9 +91,10 @@ func (time *TIME) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) b
 	if nmtIsPreOrOperational && time.IsProducer && time.ProducerIntervalMs > 0 {
 		if time.ProducerTimerMs >= time.ProducerIntervalMs {
 			time.ProducerTimerMs -= time.ProducerIntervalMs
-			binary.LittleEndian.PutUint32(time.TxBuffer.Data[0:4], time.Ms)
-			binary.LittleEndian.PutUint16(time.TxBuffer.Data[4:6], time.Days)
-			time.busManager.Send(*time.TxBuffer)
+			frame := NewFrame(time.cobId, 0, 6)
+			binary.LittleEndian.PutUint32(frame.Data[0:4], time.Ms)
+			binary.LittleEndian.PutUint16(frame.Data[4:6], time.Days)
+			time.busManager.Send(frame)
 		} else {
 			time.ProducerTimerMs += ms
 		}

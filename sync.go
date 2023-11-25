@@ -19,9 +19,9 @@ type SYNC struct {
 	OD1006Period         *[]byte
 	OD1007Window         *[]byte
 	IsProducer           bool
-	txBuffer             *BufferTxFrame
 	BusManager           *BusManager
-	Ident                uint16
+	cobId                uint32
+	txBuffer             Frame
 }
 
 const (
@@ -108,25 +108,18 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	sync.CounterOverflowValue = syncCounterOverflow
 	sync.emergency = emergency
 	sync.IsProducer = (cobIdSync & 0x40000000) != 0
-	sync.Ident = uint16(cobIdSync) & 0x7FF
+	sync.cobId = cobIdSync & 0x7FF
 	sync.BusManager = busManager
 
-	err1 := sync.BusManager.Subscribe(uint32(sync.Ident), 0x7FF, false, sync)
+	err1 := sync.BusManager.Subscribe(sync.cobId, 0x7FF, false, sync)
 	if err1 != nil {
 		return err1
 	}
-	var err2 error
 	var frameSize uint8 = 0
 	if syncCounterOverflow != 0 {
 		frameSize = 1
 	}
-	sync.txBuffer, err2 = sync.BusManager.InsertTxBuffer(uint32(sync.Ident), false, frameSize, false)
-	if err2 != nil {
-		return err2
-	}
-	if sync.txBuffer == nil {
-		return ErrIllegalArgument
-	}
+	sync.txBuffer = NewFrame(sync.cobId, 0, frameSize)
 	log.Infof("[SYNC] Initialisation finished")
 	return nil
 }
@@ -139,7 +132,7 @@ func (sync *SYNC) sendSync() {
 	sync.Timer = 0
 	sync.RxToggle = !sync.RxToggle
 	sync.txBuffer.Data[0] = sync.Counter
-	sync.BusManager.Send(*sync.txBuffer)
+	sync.BusManager.Send(sync.txBuffer)
 }
 
 func (sync *SYNC) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
