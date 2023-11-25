@@ -19,7 +19,6 @@ type TIME struct {
 	ProducerTimerMs    uint32
 	busManager         *BusManager
 	TxBuffer           *BufferTxFrame
-	ExtensionEntry1012 *Extension
 }
 
 func (time *TIME) Handle(frame Frame) {
@@ -42,7 +41,7 @@ func (time *TIME) Init(entry1012 *Entry, busManager *BusManager, producerInterva
 		log.Errorf("[TIME][%x|%x] reading cob id timestamp failed : %v", entry1012.Index, 0x0, ret)
 		return ErrOdParameters
 	}
-	time.ExtensionEntry1012 = entry1012.AddExtension(time, ReadEntryOriginal, WriteEntry1012)
+	entry1012.AddExtension(time, ReadEntryOriginal, WriteEntry1012)
 	cobId := cobIdTimestamp & 0x7FF
 	time.IsConsumer = (cobIdTimestamp & 0x80000000) != 0
 	time.IsProducer = (cobIdTimestamp & 0x40000000) != 0
