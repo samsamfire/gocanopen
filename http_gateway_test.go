@@ -22,7 +22,7 @@ func createGateway() *HTTPGatewayServer {
 	if e != nil {
 		panic(e)
 	}
-	e = network.AddNodeFromEDS(NODE_ID_TEST, "testdata/base.eds")
+	e = network.AddNode(NODE_ID_TEST, "testdata/base.eds")
 	if e != nil {
 		panic(e)
 	}
@@ -31,20 +31,6 @@ func createGateway() *HTTPGatewayServer {
 		network.Process()
 	}()
 	return gateway
-}
-
-func createNetwork() *Network {
-	network := NewNetwork(nil)
-	e := network.Connect("virtualcan", "localhost:18888", 500000)
-	if e != nil {
-		panic(e)
-	}
-	e = network.AddNodeFromEDS(NODE_ID_TEST, "testdata/base.eds")
-	if e != nil {
-		panic(e)
-	}
-	network.Process()
-	return &network
 }
 
 func TestHTTPRead(t *testing.T) {
