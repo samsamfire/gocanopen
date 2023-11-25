@@ -149,35 +149,6 @@ func (network *Network) Process() error {
 	return nil
 }
 
-// This function will load and parse Object dictionnary (OD) into memory
-// If already present, OD will be overwritten
-// User can then access the node via OD naming
-// A same OD can be used for multiple nodes
-// An OD can also be downloaded from remote nodes via block transfer
-// A callback function is available if any custom format is used for EDS custom storage
-func (network *Network) LoadOD(nodeId uint8, edsPath string, edsCustomStorageCallback *func()) error {
-	if edsPath == "" {
-		return fmt.Errorf("loading EDS from node is not implemented yet")
-	}
-	if nodeId < 1 || nodeId > 127 {
-		return fmt.Errorf("nodeId should be between 1 and 127, value given : %v", nodeId)
-	}
-	od, e := ParseEDS(edsPath, nodeId)
-	if e != nil {
-		return e
-	}
-	network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: od, edsPath: edsPath}
-	return nil
-}
-
-// Check if OD exists for given node id
-// will look in local and remote
-func (network *Network) ODLoaded(nodeId uint8) bool {
-	_, odLoaded := network.odMap[nodeId]
-
-	return odLoaded
-}
-
 // Get OD for a specific node id
 func (network *Network) GetOD(nodeId uint8) (*ObjectDictionary, error) {
 	_, odLoaded := network.odMap[nodeId]
