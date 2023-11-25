@@ -24,7 +24,7 @@ type SDOClient struct {
 	Streamer                   *ObjectStreamer
 	NodeId                     uint8
 	BusManager                 *BusManager
-	txBuffer                   *BufferTxFrame
+	txBuffer                   Frame
 	CobIdClientToServer        uint32
 	CobIdServerToClient        uint32
 	NodeIdServer               uint8
@@ -142,15 +142,11 @@ func (client *SDOClient) Setup(cobIdClientToServer uint32, cobIdServerToClient u
 		CanIdS2C = 0
 		client.Valid = false
 	}
-	err1 := client.BusManager.Subscribe(uint32(CanIdS2C), 0x7FF, false, client)
-	var err2 error
-	client.txBuffer, err2 = client.BusManager.InsertTxBuffer(uint32(CanIdC2S), false, 8, false)
-	if err2 != nil {
-		client.Valid = false
+	err := client.BusManager.Subscribe(uint32(CanIdS2C), 0x7FF, false, client)
+	if err != nil {
+		return err
 	}
-	if err1 != nil || err2 != nil {
-		return ErrSDOInvalidArguments
-	}
+	client.txBuffer = NewFrame(uint32(CanIdC2S), 0, 8)
 	return nil
 }
 
@@ -499,9 +495,6 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 				*timerNextUs = diff
 			}
 		}
-		if client.txBuffer.BufferFull {
-			ret = SDO_TRANSMIT_BUFFER_FULL
-		}
 	}
 
 	if ret == SDO_WAITING_RESPONSE {
@@ -648,7 +641,7 @@ func (client *SDOClient) downloadInitiate(forceSegmented bool) error {
 		log.Debugf("[CLIENT][TX][x%x] DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data)
 	}
 	client.TimeoutTimer = 0
-	client.BusManager.Send(*client.txBuffer)
+	client.BusManager.Send(client.txBuffer)
 	return nil
 
 }
@@ -675,7 +668,7 @@ func (client *SDOClient) downloadSegment(bufferPartial bool) error {
 
 	client.TimeoutTimer = 0
 	log.Debugf("[CLIENT][TX][x%x] DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data)
-	client.BusManager.Send(*client.txBuffer)
+	client.BusManager.Send(client.txBuffer)
 	return nil
 }
 
@@ -690,7 +683,7 @@ func (client *SDOClient) downloadBlockInitiate() error {
 		binary.LittleEndian.PutUint32(client.txBuffer.Data[4:], client.SizeIndicated)
 	}
 	client.TimeoutTimer = 0
-	client.BusManager.Send(*client.txBuffer)
+	client.BusManager.Send(client.txBuffer)
 	return nil
 
 }
@@ -725,7 +718,7 @@ func (client *SDOClient) downloadBlock(bufferPartial bool, timerNext *uint32) er
 		}
 	}
 	client.TimeoutTimer = 0
-	client.BusManager.Send(*client.txBuffer)
+	client.BusManager.Send(client.txBuffer)
 	return nil
 
 }
@@ -736,7 +729,7 @@ func (client *SDOClient) downloadBlockEnd() {
 	client.txBuffer.Data[1] = byte(client.BlockCRC)
 	client.txBuffer.Data[2] = byte(client.BlockCRC >> 8)
 	client.TimeoutTimer = 0
-	client.BusManager.Send(*client.txBuffer)
+	client.BusManager.Send(client.txBuffer)
 }
 
 // Create & send abort on bus
@@ -748,7 +741,7 @@ func (client *SDOClient) Abort(abortCode SDOAbortCode) {
 	client.txBuffer.Data[3] = client.Subindex
 	binary.LittleEndian.PutUint32(client.txBuffer.Data[4:], code)
 	log.Warnf("[CLIENT][TX][x%x] CLIENT ABORT | x%x:x%x | %v (x%x)", client.NodeIdServer, client.Index, client.Subindex, abortCode, code)
-	client.BusManager.Send(*client.txBuffer)
+	client.BusManager.Send(client.txBuffer)
 
 }
 
@@ -1020,9 +1013,6 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				}
 			}
 		}
-		if client.txBuffer.BufferFull {
-			ret = SDO_TRANSMIT_BUFFER_FULL
-		}
 	}
 
 	if ret == SDO_WAITING_RESPONSE {
@@ -1034,7 +1024,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.txBuffer.Data[2] = byte(client.Index >> 8)
 			client.txBuffer.Data[3] = client.Subindex
 			client.TimeoutTimer = 0
-			client.BusManager.Send(*client.txBuffer)
+			client.BusManager.Send(client.txBuffer)
 			client.State = SDO_STATE_UPLOAD_INITIATE_RSP
 			log.Debugf("[CLIENT][TX][x%x] UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data)
 
@@ -1045,7 +1035,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			}
 			client.txBuffer.Data[0] = 0x60 | client.Toggle
 			client.TimeoutTimer = 0
-			client.BusManager.Send(*client.txBuffer)
+			client.BusManager.Send(client.txBuffer)
 			client.State = SDO_STATE_UPLOAD_SEGMENT_RSP
 			log.Debugf("[CLIENT][TX][x%x] UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data)
 
@@ -1067,7 +1057,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.txBuffer.Data[4] = client.BlockSize
 			client.txBuffer.Data[5] = CO_CONFIG_SDO_CLI_PST
 			client.TimeoutTimer = 0
-			client.BusManager.Send(*client.txBuffer)
+			client.BusManager.Send(client.txBuffer)
 			client.State = SDO_STATE_UPLOAD_BLK_INITIATE_RSP
 			log.Debugf("[CLIENT][TX][x%x] BLOCK UPLOAD INITIATE | x%x:x%x %v blksize : %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data, client.BlockSize)
 
@@ -1079,7 +1069,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.BlockCRC = CRC16(0)
 			client.State = SDO_STATE_UPLOAD_BLK_SUBBLOCK_SREQ
 			client.RxNew = false
-			client.BusManager.Send(*client.txBuffer)
+			client.BusManager.Send(client.txBuffer)
 
 		case SDO_STATE_UPLOAD_BLK_SUBBLOCK_CRSP:
 			client.txBuffer.Data[0] = 0xA2
@@ -1118,14 +1108,14 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			}
 			client.txBuffer.Data[2] = client.BlockSize
 			client.TimeoutTimerBlock = 0
-			client.BusManager.Send(*client.txBuffer)
+			client.BusManager.Send(client.txBuffer)
 			if transferShort && !client.Finished {
 				log.Warnf("sub-block restarted: seqnoPrev=%v, blksize=%v", seqnoStart, client.BlockSize)
 			}
 
 		case SDO_STATE_UPLOAD_BLK_END_CRSP:
 			client.txBuffer.Data[0] = 0xA1
-			client.BusManager.Send(*client.txBuffer)
+			client.BusManager.Send(client.txBuffer)
 			client.State = SDO_STATE_IDLE
 			ret = SDO_SUCCESS
 

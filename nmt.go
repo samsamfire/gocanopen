@@ -63,8 +63,8 @@ type NMT struct {
 	hearbeatProducerTimer  uint32
 	emergency              *EM
 	busManager             *BusManager
-	nmtTxBuff              *BufferTxFrame
-	hbTxBuff               *BufferTxFrame
+	nmtTxBuff              Frame
+	hbTxBuff               Frame
 	callback               func(nmtState uint8)
 }
 
@@ -123,14 +123,8 @@ func (nmt *NMT) Init(
 	if err != nil {
 		return err
 	}
-	nmt.nmtTxBuff, err = busManager.InsertTxBuffer(uint32(canIdNmtTx), false, 2, false)
-	if err != nil {
-		return err
-	}
-	nmt.hbTxBuff, err = busManager.InsertTxBuffer(uint32(canIdHbTx), false, 1, false)
-	if err != nil {
-		return err
-	}
+	nmt.nmtTxBuff = NewFrame(uint32(canIdNmtTx), 0, 2)
+	nmt.hbTxBuff = NewFrame(uint32(canIdHbTx), 0, 1)
 	return nil
 
 }
@@ -150,7 +144,7 @@ func (nmt *NMT) process(internalState *uint8, timeDifferenceUs uint32, timerNext
 	// - startup
 	if nmtInit || (nmt.hearbeatProducerTimeUs != 0 && (nmt.hearbeatProducerTimer == 0 || nmtStateCopy != nmt.operatingStatePrev)) {
 		nmt.hbTxBuff.Data[0] = nmtStateCopy
-		nmt.busManager.Send(*nmt.hbTxBuff)
+		nmt.busManager.Send(nmt.hbTxBuff)
 		if nmtStateCopy == NMT_INITIALIZING {
 			if nmt.control&NMT_STARTUP_TO_OPERATIONAL != 0 {
 				nmtStateCopy = NMT_OPERATIONAL
@@ -264,5 +258,5 @@ func (nmt *NMT) SendCommand(command NMTCommand, nodeId uint8) error {
 	// Send NMT command
 	nmt.nmtTxBuff.Data[0] = uint8(command)
 	nmt.nmtTxBuff.Data[1] = nodeId
-	return nmt.busManager.Send((*nmt.nmtTxBuff))
+	return nmt.busManager.Send(nmt.nmtTxBuff)
 }

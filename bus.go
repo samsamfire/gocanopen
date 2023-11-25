@@ -27,14 +27,8 @@ type Frame struct {
 	Data  [8]byte
 }
 
-// TX Buffer struct for sending specific CAN frame ID
-type BufferTxFrame struct {
-	ID         uint32
-	Flags      uint8
-	DLC        uint8
-	Data       [8]byte
-	BufferFull bool
-	SyncFlag   bool
+func NewFrame(id uint32, flags uint8, dlc uint8) Frame {
+	return Frame{ID: id, Flags: flags, DLC: dlc}
 }
 
 // Interface used for handling a CAN frame, implementation specific : will depend on the bus type
@@ -55,7 +49,6 @@ type Bus interface {
 // Used by the CANopen stack to control errors, callbacks for specific IDs, etc.
 type BusManager struct {
 	Bus               Bus // Bus interface that can be adapted
-	txBuffer          map[uint32]*BufferTxFrame
 	frameListeners    map[uint32][]FrameListener
 	CANerrorstatus    uint16
 	CANnormal         bool
@@ -80,41 +73,15 @@ func (busManager *BusManager) Handle(frame Frame) {
 
 // Send a CAN message from given buffer
 // Limited error handling
-func (busManager *BusManager) Send(buf BufferTxFrame) error {
-	return busManager.Bus.Send(Frame{ID: buf.ID, Flags: buf.Flags, DLC: buf.DLC, Data: buf.Data})
+func (busManager *BusManager) Send(frame Frame) error {
+	return busManager.Bus.Send(frame)
 }
 
-// This should be called cyclically to update errors & process unsent messages
+// This should be called cyclically to update errors
 func (busManager *BusManager) Process() error {
 	// TODO get bus state error
 	busManager.CANerrorstatus = 0
-	// Loop through tx array and send unsent messages
-	if busManager.CANtxCount > 0 {
-		found := false
-		for _, buffer := range busManager.txBuffer {
-			if buffer.BufferFull {
-				buffer.BufferFull = false
-				busManager.CANtxCount -= 1
-				busManager.Send(*buffer)
-				found = true
-			}
-		}
-		if !found {
-			busManager.CANtxCount = 0
-		}
-	}
 	return nil
-
-}
-
-func (busManager *BusManager) InsertTxBuffer(ident uint32, rtr bool, length uint8, syncFlag bool) (*BufferTxFrame, error) {
-	// This is specific to socketcan
-	ident = ident & CAN_SFF_MASK
-	if rtr {
-		ident |= CAN_RTR_FLAG
-	}
-	busManager.txBuffer[ident] = NewBufferTxFrame(ident, length, syncFlag, 0)
-	return busManager.txBuffer[ident], nil
 }
 
 // Subscribe to a specific CAN ID
@@ -144,15 +111,10 @@ func (busManager *BusManager) ClearSyncPDOs() error {
 	return nil
 }
 
-func NewBufferTxFrame(ident uint32, length uint8, syncFlag bool, CANifindex int) *BufferTxFrame {
-	return &BufferTxFrame{ID: ident, DLC: length, BufferFull: false, SyncFlag: syncFlag}
-}
-
 func NewBusManager(bus Bus) *BusManager {
 	busManager := &BusManager{
 		Bus:               bus,
 		frameListeners:    make(map[uint32][]FrameListener),
-		txBuffer:          make(map[uint32]*BufferTxFrame),
 		CANerrorstatus:    0,
 		CANnormal:         false,
 		UseCANrxFilters:   false,

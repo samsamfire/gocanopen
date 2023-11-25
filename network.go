@@ -11,11 +11,10 @@ import (
 )
 
 type Network struct {
-	Nodes           map[uint8]*Node
-	bus             *Bus
-	busManager      *BusManager
-	sdoClient       *SDOClient // Network master has an sdo client to read/write nodes on network
-	nmtMasterTxBuff *BufferTxFrame
+	Nodes      map[uint8]*Node
+	bus        *Bus
+	busManager *BusManager
+	sdoClient  *SDOClient // Network master has an sdo client to read/write nodes on network
 	// An sdo client does not have to be linked to a specific node
 	odMap map[uint8]*ObjectDictionaryInformation
 }
@@ -77,11 +76,6 @@ func (network *Network) Connect(args ...any) error {
 		return err
 	}
 	network.sdoClient = client
-	// Add NMT tx buffer, for sending NMT commands
-	network.nmtMasterTxBuff, err = busManager.InsertTxBuffer(uint32(NMT_SERVICE_ID), false, 2, false)
-	if err != nil {
-		return err
-	}
 	return err
 }
 
@@ -263,10 +257,11 @@ func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
 		nmtCommand != NMT_RESET_NODE) {
 		return ErrIllegalArgument
 	}
-	network.nmtMasterTxBuff.Data[0] = uint8(nmtCommand)
-	network.nmtMasterTxBuff.Data[1] = nodeId
+	frame := NewFrame(uint32(NMT_SERVICE_ID), 0, 2)
+	frame.Data[0] = uint8(nmtCommand)
+	frame.Data[1] = nodeId
 	log.Debugf("[NMT] sending nmt command : %v to node(s) %v (x%x)", NMT_COMMAND_MAP[nmtCommand], nodeId, nodeId)
-	return network.busManager.Send((*network.nmtMasterTxBuff))
+	return network.busManager.Send(frame)
 }
 
 // Create a local node with a given OD

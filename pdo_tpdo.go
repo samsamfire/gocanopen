@@ -4,7 +4,7 @@ import log "github.com/sirupsen/logrus"
 
 type TPDO struct {
 	PDO              PDOCommon
-	txBuffer         *BufferTxFrame
+	txBuffer         Frame
 	TransmissionType uint8
 	SendRequest      bool
 	Sync             *SYNC
@@ -61,11 +61,7 @@ func (tpdo *TPDO) configureCOBID(entry18xx *Entry, predefinedIdent uint16, erron
 	if canId != 0 && canId == (predefinedIdent&0xFF80) {
 		canId = predefinedIdent
 	}
-	var err error
-	tpdo.txBuffer, _ = pdo.busManager.InsertTxBuffer(uint32(canId), false, uint8(pdo.DataLength), tpdo.TransmissionType <= TRANSMISSION_TYPE_SYNC_240)
-	if tpdo.txBuffer == nil || err != nil {
-		return 0, ErrIllegalArgument
-	}
+	tpdo.txBuffer = NewFrame(uint32(canId), 0, uint8(pdo.DataLength))
 	pdo.Valid = valid
 	return canId, nil
 
@@ -274,5 +270,5 @@ func (tpdo *TPDO) Send() error {
 	tpdo.InhibitTimer = tpdo.InhibitTimeUs
 	// Copy data to the buffer & send
 	copy(tpdo.txBuffer.Data[:], dataTPDO)
-	return pdo.busManager.Send(*tpdo.txBuffer)
+	return pdo.busManager.Send(tpdo.txBuffer)
 }

@@ -76,11 +76,11 @@ func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 	cobIdSync := binary.LittleEndian.Uint32(data)
 	canId := uint16(cobIdSync & 0x7FF)
 	isProducer := (cobIdSync & 0x40000000) != 0
-	if (cobIdSync&0xBFFFF800) != 0 || isIDRestricted(canId) || (sync.IsProducer && isProducer && canId != sync.Ident) {
+	if (cobIdSync&0xBFFFF800) != 0 || isIDRestricted(canId) || (sync.IsProducer && isProducer && canId != uint16(sync.cobId)) {
 		return ODR_INVALID_VALUE
 	}
 	// Reconfigure the receive and transmit buffers only if changed
-	if canId != sync.Ident {
+	if canId != uint16(sync.cobId) {
 		err := sync.BusManager.Subscribe(uint32(canId), 0x7FF, false, sync)
 		if err != nil {
 			return ODR_DEV_INCOMPAT
@@ -89,11 +89,8 @@ func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 		if sync.CounterOverflowValue != 0 {
 			frameSize = 1
 		}
-		sync.txBuffer, err = sync.BusManager.InsertTxBuffer(uint32(canId), false, frameSize, false)
-		if sync.txBuffer == nil || err != nil {
-			return ODR_DEV_INCOMPAT
-		}
-		sync.Ident = canId
+		sync.txBuffer = NewFrame(uint32(canId), 0, frameSize)
+		sync.cobId = uint32(canId)
 	}
 	// Reset in case sync is producer
 	sync.IsProducer = isProducer
@@ -183,16 +180,7 @@ func WriteEntry1014(stream *Stream, data []byte, countWritten *uint16) error {
 	}
 
 	if newEnabled {
-		var err error
-		em.txBuffer, err = em.busManager.InsertTxBuffer(
-			newCanId,
-			false,
-			8,
-			false,
-		)
-		if em.txBuffer == nil || err != nil {
-			return ODR_DEV_INCOMPAT
-		}
+		em.txBuffer = NewFrame(newCanId, 0, 8)
 	}
 	return WriteEntryOriginal(stream, data, countWritten)
 
@@ -272,12 +260,7 @@ func WriteEntry1019(stream *Stream, data []byte, countWritten *uint16) error {
 	if syncCounterOverflow != 0 {
 		nbBytes = 1
 	}
-	var err error
-	sync.txBuffer, err = sync.BusManager.InsertTxBuffer(uint32(sync.Ident), false, nbBytes, false)
-	if sync.txBuffer == nil || err != nil {
-		sync.IsProducer = false
-		return ODR_DEV_INCOMPAT
-	}
+	sync.txBuffer = NewFrame(sync.cobId, 0, nbBytes)
 	sync.CounterOverflowValue = syncCounterOverflow
 	return WriteEntryOriginal(stream, data, countWritten)
 }
@@ -438,12 +421,7 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 			if !valid {
 				canId = 0
 			}
-			err := pdo.busManager.Subscribe(
-				canId,
-				0x7FF,
-				false,
-				rpdo,
-			)
+			err := pdo.busManager.Subscribe(canId, 0x7FF, false, rpdo)
 			if valid && err == nil {
 				pdo.Valid = true
 				pdo.ConfiguredIdent = uint16(canId)
@@ -608,16 +586,7 @@ func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 			if !valid {
 				canId = 0
 			}
-			var err error
-			tpdo.txBuffer, err = pdo.busManager.InsertTxBuffer(
-				canId,
-				false,
-				uint8(pdo.DataLength),
-				tpdo.TransmissionType <= TRANSMISSION_TYPE_SYNC_240,
-			)
-			if tpdo.txBuffer == nil || err != nil {
-				return ODR_DEV_INCOMPAT
-			}
+			tpdo.txBuffer = NewFrame(canId, 0, uint8(pdo.DataLength))
 			pdo.Valid = valid
 			pdo.ConfiguredIdent = uint16(canId)
 		}
@@ -628,7 +597,6 @@ func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 		if transmissionType > TRANSMISSION_TYPE_SYNC_240 && transmissionType < TRANSMISSION_TYPE_SYNC_EVENT_LO {
 			return ODR_INVALID_VALUE
 		}
-		tpdo.txBuffer.SyncFlag = transmissionType <= TRANSMISSION_TYPE_SYNC_240
 		tpdo.SyncCounter = 255
 		tpdo.TransmissionType = transmissionType
 		tpdo.SendRequest = true
