@@ -63,7 +63,7 @@ func TestSub(t *testing.T) {
 }
 
 // Test reading OD variables
-func TestRead(t *testing.T) {
+func TestGetUint(t *testing.T) {
 	BaseObjectDictionaryParsed, err := ParseEDS("testdata/base.eds", 0x10)
 	if err != nil {
 		t.Error(err)
@@ -88,11 +88,11 @@ func TestRead(t *testing.T) {
 
 // Test reading SDO client parameter entry
 func TestReadSDO1280(t *testing.T) {
-	BaseObjectDictionaryParsed, err := ParseEDS("testdata/base.eds", 0x10)
+	od, err := ParseEDS("testdata/base.eds", 0x10)
 	if err != nil {
-		t.Error(err)
+		t.Fatalf("could not parse eds : %v", err)
 	}
-	entry := BaseObjectDictionaryParsed.Index(0x1280)
+	entry := od.Index(0x1280)
 	log.Infof("Entry 1280 : %v", entry)
 	if entry == nil {
 		t.Error()
@@ -108,8 +108,11 @@ func TestReadSDO1280(t *testing.T) {
 // Test reader writer disabled
 func TestReadWriteDisabled(t *testing.T) {
 	//var streamer ObjectStreamer
-	BaseObjectDictionaryParsed, _ := ParseEDS("testdata/base.eds", 0x10)
-	entry := BaseObjectDictionaryParsed.Index(0x2001)
+	od, err := ParseEDS("testdata/base.eds", 0x10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := od.Index(0x2001)
 	if entry == nil {
 		t.Error("Empty entry")
 	}
