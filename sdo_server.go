@@ -15,7 +15,6 @@ type SDOServer struct {
 	CANtxBuff                  *BufferTxFrame
 	CobIdClientToServer        uint32
 	CobIdServerToClient        uint32
-	ExtensionEntry1200         *Extension
 	Valid                      bool
 	Index                      uint16
 	Subindex                   uint8
@@ -175,9 +174,7 @@ func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uin
 			} else {
 				canIdServerToClient = 0
 			}
-			server.ExtensionEntry1200.Object = server
-			server.ExtensionEntry1200.Read = ReadEntryOriginal
-			server.ExtensionEntry1200.Write = WriteEntryOriginal
+			entry12xx.AddExtension(server, ReadEntryOriginal, WriteEntry1201)
 
 		} else {
 			return ErrIllegalArgument
