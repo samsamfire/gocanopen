@@ -1,6 +1,10 @@
 package canopen
 
-import log "github.com/sirupsen/logrus"
+import (
+	"os"
+
+	log "github.com/sirupsen/logrus"
+)
 
 type Configuration struct{}
 
@@ -275,5 +279,13 @@ func (node *Node) Init(
 		log.Errorf("[SYNC] error when initialising SYNC object %v", err)
 	}
 	node.SYNC = sync
+
+	//Add EDS storage if supported
+	edsEntry := od.Index(0x1021)
+	if edsEntry != nil {
+		log.Info("[EDS] EDS is downloadable via object 0x1021")
+		od.AddFile(edsEntry.Index, edsEntry.Name, od.filePath, os.O_RDONLY)
+	}
+
 	return nil
 }

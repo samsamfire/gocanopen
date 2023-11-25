@@ -135,7 +135,7 @@ DefaultValue=0x00000000
 PDOMapping=0
 
 [OptionalObjects]
-SupportedObjects=30
+SupportedObjects=32
 1=0x1003
 2=0x1005
 3=0x1006
@@ -148,24 +148,26 @@ SupportedObjects=30
 10=0x1016
 11=0x1017
 12=0x1019
-13=0x1200
-14=0x1280
-15=0x1400
-16=0x1401
-17=0x1402
-18=0x1403
-19=0x1600
-20=0x1601
-21=0x1602
-22=0x1603
-23=0x1800
-24=0x1801
-25=0x1802
-26=0x1803
-27=0x1A00
-28=0x1A01
-29=0x1A02
-30=0x1A03
+13=0x1019
+14=0x1019
+15=0x1200
+16=0x1280
+17=0x1400
+18=0x1401
+19=0x1402
+20=0x1403
+21=0x1600
+22=0x1601
+23=0x1602
+24=0x1603
+25=0x1800
+26=0x1801
+27=0x1802
+28=0x1803
+29=0x1A00
+30=0x1A01
+31=0x1A02
+32=0x1A03
 
 [1003]
 ParameterName=Pre-defined error field
@@ -586,6 +588,25 @@ DataType=0x0005
 AccessType=rw
 DefaultValue=0
 PDOMapping=0
+
+[1021]
+ParameterName=Store EDS
+ObjectType=0x7
+;StorageLocation=PERSIST_COMM
+DataType=0x0007
+AccessType=rw
+DefaultValue=0
+PDOMapping=0
+
+[1022]
+ParameterName=Storage Format
+ObjectType=0x7
+;StorageLocation=PERSIST_COMM
+DataType=0x0005
+AccessType=rw
+DefaultValue=0
+PDOMapping=0
+
 
 [1200]
 ParameterName=SDO server parameter

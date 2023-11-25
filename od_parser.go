@@ -52,6 +52,7 @@ var OBJ_NAME_MAP = map[byte]string{
 func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 
 	od := NewOD()
+	od.filePath = filePath
 
 	// Open the EDS file
 	edsFile, err := ini.Load(filePath)
