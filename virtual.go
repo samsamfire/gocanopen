@@ -45,6 +45,7 @@ func deserializeFrame(buffer []byte) (*Frame, error) {
 type VirtualCanBus struct {
 	channel       string
 	conn          net.Conn
+	receiveOwn    bool
 	framehandler  FrameListener
 	stopChan      chan bool
 	mu            sync.Mutex
@@ -93,6 +94,10 @@ func (client *VirtualCanBus) Send(frame Frame) error {
 		return err
 	}
 	_, err = client.conn.Write(frameBytes)
+	// Local loopback
+	if client.receiveOwn && client.framehandler != nil {
+		client.framehandler.Handle(frame)
+	}
 	return err
 }
 
