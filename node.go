@@ -110,8 +110,8 @@ func (node *Node) Process(enableGateway bool, timeDifferenceUs uint32, timerNext
 }
 
 /*Initialize all PDOs*/
-func (node *Node) InitPDO(od *ObjectDictionary, nodeId uint8) error {
-	if nodeId < 1 || nodeId > 127 || node.NodeIdUnconfigured {
+func (node *Node) InitPDO() error {
+	if node.id < 1 || node.id > 127 || node.NodeIdUnconfigured {
 		if node.NodeIdUnconfigured {
 			return ErrNodeIdUnconfiguredLSS
 		} else {
@@ -121,14 +121,14 @@ func (node *Node) InitPDO(od *ObjectDictionary, nodeId uint8) error {
 	// Iterate over all the possible entries : there can be a maximum of 512 maps
 	// Break loops when an entry doesn't exist (don't allow holes in mapping)
 	for i := uint16(0); i < 512; i++ {
-		entry14xx := od.Index(0x1400 + i)
-		entry16xx := od.Index(0x1600 + i)
+		entry14xx := node.OD.Index(0x1400 + i)
+		entry16xx := node.OD.Index(0x1600 + i)
 		preDefinedIdent := uint16(0)
 		pdoOffset := i % 4
 		nodeIdOffset := i / 4
-		preDefinedIdent = 0x200 + pdoOffset*0x100 + uint16(nodeId) + nodeIdOffset
+		preDefinedIdent = 0x200 + pdoOffset*0x100 + uint16(node.id) + nodeIdOffset
 		rpdo := RPDO{}
-		err := rpdo.Init(od, node.EM, node.SYNC, preDefinedIdent, entry14xx, entry16xx, node.BusManager)
+		err := rpdo.Init(node.OD, node.EM, node.SYNC, preDefinedIdent, entry14xx, entry16xx, node.BusManager)
 		if err != nil {
 			log.Warnf("[RPDO] no more RPDO after RPDO %v", i-1)
 			break
@@ -138,14 +138,14 @@ func (node *Node) InitPDO(od *ObjectDictionary, nodeId uint8) error {
 	}
 	// Do the same for TPDOS
 	for i := uint16(0); i < 512; i++ {
-		entry18xx := od.Index(0x1800 + i)
-		entry1Axx := od.Index(0x1A00 + i)
+		entry18xx := node.OD.Index(0x1800 + i)
+		entry1Axx := node.OD.Index(0x1A00 + i)
 		preDefinedIdent := uint16(0)
 		pdoOffset := i % 4
 		nodeIdOffset := i / 4
-		preDefinedIdent = 0x180 + pdoOffset*0x100 + uint16(nodeId) + nodeIdOffset
+		preDefinedIdent = 0x180 + pdoOffset*0x100 + uint16(node.id) + nodeIdOffset
 		tpdo := TPDO{}
-		err := tpdo.Init(od, node.EM, node.SYNC, preDefinedIdent, entry18xx, entry1Axx, node.BusManager)
+		err := tpdo.Init(node.OD, node.EM, node.SYNC, preDefinedIdent, entry18xx, entry1Axx, node.BusManager)
 		if err != nil {
 			log.Warnf("[TPDO] no more TPDO after TPDO %v", i-1)
 			break
