@@ -328,7 +328,7 @@ func WriteEntry1201(stream *Stream, data []byte, countWritten *uint16) error {
 			server.CobIdClientToServer,
 			cobId,
 		)
-		// node id of server
+	// node id of server
 	case 3:
 		if len(data) != 1 {
 			return ODR_TYPE_MISMATCH

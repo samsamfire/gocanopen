@@ -61,7 +61,6 @@ type NMT struct {
 	control                uint16
 	hearbeatProducerTimeUs uint32
 	hearbeatProducerTimer  uint32
-	extensionEntry1017     *Extension
 	emergency              *EM
 	busManager             *BusManager
 	nmtTxBuff              *BufferTxFrame
@@ -112,7 +111,7 @@ func (nmt *NMT) Init(
 	}
 	nmt.hearbeatProducerTimeUs = uint32(HBprodTime_ms) * 1000
 	// Extension needs to be initialized
-	nmt.extensionEntry1017 = entry1017.AddExtension(nmt, ReadEntryOriginal, WriteEntry1017)
+	entry1017.AddExtension(nmt, ReadEntryOriginal, WriteEntry1017)
 
 	if nmt.hearbeatProducerTimer > nmt.hearbeatProducerTimeUs {
 		nmt.hearbeatProducerTimer = nmt.hearbeatProducerTimeUs
