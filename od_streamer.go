@@ -61,6 +61,16 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 		if subIndex > 0 {
 			return nil, ODR_SUB_NOT_EXIST
 		}
+		if object.DataType == DOMAIN && entry.Extension == nil {
+			// Domain entries require extensions to be used, by default they are disabled
+			streamer.read = ReadEntryDisabled
+			streamer.write = WriteEntryDisabled
+			streamer.stream.Object = nil
+			streamer.stream.DataOffset = 0
+			streamer.stream.Subindex = subIndex
+			log.Warnf("[OD][x%x] no extension has been specified for this domain object", entry.Index)
+			return streamer, nil
+		}
 		streamer.stream.Attribute = object.Attribute
 		streamer.stream.Data = object.Data
 		streamer.stream.DataLength = uint32(len(object.Data))
@@ -91,7 +101,7 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 		streamer.stream.DataLength = uint32(len(record.Variable.Data))
 
 	default:
-		log.Errorf("[OD] error, unknown type : %+v", object)
+		log.Errorf("[OD][x%x] error, unknown type : %+v", entry.Index, object)
 		return nil, ODR_DEV_INCOMPAT
 	}
 	// Add normal reader / writer for object
@@ -184,7 +194,8 @@ func WriteEntryDefault(stream *Stream, data []byte, countWritten *uint16) error 
 	}
 
 	// OD variable is smaller than the provided buffer
-	if dataLenToCopy < count {
+	if dataLenToCopy < count ||
+		stream.DataOffset+uint32(dataLenToCopy) > uint32(len(stream.Data)) {
 		return ODR_DATA_LONG
 	}
 
