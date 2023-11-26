@@ -36,12 +36,12 @@ func (time *TIME) Init(entry1012 *Entry, busManager *BusManager, producerInterva
 	}
 	// Read param from OD
 	cobIdTimestamp := uint32(0)
-	ret := entry1012.GetUint32(0, &cobIdTimestamp)
+	ret := entry1012.Uint32(0, &cobIdTimestamp)
 	if ret != nil {
 		log.Errorf("[TIME][%x|%x] reading cob id timestamp failed : %v", entry1012.Index, 0x0, ret)
 		return ErrOdParameters
 	}
-	entry1012.AddExtension(time, ReadEntryOriginal, WriteEntry1012)
+	entry1012.AddExtension(time, ReadEntryDefault, WriteEntry1012)
 	cobId := cobIdTimestamp & 0x7FF
 	time.IsConsumer = (cobIdTimestamp & 0x80000000) != 0
 	time.IsProducer = (cobIdTimestamp & 0x40000000) != 0

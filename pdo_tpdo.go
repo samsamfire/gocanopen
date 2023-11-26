@@ -18,7 +18,7 @@ type TPDO struct {
 
 func (tpdo *TPDO) configureTransmissionType(entry18xx *Entry) error {
 	transmissionType := uint8(TRANSMISSION_TYPE_SYNC_EVENT_LO)
-	ret := entry18xx.GetUint8(2, &transmissionType)
+	ret := entry18xx.Uint8(2, &transmissionType)
 	if ret != nil {
 		log.Errorf("[TPDO][%x|%x] reading %v failed : %v", entry18xx.Index, 2, entry18xx.Name, ret)
 		return ErrOdParameters
@@ -34,7 +34,7 @@ func (tpdo *TPDO) configureTransmissionType(entry18xx *Entry) error {
 func (tpdo *TPDO) configureCOBID(entry18xx *Entry, predefinedIdent uint16, erroneousMap uint32) (canId uint16, e error) {
 	pdo := &tpdo.PDO
 	cobId := uint32(0)
-	ret := entry18xx.GetUint32(1, &cobId)
+	ret := entry18xx.Uint32(1, &cobId)
 	if ret != nil {
 		log.Errorf("[TPDO][%x|%x] reading %v failed : %v", entry18xx.Index, 1, entry18xx.Name, ret)
 		return 0, ErrOdParameters
@@ -105,7 +105,7 @@ func (tpdo *TPDO) Init(
 	}
 	// Configure inhibit timer (not mandatory)
 	inhibitTime := uint16(0)
-	ret = entry18xx.GetUint16(3, &inhibitTime)
+	ret = entry18xx.Uint16(3, &inhibitTime)
 	if ret != nil {
 		log.Warnf("[TPDO][%x|%x] reading inhibit timer failed : %v", entry18xx.Index, 3, ret)
 	}
@@ -113,7 +113,7 @@ func (tpdo *TPDO) Init(
 
 	// Configure event timer (not mandatory)
 	eventTime := uint16(0)
-	ret = entry18xx.GetUint16(5, &eventTime)
+	ret = entry18xx.Uint16(5, &eventTime)
 	if ret != nil {
 		log.Warnf("[TPDO][%x|%x] reading event timer failed : %v", entry18xx.Index, 5, ret)
 	}
@@ -121,7 +121,7 @@ func (tpdo *TPDO) Init(
 
 	// Configure sync start value (not mandatory)
 	tpdo.SyncStartValue = 0
-	ret = entry18xx.GetUint8(6, &tpdo.SyncStartValue)
+	ret = entry18xx.Uint8(6, &tpdo.SyncStartValue)
 	if ret != nil {
 		log.Warnf("[TPDO][%x|%x] reading sync start failed : %v", entry18xx.Index, 6, ret)
 	}
@@ -135,7 +135,7 @@ func (tpdo *TPDO) Init(
 	pdo.PreDefinedIdent = predefinedIdent
 	pdo.ConfiguredIdent = canId
 	pdo.ExtensionCommunicationParam = entry18xx.AddExtension(tpdo, ReadEntry14xxOr18xx, WriteEntry18xx)
-	pdo.ExtensionMappingParam = entry1Axx.AddExtension(tpdo, ReadEntryOriginal, WriteEntry16xxOr1Axx)
+	pdo.ExtensionMappingParam = entry1Axx.AddExtension(tpdo, ReadEntryDefault, WriteEntry16xxOr1Axx)
 	log.Debugf("[TPDO][%x] Finished initializing | canId : %v | valid : %v | inhibit : %v | event timer : %v | transmission type : %v",
 		entry18xx.Index,
 		canId,

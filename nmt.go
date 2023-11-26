@@ -104,14 +104,14 @@ func (nmt *NMT) Init(
 	nmt.hearbeatProducerTimer = uint32(firstHbTimeMs * 1000)
 
 	var HBprodTime_ms uint16
-	err := entry1017.GetUint16(0, &HBprodTime_ms)
+	err := entry1017.Uint16(0, &HBprodTime_ms)
 	if err != nil {
 		log.Errorf("[NMT][%x|%x] reading producer heartbeat failed : %v", 0x1017, 0x0, err)
 		return ErrOdParameters
 	}
 	nmt.hearbeatProducerTimeUs = uint32(HBprodTime_ms) * 1000
 	// Extension needs to be initialized
-	entry1017.AddExtension(nmt, ReadEntryOriginal, WriteEntry1017)
+	entry1017.AddExtension(nmt, ReadEntryDefault, WriteEntry1017)
 
 	if nmt.hearbeatProducerTimer > nmt.hearbeatProducerTimeUs {
 		nmt.hearbeatProducerTimer = nmt.hearbeatProducerTimeUs

@@ -31,7 +31,7 @@ type PDOCommon struct {
 	Valid                       bool
 	DataLength                  uint32
 	MappedObjectsCount          uint8
-	Streamers                   [MAX_MAPPED_ENTRIES]ObjectStreamer
+	Streamers                   [MAX_MAPPED_ENTRIES]Streamer
 	FlagPDOByte                 [OD_FLAGS_PDO_SIZE]*byte
 	FlagPDOBitmask              [OD_FLAGS_PDO_SIZE]byte
 	IsRPDO                      bool
@@ -61,18 +61,18 @@ func (base *PDOCommon) Type() string {
 // Configure a PDO map (this is done on startup and can also be done dynamically)
 func (pdo *PDOCommon) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapIndex uint32, isRPDO bool) error {
 	index := uint16(mapParam >> 16)
-	subindex := byte(mapParam >> 8)
+	subIndex := byte(mapParam >> 8)
 	mappedLengthBits := byte(mapParam)
 	mappedLength := mappedLengthBits >> 3
 	streamer := &pdo.Streamers[mapIndex]
 
 	// Total PDO length should be smaller than the max possible size
 	if mappedLength > MAX_PDO_LENGTH {
-		log.Warnf("[%v][%x|%x] mapped parameter is too long", pdo.Type(), index, subindex)
+		log.Warnf("[%v][%x|%x] mapped parameter is too long", pdo.Type(), index, subIndex)
 		return ODR_MAP_LEN
 	}
 	// Dummy entries map to "fake" entries
-	if index < 0x20 && subindex == 0 {
+	if index < 0x20 && subIndex == 0 {
 		streamer.stream.Data = make([]byte, mappedLength)
 		streamer.stream.DataOffset = uint32(mappedLength)
 		streamer.write = WriteDummy
@@ -81,22 +81,22 @@ func (pdo *PDOCommon) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInd
 	}
 	// Get entry in OD
 	entry := od.Index(index)
-	streamerCopy, ret := entry.CreateStreamer(subindex, false)
+	streamerCopy, ret := NewStreamer(entry, subIndex, false)
 	if ret != nil {
-		log.Warnf("[%v][%x|%x] mapping failed : %v", pdo.Type(), index, subindex, ret)
+		log.Warnf("[%v][%x|%x] mapping failed : %v", pdo.Type(), index, subIndex, ret)
 		return ret
 	}
 
 	// Check correct attribute, length, and alignment
 	switch {
 	case streamerCopy.stream.Attribute&pdo.attribute() == 0:
-		log.Warnf("[%v][%x|%x] mapping failed : attribute error", pdo.Type(), index, subindex)
+		log.Warnf("[%v][%x|%x] mapping failed : attribute error", pdo.Type(), index, subIndex)
 		return ODR_NO_MAP
 	case (mappedLengthBits & 0x07) != 0:
-		log.Warnf("[%v][%x|%x] mapping failed : alignment error", pdo.Type(), index, subindex)
+		log.Warnf("[%v][%x|%x] mapping failed : alignment error", pdo.Type(), index, subIndex)
 		return ODR_NO_MAP
 	case streamerCopy.stream.DataLength < uint32(mappedLength):
-		log.Warnf("[%v][%x|%x] mapping failed : length error", pdo.Type(), index, subindex)
+		log.Warnf("[%v][%x|%x] mapping failed : length error", pdo.Type(), index, subIndex)
 		return ODR_NO_MAP
 	default:
 	}
@@ -107,9 +107,9 @@ func (pdo *PDOCommon) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInd
 	if isRPDO {
 		return nil
 	}
-	if uint32(subindex) < (uint32(OD_FLAGS_PDO_SIZE)*8) && entry.Extension != nil {
-		pdo.FlagPDOByte[mapIndex] = &entry.Extension.flagsPDO[subindex>>3]
-		pdo.FlagPDOBitmask[mapIndex] = 1 << (subindex & 0x07)
+	if uint32(subIndex) < (uint32(OD_FLAGS_PDO_SIZE)*8) && entry.Extension != nil {
+		pdo.FlagPDOByte[mapIndex] = &entry.Extension.flagsPDO[subIndex>>3]
+		pdo.FlagPDOBitmask[mapIndex] = 1 << (subIndex & 0x07)
 	} else {
 		pdo.FlagPDOByte[mapIndex] = nil
 	}
@@ -123,7 +123,7 @@ func (pdo *PDOCommon) InitMapping(od *ObjectDictionary, entry *Entry, isRPDO boo
 	mappedObjectsCount := uint8(0)
 
 	// Get number of mapped objects
-	ret := entry.GetUint8(0, &mappedObjectsCount)
+	ret := entry.Uint8(0, &mappedObjectsCount)
 	if ret != nil {
 		log.Errorf("[%v][%x|%x] reading nb mapped objects failed : %v", pdo.Type(), entry.Index, 0, ret)
 		return ErrOdParameters
@@ -133,7 +133,7 @@ func (pdo *PDOCommon) InitMapping(od *ObjectDictionary, entry *Entry, isRPDO boo
 	for i := range pdo.Streamers {
 		streamer := &pdo.Streamers[i]
 		mapParam := uint32(0)
-		ret := entry.GetUint32(uint8(i)+1, &mapParam)
+		ret := entry.Uint32(uint8(i)+1, &mapParam)
 		if ret == ODR_SUB_NOT_EXIST {
 			continue
 		}

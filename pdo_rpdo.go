@@ -59,7 +59,7 @@ func (rpdo *RPDO) Handle(frame Frame) {
 func (rpdo *RPDO) configureCOBID(entry14xx *Entry, predefinedIdent uint32, erroneousMap uint32) (canId uint32, e error) {
 	cobId := uint32(0)
 	pdo := &rpdo.PDO
-	ret := entry14xx.GetUint32(1, &cobId)
+	ret := entry14xx.Uint32(1, &cobId)
 	if ret != nil {
 		log.Errorf("[RPDO][%x|%x] reading %v failed : %v", entry14xx.Index, 1, entry14xx.Name, ret)
 		return 0, ErrOdParameters
@@ -124,7 +124,7 @@ func (rpdo *RPDO) Init(od *ObjectDictionary,
 	}
 	// Configure transmission type
 	transmissionType := uint8(TRANSMISSION_TYPE_SYNC_EVENT_LO)
-	ret = entry14xx.GetUint8(2, &transmissionType)
+	ret = entry14xx.Uint8(2, &transmissionType)
 	if ret != nil {
 		log.Errorf("[RPDO][%x|%x] reading transmission type failed : %v", entry14xx.Index, 2, ret)
 		return ErrOdParameters
@@ -134,7 +134,7 @@ func (rpdo *RPDO) Init(od *ObjectDictionary,
 
 	// Configure event timer
 	eventTime := uint16(0)
-	ret = entry14xx.GetUint16(5, &eventTime)
+	ret = entry14xx.Uint16(5, &eventTime)
 	if ret != nil {
 		log.Errorf("[RPDO][%x|%x] reading event timer failed : %v", entry14xx.Index, 5, ret)
 	}
@@ -144,7 +144,7 @@ func (rpdo *RPDO) Init(od *ObjectDictionary,
 	pdo.PreDefinedIdent = predefinedIdent
 	pdo.ConfiguredIdent = uint16(canId)
 	pdo.ExtensionCommunicationParam = entry14xx.AddExtension(rpdo, ReadEntry14xxOr18xx, WriteEntry14xx)
-	pdo.ExtensionMappingParam = entry16xx.AddExtension(rpdo, ReadEntryOriginal, WriteEntry16xxOr1Axx)
+	pdo.ExtensionMappingParam = entry16xx.AddExtension(rpdo, ReadEntryDefault, WriteEntry16xxOr1Axx)
 	return nil
 }
 

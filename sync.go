@@ -58,12 +58,12 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 		return ErrIllegalArgument
 	}
 	var cobIdSync uint32 = 0
-	res := entry1005.GetUint32(0, &cobIdSync)
+	res := entry1005.Uint32(0, &cobIdSync)
 	if res != nil {
 		log.Errorf("[SYNC][%x] %v read error", entry1005.Index, entry1005.Name)
 		return ErrOdParameters
 	}
-	entry1005.AddExtension(sync, ReadEntryOriginal, WriteEntry1005)
+	entry1005.AddExtension(sync, ReadEntryDefault, WriteEntry1005)
 
 	var err error
 
@@ -92,7 +92,7 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 	// This one is not mandatory
 	var syncCounterOverflow uint8 = 0
 	if entry1019 != nil {
-		err = entry1019.GetUint8(0, &syncCounterOverflow)
+		err = entry1019.Uint8(0, &syncCounterOverflow)
 		if err != nil {
 			log.Errorf("[SYNC][%x] %v read error", entry1019.Index, entry1019.Name)
 			return ErrOdParameters
@@ -102,7 +102,7 @@ func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1
 		} else if syncCounterOverflow > 240 {
 			syncCounterOverflow = 240
 		}
-		entry1019.AddExtension(sync, ReadEntryOriginal, WriteEntry1019)
+		entry1019.AddExtension(sync, ReadEntryDefault, WriteEntry1019)
 		log.Infof("[SYNC][%x] %v : %v", entry1019.Index, entry1019.Name, syncCounterOverflow)
 	}
 	sync.CounterOverflowValue = syncCounterOverflow
