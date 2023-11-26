@@ -1,9 +1,6 @@
 package canopen
 
 import (
-	"fmt"
-	"os"
-	"os/exec"
 	"testing"
 )
 
@@ -21,21 +18,6 @@ func createNetwork() *Network {
 	}
 	go func() { network.Process() }()
 	return &network
-}
-
-func TestMain(m *testing.M) {
-	vcan_server := "/usr/local/bin/virtualcan"
-	if os.Getenv("VIRTUALCAN_SERVER_BIN") != "" {
-		vcan_server = os.Getenv("VIRTUALCAN_SERVER_BIN")
-	}
-	fmt.Printf("starting vcan server\n")
-	cmd := exec.Command(vcan_server, "--port", "18888")
-	if err := cmd.Start(); err != nil {
-		fmt.Printf("Failed to start virtual can server: %v", err)
-		os.Exit(1)
-	}
-	exit := m.Run()
-	os.Exit(exit)
 }
 
 func TestRead(t *testing.T) {
