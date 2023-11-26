@@ -86,19 +86,21 @@ func (client *VirtualCanBus) Disconnect() error {
 
 // "Send" implementation of Bus interface
 func (client *VirtualCanBus) Send(frame Frame) error {
-	if client.conn == nil {
-		return errors.New("no active connection")
-	}
-	frameBytes, err := serializeFrame(frame)
-	if err != nil {
-		return err
-	}
-	_, err = client.conn.Write(frameBytes)
 	// Local loopback
 	if client.receiveOwn && client.framehandler != nil {
 		client.framehandler.Handle(frame)
+	} else if client.conn == nil {
+		return errors.New("Error : no active connection, abort send")
 	}
-	return err
+	if client.conn != nil {
+		frameBytes, err := serializeFrame(frame)
+		if err != nil {
+			return err
+		}
+		_, err = client.conn.Write(frameBytes)
+		return err
+	}
+	return nil
 }
 
 // "Subscribe" implementation of Bus interface
@@ -119,6 +121,9 @@ func (client *VirtualCanBus) Subscribe(framehandler FrameListener) error {
 
 // Receive new CAN message
 func (client *VirtualCanBus) Recv() (*Frame, error) {
+	if client.conn == nil {
+		return nil, fmt.Errorf("Error : no active connection, abort receive")
+	}
 	client.conn.SetDeadline(time.Now().Add(200 * time.Millisecond))
 	headerBytes := make([]byte, 4)
 	n, err := client.conn.Read(headerBytes)

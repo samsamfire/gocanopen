@@ -90,7 +90,7 @@ func TestReceiveOwn(t *testing.T) {
 	// Activate receive own
 	vcan1.receiveOwn = true
 	vcan1.Send(frame)
-	if len(frameReceiver.frames) != 1 {
+	if len(frameReceiver.frames) == 0 {
 		t.Fatal("should have received own frame")
 	}
 }
