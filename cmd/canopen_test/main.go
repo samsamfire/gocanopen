@@ -1,5 +1,7 @@
 package main
 
+// Demo used for automated testing
+
 import (
 	"canopen"
 	"flag"
@@ -37,7 +39,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	node.OD.AddFile(0x3003, "File", "example2.bin", os.O_RDONLY|os.O_CREATE, os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
+	// Add file extension
+	node.OD.AddFile(0x200F, "File", "example2.bin", os.O_RDONLY|os.O_CREATE, os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
 	if err != nil {
 		panic(err)
 	}
