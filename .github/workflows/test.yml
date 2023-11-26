@@ -16,10 +16,9 @@ jobs:
           toolchain: stable
     
       - name: Checkout virtualcan
-        uses: actions/checkout@v4
+        uses: actions/checkout@master
         with:
-          respository: windelbouwman/virtualcan
-          ref: master
+          repository: windelbouwman/virtualcan
 
       - name: Run virtualcan
         run: |
