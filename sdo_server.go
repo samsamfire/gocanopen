@@ -246,7 +246,7 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 		// Stream data should be limited to the sent value
 
 		varSizeInOd := server.Streamer.stream.DataLength
-		if server.Streamer.stream.Attribute&ODA_STR != 0 &&
+		if server.Streamer.stream.Attribute&ATTRIBUTE_STR != 0 &&
 			(varSizeInOd == 0 || server.SizeTransferred < varSizeInOd) &&
 			int(server.bufWriteOffset+2) <= len(server.buffer) {
 			server.buffer[server.bufWriteOffset] = 0x00
@@ -330,7 +330,7 @@ func (server *SDOServer) readObjectDictionary(abortCode *SDOAbortCode, countMini
 		}
 
 		// Stop sending at null termination if string
-		if countRd > 0 && (server.Streamer.stream.Attribute&ODA_STR) != 0 {
+		if countRd > 0 && (server.Streamer.stream.Attribute&ATTRIBUTE_STR) != 0 {
 			server.buffer[countRd+int(buffered)] = 0
 			countStr := int(server.Streamer.stream.DataLength)
 			for i, v := range server.buffer[buffered:] {
@@ -416,13 +416,13 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					abortCode = err.(ODR).GetSDOAbordCode()
 					server.State = SDO_STATE_ABORT
 				} else {
-					if server.Streamer.stream.Attribute&ODA_SDO_RW == 0 {
+					if server.Streamer.stream.Attribute&ATTRIBUTE_SDO_RW == 0 {
 						abortCode = SDO_ABORT_UNSUPPORTED_ACCESS
 						server.State = SDO_STATE_ABORT
-					} else if upload && (server.Streamer.stream.Attribute&ODA_SDO_R) == 0 {
+					} else if upload && (server.Streamer.stream.Attribute&ATTRIBUTE_SDO_R) == 0 {
 						abortCode = SDO_ABORT_WRITEONLY
 						server.State = SDO_STATE_ABORT
-					} else if !upload && (server.Streamer.stream.Attribute&ODA_SDO_W) == 0 {
+					} else if !upload && (server.Streamer.stream.Attribute&ATTRIBUTE_SDO_W) == 0 {
 						abortCode = SDO_ABORT_READONLY
 						server.State = SDO_STATE_ABORT
 					}
@@ -445,7 +445,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 							server.State = SDO_STATE_ABORT
 						}
 					} else {
-						if server.Streamer.stream.Attribute&ODA_STR == 0 {
+						if server.Streamer.stream.Attribute&ATTRIBUTE_STR == 0 {
 							server.SizeIndicated = server.Streamer.stream.DataLength
 						} else {
 							server.SizeIndicated = 0
@@ -472,7 +472,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					//Create temporary buffer
 					buf := make([]byte, 6)
 					copy(buf, response.raw[4:4+dataSizeToWrite])
-					if (server.Streamer.stream.Attribute&ODA_STR) != 0 &&
+					if (server.Streamer.stream.Attribute&ATTRIBUTE_STR) != 0 &&
 						(varSizeInOd == 0 || uint32(dataSizeToWrite) < varSizeInOd) {
 						delta := varSizeInOd - uint32(dataSizeToWrite)
 						if delta == 1 {
@@ -514,7 +514,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 								abortCode = SDO_ABORT_DATA_LONG
 								server.State = SDO_STATE_ABORT
 								break
-							} else if server.SizeIndicated < uint32(sizeInOd) && (server.Streamer.stream.Attribute&ODA_STR) == 0 {
+							} else if server.SizeIndicated < uint32(sizeInOd) && (server.Streamer.stream.Attribute&ATTRIBUTE_STR) == 0 {
 								abortCode = SDO_ABORT_DATA_SHORT
 								server.State = SDO_STATE_ABORT
 								break
@@ -590,7 +590,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 							abortCode = SDO_ABORT_DATA_LONG
 							server.State = SDO_STATE_ABORT
 							break
-						} else if server.SizeIndicated < uint32(sizeInOd) && (server.Streamer.stream.Attribute&ODA_STR) == 0 {
+						} else if server.SizeIndicated < uint32(sizeInOd) && (server.Streamer.stream.Attribute&ATTRIBUTE_STR) == 0 {
 							abortCode = SDO_ABORT_DATA_SHORT
 							server.State = SDO_STATE_ABORT
 							break

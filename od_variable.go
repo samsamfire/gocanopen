@@ -212,25 +212,25 @@ func decode(data []byte, dataType uint8) (v any, e error) {
 }
 
 // Calculate the attribute in function of the of attribute type and pdo mapping for EDS entry
-func calculateAttribute(accessType string, pdoMapping bool, dataType uint8) ODA {
+func calculateAttribute(accessType string, pdoMapping bool, dataType uint8) uint8 {
 
-	var attribute ODA
+	var attribute uint8
 
 	switch accessType {
 	case "rw":
-		attribute = ODA_SDO_RW
+		attribute = ATTRIBUTE_SDO_RW
 	case "ro", "const":
-		attribute = ODA_SDO_R
+		attribute = ATTRIBUTE_SDO_R
 	case "wo":
-		attribute = ODA_SDO_W
+		attribute = ATTRIBUTE_SDO_W
 	default:
-		attribute = ODA_SDO_RW
+		attribute = ATTRIBUTE_SDO_RW
 	}
 	if pdoMapping {
-		attribute |= ODA_TRPDO
+		attribute |= ATTRIBUTE_TRPDO
 	}
 	if dataType == VISIBLE_STRING || dataType == OCTET_STRING {
-		attribute |= ODA_STR
+		attribute |= ATTRIBUTE_STR
 	}
 	return attribute
 }

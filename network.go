@@ -113,7 +113,7 @@ func (network *Network) Process() error {
 								startBackground = time.Now()
 								timeDifferenceUs := uint32(elapsed.Microseconds())
 								syncWas := node.processSync(timeDifferenceUs, nil)
-								node.ProcessTPDO(syncWas, timeDifferenceUs, nil)
+								node.processTPDO(syncWas, timeDifferenceUs, nil)
 								node.processRPDO(syncWas, timeDifferenceUs, nil)
 								time.Sleep(backgroundPeriod)
 							}
