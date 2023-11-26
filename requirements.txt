@@ -1,0 +1,3 @@
+canopen==2.1.0
+pytest==6.2.5
+python-can==4.2.0
