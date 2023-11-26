@@ -283,7 +283,7 @@ func (node *Node) Init(
 	edsEntry := od.Index(0x1021)
 	if edsEntry != nil {
 		log.Info("[NODE][EDS] EDS is downloadable via object 0x1021")
-		od.AddFile(edsEntry.Index, edsEntry.Name, od.filePath, os.O_RDONLY)
+		od.AddFile(edsEntry.Index, edsEntry.Name, od.filePath, os.O_RDONLY, os.O_RDONLY) // Don't allow to overwrite EDS
 	}
 
 	return nil

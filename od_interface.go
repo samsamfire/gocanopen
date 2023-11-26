@@ -37,9 +37,9 @@ func (od *ObjectDictionary) AddVariable(index uint16, name string, variable Vari
 }
 
 // Add file like object entry to OD
-func (od *ObjectDictionary) AddFile(index uint16, indexName string, filePath string, mode int) error {
+func (od *ObjectDictionary) AddFile(index uint16, indexName string, filePath string, readMode int, writeMode int) error {
 	log.Infof("[OD] adding file object entry : %v at x%x", filePath, index)
-	fileObject := &FileObject{FilePath: filePath, ReadWriteMode: mode}
+	fileObject := &FileObject{FilePath: filePath, ReadMode: readMode, WriteMode: writeMode}
 	variable := Variable{
 		Data:           []byte{},
 		DataLength:     0,

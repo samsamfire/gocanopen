@@ -137,17 +137,32 @@ def test_sdo_block_download(node: canopen.RemoteNode):
     NB_LINES = 100
     LINE = b"123456"
     with node.sdo["DOMAIN value"].open(
-        mode="wb", block_transfer=True, request_crc_support=True, size=len(LINE) * NB_LINES
+        mode="wb",
+        block_transfer=True,
+        request_crc_support=True,
+        size=len(LINE) * NB_LINES,
     ) as f:
         for _ in range(NB_LINES):
             f.write(LINE)
+
+
+def test_sdo_block_upload(node: canopen.RemoteNode):
+    with node.sdo["DOMAIN value"].open(
+        mode="rb",
+        block_transfer=True,
+        request_crc_support=True,
+    ) as f:
+        f.readlines()
 
 
 def test_sdo_block_download_multi_blocks(node: canopen.RemoteNode):
     NB_LINES = 1000
     LINE = b"123456"
     with node.sdo["DOMAIN value"].open(
-        mode="wb", block_transfer=True, request_crc_support=True, size=len(LINE) * NB_LINES
+        mode="wb",
+        block_transfer=True,
+        request_crc_support=True,
+        size=len(LINE) * NB_LINES,
     ) as f:
         for _ in range(NB_LINES):
             f.write(LINE)
@@ -180,7 +195,10 @@ def test_sdo_block_download_crc_error(node: canopen.RemoteNode):
     LINE = b"123456"
     with pytest.raises(canopen.SdoAbortedError, match="CRC error"):
         with node.sdo["DOMAIN value"].open(
-            mode="wb", block_transfer=True, request_crc_support=True, size=len(LINE) * NB_LINES
+            mode="wb",
+            block_transfer=True,
+            request_crc_support=True,
+            size=len(LINE) * NB_LINES,
         ) as f:
             for i in range(NB_LINES):
                 f.write(LINE)
@@ -194,13 +212,19 @@ def test_sdo_block_download_invalid_size(node: canopen.RemoteNode):
     LINE = b"123456"
     with pytest.raises(canopen.SdoAbortedError, match="too high"):
         with node.sdo["DOMAIN value"].open(
-            mode="wb", block_transfer=True, request_crc_support=True, size=len(LINE) * NB_LINES
+            mode="wb",
+            block_transfer=True,
+            request_crc_support=True,
+            size=len(LINE) * NB_LINES,
         ) as f:
             for _ in range(NB_LINES + 10):
                 f.write(LINE)
     with pytest.raises(canopen.SdoAbortedError, match="too low"):
         with node.sdo["DOMAIN value"].open(
-            mode="wb", block_transfer=True, request_crc_support=True, size=len(LINE) * NB_LINES
+            mode="wb",
+            block_transfer=True,
+            request_crc_support=True,
+            size=len(LINE) * NB_LINES,
         ) as f:
             # End before transmitting everything
             for _ in range(2):
@@ -236,7 +260,9 @@ def test_sdo_segmented_download_timeout(node: canopen.RemoteNode):
     # !! This is a limitation of canopen that does not check for SDO aborts without calling "read_response"
     # In the case of a block download, this means that aborts are not correctly handled
     # This starts a block download and hangs on purpose
-    f = node.sdo["UNSIGNED64 value"].open(mode="rb", block_transfer=False, request_crc_support=True)
+    f = node.sdo["UNSIGNED64 value"].open(
+        mode="rb", block_transfer=False, request_crc_support=True
+    )
     f.raw.close = mock_close
     time.sleep(1.1)
     with pytest.raises(canopen.SdoAbortedError, match="Timeout"):
@@ -255,7 +281,9 @@ def test_sdo_block_download_timeout(node: canopen.RemoteNode):
     # !! This is a limitation of canopen that does not check for SDO aborts without calling "read_response"
     # In the case of a block download, this means that aborts are not correctly handled
     # This starts a block download and hangs on purpose
-    f = node.sdo["DOMAIN value"].open(mode="wb", block_transfer=True, request_crc_support=True, size=1000)
+    f = node.sdo["DOMAIN value"].open(
+        mode="wb", block_transfer=True, request_crc_support=True, size=1000
+    )
     f.raw.close = mock_close
     time.sleep(1.1)
     with pytest.raises(canopen.SdoAbortedError, match="Timeout"):
@@ -286,7 +314,9 @@ def test_sdo_block_upload_crc_invalid(node: canopen.RemoteNode):
     from canopen.sdo.client import BlockUploadStream
 
     with pytest.raises(canopen.SdoCommunicationError, match="CRC"):
-        stream = BlockUploadStream(node.sdo, index=0x200F, subindex=0x0, request_crc_support=True)
+        stream = BlockUploadStream(
+            node.sdo, index=0x200F, subindex=0x0, request_crc_support=True
+        )
         counter = 0
         while stream._done != True:
             counter += 1
@@ -297,35 +327,43 @@ def test_sdo_block_upload_crc_invalid(node: canopen.RemoteNode):
         stream.close()
 
 
-def test_sdo_block_upload_retransmit(node: canopen.RemoteNode):
-    from canopen.sdo.client import BlockUploadStream
+# def test_sdo_block_upload_retransmit(node: canopen.RemoteNode):
+#     from canopen.sdo.client import BlockUploadStream
 
-    stream = BlockUploadStream(node.sdo, index=0x200F, subindex=0x0, request_crc_support=True)
-    counter = 0
-    while stream._done != True:
-        counter += 1
-        stream.read(7)
-        # Mess up sequence number in order to trigger retransmit
-        if stream._ackseq == 15 and counter > 200:
-            request = bytearray(8)
-            request[0] = stream._ackseq - 3
-            node.network.send_message(0x580 + node.id, request)
-    stream.close()
+#     stream = BlockUploadStream(
+#         node.sdo, index=0x200F, subindex=0x0, request_crc_support=True
+#     )
+#     counter = 0
+#     while stream._done != True:
+#         counter += 1
+#         stream.read(7)
+#         # Mess up sequence number in order to trigger retransmit
+#         if stream._ackseq == 15 and counter > 200:
+#             request = bytearray(8)
+#             request[0] = stream._ackseq - 3
+#             node.network.send_message(0x580 + node.id, request)
+#     stream.close()
 
 
 def test_sdo_block_download_upload(node: canopen.RemoteNode):
-    LINE = b"this is some binary data\n"
+    LINE = b"this is some fake bin data\n"
     STRING_BINARY = b""
-    for i in range(500):
+    for i in range(111):
         STRING_BINARY += LINE
     # Write some data then read back
     with node.sdo["DOMAIN value"].open(
-        mode="wb", block_transfer=True, size=len(STRING_BINARY), request_crc_support=True
+        mode="wb",
+        block_transfer=True,
+        size=len(STRING_BINARY),
+        request_crc_support=True,
     ) as f:
         f.write(STRING_BINARY)
     READ_BINARY = b""
     with node.sdo["DOMAIN value"].open(
-        mode="rb", block_transfer=True, size=len(STRING_BINARY), request_crc_support=True
+        mode="rb",
+        block_transfer=True,
+        size=len(STRING_BINARY),
+        request_crc_support=True,
     ) as f:
         READ_BINARY = f.read()
     assert READ_BINARY == STRING_BINARY

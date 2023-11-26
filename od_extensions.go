@@ -652,11 +652,12 @@ func ReadDummy(stream *Stream, data []byte, countRead *uint16) error {
 }
 
 type FileObject struct {
-	FilePath      string
-	ReadWriteMode int
-	File          *os.File
-	Reader        *io.Reader
-	Writer        *io.Writer
+	FilePath  string
+	WriteMode int
+	ReadMode  int
+	File      *os.File
+	Reader    *io.Reader
+	Writer    *io.Writer
 }
 
 // [SDO] Custom function for reading a file like object
@@ -672,7 +673,7 @@ func ReadEntryFileObject(stream *Stream, data []byte, countRead *uint16) error {
 	if stream.DataOffset == 0 {
 		var err error
 		log.Infof("[FILE EXTENSION] opening %v for reading", fileObject.FilePath)
-		fileObject.File, err = os.OpenFile(fileObject.FilePath, fileObject.ReadWriteMode, 0644)
+		fileObject.File, err = os.OpenFile(fileObject.FilePath, fileObject.ReadMode, 0644)
 		if err != nil {
 			return ODR_DEV_INCOMPAT
 		}
@@ -711,7 +712,7 @@ func WriteEntryFileObject(stream *Stream, data []byte, countWritten *uint16) err
 	if stream.DataOffset == 0 {
 		var err error
 		log.Infof("[FILE EXTENSION] opening %v for writing", fileObject.FilePath)
-		fileObject.File, err = os.OpenFile(fileObject.FilePath, fileObject.ReadWriteMode, 0644)
+		fileObject.File, err = os.OpenFile(fileObject.FilePath, fileObject.WriteMode, 0644)
 		if err != nil {
 			return ODR_DEV_INCOMPAT
 		}
