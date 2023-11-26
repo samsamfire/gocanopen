@@ -42,11 +42,11 @@ type PDOCommon struct {
 	BufferIdx                   int
 }
 
-func (base *PDOCommon) attribute() ODA {
+func (base *PDOCommon) attribute() uint8 {
 	if base.IsRPDO {
-		return ODA_RPDO
+		return ATTRIBUTE_RPDO
 	} else {
-		return ODA_TRPDO
+		return ATTRIBUTE_TPDO
 	}
 }
 

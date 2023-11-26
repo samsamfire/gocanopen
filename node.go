@@ -47,7 +47,7 @@ func NewNode(configuration *Configuration) *Node {
 	return &Node{Config: configuration}
 }
 
-func (node *Node) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
+func (node *Node) processTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
 	if node.NodeIdUnconfigured {
 		return
 	}
@@ -210,11 +210,7 @@ func (node *Node) Init(
 		node.NMT = nmt
 	}
 	// Initialize NMT
-	entry1017 := od.Index(0x1017)
-	if entry1017 == nil {
-		return ErrOdParameters
-	}
-	err = node.NMT.Init(entry1017, nil, nodeId, nmtControl, firstHbTimeMs, node.BusManager, NMT_SERVICE_ID, NMT_SERVICE_ID, HEARTBEAT_SERVICE_ID+uint16(nodeId))
+	err = node.NMT.Init(od.Index(0x1017), nil, nodeId, nmtControl, firstHbTimeMs, node.BusManager, NMT_SERVICE_ID, NMT_SERVICE_ID, HEARTBEAT_SERVICE_ID+uint16(nodeId))
 	if err != nil {
 		log.Errorf("[NODE][NMT] error when initializing NMT object %v", err)
 		return err

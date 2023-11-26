@@ -85,25 +85,21 @@ func (result ODR) GetSDOAbordCode() SDOAbortCode {
 	}
 }
 
-/**
- * Attributes (bit masks) for OD sub-object.
- */
-type ODA uint8
-
+// Object dictionary object attribute
 const (
-	ODA_SDO_R  ODA = 0x01 /**< SDO server may read from the variable */
-	ODA_SDO_W  ODA = 0x02 /**< SDO server may write to the variable */
-	ODA_SDO_RW ODA = 0x03 /**< SDO server may read from or write to the variable */
-	ODA_TPDO   ODA = 0x04 /**< Variable is mappable into TPDO (can be read) */
-	ODA_RPDO   ODA = 0x08 /**< Variable is mappable into RPDO (can be written) */
-	ODA_TRPDO  ODA = 0x0C /**< Variable is mappable into TPDO or RPDO */
-	ODA_TSRDO  ODA = 0x10 /**< Variable is mappable into transmitting SRDO */
-	ODA_RSRDO  ODA = 0x20 /**< Variable is mappable into receiving SRDO */
-	ODA_TRSRDO ODA = 0x30 /**< Variable is mappable into tx or rx SRDO */
-	ODA_MB     ODA = 0x40 /**< Variable is multi-byte ((u)int16_t to (u)int64_t) */
-	ODA_STR    ODA = 0x80 /**< Shorter value, than specified variable size, may be
-	  written to the variable. SDO write will fill remaining memory with zeroes.
-	  Attribute is used for VISIBLE_STRING and UNICODE_STRING. */
+	ATTRIBUTE_SDO_R  uint8 = 0x01 // SDO server may read from the variable
+	ATTRIBUTE_SDO_W  uint8 = 0x02 //SDO server may write to the variable
+	ATTRIBUTE_SDO_RW uint8 = 0x03 // SDO server may read from or write to the variable
+	ATTRIBUTE_TPDO   uint8 = 0x04 //Variable is mappable into TPDO (can be read)
+	ATTRIBUTE_RPDO   uint8 = 0x08 //Variable is mappable into RPDO (can be written)
+	ATTRIBUTE_TRPDO  uint8 = 0x0C //Variable is mappable into TPDO or RPDO
+	ATTRIBUTE_TSRDO  uint8 = 0x10 //Variable is mappable into transmitting SRDO
+	ATTRIBUTE_RSRDO  uint8 = 0x20 //Variable is mappable into receiving SRDO
+	ATTRIBUTE_TRSRDO uint8 = 0x30 //Variable is mappable into tx or rx SRDO
+	ATTRIBUTE_MB     uint8 = 0x40 //Variable is multi-byte ((u)int16_t to (u)int64_t)
+	ATTRIBUTE_STR    uint8 = 0x80 //Shorter value, than specified variable size, may be
+	//written to the variable. SDO write will fill remaining memory with zeroes.
+	//Attribute is used for VISIBLE_STRING and UNICODE_STRING.
 )
 
 // Object dictionary contains all node data
@@ -156,7 +152,7 @@ func (od *ObjectDictionary) AddFile(index uint16, indexName string, filePath str
 		DataLength:     0,
 		Name:           indexName,
 		DataType:       DOMAIN,
-		Attribute:      ODA_SDO_RW,
+		Attribute:      ATTRIBUTE_SDO_RW,
 		ParameterValue: "",
 		DefaultValue:   []byte{},
 		Index:          index,
@@ -188,17 +184,18 @@ func (od *ObjectDictionary) Index(index any) *Entry {
 	return entry
 }
 
+// A Stream to an OD entry
 type Stream struct {
 	Data       []byte
 	DataOffset uint32
 	DataLength uint32
 	Object     any // Custom objects can be used when using an OD extension
-	Attribute  ODA
+	Attribute  uint8
 	Subindex   uint8
 }
 
 func (stream *Stream) Mappable() bool {
-	return stream.Attribute&(ODA_TRPDO|ODA_TRSRDO) != 0
+	return stream.Attribute&(ATTRIBUTE_TRPDO|ATTRIBUTE_TRSRDO) != 0
 }
 
 // Extension object, is used for extending some functionnality to some OD entries
@@ -206,23 +203,21 @@ func (stream *Stream) Mappable() bool {
 // Writer must be a custom reader for object
 type Extension struct {
 	Object   any
-	Read     ExtensionReader
-	Write    ExtensionWriter
+	Read     StreamReader
+	Write    StreamWriter
 	flagsPDO [OD_FLAGS_PDO_SIZE]uint8
 }
 
-type ExtensionReader func(stream *Stream, buffer []byte, countRead *uint16) error
-type ExtensionWriter func(stream *Stream, buffer []byte, countWritten *uint16) error
+type StreamReader func(stream *Stream, buffer []byte, countRead *uint16) error
+type StreamWriter func(stream *Stream, buffer []byte, countWritten *uint16) error
 
-/*
-ObjectStreamer is created before accessing an OD entry
-It creates a buffer from OD Data []byte slice and provides a default reader
-and a default writer
-*/
+// ObjectStreamer is created before accessing an OD entry
+// It creates a buffer from OD Data []byte slice and provides a default reader
+// and a default writer
 type ObjectStreamer struct {
 	stream Stream
-	read   func(stream *Stream, buffer []byte, countRead *uint16) error
-	write  func(stream *Stream, buffer []byte, countWritten *uint16) error
+	read   StreamReader
+	write  StreamWriter
 }
 
 // Implements io.Reader
@@ -260,7 +255,7 @@ type Variable struct {
 	DataLength      uint32 //Can be different than len(Data) for strings
 	Name            string
 	DataType        byte
-	Attribute       ODA // Attribute contains the access type and pdo mapping info
+	Attribute       uint8 // Attribute contains the access type and pdo mapping info
 	ParameterValue  string
 	DefaultValue    []byte
 	StorageLocation string
@@ -390,7 +385,8 @@ func (entry *Entry) AddMember(section *ini.Section, name string, nodeId uint8, s
 }
 
 // Add an extension to entry and return created extension
-func (entry *Entry) AddExtension(object any, read ExtensionReader, write ExtensionWriter) *Extension {
+// object can be any custom object
+func (entry *Entry) AddExtension(object any, read StreamReader, write StreamWriter) *Extension {
 	extension := &Extension{Object: object, Read: read, Write: write}
 	entry.Extension = extension
 	return extension
