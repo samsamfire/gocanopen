@@ -9,7 +9,7 @@ import (
 
 type SDOServer struct {
 	OD                         *ObjectDictionary
-	Streamer                   *ObjectStreamer
+	Streamer                   *Streamer
 	NodeId                     uint8
 	BusManager                 *BusManager
 	txBuffer                   Frame
@@ -122,7 +122,7 @@ func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uin
 		return ErrIllegalArgument
 	}
 	server.OD = od
-	server.Streamer = &ObjectStreamer{}
+	server.Streamer = &Streamer{}
 	server.buffer = make([]byte, 1000)
 	server.bufReadOffset = 0
 	server.bufWriteOffset = 0
@@ -150,15 +150,15 @@ func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uin
 			canIdClientToServer = SDO_CLIENT_ID + uint16(nodeId)
 			canIdServerToClient = SDO_SERVER_ID + uint16(nodeId)
 			server.Valid = true
-			entry12xx.SetUint32(1, uint32(canIdClientToServer), true)
-			entry12xx.SetUint32(2, uint32(canIdServerToClient), true)
+			entry12xx.PutUint32(1, uint32(canIdClientToServer), true)
+			entry12xx.PutUint32(2, uint32(canIdServerToClient), true)
 		} else if entry12xx.Index > 0x1200 && entry12xx.Index <= 0x1200+0x7F {
 			// Configure other channels
 			var maxSubIndex uint8
 			var cobIdClientToServer32, cobIdServerToClient32 uint32
-			err0 := entry12xx.GetUint8(0, &maxSubIndex)
-			err1 := entry12xx.GetUint32(1, &cobIdClientToServer32)
-			err2 := entry12xx.GetUint32(2, &cobIdServerToClient32)
+			err0 := entry12xx.Uint8(0, &maxSubIndex)
+			err1 := entry12xx.Uint32(1, &cobIdClientToServer32)
+			err2 := entry12xx.Uint32(2, &cobIdServerToClient32)
 			if err0 != nil || (maxSubIndex != 2 && maxSubIndex != 3) ||
 				err1 != nil || err2 != nil {
 				log.Errorf("Error when retreiving sdo server parameters : %v, %v, %v, %v", err0, err1, err2, maxSubIndex)
@@ -174,7 +174,7 @@ func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uin
 			} else {
 				canIdServerToClient = 0
 			}
-			entry12xx.AddExtension(server, ReadEntryOriginal, WriteEntry1201)
+			entry12xx.AddExtension(server, ReadEntryDefault, WriteEntry1201)
 
 		} else {
 			return ErrIllegalArgument
@@ -411,7 +411,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				var err error
 				server.Index = response.GetIndex()
 				server.Subindex = response.GetSubindex()
-				server.Streamer, err = server.OD.Index(server.Index).CreateStreamer(server.Subindex, false)
+				server.Streamer, err = NewStreamer(server.OD.Index(server.Index), server.Subindex, false)
 				if err != nil {
 					abortCode = err.(ODR).GetSDOAbordCode()
 					server.State = SDO_STATE_ABORT

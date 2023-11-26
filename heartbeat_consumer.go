@@ -52,12 +52,12 @@ func (consumer *HBConsumer) Init(em *EM, entry1016 *Entry, busManager *BusManage
 	consumer.busManager = busManager
 
 	// Get real number of monitored nodes
-	consumer.nbMonitoredNodes = uint8(entry1016.SubEntriesCount() - 1)
+	consumer.nbMonitoredNodes = uint8(entry1016.SubCount() - 1)
 	log.Debugf("[HB CONSUMER] %v possible entries for nodes to monitor", consumer.nbMonitoredNodes)
 	consumer.monitoredNodes = make([]HBConsumerNode, consumer.nbMonitoredNodes)
 	for index := range consumer.monitoredNodes {
 		var hbConsValue uint32
-		odRet := entry1016.GetUint32(uint8(index)+1, &hbConsValue)
+		odRet := entry1016.Uint32(uint8(index)+1, &hbConsValue)
 		if odRet != nil {
 			log.Errorf("[HB CONSUMER][%x|%x] reading %v failed : %v", entry1016.Index, index+1, entry1016.Name, odRet)
 			return ErrOdParameters
@@ -74,7 +74,7 @@ func (consumer *HBConsumer) Init(em *EM, entry1016 *Entry, busManager *BusManage
 			log.Warnf("[HB CONSUMER] initializing HB consumer object %v failed, ignoring : %v", index, ret)
 		}
 	}
-	entry1016.AddExtension(consumer, ReadEntryOriginal, WriteEntry1016)
+	entry1016.AddExtension(consumer, ReadEntryDefault, WriteEntry1016)
 	return nil
 
 }

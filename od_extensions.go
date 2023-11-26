@@ -99,7 +99,7 @@ func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 		sync.Timer = 0
 	}
 	log.Debugf("[SYNC] cob-id request : %x | producer request : %v", cobIdSync, isProducer)
-	return WriteEntryOriginal(stream, data, countWritten)
+	return WriteEntryDefault(stream, data, countWritten)
 }
 
 // [TIME] update cob id & if should be producer
@@ -119,7 +119,7 @@ func WriteEntry1012(stream *Stream, data []byte, countWritten *uint16) error {
 	time.IsConsumer = (cobIdTimestamp & 0x80000000) != 0
 	time.IsProducer = (cobIdTimestamp & 0x40000000) != 0
 
-	return WriteEntryOriginal(stream, data, countWritten)
+	return WriteEntryDefault(stream, data, countWritten)
 }
 
 // [EMERGENCY] read emergency cob id
@@ -182,7 +182,7 @@ func WriteEntry1014(stream *Stream, data []byte, countWritten *uint16) error {
 	if newEnabled {
 		em.txBuffer = NewFrame(newCanId, 0, 8)
 	}
-	return WriteEntryOriginal(stream, data, countWritten)
+	return WriteEntryDefault(stream, data, countWritten)
 
 }
 
@@ -198,7 +198,7 @@ func WriteEntry1015(stream *Stream, data []byte, countWritten *uint16) error {
 	em.InhibitEmTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 100
 	em.InhibitEmTimer = 0
 
-	return WriteEntryOriginal(stream, data, countWritten)
+	return WriteEntryDefault(stream, data, countWritten)
 
 }
 
@@ -222,7 +222,7 @@ func WriteEntry1016(stream *Stream, data []byte, countWritten *uint16) error {
 	if ret != nil {
 		return ODR_PAR_INCOMPAT
 	}
-	return WriteEntryOriginal(stream, data, countWritten)
+	return WriteEntryDefault(stream, data, countWritten)
 }
 
 // [NMT] update heartbeat period
@@ -236,7 +236,7 @@ func WriteEntry1017(stream *Stream, data []byte, countWritten *uint16) error {
 	}
 	nmt.hearbeatProducerTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 1000
 	nmt.hearbeatProducerTimer = 0
-	return WriteEntryOriginal(stream, data, countWritten)
+	return WriteEntryDefault(stream, data, countWritten)
 }
 
 // [SYNC] update synchronous counter overflow
@@ -262,7 +262,7 @@ func WriteEntry1019(stream *Stream, data []byte, countWritten *uint16) error {
 	}
 	sync.txBuffer = NewFrame(sync.cobId, 0, nbBytes)
 	sync.CounterOverflowValue = syncCounterOverflow
-	return WriteEntryOriginal(stream, data, countWritten)
+	return WriteEntryDefault(stream, data, countWritten)
 }
 
 // [SDO server] update server parameters
@@ -326,7 +326,7 @@ func WriteEntry1201(stream *Stream, data []byte, countWritten *uint16) error {
 		return ODR_SUB_NOT_EXIST
 
 	}
-	return WriteEntryOriginal(stream, data, countWritten)
+	return WriteEntryDefault(stream, data, countWritten)
 }
 
 // [SDO Client] update parameters
@@ -380,7 +380,7 @@ func WriteEntry1280(stream *Stream, data []byte, countWritten *uint16) error {
 		return ODR_SUB_NOT_EXIST
 
 	}
-	return WriteEntryOriginal(stream, data, countWritten)
+	return WriteEntryDefault(stream, data, countWritten)
 }
 
 // [RPDO] update communication parameter
@@ -458,12 +458,12 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 		rpdo.TimeoutTimer = 0
 	}
 
-	return WriteEntryOriginal(stream, bufCopy, countWritten)
+	return WriteEntryDefault(stream, bufCopy, countWritten)
 }
 
 // [RPDO][TPDO] get communication parameter
 func ReadEntry14xxOr18xx(stream *Stream, data []byte, countRead *uint16) error {
-	err := ReadEntryOriginal(stream, data, countRead)
+	err := ReadEntryDefault(stream, data, countRead)
 	// Add node id when reading subindex 1
 	if err == nil && stream.Subindex == 1 && *countRead == 4 {
 		// Get the corresponding object, either TPDO or RPDO
@@ -545,7 +545,7 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 			return ret
 		}
 	}
-	return WriteEntryOriginal(stream, data, countWritten)
+	return WriteEntryDefault(stream, data, countWritten)
 }
 
 // [TPDO] update communication parameter
@@ -626,7 +626,7 @@ func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 		tpdo.SyncStartValue = syncStartValue
 
 	}
-	return WriteEntryOriginal(stream, bufCopy, countWritten)
+	return WriteEntryDefault(stream, bufCopy, countWritten)
 
 }
 

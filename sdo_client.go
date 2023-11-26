@@ -21,7 +21,7 @@ const CO_CONFIG_SDO_CLI_PST = 21
 
 type SDOClient struct {
 	OD                         *ObjectDictionary
-	Streamer                   *ObjectStreamer
+	Streamer                   *Streamer
 	NodeId                     uint8
 	BusManager                 *BusManager
 	txBuffer                   Frame
@@ -79,7 +79,7 @@ func (client *SDOClient) Init(od *ObjectDictionary, entry1280 *Entry, nodeId uin
 	client.OD = od
 	client.NodeId = nodeId
 	client.BusManager = busManager
-	client.Streamer = &ObjectStreamer{}
+	client.Streamer = &Streamer{}
 
 	fifo := NewFifo(300)
 	client.Fifo = fifo
@@ -88,10 +88,10 @@ func (client *SDOClient) Init(od *ObjectDictionary, entry1280 *Entry, nodeId uin
 	var CobIdClientToServer, CobIdServerToClient uint32
 	if entry1280 != nil {
 		var maxSubindex uint8
-		err1 := entry1280.GetUint8(0, &maxSubindex)
-		err2 := entry1280.GetUint32(1, &CobIdClientToServer)
-		err3 := entry1280.GetUint32(2, &CobIdServerToClient)
-		err4 := entry1280.GetUint8(3, &nodeIdServer)
+		err1 := entry1280.Uint8(0, &maxSubindex)
+		err2 := entry1280.Uint32(1, &CobIdClientToServer)
+		err3 := entry1280.Uint32(2, &CobIdServerToClient)
+		err4 := entry1280.Uint8(3, &nodeIdServer)
 		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || maxSubindex != 3 {
 			log.Errorf("[SDO CLIENT] error when reading SDO client parameters in OD 0:%v,1:%v,2:%v,3:%v,max sub-index(should be 3) : %v", err1, err2, err3, err4, maxSubindex)
 			return ErrOdParameters
@@ -100,7 +100,7 @@ func (client *SDOClient) Init(od *ObjectDictionary, entry1280 *Entry, nodeId uin
 		nodeIdServer = 0
 	}
 	if entry1280 != nil {
-		entry1280.AddExtension(client, ReadEntryOriginal, WriteEntry1280)
+		entry1280.AddExtension(client, ReadEntryDefault, WriteEntry1280)
 	}
 	client.CobIdClientToServer = 0
 	client.CobIdServerToClient = 0

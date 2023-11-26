@@ -342,12 +342,12 @@ func (emergency *EM) Init(
 	emergency.busManager = busManager
 	// TODO handle error register ptr
 	//emergency.errorRegister
-	fifoSize := entry1003.SubEntriesCount()
+	fifoSize := entry1003.SubCount()
 	emergency.Fifo = make([]EMFifo, fifoSize)
 
 	// Get cob id initial & verify
 	cobIdEmergency := uint32(0)
-	ret := entry1014.GetUint32(0, &cobIdEmergency)
+	ret := entry1014.Uint32(0, &cobIdEmergency)
 	if ret != nil || (cobIdEmergency&0x7FFFF800) != 0 {
 		// Don't break if only value is wrong
 		if ret != nil {
@@ -366,10 +366,10 @@ func (emergency *EM) Init(
 	emergency.InhibitEmTimeUs = 0
 	emergency.InhibitEmTimer = 0
 	inhibitTime100us := uint16(0)
-	ret = entry1015.GetUint16(0, &inhibitTime100us)
+	ret = entry1015.Uint16(0, &inhibitTime100us)
 	if ret == nil {
 		emergency.InhibitEmTimeUs = uint32(inhibitTime100us) * 100
-		entry1015.AddExtension(emergency, ReadEntryOriginal, WriteEntry1015)
+		entry1015.AddExtension(emergency, ReadEntryDefault, WriteEntry1015)
 	}
 	entry1003.AddExtension(emergency, ReadEntry1003, WriteEntry1003)
 	if entryStatusBits != nil {
