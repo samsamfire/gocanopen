@@ -7,8 +7,12 @@ import os
 import signal
 import subprocess
 
-EDS_PATH = str(pathlib.Path(__file__).parent.absolute().parent.joinpath("testdata/base.eds"))
-EXEC_PATH = pathlib.Path(__file__).parent.absolute().parent.joinpath("cmd/canopen/canopen")
+EDS_PATH = str(
+    pathlib.Path(__file__).parent.absolute().parent.joinpath("testdata/base.eds")
+)
+EXEC_PATH = (
+    pathlib.Path(__file__).parent.absolute().parent.joinpath("cmd/canopen/canopen")
+)
 TEST_ID = 0x10
 # The os.setsid() is passed in the argument preexec_fn so
 # it's run after the fork() and before  exec() to run the shell.
@@ -40,7 +44,11 @@ logger = logging.getLogger(__name__)
 @pytest.fixture(scope="session")
 def network():
     network = canopen.Network()
-    network.connect(interface="socketcan", bitrate=500_000, channel="vcan0", receive_own_messages=True)
+    network.connect(
+        interface="virtualcan",
+        channel="localhost:18889",
+        receive_own_messages=True,
+    )
     yield network
 
 
