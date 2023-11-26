@@ -1,0 +1,33 @@
+name: Test runner
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+
+      - name: Install minimal stable with clippy and rustfmt
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+    
+      - name: Checkout virtualcan
+        uses: actions/checkout@v4
+        with:
+          respository: windelbouwman/virtualcan
+          ref: master
+
+      - name: Run virtualcan
+        run: |
+          ls
+          cd ./virtualcan/rust/server
+          cargo run --release -- --port 18888
+
+      # - name: Checkout Repository
+      #   uses: actions/checkout@v4
+
+      
