@@ -96,6 +96,8 @@ func (pdo *PDOCommon) ConfigureMap(mapParam uint32, mapIndex uint32, isRPDO bool
 	}
 
 	streamer.stream = streamerCopy.stream
+	streamer.read = streamerCopy.read
+	streamer.write = streamerCopy.write
 	streamer.stream.DataOffset = uint32(mappedLength)
 
 	if isRPDO {
@@ -164,7 +166,8 @@ func (pdo *PDOCommon) InitMapping(entry *Entry, isRPDO bool, erroneoursMap *uint
 // Create and initialize a common PDO object
 func NewPDO(
 	od *ObjectDictionary,
-	entry *Entry, isRPDO bool,
+	entry *Entry,
+	isRPDO bool,
 	em *EM,
 	erroneoursMap *uint32,
 ) (*PDOCommon, error) {

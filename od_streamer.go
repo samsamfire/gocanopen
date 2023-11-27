@@ -48,7 +48,7 @@ func (streamer *Streamer) Write(b []byte) (n int, err error) {
 	return int(countWritten), err
 }
 
-// Create an object streamer for a give od entry + subindex
+// Create an object streamer for a given od entry + subindex
 func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 	if entry == nil || entry.Object == nil {
 		return nil, ODR_IDX_NOT_EXIST
