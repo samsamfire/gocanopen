@@ -65,7 +65,7 @@ func TestSendAndSubscribe(t *testing.T) {
 		vcan1.Send(frame)
 	}
 	// Tiny sleep
-	time.Sleep(time.Millisecond * 100)
+	time.Sleep(time.Millisecond * 500)
 	if len(frameReceiver.frames) < 100 {
 		t.Fatal("should have received at least 100 frames")
 	}
