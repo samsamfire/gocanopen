@@ -101,7 +101,7 @@ func (pdo *PDOCommon) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInd
 	default:
 	}
 
-	streamer = streamerCopy
+	streamer.stream = streamerCopy.stream
 	streamer.stream.DataOffset = uint32(mappedLength)
 
 	if isRPDO {
