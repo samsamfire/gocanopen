@@ -132,7 +132,9 @@ def test_rpdo_receive_consistency(node_configured: canopen.RemoteNode, first_rpd
 def test_tpdo_receive_consistency(node_configured: canopen.RemoteNode, first_tpdo: Map):
     def tpdo_receiver(map: Map):
         raw_val = map["UNSIGNED64 value"].raw
-        assert raw_val == 0xAA_AA_AA_AA_AA_AA_AA_A or raw_val == 0xBB_BB_BB_BB_BB_BB_BB_B
+        assert (
+            raw_val == 0xAA_AA_AA_AA_AA_AA_AA_A or raw_val == 0xBB_BB_BB_BB_BB_BB_BB_B
+        )
 
     first_tpdo.clear()
     first_tpdo.clear()
@@ -144,7 +146,7 @@ def test_tpdo_receive_consistency(node_configured: canopen.RemoteNode, first_tpd
     first_tpdo.save()
     first_tpdo["UNSIGNED64 value"].raw = 8989
     first_tpdo.add_callback(tpdo_receiver)
-    while True:
+    for i in range(100):
         node_configured.sdo["UNSIGNED64 value"].raw = 0xAA_AA_AA_AA_AA_AA_AA_A
         node_configured.sdo["UNSIGNED64 value"].raw = 0xBB_BB_BB_BB_BB_BB_BB_B
 
