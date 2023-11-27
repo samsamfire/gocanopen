@@ -26,7 +26,7 @@ func main() {
 	flag.Parse()
 
 	network := canopen.NewNetwork(nil)
-	err := network.Connect("virtualcan", "127.0.0.1:18888", 500000)
+	err := network.Connect("virtualcan", "127.0.0.1:18889", 500000)
 	if err != nil {
 		panic(err)
 	}
