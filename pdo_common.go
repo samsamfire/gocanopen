@@ -4,9 +4,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-/*
-Common parts between RPDOs and TPDOs
-*/
+// Common base between TPDOs and RPDOs
 
 const (
 	MAX_PDO_LENGTH     uint8 = 8
@@ -25,21 +23,17 @@ const (
 
 // Common to TPDO & RPDO
 type PDOCommon struct {
-	od                          *ObjectDictionary
-	em                          *EM
-	busManager                  *BusManager
-	Valid                       bool
-	DataLength                  uint32
-	MappedObjectsCount          uint8
-	Streamers                   [MAX_MAPPED_ENTRIES]Streamer
-	FlagPDOByte                 [OD_FLAGS_PDO_SIZE]*byte
-	FlagPDOBitmask              [OD_FLAGS_PDO_SIZE]byte
-	IsRPDO                      bool
-	PreDefinedIdent             uint16
-	ConfiguredIdent             uint16
-	ExtensionMappingParam       *Extension
-	ExtensionCommunicationParam *Extension
-	BufferIdx                   int
+	od                 *ObjectDictionary
+	em                 *EM
+	streamers          [MAX_MAPPED_ENTRIES]Streamer
+	Valid              bool
+	DataLength         uint32
+	MappedObjectsCount uint8
+	FlagPDOByte        [OD_FLAGS_PDO_SIZE]*byte
+	FlagPDOBitmask     [OD_FLAGS_PDO_SIZE]byte
+	IsRPDO             bool
+	PreDefinedIdent    uint16
+	ConfiguredIdent    uint16
 }
 
 func (base *PDOCommon) attribute() uint8 {
@@ -59,12 +53,12 @@ func (base *PDOCommon) Type() string {
 }
 
 // Configure a PDO map (this is done on startup and can also be done dynamically)
-func (pdo *PDOCommon) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapIndex uint32, isRPDO bool) error {
+func (pdo *PDOCommon) ConfigureMap(mapParam uint32, mapIndex uint32, isRPDO bool) error {
 	index := uint16(mapParam >> 16)
 	subIndex := byte(mapParam >> 8)
 	mappedLengthBits := byte(mapParam)
 	mappedLength := mappedLengthBits >> 3
-	streamer := &pdo.Streamers[mapIndex]
+	streamer := &pdo.streamers[mapIndex]
 
 	// Total PDO length should be smaller than the max possible size
 	if mappedLength > MAX_PDO_LENGTH {
@@ -80,7 +74,7 @@ func (pdo *PDOCommon) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInd
 		return nil
 	}
 	// Get entry in OD
-	entry := od.Index(index)
+	entry := pdo.od.Index(index)
 	streamerCopy, ret := NewStreamer(entry, subIndex, false)
 	if ret != nil {
 		log.Warnf("[%v][%x|%x] mapping failed : %v", pdo.Type(), index, subIndex, ret)
@@ -118,7 +112,7 @@ func (pdo *PDOCommon) ConfigureMap(od *ObjectDictionary, mapParam uint32, mapInd
 }
 
 // Initialize mapping objects for PDOs, this is done once on startup
-func (pdo *PDOCommon) InitMapping(od *ObjectDictionary, entry *Entry, isRPDO bool, erroneoursMap *uint32) error {
+func (pdo *PDOCommon) InitMapping(entry *Entry, isRPDO bool, erroneoursMap *uint32) error {
 	pdoDataLength := uint32(0)
 	mappedObjectsCount := uint8(0)
 
@@ -130,8 +124,8 @@ func (pdo *PDOCommon) InitMapping(od *ObjectDictionary, entry *Entry, isRPDO boo
 	}
 
 	// Iterate over all the mapping objects
-	for i := range pdo.Streamers {
-		streamer := &pdo.Streamers[i]
+	for i := range pdo.streamers {
+		streamer := &pdo.streamers[i]
 		mapParam := uint32(0)
 		ret := entry.Uint32(uint8(i)+1, &mapParam)
 		if ret == ODR_SUB_NOT_EXIST {
@@ -141,7 +135,7 @@ func (pdo *PDOCommon) InitMapping(od *ObjectDictionary, entry *Entry, isRPDO boo
 			log.Errorf("[%v][%x|%x] reading mapped object failed : %v", pdo.Type(), entry.Index, i+1, ret)
 			return ErrOdParameters
 		}
-		ret = pdo.ConfigureMap(od, mapParam, uint32(i), isRPDO)
+		ret = pdo.ConfigureMap(mapParam, uint32(i), isRPDO)
 		if ret != nil {
 			// Init failed, but not critical
 			streamer.stream.Data = make([]byte, 0)
@@ -165,4 +159,63 @@ func (pdo *PDOCommon) InitMapping(od *ObjectDictionary, entry *Entry, isRPDO boo
 		pdo.MappedObjectsCount = mappedObjectsCount
 	}
 	return nil
+}
+
+// Create and initialize a common PDO object
+func NewPDO(
+	od *ObjectDictionary,
+	entry *Entry, isRPDO bool,
+	em *EM,
+	erroneoursMap *uint32,
+) (*PDOCommon, error) {
+
+	pdo := &PDOCommon{}
+	pdo.od = od
+	pdo.em = em
+	pdoDataLength := uint32(0)
+	mappedObjectsCount := uint8(0)
+
+	// Get number of mapped objects
+	ret := entry.Uint8(0, &mappedObjectsCount)
+	if ret != nil {
+		log.Errorf("[%v][%x|%x] reading nb mapped objects failed : %v", pdo.Type(), entry.Index, 0, ret)
+		return nil, ErrOdParameters
+	}
+
+	// Iterate over all the mapping objects
+	for i := range pdo.streamers {
+		streamer := &pdo.streamers[i]
+		mapParam := uint32(0)
+		ret := entry.Uint32(uint8(i)+1, &mapParam)
+		if ret == ODR_SUB_NOT_EXIST {
+			continue
+		}
+		if ret != nil {
+			log.Errorf("[%v][%x|%x] reading mapped object failed : %v", pdo.Type(), entry.Index, i+1, ret)
+			return nil, ErrOdParameters
+		}
+		ret = pdo.ConfigureMap(mapParam, uint32(i), isRPDO)
+		if ret != nil {
+			// Init failed, but not critical
+			streamer.stream.Data = make([]byte, 0)
+			streamer.stream.DataOffset = 0xFF
+			if *erroneoursMap == 0 {
+				*erroneoursMap = mapParam
+			}
+		}
+		if i < int(mappedObjectsCount) {
+			pdoDataLength += streamer.stream.DataOffset
+		}
+	}
+
+	if pdoDataLength > uint32(MAX_PDO_LENGTH) || (pdoDataLength == 0 && mappedObjectsCount > 0) {
+		if *erroneoursMap == 0 {
+			*erroneoursMap = 1
+		}
+	}
+	if *erroneoursMap == 0 {
+		pdo.DataLength = uint32(pdoDataLength)
+		pdo.MappedObjectsCount = mappedObjectsCount
+	}
+	return pdo, nil
 }

@@ -392,7 +392,7 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 	if !ok {
 		return ODR_DEV_INCOMPAT
 	}
-	pdo := &rpdo.PDO
+	pdo := &rpdo.pdo
 	bufCopy := make([]byte, len(data))
 	copy(bufCopy, data)
 	switch stream.Subindex {
@@ -421,7 +421,7 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 			if !valid {
 				canId = 0
 			}
-			err := pdo.busManager.Subscribe(canId, 0x7FF, false, rpdo)
+			err := rpdo.busManager.Subscribe(canId, 0x7FF, false, rpdo)
 			if valid && err == nil {
 				pdo.Valid = true
 				pdo.ConfiguredIdent = uint16(canId)
@@ -470,9 +470,9 @@ func ReadEntry14xxOr18xx(stream *Stream, data []byte, countRead *uint16) error {
 		var pdo *PDOCommon
 		switch v := stream.Object.(type) {
 		case *RPDO:
-			pdo = &v.PDO
+			pdo = &v.pdo
 		case *TPDO:
-			pdo = &v.PDO
+			pdo = &v.pdo
 		default:
 			return ODR_DEV_INCOMPAT
 		}
@@ -500,9 +500,9 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 	var pdo *PDOCommon
 	switch v := stream.Object.(type) {
 	case *RPDO:
-		pdo = &v.PDO
+		pdo = &v.pdo
 	case *TPDO:
-		pdo = &v.PDO
+		pdo = &v.pdo
 	default:
 		return ODR_DEV_INCOMPAT
 	}
@@ -518,7 +518,7 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 			return ODR_MAP_LEN
 		}
 		for i := 0; i < int(mappedObjectsCount); i++ {
-			streamer := pdo.Streamers[i]
+			streamer := pdo.streamers[i]
 			dataLength := streamer.stream.DataLength
 			mappedLength := streamer.stream.DataOffset
 			if mappedLength > dataLength {
@@ -537,7 +537,6 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 
 	} else {
 		ret := pdo.ConfigureMap(
-			pdo.od,
 			binary.LittleEndian.Uint32(data),
 			uint32(stream.Subindex)-1,
 			pdo.IsRPDO)
@@ -557,7 +556,7 @@ func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 	if !ok {
 		return ODR_DEV_INCOMPAT
 	}
-	pdo := &tpdo.PDO
+	pdo := &tpdo.pdo
 	bufCopy := make([]byte, len(data))
 	copy(bufCopy, data)
 	switch stream.Subindex {

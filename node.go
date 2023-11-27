@@ -131,13 +131,12 @@ func (node *Node) InitPDO() error {
 		pdoOffset := i % 4
 		nodeIdOffset := i / 4
 		preDefinedIdent = 0x200 + pdoOffset*0x100 + uint16(node.id) + nodeIdOffset
-		rpdo := RPDO{}
-		err := rpdo.Init(node.OD, node.EM, node.SYNC, preDefinedIdent, entry14xx, entry16xx, node.BusManager)
+		rpdo, err := NewRPDO(node.BusManager, node.OD, node.EM, node.SYNC, entry14xx, entry16xx, preDefinedIdent)
 		if err != nil {
 			log.Warnf("[NODE][RPDO] no more RPDO after RPDO %v", i-1)
 			break
 		} else {
-			node.RPDOs = append(node.RPDOs, &rpdo)
+			node.RPDOs = append(node.RPDOs, rpdo)
 		}
 	}
 	// Do the same for TPDOS
@@ -148,13 +147,12 @@ func (node *Node) InitPDO() error {
 		pdoOffset := i % 4
 		nodeIdOffset := i / 4
 		preDefinedIdent = 0x180 + pdoOffset*0x100 + uint16(node.id) + nodeIdOffset
-		tpdo := TPDO{}
-		err := tpdo.Init(node.OD, node.EM, node.SYNC, preDefinedIdent, entry18xx, entry1Axx, node.BusManager)
+		tpdo, err := NewTPDO(node.BusManager, node.OD, node.EM, node.SYNC, entry18xx, entry1Axx, preDefinedIdent)
 		if err != nil {
 			log.Warnf("[NODE][TPDO] no more TPDO after TPDO %v", i-1)
 			break
 		} else {
-			node.TPDOs = append(node.TPDOs, &tpdo)
+			node.TPDOs = append(node.TPDOs, tpdo)
 		}
 
 	}

@@ -12,18 +12,19 @@ const (
 )
 
 type RPDO struct {
-	PDO           PDOCommon
+	pdo           PDOCommon
 	RxNew         [RPDO_BUFFER_COUNT]bool
 	RxData        [RPDO_BUFFER_COUNT][MAX_PDO_LENGTH]byte
 	ReceiveError  uint8
-	Sync          *SYNC
+	sync          *SYNC
 	Synchronous   bool
 	TimeoutTimeUs uint32
 	TimeoutTimer  uint32
+	busManager    *BusManager
 }
 
 func (rpdo *RPDO) Handle(frame Frame) {
-	pdo := &rpdo.PDO
+	pdo := &rpdo.pdo
 	err := rpdo.ReceiveError
 
 	if !pdo.Valid {
@@ -43,7 +44,7 @@ func (rpdo *RPDO) Handle(frame Frame) {
 		}
 		// Determine where to copy the message
 		bufNo := 0
-		if rpdo.Synchronous && rpdo.Sync != nil && rpdo.Sync.RxToggle {
+		if rpdo.Synchronous && rpdo.sync != nil && rpdo.sync.RxToggle {
 			bufNo = 1
 		}
 		rpdo.RxData[bufNo] = frame.Data
@@ -58,7 +59,7 @@ func (rpdo *RPDO) Handle(frame Frame) {
 
 func (rpdo *RPDO) configureCOBID(entry14xx *Entry, predefinedIdent uint32, erroneousMap uint32) (canId uint32, e error) {
 	cobId := uint32(0)
-	pdo := &rpdo.PDO
+	pdo := &rpdo.pdo
 	ret := entry14xx.Uint32(1, &cobId)
 	if ret != nil {
 		log.Errorf("[RPDO][%x|%x] reading %v failed : %v", entry14xx.Index, 1, entry14xx.Name, ret)
@@ -86,7 +87,7 @@ func (rpdo *RPDO) configureCOBID(entry14xx *Entry, predefinedIdent uint32, erron
 	if canId != 0 && canId == (predefinedIdent&0xFF80) {
 		canId = predefinedIdent
 	}
-	ret = pdo.busManager.Subscribe(canId, 0x7FF, false, rpdo)
+	ret = rpdo.busManager.Subscribe(canId, 0x7FF, false, rpdo)
 	if ret != nil {
 		return 0, ret
 	}
@@ -94,62 +95,8 @@ func (rpdo *RPDO) configureCOBID(entry14xx *Entry, predefinedIdent uint32, erron
 	return canId, nil
 }
 
-func (rpdo *RPDO) Init(od *ObjectDictionary,
-	em *EM,
-	sync *SYNC,
-	predefinedIdent uint16,
-	entry14xx *Entry,
-	entry16xx *Entry,
-	busManager *BusManager) error {
-	pdo := &rpdo.PDO
-	if od == nil || em == nil || entry14xx == nil || entry16xx == nil || busManager == nil {
-		return ErrIllegalArgument
-	}
-
-	// Reset RPDO entirely
-	*rpdo = RPDO{}
-	pdo.em = em
-	pdo.busManager = busManager
-
-	// Configure mapping params
-	erroneousMap := uint32(0)
-	ret := pdo.InitMapping(od, entry16xx, true, &erroneousMap)
-	if ret != nil {
-		return ret
-	}
-	// Configure communication params
-	canId, err := rpdo.configureCOBID(entry14xx, uint32(predefinedIdent), erroneousMap)
-	if err != nil {
-		return err
-	}
-	// Configure transmission type
-	transmissionType := uint8(TRANSMISSION_TYPE_SYNC_EVENT_LO)
-	ret = entry14xx.Uint8(2, &transmissionType)
-	if ret != nil {
-		log.Errorf("[RPDO][%x|%x] reading transmission type failed : %v", entry14xx.Index, 2, ret)
-		return ErrOdParameters
-	}
-	rpdo.Sync = sync
-	rpdo.Synchronous = transmissionType <= TRANSMISSION_TYPE_SYNC_240
-
-	// Configure event timer
-	eventTime := uint16(0)
-	ret = entry14xx.Uint16(5, &eventTime)
-	if ret != nil {
-		log.Errorf("[RPDO][%x|%x] reading event timer failed : %v", entry14xx.Index, 5, ret)
-	}
-	rpdo.TimeoutTimeUs = uint32(eventTime) * 1000
-	pdo.IsRPDO = true
-	pdo.od = od
-	pdo.PreDefinedIdent = predefinedIdent
-	pdo.ConfiguredIdent = uint16(canId)
-	pdo.ExtensionCommunicationParam = entry14xx.AddExtension(rpdo, ReadEntry14xxOr18xx, WriteEntry14xx)
-	pdo.ExtensionMappingParam = entry16xx.AddExtension(rpdo, ReadEntryDefault, WriteEntry16xxOr1Axx)
-	return nil
-}
-
 func (rpdo *RPDO) process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOperational bool, syncWas bool) {
-	pdo := &rpdo.PDO
+	pdo := &rpdo.pdo
 	if !pdo.Valid || !nmtIsOperational || (!syncWas && rpdo.Synchronous) {
 		// not valid and op, clear can receive flags & timeouttimer
 		if !pdo.Valid || !nmtIsOperational {
@@ -176,7 +123,7 @@ func (rpdo *RPDO) process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 	}
 	// Get the correct rx buffer
 	bufNo := uint8(0)
-	if rpdo.Synchronous && rpdo.Sync != nil && !rpdo.Sync.RxToggle {
+	if rpdo.Synchronous && rpdo.sync != nil && !rpdo.sync.RxToggle {
 		bufNo = 1
 	}
 	// Copy RPDO into OD variables
@@ -186,7 +133,7 @@ func (rpdo *RPDO) process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 		dataRPDO := rpdo.RxData[bufNo][:]
 		rpdo.RxNew[bufNo] = false
 		for i := 0; i < int(pdo.MappedObjectsCount); i++ {
-			streamer := &pdo.Streamers[i]
+			streamer := &pdo.streamers[i]
 			dataOffset := &streamer.stream.DataOffset
 			mappedLength := *dataOffset
 			dataLength := streamer.stream.DataLength
@@ -203,7 +150,7 @@ func (rpdo *RPDO) process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 			*dataOffset = 0
 			_, err := streamer.Write(buffer)
 			if err != nil {
-				log.Warnf("[RPDO][%x] failed to write to OD on RPDO reception because %v", rpdo.PDO.ConfiguredIdent, err)
+				log.Warnf("[RPDO][%x] failed to write to OD on RPDO reception because %v", rpdo.pdo.ConfiguredIdent, err)
 			}
 			*dataOffset = mappedLength
 
@@ -231,4 +178,57 @@ func (rpdo *RPDO) process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 		}
 	}
 
+}
+
+func NewRPDO(
+	busManager *BusManager,
+	od *ObjectDictionary,
+	em *EM,
+	sync *SYNC,
+	entry14xx *Entry,
+	entry16xx *Entry,
+	predefinedIdent uint16,
+) (*RPDO, error) {
+	if od == nil || em == nil || entry14xx == nil || entry16xx == nil || busManager == nil {
+		return nil, ErrIllegalArgument
+	}
+	rpdo := &RPDO{}
+	// Configure mapping parameters
+	erroneousMap := uint32(0)
+	pdo, err := NewPDO(od, entry16xx, true, em, &erroneousMap)
+	rpdo.pdo = *pdo
+	rpdo.busManager = busManager
+	if err != nil {
+		return nil, err
+	}
+	rpdo.pdo = *pdo
+	// Configure communication params
+	canId, err := rpdo.configureCOBID(entry14xx, uint32(predefinedIdent), erroneousMap)
+	if err != nil {
+		return nil, err
+	}
+	// Configure transmission type
+	transmissionType := uint8(TRANSMISSION_TYPE_SYNC_EVENT_LO)
+	ret := entry14xx.Uint8(2, &transmissionType)
+	if ret != nil {
+		log.Errorf("[RPDO][%x|%x] reading transmission type failed : %v", entry14xx.Index, 2, ret)
+		return nil, ErrOdParameters
+	}
+	rpdo.sync = sync
+	rpdo.Synchronous = transmissionType <= TRANSMISSION_TYPE_SYNC_240
+
+	// Configure event timer
+	eventTime := uint16(0)
+	ret = entry14xx.Uint16(5, &eventTime)
+	if ret != nil {
+		log.Errorf("[RPDO][%x|%x] reading event timer failed : %v", entry14xx.Index, 5, ret)
+	}
+	rpdo.TimeoutTimeUs = uint32(eventTime) * 1000
+	pdo.IsRPDO = true
+	pdo.od = od
+	pdo.PreDefinedIdent = predefinedIdent
+	pdo.ConfiguredIdent = uint16(canId)
+	entry14xx.AddExtension(rpdo, ReadEntry14xxOr18xx, WriteEntry14xx)
+	entry16xx.AddExtension(rpdo, ReadEntryDefault, WriteEntry16xxOr1Axx)
+	return rpdo, nil
 }
