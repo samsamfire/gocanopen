@@ -448,9 +448,6 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 			rpdo.RxNew[1] = false
 		}
 		rpdo.Synchronous = synchronous
-		if transmissionType < TRANSMISSION_TYPE_SYNC_EVENT_LO {
-			return ODR_INVALID_VALUE
-		}
 		log.Debugf("[%v] Updated pdo transmission type : %v", pdo.Type(), transmissionType)
 
 	case 5:
