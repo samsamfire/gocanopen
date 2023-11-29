@@ -72,7 +72,7 @@ jobs:
         run: |
           ~/vcan/virtualcan --port 18889 &
           go run ./cmd/canopen_test -p ./testdata/base.eds &
-          sleep 5
+          sleep 15
           python -m pytest ./tests/test_sdo.py ./tests/test_pdo.py
 
 
