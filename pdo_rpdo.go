@@ -31,9 +31,9 @@ func (rpdo *RPDO) Handle(frame Frame) {
 		return
 	}
 
-	if frame.DLC >= uint8(pdo.DataLength) {
+	if frame.DLC >= uint8(pdo.dataLength) {
 		// Indicate if errors in PDO length
-		if frame.DLC == uint8(pdo.DataLength) {
+		if frame.DLC == uint8(pdo.dataLength) {
 			if err == CO_RPDO_RX_ACK_ERROR {
 				err = CO_RPDO_RX_OK
 			}
@@ -67,7 +67,7 @@ func (rpdo *RPDO) configureCOBID(entry14xx *Entry, predefinedIdent uint32, erron
 	}
 	valid := (cobId & 0x80000000) == 0
 	canId = cobId & 0x7FF
-	if valid && (pdo.MappedObjectsCount == 0 || canId == 0) {
+	if valid && (pdo.nbMapped == 0 || canId == 0) {
 		valid = false
 		if erroneousMap == 0 {
 			erroneousMap = 1
@@ -114,7 +114,7 @@ func (rpdo *RPDO) process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 		if rpdo.ReceiveError != CO_RPDO_RX_SHORT {
 			errorCode = CO_EMC_PDO_LENGTH_EXC
 		}
-		pdo.em.Error(setError, CO_EM_RPDO_WRONG_LENGTH, uint16(errorCode), pdo.DataLength)
+		pdo.em.Error(setError, CO_EM_RPDO_WRONG_LENGTH, uint16(errorCode), pdo.dataLength)
 		if setError {
 			rpdo.ReceiveError = CO_RPDO_RX_ACK_ERROR
 		} else {
@@ -132,7 +132,7 @@ func (rpdo *RPDO) process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 		rpdoReceived = true
 		dataRPDO := rpdo.RxData[bufNo][:]
 		rpdo.RxNew[bufNo] = false
-		for i := 0; i < int(pdo.MappedObjectsCount); i++ {
+		for i := 0; i < int(pdo.nbMapped); i++ {
 			streamer := &pdo.streamers[i]
 			dataOffset := &streamer.stream.DataOffset
 			mappedLength := *dataOffset
@@ -150,7 +150,7 @@ func (rpdo *RPDO) process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 			*dataOffset = 0
 			_, err := streamer.Write(buffer)
 			if err != nil {
-				log.Warnf("[RPDO][%x] failed to write to OD on RPDO reception because %v", rpdo.pdo.ConfiguredIdent, err)
+				log.Warnf("[RPDO][%x] failed to write to OD on RPDO reception because %v", rpdo.pdo.configuredId, err)
 			}
 			*dataOffset = mappedLength
 
@@ -226,8 +226,8 @@ func NewRPDO(
 	rpdo.TimeoutTimeUs = uint32(eventTime) * 1000
 	pdo.IsRPDO = true
 	pdo.od = od
-	pdo.PreDefinedIdent = predefinedIdent
-	pdo.ConfiguredIdent = uint16(canId)
+	pdo.predefinedId = predefinedIdent
+	pdo.configuredId = uint16(canId)
 	entry14xx.AddExtension(rpdo, ReadEntry14xxOr18xx, WriteEntry14xx)
 	entry16xx.AddExtension(rpdo, ReadEntryDefault, WriteEntry16xxOr1Axx)
 	return rpdo, nil

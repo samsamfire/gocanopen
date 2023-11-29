@@ -406,16 +406,16 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 		 * enabling the PDO */
 
 		if (cobId&0x3FFFF800) != 0 ||
-			valid && pdo.Valid && canId != uint32(pdo.ConfiguredIdent) ||
+			valid && pdo.Valid && canId != uint32(pdo.configuredId) ||
 			valid && isIDRestricted(uint16(canId)) ||
-			valid && pdo.MappedObjectsCount == 0 {
+			valid && pdo.nbMapped == 0 {
 			return ODR_INVALID_VALUE
 		}
 
 		// Parameter changed ?
-		if valid != pdo.Valid || canId != uint32(pdo.ConfiguredIdent) {
+		if valid != pdo.Valid || canId != uint32(pdo.configuredId) {
 			// If default id is written store to OD without node id
-			if canId == uint32(pdo.PreDefinedIdent) {
+			if canId == uint32(pdo.predefinedId) {
 				binary.LittleEndian.PutUint32(bufCopy, cobId&0xFFFFFF80)
 			}
 			if !valid {
@@ -424,7 +424,7 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 			err := rpdo.busManager.Subscribe(canId, 0x7FF, false, rpdo)
 			if valid && err == nil {
 				pdo.Valid = true
-				pdo.ConfiguredIdent = uint16(canId)
+				pdo.configuredId = uint16(canId)
 			} else {
 				pdo.Valid = false
 				rpdo.RxNew[0] = false
@@ -433,6 +433,7 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 					return ODR_DEV_INCOMPAT
 				}
 			}
+			log.Debugf("[%v] Updated pdo with cobId : x%x, valid : %v", pdo.Type(), pdo.configuredId&0x7FF, pdo.Valid)
 		}
 
 	case 2:
@@ -450,12 +451,14 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 		if transmissionType < TRANSMISSION_TYPE_SYNC_EVENT_LO {
 			return ODR_INVALID_VALUE
 		}
+		log.Debugf("[%v] Updated pdo transmission type : %v", pdo.Type(), transmissionType)
 
 	case 5:
 		// Envent timer
 		eventTime := binary.LittleEndian.Uint16(data)
 		rpdo.TimeoutTimeUs = uint32(eventTime) * 1000
 		rpdo.TimeoutTimer = 0
+		log.Debugf("[%v] Updated pdo event timer : %v us", pdo.Type(), eventTime)
 	}
 
 	return WriteEntryDefault(stream, bufCopy, countWritten)
@@ -479,8 +482,8 @@ func ReadEntry14xxOr18xx(stream *Stream, data []byte, countRead *uint16) error {
 		cobId := binary.LittleEndian.Uint32(data)
 		canId := uint16(cobId & 0x7FF)
 		// Add ID if not contained
-		if canId != 0 && canId == (pdo.PreDefinedIdent&0xFF80) {
-			cobId = (cobId & 0xFFFF0000) | uint32(pdo.PreDefinedIdent)
+		if canId != 0 && canId == (pdo.predefinedId&0xFF80) {
+			cobId = (cobId & 0xFFFF0000) | uint32(pdo.predefinedId)
 		}
 		// If PDO not valid, set bit 32
 		if !pdo.Valid {
@@ -507,7 +510,7 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 		return ODR_DEV_INCOMPAT
 	}
 	// PDO must be disabled in order to allow mapping
-	if pdo.Valid || pdo.MappedObjectsCount != 0 && stream.Subindex > 0 {
+	if pdo.Valid || pdo.nbMapped != 0 && stream.Subindex > 0 {
 		return ODR_UNSUPP_ACCESS
 	}
 	if stream.Subindex == 0 {
@@ -527,21 +530,21 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 			pdoDataLength += mappedLength
 		}
 		if pdoDataLength > uint32(MAX_PDO_LENGTH) {
+			log.Infof("value of streamers : %+v", pdo.streamers)
+			log.Infof("nb of mapped objects : %v", pdo.nbMapped)
 			return ODR_MAP_LEN
 		}
 		if pdoDataLength == 0 && mappedObjectsCount > 0 {
 			return ODR_INVALID_VALUE
 		}
-		pdo.DataLength = pdoDataLength
-		pdo.MappedObjectsCount = mappedObjectsCount
+		pdo.dataLength = pdoDataLength
+		pdo.nbMapped = mappedObjectsCount
+		log.Debugf("[%v][x%x] Updated pdo number of mapped objects to : %v", pdo.configuredId, pdo.Type(), mappedObjectsCount)
 
 	} else {
-		ret := pdo.ConfigureMap(
-			binary.LittleEndian.Uint32(data),
-			uint32(stream.Subindex)-1,
-			pdo.IsRPDO)
-		if ret != nil {
-			return ret
+		err := pdo.configureMap(binary.LittleEndian.Uint32(data), uint32(stream.Subindex)-1, pdo.IsRPDO)
+		if err != nil {
+			return err
 		}
 	}
 	return WriteEntryDefault(stream, data, countWritten)
@@ -565,29 +568,30 @@ func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 		cobId := binary.LittleEndian.Uint32(data)
 		canId := cobId & 0x7FF
 		valid := (cobId & 0x80000000) == 0
-		/* bits 11...29 must be zero, PDO must be disabled on change,
-		 * CAN_ID == 0 is not allowed, mapping must be configured before
-		 * enabling the PDO */
+		// - bits 11...29 must be zero
+		// - PDO must be disabled on change
+		// - CAN_ID == 0 is not allowed
+		// - mapping must be configured before enabling the PDO
 
 		if (cobId&0x3FFFF800) != 0 ||
-			valid && pdo.Valid && canId != uint32(pdo.ConfiguredIdent) ||
-			valid && isIDRestricted(uint16(canId)) ||
-			valid && pdo.MappedObjectsCount == 0 {
+			(valid && pdo.Valid && canId != uint32(pdo.configuredId)) ||
+			(valid && isIDRestricted(uint16(canId))) ||
+			(valid && pdo.nbMapped == 0) {
 			return ODR_INVALID_VALUE
 		}
 
 		// Parameter changed ?
-		if valid != pdo.Valid || canId != uint32(pdo.ConfiguredIdent) {
+		if valid != pdo.Valid || canId != uint32(pdo.configuredId) {
 			// If default id is written store to OD without node id
-			if canId == uint32(pdo.PreDefinedIdent) {
+			if canId == uint32(pdo.predefinedId) {
 				binary.LittleEndian.PutUint32(bufCopy, cobId&0xFFFFFF80)
 			}
 			if !valid {
 				canId = 0
 			}
-			tpdo.txBuffer = NewFrame(canId, 0, uint8(pdo.DataLength))
+			tpdo.txBuffer = NewFrame(canId, 0, uint8(pdo.dataLength))
 			pdo.Valid = valid
-			pdo.ConfiguredIdent = uint16(canId)
+			pdo.configuredId = uint16(canId)
 		}
 
 	case 2:

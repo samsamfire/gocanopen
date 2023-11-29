@@ -42,7 +42,7 @@ func (tpdo *TPDO) configureCOBID(entry18xx *Entry, predefinedIdent uint16, erron
 	}
 	valid := (cobId & 0x80000000) == 0
 	canId = uint16(cobId & 0x7FF)
-	if valid && (pdo.MappedObjectsCount == 0 || canId == 0) {
+	if valid && (pdo.nbMapped == 0 || canId == 0) {
 		valid = false
 		if erroneousMap == 0 {
 			erroneousMap = 1
@@ -62,7 +62,7 @@ func (tpdo *TPDO) configureCOBID(entry18xx *Entry, predefinedIdent uint16, erron
 	if canId != 0 && canId == (predefinedIdent&0xFF80) {
 		canId = predefinedIdent
 	}
-	tpdo.txBuffer = NewFrame(uint32(canId), 0, uint8(pdo.DataLength))
+	tpdo.txBuffer = NewFrame(uint32(canId), 0, uint8(pdo.dataLength))
 	pdo.Valid = valid
 	return canId, nil
 
@@ -95,10 +95,10 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 		}
 		// Check for tpdo send requests
 		if !tpdo.SendRequest {
-			for i := 0; i < int(pdo.MappedObjectsCount); i++ {
-				flagPDOByte := pdo.FlagPDOByte[i]
+			for i := 0; i < int(pdo.nbMapped); i++ {
+				flagPDOByte := pdo.flagPDOByte[i]
 				if flagPDOByte != nil {
-					if (*flagPDOByte & pdo.FlagPDOBitmask[i]) == 0 {
+					if (*flagPDOByte & pdo.flagPDOBitmask[i]) == 0 {
 						tpdo.SendRequest = true
 					}
 				}
@@ -161,7 +161,7 @@ func (tpdo *TPDO) Send() error {
 	pdo := &tpdo.pdo
 	eventDriven := tpdo.TransmissionType == TRANSMISSION_TYPE_SYNC_ACYCLIC || tpdo.TransmissionType >= uint8(TRANSMISSION_TYPE_SYNC_EVENT_LO)
 	dataTPDO := make([]byte, 0)
-	for i := 0; i < int(pdo.MappedObjectsCount); i++ {
+	for i := 0; i < int(pdo.nbMapped); i++ {
 		streamer := &pdo.streamers[i]
 		mappedLength := streamer.stream.DataOffset
 		dataLength := int(streamer.stream.DataLength)
@@ -173,16 +173,16 @@ func (tpdo *TPDO) Send() error {
 		buffer := make([]byte, dataLength)
 		_, err := streamer.Read(buffer)
 		if err != nil {
-			log.Warnf("[TPDO]sending TPDO cob id %x failed : %v", pdo.ConfiguredIdent, err)
+			log.Warnf("[TPDO]sending TPDO cob id %x failed : %v", pdo.configuredId, err)
 			return err
 		}
 		streamer.stream.DataOffset = mappedLength
 		// Add to tpdo frame only up to mapped length
 		dataTPDO = append(dataTPDO, buffer[:mappedLength]...)
 
-		flagPDOByte := pdo.FlagPDOByte[i]
+		flagPDOByte := pdo.flagPDOByte[i]
 		if flagPDOByte != nil && eventDriven {
-			*flagPDOByte |= pdo.FlagPDOBitmask[i]
+			*flagPDOByte |= pdo.flagPDOBitmask[i]
 		}
 	}
 	tpdo.SendRequest = false
@@ -253,8 +253,8 @@ func NewTPDO(
 
 	// Configure OD extensions
 	pdo.IsRPDO = false
-	pdo.PreDefinedIdent = predefinedIdent
-	pdo.ConfiguredIdent = canId
+	pdo.predefinedId = predefinedIdent
+	pdo.configuredId = canId
 	entry18xx.AddExtension(tpdo, ReadEntry14xxOr18xx, WriteEntry18xx)
 	entry1Axx.AddExtension(tpdo, ReadEntryDefault, WriteEntry16xxOr1Axx)
 
