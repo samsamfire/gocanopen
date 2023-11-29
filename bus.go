@@ -1,6 +1,10 @@
 package canopen
 
-import "fmt"
+import (
+	"fmt"
+
+	log "github.com/sirupsen/logrus"
+)
 
 const CAN_RTR_FLAG uint32 = 0x40000000
 const CAN_SFF_MASK uint32 = 0x000007FF
@@ -74,7 +78,11 @@ func (busManager *BusManager) Handle(frame Frame) {
 // Send a CAN message from given buffer
 // Limited error handling
 func (busManager *BusManager) Send(frame Frame) error {
-	return busManager.Bus.Send(frame)
+	err := busManager.Bus.Send(frame)
+	if err != nil {
+		log.Warnf("[CAN ERROR] %v", err)
+	}
+	return err
 }
 
 // This should be called cyclically to update errors
