@@ -146,6 +146,7 @@ def test_tpdo_receive_consistency(node_configured: canopen.RemoteNode, first_tpd
     first_tpdo.clear()
     first_tpdo.add_variable("UNSIGNED64 value")
     node_configured.sdo["Communication cycle period"].raw = 1000
+    node_configured.sdo["UNSIGNED64 value"].raw = 0xAA_AA_AA_AA_AA_AA_AA_A
     first_tpdo.trans_type = 1
     first_tpdo.enabled = True
     first_tpdo.cob_id = 0x190
