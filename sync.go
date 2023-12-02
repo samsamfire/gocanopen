@@ -53,77 +53,6 @@ func (sync *SYNC) Handle(frame Frame) {
 
 }
 
-func (sync *SYNC) Init(emergency *EM, entry1005 *Entry, entry1006 *Entry, entry1007 *Entry, entry1019 *Entry, busManager *BusManager) error {
-	if emergency == nil || entry1005 == nil {
-		return ErrIllegalArgument
-	}
-	var cobIdSync uint32 = 0
-	res := entry1005.Uint32(0, &cobIdSync)
-	if res != nil {
-		log.Errorf("[SYNC][%x] %v read error", entry1005.Index, entry1005.Name)
-		return ErrOdParameters
-	}
-	entry1005.AddExtension(sync, ReadEntryDefault, WriteEntry1005)
-
-	var err error
-
-	if entry1006 == nil {
-		log.Errorf("[SYNC][1006] COMM CYCLE PERIOD not found")
-		return ErrOdParameters
-	} else if entry1007 == nil {
-		log.Errorf("[SYNC][1007] SYNCHRONOUS WINDOW LENGTH not found")
-		return ErrOdParameters
-	}
-
-	sync.OD1006Period, err = entry1006.GetPtr(0, 4)
-	if err != nil {
-		log.Errorf("[SYNC][%x] %v read error", entry1006.Index, entry1006.Name)
-		return ErrOdParameters
-	}
-	log.Infof("[SYNC][%x] %v : %v", entry1006.Index, entry1006.Name, binary.LittleEndian.Uint32(*sync.OD1006Period))
-
-	sync.OD1007Window, err = entry1007.GetPtr(0, 4)
-	if err != nil {
-		log.Errorf("[SYNC][%x] %v read error", entry1007.Index, entry1007.Name)
-		return ErrOdParameters
-	}
-	log.Infof("[SYNC][%x] %v : %v", entry1007.Index, entry1007.Name, binary.LittleEndian.Uint32(*sync.OD1007Window))
-
-	// This one is not mandatory
-	var syncCounterOverflow uint8 = 0
-	if entry1019 != nil {
-		err = entry1019.Uint8(0, &syncCounterOverflow)
-		if err != nil {
-			log.Errorf("[SYNC][%x] %v read error", entry1019.Index, entry1019.Name)
-			return ErrOdParameters
-		}
-		if syncCounterOverflow == 1 {
-			syncCounterOverflow = 2
-		} else if syncCounterOverflow > 240 {
-			syncCounterOverflow = 240
-		}
-		entry1019.AddExtension(sync, ReadEntryDefault, WriteEntry1019)
-		log.Infof("[SYNC][%x] %v : %v", entry1019.Index, entry1019.Name, syncCounterOverflow)
-	}
-	sync.CounterOverflowValue = syncCounterOverflow
-	sync.emergency = emergency
-	sync.IsProducer = (cobIdSync & 0x40000000) != 0
-	sync.cobId = cobIdSync & 0x7FF
-	sync.BusManager = busManager
-
-	err1 := sync.BusManager.Subscribe(sync.cobId, 0x7FF, false, sync)
-	if err1 != nil {
-		return err1
-	}
-	var frameSize uint8 = 0
-	if syncCounterOverflow != 0 {
-		frameSize = 1
-	}
-	sync.txBuffer = NewFrame(sync.cobId, 0, frameSize)
-	log.Infof("[SYNC] Initialisation finished")
-	return nil
-}
-
 func (sync *SYNC) sendSync() {
 	sync.Counter += 1
 	if sync.Counter > sync.CounterOverflowValue {
@@ -289,5 +218,5 @@ func NewSYNC(
 	}
 	sync.txBuffer = NewFrame(sync.cobId, 0, frameSize)
 	log.Infof("[SYNC] Initialisation finished")
-	return nil, err
+	return sync, nil
 }

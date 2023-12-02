@@ -214,9 +214,12 @@ func (node *Node) Init(
 			return err
 		} else {
 			node.NMT = nmt
+			log.Infof("[NODE][NMT] initialized from OD for node x%x", nodeId)
 		}
+	} else {
+		node.NMT = nmt
+		log.Infof("[NODE][NMT] initialized for node x%x", nodeId)
 	}
-	log.Infof("[NODE][NMT] initialized for node x%x", nodeId)
 
 	// Initialize HB consumer
 	hbCons, err := NewHBConsumer(node.BusManager, node.EM, od.Index(0x1016))
