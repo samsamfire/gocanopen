@@ -1,12 +1,11 @@
 package canopen
 
 import (
+	"errors"
 	"os"
 
 	log "github.com/sirupsen/logrus"
 )
-
-type Configuration struct{}
 
 const (
 	NMT_SERVICE_ID       uint16 = 0
@@ -24,7 +23,6 @@ const (
 
 type Node struct {
 	OD                 *ObjectDictionary
-	Config             *Configuration
 	BusManager         *BusManager
 	NodeIdUnconfigured bool
 	NMT                *NMT
@@ -109,7 +107,7 @@ func (node *Node) Process(enableGateway bool, timeDifferenceUs uint32, timerNext
 }
 
 /*Initialize all PDOs*/
-func (node *Node) InitPDO() error {
+func (node *Node) initPDO() error {
 	if node.id < 1 || node.id > 127 || node.NodeIdUnconfigured {
 		if node.NodeIdUnconfigured {
 			return ErrNodeIdUnconfiguredLSS
@@ -155,21 +153,28 @@ func (node *Node) InitPDO() error {
 	return nil
 }
 
-// Initialize CANopen specifics for the node
-func (node *Node) Init(
+// Create a new node
+func NewNode(
+	busManager *BusManager,
+	od *ObjectDictionary,
 	nmt *NMT,
 	emergency *EM,
-	od *ObjectDictionary,
-	statusBits *Entry,
+	nodeId uint8,
 	nmtControl uint16,
 	firstHbTimeMs uint16,
 	sdoServerTimeoutMs uint16,
 	sdoClientTimeoutMs uint16,
 	blockTransferEnabled bool,
-	nodeId uint8,
+	statusBits *Entry,
 
-) error {
+) (*Node, error) {
+
+	if busManager == nil || od == nil {
+		return nil, errors.New("need at least busManager and od parameters")
+	}
 	var err error
+	node := &Node{}
+	node.BusManager = busManager
 	node.NodeIdUnconfigured = false
 	node.OD = od
 	node.exit = make(chan bool)
@@ -177,30 +182,30 @@ func (node *Node) Init(
 	node.State = NODE_INIT
 
 	if emergency == nil {
-		node.EM = &EM{}
+		emergency, err := NewEM(
+			busManager,
+			nodeId,
+			od.Index(0x1001),
+			od.Index(0x1014),
+			od.Index(0x1015),
+			od.Index(0x1003),
+			nil,
+		)
+		if err != nil {
+			log.Errorf("[NODE][EMERGENCY producer] error when initializing emergency producer %v", err)
+			return nil, ErrOdParameters
+		}
+		node.EM = emergency
 	} else {
 		node.EM = emergency
 	}
-	// Initialize EM object
-	err = node.EM.Init(
-		node.BusManager,
-		od.Index(0x1001),
-		od.Index(0x1014),
-		od.Index(0x1015),
-		od.Index(0x1003),
-		nil,
-		nodeId,
-	)
-	if err != nil {
-		log.Errorf("[NODE][EMERGENCY producer] error when initializing emergency producer %v", err)
-		return ErrOdParameters
-	}
+	emergency = node.EM
 
 	// NMT object can either be supplied or created with automatically with an OD entry
 	if nmt == nil {
 		nmt, err := NewNMT(
-			node.BusManager,
-			node.EM,
+			busManager,
+			emergency,
 			nodeId,
 			nmtControl,
 			firstHbTimeMs,
@@ -211,7 +216,7 @@ func (node *Node) Init(
 		)
 		if err != nil {
 			log.Errorf("[NODE][NMT] error when initializing NMT object %v", err)
-			return err
+			return nil, err
 		} else {
 			node.NMT = nmt
 			log.Infof("[NODE][NMT] initialized from OD for node x%x", nodeId)
@@ -222,10 +227,10 @@ func (node *Node) Init(
 	}
 
 	// Initialize HB consumer
-	hbCons, err := NewHBConsumer(node.BusManager, node.EM, od.Index(0x1016))
+	hbCons, err := NewHBConsumer(busManager, emergency, od.Index(0x1016))
 	if err != nil {
 		log.Errorf("[NODE][HB Consumer] error when initializing HB consummers %v", err)
-		return err
+		return nil, err
 	} else {
 		node.HBConsumer = hbCons
 	}
@@ -238,10 +243,10 @@ func (node *Node) Init(
 	if entry1200 == nil {
 		log.Warnf("[NODE][SDO SERVER] no sdo servers initialized for node x%x", nodeId)
 	} else {
-		server, err := NewSDOServer(node.BusManager, od, nodeId, sdoServerTimeoutMs, entry1200)
+		server, err := NewSDOServer(busManager, od, nodeId, sdoServerTimeoutMs, entry1200)
 		if err != nil {
 			log.Errorf("[NODE][SDO SERVER] error when initializing SDO server object %v", err)
-			return err
+			return nil, err
 		} else {
 			sdoServers = append(sdoServers, server)
 			node.SDOServers = sdoServers
@@ -257,7 +262,7 @@ func (node *Node) Init(
 		log.Info("[NODE][SDO CLIENT] no SDO clients initialized for node")
 	} else {
 
-		client, err := NewSDOClient(node.BusManager, od, nodeId, entry1280)
+		client, err := NewSDOClient(busManager, od, nodeId, entry1280)
 		if err != nil {
 			log.Errorf("[NODE][SDO CLIENT] error when initializing SDO client object %v", err)
 		} else {
@@ -268,7 +273,7 @@ func (node *Node) Init(
 	}
 
 	//Initialize TIME
-	time, err := NewTIME(node.BusManager, od.Index(0x1012), 1000) // hardcoded for now
+	time, err := NewTIME(busManager, od.Index(0x1012), 1000) // hardcoded for now
 	if err != nil {
 		log.Errorf("[NODE][TIME] error when initializing TIME object %v", err)
 	} else {
@@ -276,7 +281,14 @@ func (node *Node) Init(
 	}
 
 	//Initialize SYNC
-	sync, err := NewSYNC(node.BusManager, node.EM, od.Index(0x1005), od.Index(0x1006), od.Index(0x1007), od.Index(0x1019))
+	sync, err := NewSYNC(
+		busManager,
+		emergency,
+		od.Index(0x1005),
+		od.Index(0x1006),
+		od.Index(0x1007),
+		od.Index(0x1019),
+	)
 	if err != nil {
 		log.Errorf("[NODE][SYNC] error when initialising SYNC object %v", err)
 	} else {
@@ -289,11 +301,9 @@ func (node *Node) Init(
 		log.Info("[NODE][EDS] EDS is downloadable via object 0x1021")
 		od.AddFile(edsEntry.Index, edsEntry.Name, od.filePath, os.O_RDONLY, os.O_RDONLY) // Don't allow to overwrite EDS
 	}
-
-	return nil
-}
-
-// Create a new node
-func NewNode(configuration *Configuration) *Node {
-	return &Node{Config: configuration}
+	err = node.initPDO()
+	if err != nil {
+		return nil, err
+	}
+	return node, nil
 }

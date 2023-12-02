@@ -276,16 +276,24 @@ func (network *Network) CreateNode(nodeId uint8, od any) (*Node, error) {
 	default:
 		return nil, fmt.Errorf("expecting string or ObjectDictionary got : %T", od)
 	}
-	// Create and initialize a CANopen node
-	node := &Node{Config: nil, BusManager: network.busManager, NMT: nil}
-	err = node.Init(nil, nil, odNode, nil, NMT_STARTUP_TO_OPERATIONAL, 500, 1000, 1000, true, nodeId)
+	// Create and initialize a "local" CANopen node
+	node, err := NewNode(
+		network.busManager,
+		odNode,
+		nil, // Use definition from OD
+		nil, // Use definition from OD
+		nodeId,
+		NMT_STARTUP_TO_OPERATIONAL,
+		500,
+		SDO_CLIENT_TIMEOUT, // Not changeable currently
+		SDO_SERVER_TIMEOUT, // Not changeable currently
+		true,
+		nil,
+	)
 	if err != nil {
 		return nil, err
 	}
-	err = node.InitPDO()
-	if err != nil {
-		return nil, err
-	}
+	// Return created node and add it to network
 	network.Nodes[nodeId] = node
 	return node, nil
 }
