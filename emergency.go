@@ -322,62 +322,6 @@ func (emergency *EM) Handle(frame Frame) {
 		infoCode)
 
 }
-func (emergency *EM) Init(
-	busManager *BusManager,
-	entry1001 *Entry,
-	entry1014 *Entry,
-	entry1015 *Entry,
-	entry1003 *Entry,
-	entryStatusBits *Entry,
-	nodeId uint8,
-) error {
-	if emergency == nil || entry1001 == nil ||
-		entry1014 == nil || busManager == nil ||
-		nodeId < 1 || nodeId > 127 ||
-		entry1003 == nil {
-		log.Debugf("%v", emergency)
-		return ErrIllegalArgument
-
-	}
-	emergency.busManager = busManager
-	// TODO handle error register ptr
-	//emergency.errorRegister
-	fifoSize := entry1003.SubCount()
-	emergency.Fifo = make([]EMFifo, fifoSize)
-
-	// Get cob id initial & verify
-	cobIdEmergency := uint32(0)
-	ret := entry1014.Uint32(0, &cobIdEmergency)
-	if ret != nil || (cobIdEmergency&0x7FFFF800) != 0 {
-		// Don't break if only value is wrong
-		if ret != nil {
-			return ErrOdParameters
-		}
-	}
-	producerCanId := cobIdEmergency & 0x7FF
-	emergency.ProducerEnabled = (cobIdEmergency&0x80000000) == 0 && producerCanId != 0
-	entry1014.AddExtension(emergency, ReadEntry1014, WriteEntry1014)
-	emergency.ProducerIdent = uint16(producerCanId)
-	if producerCanId == uint32(EMERGENCY_SERVICE_ID) {
-		producerCanId += uint32(nodeId)
-	}
-	emergency.NodeId = nodeId
-	emergency.txBuffer = NewFrame(producerCanId, 0, 8)
-	emergency.InhibitEmTimeUs = 0
-	emergency.InhibitEmTimer = 0
-	inhibitTime100us := uint16(0)
-	ret = entry1015.Uint16(0, &inhibitTime100us)
-	if ret == nil {
-		emergency.InhibitEmTimeUs = uint32(inhibitTime100us) * 100
-		entry1015.AddExtension(emergency, ReadEntryDefault, WriteEntry1015)
-	}
-	entry1003.AddExtension(emergency, ReadEntry1003, WriteEntry1003)
-	if entryStatusBits != nil {
-		entryStatusBits.AddExtension(emergency, ReadEntryStatusBits, WriteEntryStatusBits)
-	}
-
-	return busManager.Subscribe(uint32(EMERGENCY_SERVICE_ID), 0x780, false, emergency)
-}
 
 func (emergency *EM) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
 	// Check errors from driver
@@ -587,4 +531,64 @@ func (emergency *EM) GetErrorRegister() byte {
 		return 0
 	}
 	return *emergency.errorRegister
+}
+
+func NewEM(
+	busManager *BusManager,
+	nodeId uint8,
+	entry1001 *Entry,
+	entry1014 *Entry,
+	entry1015 *Entry,
+	entry1003 *Entry,
+	entryStatusBits *Entry,
+) (*EM, error) {
+	if entry1001 == nil || entry1014 == nil || busManager == nil ||
+		nodeId < 1 || nodeId > 127 ||
+		entry1003 == nil {
+		return nil, ErrIllegalArgument
+
+	}
+	emergency := &EM{}
+	emergency.busManager = busManager
+	// TODO handle error register ptr
+	//emergency.errorRegister
+	fifoSize := entry1003.SubCount()
+	emergency.Fifo = make([]EMFifo, fifoSize)
+
+	// Get cob id initial & verify
+	cobIdEmergency := uint32(0)
+	ret := entry1014.Uint32(0, &cobIdEmergency)
+	if ret != nil || (cobIdEmergency&0x7FFFF800) != 0 {
+		// Don't break if only value is wrong
+		if ret != nil {
+			return nil, ErrOdParameters
+		}
+	}
+	producerCanId := cobIdEmergency & 0x7FF
+	emergency.ProducerEnabled = (cobIdEmergency&0x80000000) == 0 && producerCanId != 0
+	entry1014.AddExtension(emergency, ReadEntry1014, WriteEntry1014)
+	emergency.ProducerIdent = uint16(producerCanId)
+	if producerCanId == uint32(EMERGENCY_SERVICE_ID) {
+		producerCanId += uint32(nodeId)
+	}
+	emergency.NodeId = nodeId
+	emergency.txBuffer = NewFrame(producerCanId, 0, 8)
+	emergency.InhibitEmTimeUs = 0
+	emergency.InhibitEmTimer = 0
+	inhibitTime100us := uint16(0)
+	ret = entry1015.Uint16(0, &inhibitTime100us)
+	if ret == nil {
+		emergency.InhibitEmTimeUs = uint32(inhibitTime100us) * 100
+		entry1015.AddExtension(emergency, ReadEntryDefault, WriteEntry1015)
+	}
+	entry1003.AddExtension(emergency, ReadEntry1003, WriteEntry1003)
+	if entryStatusBits != nil {
+		entryStatusBits.AddExtension(emergency, ReadEntryStatusBits, WriteEntryStatusBits)
+	}
+
+	err := busManager.Subscribe(uint32(EMERGENCY_SERVICE_ID), 0x780, false, emergency)
+	if err != nil {
+		return nil, err
+	}
+	return emergency, nil
 }

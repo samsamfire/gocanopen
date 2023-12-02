@@ -119,6 +119,9 @@ func (abort SDOAbortCode) Error() string {
 	}
 }
 
+const SDO_CLIENT_TIMEOUT = 1000
+const SDO_SERVER_TIMEOUT = 1000
+
 type SDOResponse struct {
 	raw [8]byte
 }
