@@ -20,10 +20,10 @@ const SDO_CLI_BUFFER_SIZE = 1000
 const CO_CONFIG_SDO_CLI_PST = 21
 
 type SDOClient struct {
-	OD                         *ObjectDictionary
-	Streamer                   *Streamer
+	od                         *ObjectDictionary
+	streamer                   *Streamer
 	NodeId                     uint8
-	BusManager                 *BusManager
+	busManager                 *BusManager
 	txBuffer                   Frame
 	CobIdClientToServer        uint32
 	CobIdServerToClient        uint32
@@ -37,7 +37,7 @@ type SDOClient struct {
 	State                      SDOState
 	TimeoutTimeUs              uint32
 	TimeoutTimer               uint32
-	Fifo                       *Fifo
+	fifo                       *Fifo
 	RxNew                      bool
 	Response                   SDOResponse
 	Toggle                     uint8
@@ -67,50 +67,6 @@ const (
 	SDO_SUCCESS                    uint8 = 0 // Success, end of communication. SDO client: uploaded data must be read.
 
 )
-
-func (client *SDOClient) Init(od *ObjectDictionary, entry1280 *Entry, nodeId uint8, busManager *BusManager) error {
-	if busManager == nil {
-		return ErrIllegalArgument
-	}
-	if entry1280 != nil && (entry1280.Index < 0x1280 || entry1280.Index > (0x1280+0x7F)) {
-		log.Errorf("[SDO CLIENT] invalid index for sdo client : x%v", entry1280.Index)
-		return ErrIllegalArgument
-	}
-	client.OD = od
-	client.NodeId = nodeId
-	client.BusManager = busManager
-	client.Streamer = &Streamer{}
-
-	fifo := NewFifo(300)
-	client.Fifo = fifo
-
-	var nodeIdServer uint8
-	var CobIdClientToServer, CobIdServerToClient uint32
-	if entry1280 != nil {
-		var maxSubindex uint8
-		err1 := entry1280.Uint8(0, &maxSubindex)
-		err2 := entry1280.Uint32(1, &CobIdClientToServer)
-		err3 := entry1280.Uint32(2, &CobIdServerToClient)
-		err4 := entry1280.Uint8(3, &nodeIdServer)
-		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || maxSubindex != 3 {
-			log.Errorf("[SDO CLIENT] error when reading SDO client parameters in OD 0:%v,1:%v,2:%v,3:%v,max sub-index(should be 3) : %v", err1, err2, err3, err4, maxSubindex)
-			return ErrOdParameters
-		}
-	} else {
-		nodeIdServer = 0
-	}
-	if entry1280 != nil {
-		entry1280.AddExtension(client, ReadEntryDefault, WriteEntry1280)
-	}
-	client.CobIdClientToServer = 0
-	client.CobIdServerToClient = 0
-
-	err := client.Setup(CobIdClientToServer, CobIdServerToClient, nodeIdServer)
-	if err != nil {
-		return ErrIllegalArgument
-	}
-	return nil
-}
 
 // Setup the client for a new communication
 func (client *SDOClient) Setup(cobIdClientToServer uint32, cobIdServerToClient uint32, nodeIdServer uint8) error {
@@ -142,7 +98,7 @@ func (client *SDOClient) Setup(cobIdClientToServer uint32, cobIdServerToClient u
 		CanIdS2C = 0
 		client.Valid = false
 	}
-	err := client.BusManager.Subscribe(uint32(CanIdS2C), 0x7FF, false, client)
+	err := client.busManager.Subscribe(uint32(CanIdS2C), 0x7FF, false, client)
 	if err != nil {
 		return err
 	}
@@ -171,7 +127,7 @@ func (client *SDOClient) Handle(frame Frame) {
 					client.Finished = true
 					state = SDO_STATE_UPLOAD_BLK_SUBBLOCK_CRSP
 				} else {
-					client.Fifo.Write(frame.Data[1:], &client.BlockCRC)
+					client.fifo.Write(frame.Data[1:], &client.BlockCRC)
 					client.SizeTransferred += 7
 					if seqno == client.BlockSize {
 						log.Debugf("[CLIENT][RX][x%x] BLOCK UPLOAD END SUB-BLOCK | x%x:x%x | %v", client.NodeIdServer, client.Index, client.Subindex, frame.Data)
@@ -208,10 +164,10 @@ func (client *SDOClient) DownloadInitiate(index uint16, subindex uint8, sizeIndi
 	client.Finished = false
 	client.TimeoutTimeUs = uint32(timeoutMs) * 1000
 	client.TimeoutTimer = 0
-	client.Fifo.Reset()
+	client.fifo.Reset()
 
-	if client.OD != nil && client.NodeId != 0 && client.NodeIdServer == client.NodeId {
-		client.Streamer.write = nil
+	if client.od != nil && client.NodeId != 0 && client.NodeIdServer == client.NodeId {
+		client.streamer.write = nil
 		client.State = SDO_STATE_DOWNLOAD_LOCAL_TRANSFER
 	} else if blockEnabled && (sizeIndicated == 0 || sizeIndicated > CO_CONFIG_SDO_CLI_PST) {
 		client.State = SDO_STATE_DOWNLOAD_BLK_INITIATE_REQ
@@ -233,7 +189,7 @@ func (client *SDOClient) DownloadBufWrite(buffer []byte) int {
 	if buffer == nil {
 		return 0
 	}
-	return client.Fifo.Write(buffer, nil)
+	return client.fifo.Write(buffer, nil)
 }
 
 // Write value to OD locally
@@ -432,14 +388,14 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 					client.BlockSize = 127
 				}
 				client.BlockSequenceNb = 0
-				client.Fifo.AltBegin(0)
+				client.fifo.AltBegin(0)
 				client.State = SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_REQ
 
 			case SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_REQ, SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_RSP:
 
 				if response.GetNumberOfSegments() < client.BlockSequenceNb {
 					log.Error("Not all segments transferred successfully")
-					client.Fifo.AltBegin(int(response.raw[1]) * 7)
+					client.fifo.AltBegin(int(response.raw[1]) * 7)
 					client.Finished = false
 
 				} else if response.GetNumberOfSegments() > client.BlockSequenceNb {
@@ -448,14 +404,14 @@ func (client *SDOClient) Download(timeDifferenceUs uint32, abort bool, bufferPar
 					break
 				}
 				// TODO alt finish
-				client.Fifo.AltFinish(&client.BlockCRC)
+				client.fifo.AltFinish(&client.BlockCRC)
 
 				if client.Finished {
 					client.State = SDO_STATE_DOWNLOAD_BLK_END_REQ
 				} else {
 					client.BlockSize = response.raw[2]
 					client.BlockSequenceNb = 0
-					client.Fifo.AltBegin(0)
+					client.fifo.AltBegin(0)
 					client.State = SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_REQ
 				}
 
@@ -614,7 +570,7 @@ func (client *SDOClient) downloadInitiate(forceSegmented bool) error {
 	client.txBuffer.Data[2] = byte(client.Index >> 8)
 	client.txBuffer.Data[3] = client.Subindex
 
-	count := uint32(client.Fifo.GetOccupied())
+	count := uint32(client.fifo.GetOccupied())
 	if (client.SizeIndicated == 0 && count <= 4) || (client.SizeIndicated > 0 && client.SizeIndicated <= 4) && !forceSegmented {
 		client.txBuffer.Data[0] |= 0x02
 		// Check length
@@ -626,7 +582,7 @@ func (client *SDOClient) downloadInitiate(forceSegmented bool) error {
 			client.txBuffer.Data[0] |= byte(0x01 | ((4 - count) << 2))
 		}
 		// Copy the data in queue and add the count
-		count = uint32(client.Fifo.Read(client.txBuffer.Data[4:], nil))
+		count = uint32(client.fifo.Read(client.txBuffer.Data[4:], nil))
 		client.SizeTransferred = count
 		client.Finished = true
 		log.Debugf("[CLIENT][TX][x%x] DOWNLOAD EXPEDITED | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data)
@@ -641,7 +597,7 @@ func (client *SDOClient) downloadInitiate(forceSegmented bool) error {
 		log.Debugf("[CLIENT][TX][x%x] DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data)
 	}
 	client.TimeoutTimer = 0
-	client.BusManager.Send(client.txBuffer)
+	client.busManager.Send(client.txBuffer)
 	return nil
 
 }
@@ -649,7 +605,7 @@ func (client *SDOClient) downloadInitiate(forceSegmented bool) error {
 // Helper function for downloading a segement of segmented transfer
 func (client *SDOClient) downloadSegment(bufferPartial bool) error {
 	// Fill data part
-	count := uint32(client.Fifo.Read(client.txBuffer.Data[1:], nil))
+	count := uint32(client.fifo.Read(client.txBuffer.Data[1:], nil))
 	client.SizeTransferred += count
 	if client.SizeIndicated > 0 && client.SizeTransferred > client.SizeIndicated {
 		client.SizeTransferred -= count
@@ -658,7 +614,7 @@ func (client *SDOClient) downloadSegment(bufferPartial bool) error {
 
 	//Command specifier
 	client.txBuffer.Data[0] = uint8(uint32(client.Toggle) | ((7 - count) << 1))
-	if client.Fifo.GetOccupied() == 0 && !bufferPartial {
+	if client.fifo.GetOccupied() == 0 && !bufferPartial {
 		if client.SizeIndicated > 0 && client.SizeTransferred < client.SizeIndicated {
 			return SDO_ABORT_DATA_SHORT
 		}
@@ -668,7 +624,7 @@ func (client *SDOClient) downloadSegment(bufferPartial bool) error {
 
 	client.TimeoutTimer = 0
 	log.Debugf("[CLIENT][TX][x%x] DOWNLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data)
-	client.BusManager.Send(client.txBuffer)
+	client.busManager.Send(client.txBuffer)
 	return nil
 }
 
@@ -683,27 +639,27 @@ func (client *SDOClient) downloadBlockInitiate() error {
 		binary.LittleEndian.PutUint32(client.txBuffer.Data[4:], client.SizeIndicated)
 	}
 	client.TimeoutTimer = 0
-	client.BusManager.Send(client.txBuffer)
+	client.busManager.Send(client.txBuffer)
 	return nil
 
 }
 
 // Helper function for downloading a sub-block
 func (client *SDOClient) downloadBlock(bufferPartial bool, timerNext *uint32) error {
-	if client.Fifo.AltGetOccupied() < 7 && bufferPartial {
+	if client.fifo.AltGetOccupied() < 7 && bufferPartial {
 		// No data yet
 		return nil
 	}
 	client.BlockSequenceNb++
 	client.txBuffer.Data[0] = client.BlockSequenceNb
-	count := uint32(client.Fifo.AltRead(client.txBuffer.Data[1:]))
+	count := uint32(client.fifo.AltRead(client.txBuffer.Data[1:]))
 	client.BlockNoData = uint8(7 - count)
 	client.SizeTransferred += count
 	if client.SizeIndicated > 0 && client.SizeTransferred > client.SizeIndicated {
 		client.SizeTransferred -= count
 		return SDO_ABORT_DATA_LONG
 	}
-	if client.Fifo.AltGetOccupied() == 0 && !bufferPartial {
+	if client.fifo.AltGetOccupied() == 0 && !bufferPartial {
 		if client.SizeIndicated > 0 && client.SizeTransferred < client.SizeIndicated {
 			return SDO_ABORT_DATA_SHORT
 		}
@@ -718,7 +674,7 @@ func (client *SDOClient) downloadBlock(bufferPartial bool, timerNext *uint32) er
 		}
 	}
 	client.TimeoutTimer = 0
-	client.BusManager.Send(client.txBuffer)
+	client.busManager.Send(client.txBuffer)
 	return nil
 
 }
@@ -729,7 +685,7 @@ func (client *SDOClient) downloadBlockEnd() {
 	client.txBuffer.Data[1] = byte(client.BlockCRC)
 	client.txBuffer.Data[2] = byte(client.BlockCRC >> 8)
 	client.TimeoutTimer = 0
-	client.BusManager.Send(client.txBuffer)
+	client.busManager.Send(client.txBuffer)
 }
 
 // Create & send abort on bus
@@ -741,7 +697,7 @@ func (client *SDOClient) Abort(abortCode SDOAbortCode) {
 	client.txBuffer.Data[3] = client.Subindex
 	binary.LittleEndian.PutUint32(client.txBuffer.Data[4:], code)
 	log.Warnf("[CLIENT][TX][x%x] CLIENT ABORT | x%x:x%x | %v (x%x)", client.NodeIdServer, client.Index, client.Subindex, abortCode, code)
-	client.BusManager.Send(client.txBuffer)
+	client.busManager.Send(client.txBuffer)
 
 }
 
@@ -758,11 +714,11 @@ func (client *SDOClient) UploadInitiate(index uint16, subindex uint8, timeoutTim
 	client.SizeIndicated = 0
 	client.SizeTransferred = 0
 	client.Finished = false
-	client.Fifo.Reset()
+	client.fifo.Reset()
 	client.TimeoutTimeUs = uint32(timeoutTimeMs) * 1000
 	client.TimeoutTimeBlockTransferUs = uint32(timeoutTimeMs) * 1000
-	if client.OD != nil && client.NodeId != 0 && client.NodeIdServer == client.NodeId {
-		client.Streamer.read = nil
+	if client.od != nil && client.NodeId != 0 && client.NodeIdServer == client.NodeId {
+		client.streamer.read = nil
 		client.State = SDO_STATE_UPLOAD_LOCAL_TRANSFER
 	} else if blockEnabled {
 		client.State = SDO_STATE_UPLOAD_BLK_INITIATE_REQ
@@ -824,7 +780,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 					if (response.raw[0] & 0x01) != 0 {
 						count -= uint32((response.raw[0] >> 2) & 0x03)
 					}
-					client.Fifo.Write(response.raw[4:4+count], nil)
+					client.fifo.Write(response.raw[4:4+count], nil)
 					client.SizeTransferred = count
 					client.State = SDO_STATE_IDLE
 					ret = SDO_SUCCESS
@@ -852,7 +808,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				}
 				client.Toggle ^= 0x10
 				count := 7 - (response.raw[0]>>1)&0x07
-				countWr := client.Fifo.Write(response.raw[1:1+count], nil)
+				countWr := client.fifo.Write(response.raw[1:1+count], nil)
 				client.SizeTransferred += uint32(countWr)
 				// Check enough space if fifo
 				if countWr != int(count) {
@@ -915,7 +871,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 						if (response.raw[0] & 0x01) != 0 {
 							count -= (int(response.raw[0]>>2) & 0x03)
 						}
-						client.Fifo.Write(response.raw[4:4+count], nil)
+						client.fifo.Write(response.raw[4:4+count], nil)
 						client.SizeTransferred = uint32(count)
 						client.State = SDO_STATE_IDLE
 						ret = SDO_SUCCESS
@@ -939,7 +895,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 				//Get number of data bytes in last segment, that do not
 				//contain data. Then copy remaining data into fifo
 				noData := (response.raw[0] >> 2) & 0x07
-				client.Fifo.Write(client.BlockDataUploadLast[:7-noData], &client.BlockCRC)
+				client.fifo.Write(client.BlockDataUploadLast[:7-noData], &client.BlockCRC)
 				client.SizeTransferred += uint32(7 - noData)
 
 				if client.SizeIndicated > 0 && client.SizeTransferred > client.SizeIndicated {
@@ -1024,18 +980,18 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.txBuffer.Data[2] = byte(client.Index >> 8)
 			client.txBuffer.Data[3] = client.Subindex
 			client.TimeoutTimer = 0
-			client.BusManager.Send(client.txBuffer)
+			client.busManager.Send(client.txBuffer)
 			client.State = SDO_STATE_UPLOAD_INITIATE_RSP
 			log.Debugf("[CLIENT][TX][x%x] UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data)
 
 		case SDO_STATE_UPLOAD_SEGMENT_REQ:
-			if client.Fifo.GetSpace() < 7 {
+			if client.fifo.GetSpace() < 7 {
 				ret = SDO_UPLOAD_DATA_FULL
 				break
 			}
 			client.txBuffer.Data[0] = 0x60 | client.Toggle
 			client.TimeoutTimer = 0
-			client.BusManager.Send(client.txBuffer)
+			client.busManager.Send(client.txBuffer)
 			client.State = SDO_STATE_UPLOAD_SEGMENT_RSP
 			log.Debugf("[CLIENT][TX][x%x] UPLOAD SEGMENT | x%x:x%x %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data)
 
@@ -1045,7 +1001,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.txBuffer.Data[2] = byte(client.Index >> 8)
 			client.txBuffer.Data[3] = client.Subindex
 			// Calculate number of block segments from free space
-			count := client.Fifo.GetSpace() / 7
+			count := client.fifo.GetSpace() / 7
 			if count >= 127 {
 				count = 127
 			} else if count == 0 {
@@ -1057,7 +1013,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.txBuffer.Data[4] = client.BlockSize
 			client.txBuffer.Data[5] = CO_CONFIG_SDO_CLI_PST
 			client.TimeoutTimer = 0
-			client.BusManager.Send(client.txBuffer)
+			client.busManager.Send(client.txBuffer)
 			client.State = SDO_STATE_UPLOAD_BLK_INITIATE_RSP
 			log.Debugf("[CLIENT][TX][x%x] BLOCK UPLOAD INITIATE | x%x:x%x %v blksize : %v", client.NodeIdServer, client.Index, client.Subindex, client.txBuffer.Data, client.BlockSize)
 
@@ -1069,7 +1025,7 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			client.BlockCRC = CRC16(0)
 			client.State = SDO_STATE_UPLOAD_BLK_SUBBLOCK_SREQ
 			client.RxNew = false
-			client.BusManager.Send(client.txBuffer)
+			client.busManager.Send(client.txBuffer)
 
 		case SDO_STATE_UPLOAD_BLK_SUBBLOCK_CRSP:
 			client.txBuffer.Data[0] = 0xA2
@@ -1086,11 +1042,11 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 					break
 				}
 				// Calculate number of block segments from free space
-				count := client.Fifo.GetSpace() / 7
+				count := client.fifo.GetSpace() / 7
 				if count >= 127 {
 					count = 127
 
-				} else if client.Fifo.GetOccupied() > 0 {
+				} else if client.fifo.GetOccupied() > 0 {
 					ret = SDO_UPLOAD_DATA_FULL
 					log.Warnf("Fifo is full")
 					if transferShort {
@@ -1108,14 +1064,14 @@ func (client *SDOClient) Upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 			}
 			client.txBuffer.Data[2] = client.BlockSize
 			client.TimeoutTimerBlock = 0
-			client.BusManager.Send(client.txBuffer)
+			client.busManager.Send(client.txBuffer)
 			if transferShort && !client.Finished {
 				log.Warnf("sub-block restarted: seqnoPrev=%v, blksize=%v", seqnoStart, client.BlockSize)
 			}
 
 		case SDO_STATE_UPLOAD_BLK_END_CRSP:
 			client.txBuffer.Data[0] = 0xA1
-			client.BusManager.Send(client.txBuffer)
+			client.busManager.Send(client.txBuffer)
 			client.State = SDO_STATE_IDLE
 			ret = SDO_SUCCESS
 
@@ -1156,7 +1112,7 @@ func (client *SDOClient) UploadBufRead(buffer []byte) int {
 	if buffer == nil {
 		return 0
 	}
-	return client.Fifo.Read(buffer, nil)
+	return client.fifo.Read(buffer, nil)
 }
 
 func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, data []byte) (int, error) {
@@ -1235,4 +1191,50 @@ func (reader *BlockReader) ReadAll() (data []byte, err error) {
 
 func NewBlockReader(nodeid uint8, index uint16, subindex uint8, client *SDOClient) *BlockReader {
 	return &BlockReader{Client: client, Index: index, SubIndex: subindex, NodeIdServer: nodeid}
+}
+
+func NewSDOClient(busManager *BusManager, od *ObjectDictionary, nodeId uint8, entry1280 *Entry) (*SDOClient, error) {
+
+	if busManager == nil {
+		return nil, ErrIllegalArgument
+	}
+	if entry1280 != nil && (entry1280.Index < 0x1280 || entry1280.Index > (0x1280+0x7F)) {
+		log.Errorf("[SDO CLIENT] invalid index for sdo client : x%v", entry1280.Index)
+		return nil, ErrIllegalArgument
+	}
+	client := &SDOClient{}
+	client.od = od
+	client.NodeId = nodeId
+	client.busManager = busManager
+	client.streamer = &Streamer{}
+
+	fifo := NewFifo(300)
+	client.fifo = fifo
+
+	var nodeIdServer uint8
+	var CobIdClientToServer, CobIdServerToClient uint32
+	if entry1280 != nil {
+		var maxSubindex uint8
+		err1 := entry1280.Uint8(0, &maxSubindex)
+		err2 := entry1280.Uint32(1, &CobIdClientToServer)
+		err3 := entry1280.Uint32(2, &CobIdServerToClient)
+		err4 := entry1280.Uint8(3, &nodeIdServer)
+		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || maxSubindex != 3 {
+			log.Errorf("[SDO CLIENT] error when reading SDO client parameters in OD 0:%v,1:%v,2:%v,3:%v,max sub-index(should be 3) : %v", err1, err2, err3, err4, maxSubindex)
+			return nil, ErrOdParameters
+		}
+	} else {
+		nodeIdServer = 0
+	}
+	if entry1280 != nil {
+		entry1280.AddExtension(client, ReadEntryDefault, WriteEntry1280)
+	}
+	client.CobIdClientToServer = 0
+	client.CobIdServerToClient = 0
+
+	err := client.Setup(CobIdClientToServer, CobIdServerToClient, nodeIdServer)
+	if err != nil {
+		return nil, ErrIllegalArgument
+	}
+	return client, nil
 }

@@ -12,7 +12,6 @@ import (
 
 type Network struct {
 	Nodes      map[uint8]*Node
-	bus        *Bus
 	busManager *BusManager
 	sdoClient  *SDOClient // Network master has an sdo client to read/write nodes on network
 	// An sdo client does not have to be linked to a specific node
@@ -70,11 +69,7 @@ func (network *Network) Connect(args ...any) error {
 		return err
 	}
 	// Add SDO client to network by default
-	client := &SDOClient{}
-	err = client.Init(nil, nil, 0, busManager)
-	if err != nil {
-		return err
-	}
+	client, err := NewSDOClient(busManager, nil, 0, nil)
 	network.sdoClient = client
 	return err
 }

@@ -42,11 +42,6 @@ type Node struct {
 	exit               chan bool
 }
 
-/* Create a new canopen management object */
-func NewNode(configuration *Configuration) *Node {
-	return &Node{Config: configuration}
-}
-
 func (node *Node) processTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
 	if node.NodeIdUnconfigured {
 		return
@@ -201,23 +196,30 @@ func (node *Node) Init(
 		return ErrOdParameters
 	}
 
-	// NMT object can either be supplied or created with OD entry
+	// NMT object can either be supplied or created with automatically with an OD entry
 	if nmt == nil {
-		node.NMT = &NMT{}
-	} else {
-		node.NMT = nmt
-	}
-	// Initialize NMT
-	err = node.NMT.Init(od.Index(0x1017), nil, nodeId, nmtControl, firstHbTimeMs, node.BusManager, NMT_SERVICE_ID, NMT_SERVICE_ID, HEARTBEAT_SERVICE_ID+uint16(nodeId))
-	if err != nil {
-		log.Errorf("[NODE][NMT] error when initializing NMT object %v", err)
-		return err
+		nmt, err := NewNMT(
+			node.BusManager,
+			node.EM,
+			nodeId,
+			nmtControl,
+			firstHbTimeMs,
+			NMT_SERVICE_ID,
+			NMT_SERVICE_ID,
+			HEARTBEAT_SERVICE_ID+uint16(nodeId),
+			od.Index(0x1017),
+		)
+		if err != nil {
+			log.Errorf("[NODE][NMT] error when initializing NMT object %v", err)
+			return err
+		} else {
+			node.NMT = nmt
+		}
 	}
 	log.Infof("[NODE][NMT] initialized for node x%x", nodeId)
 
 	// Initialize HB consumer
-	hbCons := &HBConsumer{}
-	err = hbCons.Init(node.EM, od.Index(0x1016), node.BusManager)
+	hbCons, err := NewHBConsumer(node.BusManager, node.EM, od.Index(0x1016))
 	if err != nil {
 		log.Errorf("[NODE][HB Consumer] error when initializing HB consummers %v", err)
 		return err
@@ -229,39 +231,41 @@ func (node *Node) Init(
 	// Initialize SDO server
 	// For now only one server
 	entry1200 := od.Index(0x1200)
+	sdoServers := make([]*SDOServer, 0)
 	if entry1200 == nil {
 		log.Warnf("[NODE][SDO SERVER] no sdo servers initialized for node x%x", nodeId)
 	} else {
-		node.SDOServers = make([]*SDOServer, 0)
-		server := &SDOServer{}
-		err = server.Init(od, entry1200, nodeId, sdoServerTimeoutMs, node.BusManager)
+		server, err := NewSDOServer(node.BusManager, od, nodeId, sdoServerTimeoutMs, entry1200)
 		if err != nil {
 			log.Errorf("[NODE][SDO SERVER] error when initializing SDO server object %v", err)
 			return err
+		} else {
+			sdoServers = append(sdoServers, server)
+			node.SDOServers = sdoServers
+			log.Infof("[NODE][SDO SERVER] initialized for node x%x", nodeId)
 		}
-		node.SDOServers = append(node.SDOServers, server)
-		log.Infof("[NODE][SDO SERVER] initialized for node x%x", nodeId)
 	}
 
 	// Initialize SDO clients if any
 	// For now only one client
 	entry1280 := od.Index(0x1280)
+	sdoClients := make([]*SDOClient, 0)
 	if entry1280 == nil {
 		log.Info("[NODE][SDO CLIENT] no SDO clients initialized for node")
 	} else {
-		node.SDOclients = make([]*SDOClient, 0)
-		client := &SDOClient{}
-		err = client.Init(od, entry1280, nodeId, node.BusManager)
+
+		client, err := NewSDOClient(node.BusManager, od, nodeId, entry1280)
 		if err != nil {
 			log.Errorf("[NODE][SDO CLIENT] error when initializing SDO client object %v", err)
+		} else {
+			sdoClients = append(node.SDOclients, client)
+			log.Infof("[NODE][SDO CLIENT] initialized for node x%x", nodeId)
 		}
-		node.SDOclients = append(node.SDOclients, client)
-		log.Infof("[NODE][SDO CLIENT] initialized for node x%x", nodeId)
+		node.SDOclients = sdoClients
 	}
+
 	//Initialize TIME
-	time := &TIME{}
-	node.TIME = time
-	err = time.Init(od.Index(0x1012), node.BusManager, 1000)
+	time, err := NewTIME(node.BusManager, od.Index(0x1012), 1000) // hardcoded for now
 	if err != nil {
 		log.Errorf("[NODE][TIME] error when initializing TIME object %v", err)
 	} else {
@@ -269,8 +273,7 @@ func (node *Node) Init(
 	}
 
 	//Initialize SYNC
-	sync := &SYNC{}
-	err = sync.Init(&EM{}, od.Index(0x1005), od.Index(0x1006), od.Index(0x1007), od.Index(0x1019), node.BusManager)
+	sync, err := NewSYNC(node.BusManager, node.EM, od.Index(0x1005), od.Index(0x1006), od.Index(0x1007), od.Index(0x1019))
 	if err != nil {
 		log.Errorf("[NODE][SYNC] error when initialising SYNC object %v", err)
 	} else {
@@ -285,4 +288,9 @@ func (node *Node) Init(
 	}
 
 	return nil
+}
+
+// Create a new node
+func NewNode(configuration *Configuration) *Node {
+	return &Node{Config: configuration}
 }

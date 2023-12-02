@@ -91,7 +91,7 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 			//objectType determines what type of entry we should add to dictionary : Variable, Array or Record
 			switch objectType {
 			case OBJ_VAR, OBJ_DOMAIN:
-				variable, err := buildVariable(section, name, nodeId, index, 0)
+				variable, err := NewVariable(section, name, nodeId, index, 0)
 				if err != nil {
 					return nil, err
 				}

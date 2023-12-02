@@ -101,7 +101,7 @@ func (entry *Entry) AddMember(section *ini.Section, name string, nodeId uint8, s
 	case Variable:
 		return fmt.Errorf("cannot add a member to variable type")
 	case Array:
-		variable, err := buildVariable(section, name, nodeId, entry.Index, subIndex)
+		variable, err := NewVariable(section, name, nodeId, entry.Index, subIndex)
 		if err != nil {
 			return err
 		}
@@ -111,7 +111,7 @@ func (entry *Entry) AddMember(section *ini.Section, name string, nodeId uint8, s
 		return nil
 
 	case []Record:
-		variable, err := buildVariable(section, name, nodeId, entry.Index, subIndex)
+		variable, err := NewVariable(section, name, nodeId, entry.Index, subIndex)
 		if err != nil {
 			return err
 		}
