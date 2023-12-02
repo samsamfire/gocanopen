@@ -70,11 +70,11 @@ jobs:
 
       - name: Run python integration tests
         run: |
-          ~/vcan/virtualcan --port 18889 &
-          go run ./cmd/canopen_test -p ./testdata/base.eds &
+          nohup ~/vcan/virtualcan --port 18889 &
+          nohup go run ./cmd/canopen_test -p ./testdata/base.eds &
           sleep 15
-          python -m pytest ./tests/test_sdo.py
-          python -m pytest ./tests/test_pdo.py
+          python -m pytest ./tests/test_sdo.py -v
+          python -m pytest ./tests/test_pdo.py -v
 
 
 
