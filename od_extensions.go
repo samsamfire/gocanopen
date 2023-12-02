@@ -218,8 +218,8 @@ func WriteEntry1016(stream *Stream, data []byte, countWritten *uint16) error {
 	hbConsValue := binary.LittleEndian.Uint32(data)
 	nodeId := uint8(hbConsValue>>16) & 0xFF
 	time := hbConsValue & 0xFFFF
-	ret := consumer.InitEntry(stream.Subindex-1, nodeId, uint16(time))
-	if ret != nil {
+	err := consumer.addHearbeatConsumerNode(stream.Subindex-1, nodeId, uint16(time))
+	if err != nil {
 		return ODR_PAR_INCOMPAT
 	}
 	return WriteEntryDefault(stream, data, countWritten)

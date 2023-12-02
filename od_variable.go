@@ -12,7 +12,7 @@ import (
 )
 
 // Create variable from section entry
-func buildVariable(
+func NewVariable(
 	section *ini.Section,
 	name string,
 	nodeId uint8,

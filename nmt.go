@@ -81,54 +81,6 @@ func (nmt *NMT) Handle(frame Frame) {
 	}
 }
 
-func (nmt *NMT) Init(
-	entry1017 *Entry,
-	emergency *EM,
-	nodeId uint8,
-	control uint16,
-	firstHbTimeMs uint16,
-	busManager *BusManager,
-	canIdNmtTx uint16,
-	canIdNmtRx uint16,
-	canIdHbTx uint16,
-) error {
-	if entry1017 == nil || busManager == nil {
-		return ErrIllegalArgument
-	}
-
-	nmt.operatingState = NMT_INITIALIZING
-	nmt.operatingStatePrev = nmt.operatingState
-	nmt.nodeId = nodeId
-	nmt.control = control
-	nmt.emergency = emergency
-	nmt.hearbeatProducerTimer = uint32(firstHbTimeMs * 1000)
-
-	var HBprodTime_ms uint16
-	err := entry1017.Uint16(0, &HBprodTime_ms)
-	if err != nil {
-		log.Errorf("[NMT][%x|%x] reading producer heartbeat failed : %v", 0x1017, 0x0, err)
-		return ErrOdParameters
-	}
-	nmt.hearbeatProducerTimeUs = uint32(HBprodTime_ms) * 1000
-	// Extension needs to be initialized
-	entry1017.AddExtension(nmt, ReadEntryDefault, WriteEntry1017)
-
-	if nmt.hearbeatProducerTimer > nmt.hearbeatProducerTimeUs {
-		nmt.hearbeatProducerTimer = nmt.hearbeatProducerTimeUs
-	}
-
-	// Configure NMT specific tx/rx buffers
-	nmt.busManager = busManager
-	err = busManager.Subscribe(uint32(canIdNmtRx), 0x7FF, false, nmt)
-	if err != nil {
-		return err
-	}
-	nmt.nmtTxBuff = NewFrame(uint32(canIdNmtTx), 0, 2)
-	nmt.hbTxBuff = NewFrame(uint32(canIdHbTx), 0, 1)
-	return nil
-
-}
-
 func (nmt *NMT) process(internalState *uint8, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
 	nmtStateCopy := nmt.operatingState
 	resetCommand := RESET_NOT
@@ -259,4 +211,53 @@ func (nmt *NMT) SendCommand(command NMTCommand, nodeId uint8) error {
 	nmt.nmtTxBuff.Data[0] = uint8(command)
 	nmt.nmtTxBuff.Data[1] = nodeId
 	return nmt.busManager.Send(nmt.nmtTxBuff)
+}
+
+func NewNMT(
+	busManager *BusManager,
+	emergency *EM,
+	nodeId uint8,
+	control uint16,
+	firstHbTimeMs uint16,
+	canIdNmtTx uint16,
+	canIdNmtRx uint16,
+	canIdHbTx uint16,
+	entry1017 *Entry,
+) (*NMT, error) {
+
+	nmt := &NMT{}
+	if entry1017 == nil || busManager == nil {
+		return nil, ErrIllegalArgument
+	}
+
+	nmt.operatingState = NMT_INITIALIZING
+	nmt.operatingStatePrev = nmt.operatingState
+	nmt.nodeId = nodeId
+	nmt.control = control
+	nmt.emergency = emergency
+	nmt.hearbeatProducerTimer = uint32(firstHbTimeMs * 1000)
+
+	var HBprodTime_ms uint16
+	err := entry1017.Uint16(0, &HBprodTime_ms)
+	if err != nil {
+		log.Errorf("[NMT][%x|%x] reading producer heartbeat failed : %v", 0x1017, 0x0, err)
+		return nil, ErrOdParameters
+	}
+	nmt.hearbeatProducerTimeUs = uint32(HBprodTime_ms) * 1000
+	// Extension needs to be initialized
+	entry1017.AddExtension(nmt, ReadEntryDefault, WriteEntry1017)
+
+	if nmt.hearbeatProducerTimer > nmt.hearbeatProducerTimeUs {
+		nmt.hearbeatProducerTimer = nmt.hearbeatProducerTimeUs
+	}
+
+	// Configure NMT specific tx/rx buffers
+	nmt.busManager = busManager
+	err = busManager.Subscribe(uint32(canIdNmtRx), 0x7FF, false, nmt)
+	if err != nil {
+		return nil, err
+	}
+	nmt.nmtTxBuff = NewFrame(uint32(canIdNmtTx), 0, 2)
+	nmt.hbTxBuff = NewFrame(uint32(canIdHbTx), 0, 1)
+	return nmt, nil
 }

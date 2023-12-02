@@ -25,7 +25,7 @@ func Test_buildVariable(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := buildVariable(tt.args.section, tt.args.name, tt.args.nodeId, tt.args.index, tt.args.subindex)
+			got, err := NewVariable(tt.args.section, tt.args.name, tt.args.nodeId, tt.args.index, tt.args.subindex)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("buildVariable() error = %v, wantErr %v", err, tt.wantErr)
 				return

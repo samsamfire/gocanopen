@@ -30,40 +30,6 @@ func (time *TIME) Handle(frame Frame) {
 
 }
 
-func (time *TIME) Init(entry1012 *Entry, busManager *BusManager, producerIntervalMs uint32) error {
-	if time == nil || entry1012 == nil || busManager == nil {
-		return ErrIllegalArgument
-	}
-	// Read param from OD
-	cobIdTimestamp := uint32(0)
-	ret := entry1012.Uint32(0, &cobIdTimestamp)
-	if ret != nil {
-		log.Errorf("[TIME][%x|%x] reading cob id timestamp failed : %v", entry1012.Index, 0x0, ret)
-		return ErrOdParameters
-	}
-	entry1012.AddExtension(time, ReadEntryDefault, WriteEntry1012)
-	cobId := cobIdTimestamp & 0x7FF
-	time.IsConsumer = (cobIdTimestamp & 0x80000000) != 0
-	time.IsProducer = (cobIdTimestamp & 0x40000000) != 0
-	time.RxNew = false
-	time.cobId = cobId
-	if time.IsConsumer {
-		err := busManager.Subscribe(cobId, 0x7FF, false, time)
-		if err != nil {
-			return ErrIllegalArgument
-		}
-	}
-	time.busManager = busManager
-	time.SetInternalTime()
-	time.ProducerIntervalMs = producerIntervalMs
-	time.ProducerTimerMs = producerIntervalMs
-	log.Infof("[TIME] initialized time object | producer : %v, consumer : %v", time.IsProducer, time.IsConsumer)
-	if time.IsProducer {
-		log.Infof("[TIME] publish period is %v ms", producerIntervalMs)
-	}
-	return nil
-}
-
 func (time *TIME) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) bool {
 	timestampReceived := false
 	if nmtIsPreOrOperational && time.IsConsumer {
@@ -119,4 +85,39 @@ func (time_obj *TIME) SetInternalTime() {
 	time_obj.Days = days
 	log.Infof("[TIME] setting the date to %v", time.Now())
 	log.Infof("[TIME] days since 01/01/1984 : %v | ms since 00:00 : %v", days, ms)
+}
+
+func NewTIME(busManager *BusManager, entry1012 *Entry, producerIntervalMs uint32) (*TIME, error) {
+	if entry1012 == nil || busManager == nil {
+		return nil, ErrIllegalArgument
+	}
+	time := &TIME{}
+	// Read param from OD
+	cobIdTimestamp := uint32(0)
+	err := entry1012.Uint32(0, &cobIdTimestamp)
+	if err != nil {
+		log.Errorf("[TIME][%x|%x] reading cob id timestamp failed : %v", entry1012.Index, 0x0, err)
+		return nil, ErrOdParameters
+	}
+	entry1012.AddExtension(time, ReadEntryDefault, WriteEntry1012)
+	cobId := cobIdTimestamp & 0x7FF
+	time.IsConsumer = (cobIdTimestamp & 0x80000000) != 0
+	time.IsProducer = (cobIdTimestamp & 0x40000000) != 0
+	time.RxNew = false
+	time.cobId = cobId
+	if time.IsConsumer {
+		err := busManager.Subscribe(cobId, 0x7FF, false, time)
+		if err != nil {
+			return nil, ErrIllegalArgument
+		}
+	}
+	time.busManager = busManager
+	time.SetInternalTime()
+	time.ProducerIntervalMs = producerIntervalMs
+	time.ProducerTimerMs = producerIntervalMs
+	log.Infof("[TIME] initialized time object | producer : %v, consumer : %v", time.IsProducer, time.IsConsumer)
+	if time.IsProducer {
+		log.Infof("[TIME] publish period is %v ms", producerIntervalMs)
+	}
+	return time, err
 }

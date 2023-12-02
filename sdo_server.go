@@ -8,8 +8,8 @@ import (
 )
 
 type SDOServer struct {
-	OD                         *ObjectDictionary
-	Streamer                   *Streamer
+	od                         *ObjectDictionary
+	streamer                   *Streamer
 	NodeId                     uint8
 	BusManager                 *BusManager
 	txBuffer                   Frame
@@ -117,77 +117,6 @@ func (server *SDOServer) Handle(frame Frame) {
 	}
 }
 
-func (server *SDOServer) Init(od *ObjectDictionary, entry12xx *Entry, nodeId uint8, timeoutTimeMs uint16, busManager *BusManager) error {
-	if od == nil || busManager == nil {
-		return ErrIllegalArgument
-	}
-	server.OD = od
-	server.Streamer = &Streamer{}
-	server.buffer = make([]byte, 1000)
-	server.bufReadOffset = 0
-	server.bufWriteOffset = 0
-	server.NodeId = nodeId
-	server.TimeoutTimeUs = uint32(timeoutTimeMs) * 1000
-	server.TimeoutTimeBlockTransferUs = uint32(timeoutTimeMs) * 700
-	var canIdClientToServer uint16
-	var canIdServerToClient uint16
-	if entry12xx == nil {
-		/*Configure sdo channel*/
-		if nodeId < 1 || nodeId > 127 {
-			log.Errorf("SDO server node id is not valid : %x", nodeId)
-			return ErrIllegalArgument
-		}
-		canIdClientToServer = SDO_CLIENT_ID + uint16(nodeId)
-		canIdServerToClient = SDO_SERVER_ID + uint16(nodeId)
-		server.Valid = true
-	} else {
-		if entry12xx.Index == 0x1200 {
-			// Default channels
-			if nodeId < 1 || nodeId > 127 {
-				log.Errorf("SDO server node id is not valid : %x", nodeId)
-				return ErrIllegalArgument
-			}
-			canIdClientToServer = SDO_CLIENT_ID + uint16(nodeId)
-			canIdServerToClient = SDO_SERVER_ID + uint16(nodeId)
-			server.Valid = true
-			entry12xx.PutUint32(1, uint32(canIdClientToServer), true)
-			entry12xx.PutUint32(2, uint32(canIdServerToClient), true)
-		} else if entry12xx.Index > 0x1200 && entry12xx.Index <= 0x1200+0x7F {
-			// Configure other channels
-			var maxSubIndex uint8
-			var cobIdClientToServer32, cobIdServerToClient32 uint32
-			err0 := entry12xx.Uint8(0, &maxSubIndex)
-			err1 := entry12xx.Uint32(1, &cobIdClientToServer32)
-			err2 := entry12xx.Uint32(2, &cobIdServerToClient32)
-			if err0 != nil || (maxSubIndex != 2 && maxSubIndex != 3) ||
-				err1 != nil || err2 != nil {
-				log.Errorf("Error when retreiving sdo server parameters : %v, %v, %v, %v", err0, err1, err2, maxSubIndex)
-				return ErrOdParameters
-			}
-			if (cobIdClientToServer32 & 0x80000000) == 0 {
-				canIdClientToServer = uint16(cobIdClientToServer32 & 0x7FF)
-			} else {
-				canIdClientToServer = 0
-			}
-			if (cobIdServerToClient32 & 0x80000000) == 0 {
-				canIdServerToClient = uint16(cobIdServerToClient32 & 0x7FF)
-			} else {
-				canIdServerToClient = 0
-			}
-			entry12xx.AddExtension(server, ReadEntryDefault, WriteEntry1201)
-
-		} else {
-			return ErrIllegalArgument
-		}
-	}
-	server.RxNew = false
-	server.BusManager = busManager
-	server.CobIdClientToServer = 0
-	server.CobIdServerToClient = 0
-	return server.InitRxTx(server.BusManager, uint32(canIdClientToServer), uint32(canIdServerToClient))
-
-}
-
 func (server *SDOServer) InitRxTx(busManager *BusManager, cobIdClientToServer uint32, cobIdServerToClient uint32) error {
 	var ret error
 	// Only proceed if parameters change (i.e. different client)
@@ -245,8 +174,8 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 		// Golang does not have null termination characters so nothing particular to do
 		// Stream data should be limited to the sent value
 
-		varSizeInOd := server.Streamer.stream.DataLength
-		if server.Streamer.stream.Attribute&ATTRIBUTE_STR != 0 &&
+		varSizeInOd := server.streamer.stream.DataLength
+		if server.streamer.stream.Attribute&ATTRIBUTE_STR != 0 &&
 			(varSizeInOd == 0 || server.SizeTransferred < varSizeInOd) &&
 			int(server.bufWriteOffset+2) <= len(server.buffer) {
 			server.buffer[server.bufWriteOffset] = 0x00
@@ -257,9 +186,9 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 				server.bufWriteOffset++
 				server.SizeTransferred++
 			}
-			server.Streamer.stream.DataLength = server.SizeTransferred
+			server.streamer.stream.DataLength = server.SizeTransferred
 		} else if varSizeInOd == 0 {
-			server.Streamer.stream.DataLength = server.SizeTransferred
+			server.streamer.stream.DataLength = server.SizeTransferred
 		} else if server.SizeTransferred != varSizeInOd {
 			if server.SizeTransferred > varSizeInOd {
 				*abortCode = SDO_ABORT_DATA_LONG
@@ -293,7 +222,7 @@ func (server *SDOServer) writeObjectDictionary(abortCode *SDOAbortCode, crcOpera
 	}
 
 	// Write the data
-	_, ret := server.Streamer.Write(server.buffer[:server.bufWriteOffset])
+	_, ret := server.streamer.Write(server.buffer[:server.bufWriteOffset])
 	server.bufWriteOffset = 0
 	if ret != nil && ret != ODR_PARTIAL {
 		*abortCode = ret.(ODR).GetSDOAbordCode()
@@ -321,7 +250,7 @@ func (server *SDOServer) readObjectDictionary(abortCode *SDOAbortCode, countMini
 		server.bufWriteOffset = buffered
 
 		// Read from OD into the buffer
-		countRd, err := server.Streamer.Read(server.buffer[buffered:])
+		countRd, err := server.streamer.Read(server.buffer[buffered:])
 
 		if err != nil && err != ODR_PARTIAL {
 			*abortCode = err.(ODR).GetSDOAbordCode()
@@ -330,9 +259,9 @@ func (server *SDOServer) readObjectDictionary(abortCode *SDOAbortCode, countMini
 		}
 
 		// Stop sending at null termination if string
-		if countRd > 0 && (server.Streamer.stream.Attribute&ATTRIBUTE_STR) != 0 {
+		if countRd > 0 && (server.streamer.stream.Attribute&ATTRIBUTE_STR) != 0 {
 			server.buffer[countRd+int(buffered)] = 0
-			countStr := int(server.Streamer.stream.DataLength)
+			countStr := int(server.streamer.stream.DataLength)
 			for i, v := range server.buffer[buffered:] {
 				if v == 0 {
 					countStr = i
@@ -346,7 +275,7 @@ func (server *SDOServer) readObjectDictionary(abortCode *SDOAbortCode, countMini
 				// String terminator found
 				countRd = countStr
 				err = nil
-				server.Streamer.stream.DataLength = server.SizeTransferred + uint32(countRd)
+				server.streamer.stream.DataLength = server.SizeTransferred + uint32(countRd)
 			}
 		}
 
@@ -411,18 +340,18 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				var err error
 				server.Index = response.GetIndex()
 				server.Subindex = response.GetSubindex()
-				server.Streamer, err = NewStreamer(server.OD.Index(server.Index), server.Subindex, false)
+				server.streamer, err = NewStreamer(server.od.Index(server.Index), server.Subindex, false)
 				if err != nil {
 					abortCode = err.(ODR).GetSDOAbordCode()
 					server.State = SDO_STATE_ABORT
 				} else {
-					if server.Streamer.stream.Attribute&ATTRIBUTE_SDO_RW == 0 {
+					if server.streamer.stream.Attribute&ATTRIBUTE_SDO_RW == 0 {
 						abortCode = SDO_ABORT_UNSUPPORTED_ACCESS
 						server.State = SDO_STATE_ABORT
-					} else if upload && (server.Streamer.stream.Attribute&ATTRIBUTE_SDO_R) == 0 {
+					} else if upload && (server.streamer.stream.Attribute&ATTRIBUTE_SDO_R) == 0 {
 						abortCode = SDO_ABORT_WRITEONLY
 						server.State = SDO_STATE_ABORT
-					} else if !upload && (server.Streamer.stream.Attribute&ATTRIBUTE_SDO_W) == 0 {
+					} else if !upload && (server.streamer.stream.Attribute&ATTRIBUTE_SDO_W) == 0 {
 						abortCode = SDO_ABORT_READONLY
 						server.State = SDO_STATE_ABORT
 					}
@@ -436,7 +365,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.Finished = false
 				if server.readObjectDictionary(&abortCode, 7, false) {
 					if server.Finished {
-						server.SizeIndicated = server.Streamer.stream.DataLength
+						server.SizeIndicated = server.streamer.stream.DataLength
 						if server.SizeIndicated == 0 {
 							server.SizeIndicated = server.bufWriteOffset
 						} else if server.SizeIndicated != server.bufWriteOffset {
@@ -445,8 +374,8 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 							server.State = SDO_STATE_ABORT
 						}
 					} else {
-						if server.Streamer.stream.Attribute&ATTRIBUTE_STR == 0 {
-							server.SizeIndicated = server.Streamer.stream.DataLength
+						if server.streamer.stream.Attribute&ATTRIBUTE_STR == 0 {
+							server.SizeIndicated = server.streamer.stream.DataLength
 						} else {
 							server.SizeIndicated = 0
 						}
@@ -462,7 +391,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				if (response.raw[0] & 0x02) != 0 {
 					log.Debugf("[SERVER][RX] DOWNLOAD EXPEDITED | x%x:x%x %v", server.Index, server.Subindex, response.raw)
 					//Expedited 4 bytes of data max
-					varSizeInOd := server.Streamer.stream.DataLength
+					varSizeInOd := server.streamer.stream.DataLength
 					dataSizeToWrite := 4
 					if (response.raw[0] & 0x01) != 0 {
 						dataSizeToWrite -= (int(response.raw[0]) >> 2) & 0x03
@@ -472,7 +401,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					//Create temporary buffer
 					buf := make([]byte, 6)
 					copy(buf, response.raw[4:4+dataSizeToWrite])
-					if (server.Streamer.stream.Attribute&ATTRIBUTE_STR) != 0 &&
+					if (server.streamer.stream.Attribute&ATTRIBUTE_STR) != 0 &&
 						(varSizeInOd == 0 || uint32(dataSizeToWrite) < varSizeInOd) {
 						delta := varSizeInOd - uint32(dataSizeToWrite)
 						if delta == 1 {
@@ -480,9 +409,9 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 						} else {
 							dataSizeToWrite += 2
 						}
-						server.Streamer.stream.DataLength = uint32(dataSizeToWrite)
+						server.streamer.stream.DataLength = uint32(dataSizeToWrite)
 					} else if varSizeInOd == 0 {
-						server.Streamer.stream.DataLength = uint32(dataSizeToWrite)
+						server.streamer.stream.DataLength = uint32(dataSizeToWrite)
 					} else if dataSizeToWrite != int(varSizeInOd) {
 						if dataSizeToWrite > int(varSizeInOd) {
 							abortCode = SDO_ABORT_DATA_LONG
@@ -492,7 +421,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 						server.State = SDO_STATE_ABORT
 						break
 					}
-					_, err := server.Streamer.Write(buf[:dataSizeToWrite])
+					_, err := server.streamer.Write(buf[:dataSizeToWrite])
 					if err != nil {
 						abortCode = err.(ODR).GetSDOAbordCode()
 						server.State = SDO_STATE_ABORT
@@ -506,7 +435,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					if (response.raw[0] & 0x01) != 0 {
 						log.Debugf("[SERVER][RX] DOWNLOAD SEGMENTED | x%x:x%x %v", server.Index, server.Subindex, response.raw)
 						// Segmented transfer check if size indicated
-						sizeInOd := server.Streamer.stream.DataLength
+						sizeInOd := server.streamer.stream.DataLength
 						server.SizeIndicated = binary.LittleEndian.Uint32(response.raw[4:])
 						// Check if size matches
 						if sizeInOd > 0 {
@@ -514,7 +443,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 								abortCode = SDO_ABORT_DATA_LONG
 								server.State = SDO_STATE_ABORT
 								break
-							} else if server.SizeIndicated < uint32(sizeInOd) && (server.Streamer.stream.Attribute&ATTRIBUTE_STR) == 0 {
+							} else if server.SizeIndicated < uint32(sizeInOd) && (server.streamer.stream.Attribute&ATTRIBUTE_STR) == 0 {
 								abortCode = SDO_ABORT_DATA_SHORT
 								server.State = SDO_STATE_ABORT
 								break
@@ -543,7 +472,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					server.bufWriteOffset += uint32(count)
 					server.SizeTransferred += uint32(count)
 
-					if server.Streamer.stream.DataLength > 0 && server.SizeTransferred > server.Streamer.stream.DataLength {
+					if server.streamer.stream.DataLength > 0 && server.SizeTransferred > server.streamer.stream.DataLength {
 						abortCode = SDO_ABORT_DATA_LONG
 						server.State = SDO_STATE_ABORT
 						break
@@ -582,7 +511,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.BlockCRCEnabled = response.IsCRCEnabled()
 				// Check if size indicated
 				if (response.raw[0] & 0x02) != 0 {
-					sizeInOd := server.Streamer.stream.DataLength
+					sizeInOd := server.streamer.stream.DataLength
 					server.SizeIndicated = binary.LittleEndian.Uint32(response.raw[4:])
 					// Check if size matches
 					if sizeInOd > 0 {
@@ -590,7 +519,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 							abortCode = SDO_ABORT_DATA_LONG
 							server.State = SDO_STATE_ABORT
 							break
-						} else if server.SizeIndicated < uint32(sizeInOd) && (server.Streamer.stream.Attribute&ATTRIBUTE_STR) == 0 {
+						} else if server.SizeIndicated < uint32(sizeInOd) && (server.streamer.stream.Attribute&ATTRIBUTE_STR) == 0 {
 							abortCode = SDO_ABORT_DATA_SHORT
 							server.State = SDO_STATE_ABORT
 							break
@@ -1043,4 +972,76 @@ func (server *SDOServer) Abort(abortCode SDOAbortCode) {
 		log.Warnf("[SERVER][TX] SERVER ABORT | %v", server.ErrorExtraInfo)
 		server.ErrorExtraInfo = nil
 	}
+}
+
+func NewSDOServer(busManager *BusManager, od *ObjectDictionary, nodeId uint8, timeoutTimeMs uint16, entry12xx *Entry) (*SDOServer, error) {
+	server := &SDOServer{}
+	if od == nil || busManager == nil || entry12xx == nil {
+		return nil, ErrIllegalArgument
+	}
+	server.od = od
+	server.streamer = &Streamer{}
+	server.buffer = make([]byte, 1000)
+	server.bufReadOffset = 0
+	server.bufWriteOffset = 0
+	server.NodeId = nodeId
+	server.TimeoutTimeUs = uint32(timeoutTimeMs) * 1000
+	server.TimeoutTimeBlockTransferUs = uint32(timeoutTimeMs) * 700
+	var canIdClientToServer uint16
+	var canIdServerToClient uint16
+	if entry12xx == nil {
+		/*Configure sdo channel*/
+		if nodeId < 1 || nodeId > 127 {
+			log.Errorf("SDO server node id is not valid : %x", nodeId)
+			return nil, ErrIllegalArgument
+		}
+		canIdClientToServer = SDO_CLIENT_ID + uint16(nodeId)
+		canIdServerToClient = SDO_SERVER_ID + uint16(nodeId)
+		server.Valid = true
+	} else {
+		if entry12xx.Index == 0x1200 {
+			// Default channels
+			if nodeId < 1 || nodeId > 127 {
+				log.Errorf("SDO server node id is not valid : %x", nodeId)
+				return nil, ErrIllegalArgument
+			}
+			canIdClientToServer = SDO_CLIENT_ID + uint16(nodeId)
+			canIdServerToClient = SDO_SERVER_ID + uint16(nodeId)
+			server.Valid = true
+			entry12xx.PutUint32(1, uint32(canIdClientToServer), true)
+			entry12xx.PutUint32(2, uint32(canIdServerToClient), true)
+		} else if entry12xx.Index > 0x1200 && entry12xx.Index <= 0x1200+0x7F {
+			// Configure other channels
+			var maxSubIndex uint8
+			var cobIdClientToServer32, cobIdServerToClient32 uint32
+			err0 := entry12xx.Uint8(0, &maxSubIndex)
+			err1 := entry12xx.Uint32(1, &cobIdClientToServer32)
+			err2 := entry12xx.Uint32(2, &cobIdServerToClient32)
+			if err0 != nil || (maxSubIndex != 2 && maxSubIndex != 3) ||
+				err1 != nil || err2 != nil {
+				log.Errorf("Error when retreiving sdo server parameters : %v, %v, %v, %v", err0, err1, err2, maxSubIndex)
+				return nil, ErrOdParameters
+			}
+			if (cobIdClientToServer32 & 0x80000000) == 0 {
+				canIdClientToServer = uint16(cobIdClientToServer32 & 0x7FF)
+			} else {
+				canIdClientToServer = 0
+			}
+			if (cobIdServerToClient32 & 0x80000000) == 0 {
+				canIdServerToClient = uint16(cobIdServerToClient32 & 0x7FF)
+			} else {
+				canIdServerToClient = 0
+			}
+			entry12xx.AddExtension(server, ReadEntryDefault, WriteEntry1201)
+
+		} else {
+			return nil, ErrIllegalArgument
+		}
+	}
+	server.RxNew = false
+	server.BusManager = busManager
+	server.CobIdClientToServer = 0
+	server.CobIdServerToClient = 0
+	return server, server.InitRxTx(busManager, uint32(canIdClientToServer), uint32(canIdServerToClient))
+
 }
