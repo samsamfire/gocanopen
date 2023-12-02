@@ -68,7 +68,7 @@ func (tpdo *TPDO) configureCOBID(entry18xx *Entry, predefinedIdent uint16, erron
 
 }
 
-func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOperational bool, syncWas bool) {
+func (tpdo *TPDO) process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOperational bool, syncWas bool) {
 
 	pdo := &tpdo.pdo
 	if !pdo.Valid || !nmtIsOperational {
