@@ -53,7 +53,7 @@ func (node *Node) processTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs
 	}
 	nmtIsOperational := node.NMT.GetInternalState() == NMT_OPERATIONAL
 	for _, tpdo := range node.TPDOs {
-		tpdo.Process(timeDifferenceUs, timerNextUs, nmtIsOperational, syncWas)
+		tpdo.process(timeDifferenceUs, timerNextUs, nmtIsOperational, syncWas)
 	}
 }
 

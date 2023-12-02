@@ -285,7 +285,7 @@ def test_sdo_block_download_timeout(node: canopen.RemoteNode):
         mode="wb", block_transfer=True, request_crc_support=True, size=1000
     )
     f.raw.close = mock_close
-    time.sleep(1.1)
+    time.sleep(2.0)
     with pytest.raises(canopen.SdoAbortedError, match="Timeout"):
         while True:
             _ = f.raw.sdo_client.read_response()
