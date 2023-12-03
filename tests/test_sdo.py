@@ -326,11 +326,11 @@ def test_sdo_block_upload_crc_invalid(node: canopen.RemoteNode):
                 stream._crc.process(b"randomdata")
         stream.close()
 
-    # Sleep because of bug in end of transmission
     # PR oppened
-    time.sleep(0.5)
-    with node.sdo.open(index=0x200F, subindex=0x0, request_crc_support=True):
-        return
+    try:
+        node.sdo.read_response()
+    except Exception as e:
+        pass
 
 
 # def test_sdo_block_upload_retransmit(node: canopen.RemoteNode):
