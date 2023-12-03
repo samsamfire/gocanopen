@@ -2,16 +2,6 @@ package canopen
 
 import "testing"
 
-func TestCcitt_single(t *testing.T) {
-	crc := CRC16(0)
-
-	crc.ccittSingle(10)
-	if crc != 0xA14A {
-		t.Errorf("Was expecting 0xA14A, got %x", crc)
-	}
-
-}
-
 func TestFifoWrite(t *testing.T) {
 	fifo := NewFifo(100)
 	res := fifo.Write([]byte{1, 2, 3, 4, 5}, nil)
@@ -62,20 +52,27 @@ func TestFifoRead(t *testing.T) {
 }
 
 func TestFifoAltRead(t *testing.T) {
-	fifo := NewFifo(100)
-	receive_buffer := make([]byte, 10)
-	var eof bool = false
-	res := fifo.AltRead(receive_buffer)
+	fifo := NewFifo(101)
+	if fifo.AltGetOccupied() != 0 {
+		t.Fatal("fifo should be empty")
+	}
+	rxBuffer := make([]byte, 7)
+	res := fifo.AltRead(rxBuffer)
 	if res != 0 {
 		t.Error()
 	}
 	// Write to fifo
-	res = fifo.Write([]byte{1, 2, 3, 4}, nil)
-	if res != 4 && fifo.writePos != 4 {
-		t.Error()
+	for i := 0; i < 10; i++ {
+		res = fifo.Write([]byte("1234567891"), nil)
+		if res != 10 {
+			t.Fatalf("should be exactly 10, got %v", res)
+		}
 	}
-	res = fifo.Read(receive_buffer, &eof)
-	if res != 4 {
-		t.Errorf("Res is %v", res)
+	res = fifo.AltRead(rxBuffer)
+	if res != 7 || string(rxBuffer) != "1234567" {
+		t.Fatal("alt read problem")
+	}
+	if fifo.AltGetOccupied() != 93 {
+		t.Fatalf("should be 93 left, instead %v", fifo.AltGetOccupied())
 	}
 }
