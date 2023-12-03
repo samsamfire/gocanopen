@@ -1,4 +1,4 @@
-name: Test runner for golang unit testing
+name: Unit testing golang
 
 on: [push]
 

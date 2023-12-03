@@ -1,4 +1,4 @@
-name: Test runner
+name: Integration tests with python
 
 on: [push]
 
