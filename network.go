@@ -120,7 +120,7 @@ func (network *Network) Process() error {
 					elapsed := time.Since(startMain)
 					startMain = time.Now()
 					timeDifferenceUs := uint32(elapsed.Microseconds())
-					state := node.Process(false, timeDifferenceUs, nil)
+					state := node.processMain(false, timeDifferenceUs, nil)
 					// <-- Add application code HERE
 					time.Sleep(mainPeriod)
 					if state == RESET_APP || state == RESET_COMM {

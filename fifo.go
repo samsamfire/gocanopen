@@ -47,6 +47,9 @@ func (fifo *Fifo) GetOccupied() int {
 // Write data to fifo
 func (fifo *Fifo) Write(buffer []byte, crc *CRC16) int {
 
+	if buffer == nil {
+		return 0
+	}
 	writeCounter := 0
 
 	for _, element := range buffer {
