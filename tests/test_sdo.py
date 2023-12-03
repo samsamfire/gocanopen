@@ -324,13 +324,13 @@ def test_sdo_block_upload_crc_invalid(node: canopen.RemoteNode):
             if counter == 11:
                 # Mess up CRC
                 stream._crc.process(b"randomdata")
-        stream.close()
-
-    # PR oppened
-    try:
-        node.sdo.read_response()
-    except Exception as e:
-        pass
+            stream.close()
+    
+    # Do some dummy reads
+    for value in [10, 22, 89, 253]:
+        node.sdo["UNSIGNED8 value"].raw = value
+        assert node.sdo["UNSIGNED8 value"].raw == value
+        assert node.sdo["UNSIGNED8 value"].od.data_type == datatypes.UNSIGNED8
 
 
 # def test_sdo_block_upload_retransmit(node: canopen.RemoteNode):
