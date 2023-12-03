@@ -86,7 +86,7 @@ func (busManager *BusManager) Send(frame Frame) error {
 }
 
 // This should be called cyclically to update errors
-func (busManager *BusManager) Process() error {
+func (busManager *BusManager) process() error {
 	// TODO get bus state error
 	busManager.CANerrorstatus = 0
 	return nil

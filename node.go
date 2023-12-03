@@ -79,15 +79,15 @@ func (node *Node) processSync(timeDifferenceUs uint32, timerNextUs *uint32) bool
 	return syncWas
 }
 
-/* Process all objects */
-func (node *Node) Process(enableGateway bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
+// Process canopen objects that are not RT
+// Does not process SYNC and PDOs
+func (node *Node) processMain(enableGateway bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
 	// Process all objects
 	reset := RESET_NOT
 	NMTState := node.NMT.GetInternalState()
 	NMTisPreOrOperational := (NMTState == NMT_PRE_OPERATIONAL) || (NMTState == NMT_OPERATIONAL)
 
-	// CAN stuff to process
-	node.BusManager.Process()
+	node.BusManager.process()
 	node.EM.process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
 	reset = node.NMT.process(&NMTState, timeDifferenceUs, timerNextUs)
 	// Update NMTisPreOrOperational
@@ -97,16 +97,14 @@ func (node *Node) Process(enableGateway bool, timeDifferenceUs uint32, timerNext
 	for _, server := range node.SDOServers {
 		server.process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
 	}
-	// Process HB consumer
 	node.HBConsumer.process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
-	// Process TIME object
 	node.TIME.process(NMTisPreOrOperational, timeDifferenceUs)
 
 	return reset
 
 }
 
-/*Initialize all PDOs*/
+// Initialize all PDOs
 func (node *Node) initPDO() error {
 	if node.id < 1 || node.id > 127 || node.NodeIdUnconfigured {
 		if node.NodeIdUnconfigured {
