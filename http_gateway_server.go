@@ -111,7 +111,6 @@ func (e *HTTPGatewayError) Error() string {
 
 type HTTPGatewayServer struct {
 	network          *Network
-	sdoTimeout       uint16
 	serveMux         *http.ServeMux
 	defaultNetworkId uint16
 	defaultNodeId    uint8
@@ -347,9 +346,9 @@ func (gateway *HTTPGatewayServer) processCANopenRequest(w http.ResponseWriter, r
 			return ErrGwSyntaxError
 		}
 	}
-	if len(matchPDO) <= 2 {
-		// TODO
-	}
+	// if len(matchPDO) <= 2 {
+	// 	// TODO
+	// }
 
 	log.Errorf("[HTTP][SERVER] request did not match any of the known commands, probably a syntax error")
 	return ErrGwSyntaxError

@@ -114,7 +114,7 @@ func TestReadWriteDisabled(t *testing.T) {
 	}
 	entry := od.Index(0x2001)
 	if entry == nil {
-		t.Error("Empty entry")
+		t.Fatal("Empty entry")
 	}
 	extension := Extension{Object: nil, Read: ReadEntryDisabled, Write: WriteEntryDisabled, flagsPDO: [32]uint8{0}}
 	entry.Extension = &extension
