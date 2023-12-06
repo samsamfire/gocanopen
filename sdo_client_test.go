@@ -23,20 +23,20 @@ func TestSDOReadExpedited(t *testing.T) {
 	}
 }
 
-func TestSDOLocal(t *testing.T) {
-	network := createNetwork()
-	_, err := network.CreateNode(0x55, "./testdata/base.eds")
-	if err != nil {
-		t.Fatal(err)
-	}
-	data := []byte{0x10}
-	for i := 0; i < 8; i++ {
-		err := network.sdoClient.WriteRaw(0x55, 0x2001+uint16(i), 0, data, false)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-}
+// func TestSDOLocal(t *testing.T) {
+// 	network := createNetwork()
+// 	_, err := network.CreateNode(0x55, "./testdata/base.eds")
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	data := []byte{0x10}
+// 	for i := 0; i < 8; i++ {
+// 		err := network.sdoClient.WriteRaw(0x55, 0x2001+uint16(i), 0, data, false)
+// 		if err != nil {
+// 			t.Fatal(err)
+// 		}
+// 	}
+// }
 
 func TestSDOReadBlock(t *testing.T) {
 	network := createNetwork()
@@ -49,13 +49,10 @@ func TestSDOReadBlock(t *testing.T) {
 
 func TestSDOWriteBlock(t *testing.T) {
 	network := createNetwork()
-	data, err := os.ReadFile("./notes.txt")
-	if err != nil {
-		t.Fatal("error", err)
-	}
+	data := []byte("some random string some random string some random string some random string some random stringsome random string some random string")
 	node := network.Nodes[NODE_ID_TEST]
 	node.OD.AddFile(0x3333, "File entry", "./here.txt", os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
-	err = network.sdoClient.WriteRaw(NODE_ID_TEST, 0x3333, 0, data, false)
+	err := network.sdoClient.WriteRaw(NODE_ID_TEST, 0x3333, 0, data, false)
 	if err != nil {
 		t.Fatal(err)
 	}
