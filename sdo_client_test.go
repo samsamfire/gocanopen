@@ -3,7 +3,14 @@ package canopen
 import (
 	"os"
 	"testing"
+
+	log "github.com/sirupsen/logrus"
 )
+
+func init() {
+	// Set the logger to debug
+	log.SetLevel(log.WarnLevel)
+}
 
 func TestSDOReadBlock(t *testing.T) {
 	network := createNetwork()
@@ -16,12 +23,13 @@ func TestSDOReadBlock(t *testing.T) {
 
 func TestSDOWriteBlock(t *testing.T) {
 	network := createNetwork()
-	data := []byte(
-		"this is some unimportant data",
-	)
+	data, err := os.ReadFile("./notes.txt")
+	if err != nil {
+		t.Fatal("error", err)
+	}
 	node := network.Nodes[NODE_ID_TEST]
 	node.OD.AddFile(0x3333, "File entry", "./here.txt", os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
-	err := network.sdoClient.WriteRaw(NODE_ID_TEST, 0x3333, 0, data, false)
+	err = network.sdoClient.WriteRaw(NODE_ID_TEST, 0x3333, 0, data, false)
 	if err != nil {
 		t.Fatal(err)
 	}
