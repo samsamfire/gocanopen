@@ -976,7 +976,13 @@ func (server *SDOServer) Abort(abortCode SDOAbortCode) {
 	}
 }
 
-func NewSDOServer(busManager *BusManager, od *ObjectDictionary, nodeId uint8, timeoutTimeMs uint16, entry12xx *Entry) (*SDOServer, error) {
+func NewSDOServer(
+	busManager *BusManager,
+	od *ObjectDictionary,
+	nodeId uint8,
+	timeoutMs uint32,
+	entry12xx *Entry,
+) (*SDOServer, error) {
 	server := &SDOServer{}
 	if od == nil || busManager == nil || entry12xx == nil {
 		return nil, ErrIllegalArgument
@@ -987,8 +993,8 @@ func NewSDOServer(busManager *BusManager, od *ObjectDictionary, nodeId uint8, ti
 	server.bufReadOffset = 0
 	server.bufWriteOffset = 0
 	server.NodeId = nodeId
-	server.TimeoutTimeUs = uint32(timeoutTimeMs) * 1000
-	server.TimeoutTimeBlockTransferUs = uint32(timeoutTimeMs) * 700
+	server.TimeoutTimeUs = timeoutMs * 1000
+	server.TimeoutTimeBlockTransferUs = timeoutMs * 700
 	var canIdClientToServer uint16
 	var canIdServerToClient uint16
 	if entry12xx == nil {
