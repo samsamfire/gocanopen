@@ -8,16 +8,26 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-/* TODOs
-- Locking mechanisms
-- string with different size if no null character
-- extension management
-- block download
-- refactor/document
-*/
-
 const SDO_CLI_BUFFER_SIZE = 1000
 const CO_CONFIG_SDO_CLI_PST = 21
+const DEFAULT_SDO_CLIENT_TIMEOUT_MS = 1000
+
+type SDOReturn int8
+
+var ErrSDOInvalidArguments = errors.New("error in arguments")
+var ErrSDOEndedWithClientAbort = errors.New("communication ended with client abort")
+var ErrSDOEndedWithServerAbort = errors.New("communication ended with server abort")
+
+const (
+	SDO_WAITING_LOCAL_TRANSFER     uint8 = 6 // Waiting in client local transfer.
+	SDO_UPLOAD_DATA_FULL           uint8 = 5 // Data buffer is full.SDO client: data must be read before next upload cycle begins.
+	SDO_TRANSMIT_BUFFER_FULL       uint8 = 4 // CAN transmit buffer is full. Waiting.
+	SDO_BLOCK_DOWNLOAD_IN_PROGRESS uint8 = 3 // Block download is in progress. Sending train of messages.
+	SDO_BLOCK_UPLOAD_IN_PROGRESS   uint8 = 2 // Block upload is in progress. Receiving train of messages.SDO client: Data must not be read in this state.
+	SDO_WAITING_RESPONSE           uint8 = 1 // Waiting server or client response.
+	SDO_SUCCESS                    uint8 = 0 // Success, end of communication. SDO client: uploaded data must be read.
+
+)
 
 type SDOClient struct {
 	od                         *ObjectDictionary
@@ -50,23 +60,6 @@ type SDOClient struct {
 	BlockDataUploadLast        [7]byte
 	BlockCRC                   CRC16
 }
-
-type SDOReturn int8
-
-var ErrSDOInvalidArguments = errors.New("error in arguments")
-var ErrSDOEndedWithClientAbort = errors.New("communication ended with client abort")
-var ErrSDOEndedWithServerAbort = errors.New("communication ended with server abort")
-
-const (
-	SDO_WAITING_LOCAL_TRANSFER     uint8 = 6 // Waiting in client local transfer.
-	SDO_UPLOAD_DATA_FULL           uint8 = 5 // Data buffer is full.SDO client: data must be read before next upload cycle begins.
-	SDO_TRANSMIT_BUFFER_FULL       uint8 = 4 // CAN transmit buffer is full. Waiting.
-	SDO_BLOCK_DOWNLOAD_IN_PROGRESS uint8 = 3 // Block download is in progress. Sending train of messages.
-	SDO_BLOCK_UPLOAD_IN_PROGRESS   uint8 = 2 // Block upload is in progress. Receiving train of messages.SDO client: Data must not be read in this state.
-	SDO_WAITING_RESPONSE           uint8 = 1 // Waiting server or client response.
-	SDO_SUCCESS                    uint8 = 0 // Success, end of communication. SDO client: uploaded data must be read.
-
-)
 
 func (client *SDOClient) Handle(frame Frame) {
 
@@ -153,7 +146,7 @@ func (client *SDOClient) setup(cobIdClientToServer uint32, cobIdServerToClient u
 }
 
 // Start a new download sequence
-func (client *SDOClient) DownloadInitiate(index uint16, subindex uint8, sizeIndicated uint32, timeoutMs uint16, blockEnabled bool) error {
+func (client *SDOClient) DownloadInitiate(index uint16, subindex uint8, sizeIndicated uint32, blockEnabled bool) error {
 	if !client.Valid {
 		return ErrSDOInvalidArguments
 	}
@@ -162,7 +155,6 @@ func (client *SDOClient) DownloadInitiate(index uint16, subindex uint8, sizeIndi
 	client.SizeIndicated = sizeIndicated
 	client.SizeTransferred = 0
 	client.Finished = false
-	client.TimeoutTimeUs = uint32(timeoutMs) * 1000
 	client.TimeoutTimer = 0
 	client.fifo.Reset()
 
@@ -383,6 +375,7 @@ func (client *SDOClient) download(timeDifferenceUs uint32, abort bool, bufferPar
 				client.BlockSequenceNb = 0
 				client.fifo.AltBegin(0)
 				client.State = SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_REQ
+				log.Debugf("[CLIENT][RX][x%x] DOWNLOAD BLOCK | x%x:x%x %v | blksize %v", client.NodeIdServer, client.Index, client.Subindex, response.raw, client.BlockSize)
 
 			case SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_REQ, SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_RSP:
 
@@ -397,7 +390,6 @@ func (client *SDOClient) download(timeDifferenceUs uint32, abort bool, bufferPar
 					break
 				}
 				client.fifo.AltFinish(&client.BlockCRC)
-				log.Warn(client.BlockCRC)
 				if client.Finished {
 					client.State = SDO_STATE_DOWNLOAD_BLK_END_REQ
 				} else {
@@ -655,7 +647,7 @@ func (client *SDOClient) abort(abortCode SDOAbortCode) {
 ////////////SDO UPLOAD///////////////
 /////////////////////////////////////
 
-func (client *SDOClient) uploadInitiate(index uint16, subindex uint8, timeoutTimeMs uint16, blockEnabled bool) error {
+func (client *SDOClient) uploadInitiate(index uint16, subindex uint8, blockEnabled bool) error {
 	if !client.Valid {
 		return ErrSDOInvalidArguments
 	}
@@ -665,8 +657,6 @@ func (client *SDOClient) uploadInitiate(index uint16, subindex uint8, timeoutTim
 	client.SizeTransferred = 0
 	client.Finished = false
 	client.fifo.Reset()
-	client.TimeoutTimeUs = uint32(timeoutTimeMs) * 1000
-	client.TimeoutTimeBlockTransferUs = uint32(timeoutTimeMs) * 1000
 	if client.od != nil && client.NodeId != 0 && client.NodeIdServer == client.NodeId {
 		client.streamer.read = nil
 		client.State = SDO_STATE_UPLOAD_LOCAL_TRANSFER
@@ -1031,13 +1021,12 @@ func (client *SDOClient) upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 	}
 
 	if ret == SDO_WAITING_RESPONSE {
-
-		if client.State == SDO_STATE_ABORT {
+		switch client.State {
+		case SDO_STATE_ABORT:
 			client.abort(abortCode.(SDOAbortCode))
 			err = ErrSDOEndedWithClientAbort
 			client.State = SDO_STATE_IDLE
-
-		} else if client.State == SDO_STATE_UPLOAD_BLK_SUBBLOCK_SREQ {
+		case SDO_STATE_UPLOAD_BLK_SUBBLOCK_SREQ:
 			ret = SDO_BLOCK_UPLOAD_IN_PROGRESS
 		}
 	}
@@ -1057,57 +1046,54 @@ func (client *SDOClient) upload(timeDifferenceUs uint32, abort bool, sdoAbortCod
 
 }
 
-func (client *SDOClient) uploadBufRead(buffer []byte) int {
-	if buffer == nil {
-		return 0
-	}
-	return client.fifo.Read(buffer, nil)
-}
-
+// Read a given index/subindex from node into data
+// Similar to io.Read
 func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, data []byte) (int, error) {
+	var timeDifferenceUs uint32 = 10000
+	abortCode := SDO_ABORT_NONE
+
 	err := client.setup(uint32(SDO_CLIENT_ID)+uint32(nodeId), uint32(SDO_SERVER_ID)+uint32(nodeId), nodeId)
 	if err != nil {
-		log.Errorf("Error when setting up SDO client reason : %v", err)
-		return 0, SDO_ABORT_GENERAL
+		return 0, err
 	}
-	err = client.uploadInitiate(index, subindex, 1000, false)
-
+	err = client.uploadInitiate(index, subindex, false)
 	if err != nil {
-		return 0, SDO_ABORT_GENERAL
+		return 0, err
 	}
-	var timeDifferenceUs uint32 = 10000
-	var abortCode SDOAbortCode
 
 	for {
 		ret, err := client.upload(timeDifferenceUs, false, &abortCode, nil, nil, nil)
 		if err != nil {
 			return 0, abortCode
-		} else if ret == 0 {
+		} else if ret == SDO_SUCCESS {
 			break
 		}
 		time.Sleep(time.Duration(timeDifferenceUs) * time.Microsecond)
 	}
 	if abortCode == SDO_ABORT_NONE {
-		return client.uploadBufRead(data), nil
+		return client.fifo.Read(data, nil), nil
 	}
-	return client.uploadBufRead(data), abortCode
+	return 0, abortCode
 }
 
+// Read everything from a given index/subindex from node and return all bytes
+// Similar to io.ReadAll
 func (client *SDOClient) ReadAll(nodeId uint8, index uint16, subindex uint8) ([]byte, error) {
-
-	err := client.setup(uint32(SDO_CLIENT_ID)+uint32(nodeId), uint32(SDO_SERVER_ID)+uint32(nodeId), nodeId)
-	if err != nil {
-		log.Errorf("Error when setting up SDO client reason : %v", err)
-		return nil, SDO_ABORT_GENERAL
-	}
-	err = client.uploadInitiate(index, subindex, 1000, true)
-
-	if err != nil {
-		return nil, SDO_ABORT_GENERAL
-	}
-
 	var timeDifferenceUs uint32 = 10000
 	abortCode := SDO_ABORT_NONE
+	err := client.setup(
+		uint32(SDO_CLIENT_ID)+uint32(nodeId),
+		uint32(SDO_SERVER_ID)+uint32(nodeId),
+		nodeId,
+	)
+	if err != nil {
+		return nil, err
+	}
+	err = client.uploadInitiate(index, subindex, true)
+	if err != nil {
+		return nil, err
+	}
+
 	buffer := make([]byte, 1000)
 	singleRead := 0
 	returnBuffer := make([]byte, 0)
@@ -1116,55 +1102,79 @@ func (client *SDOClient) ReadAll(nodeId uint8, index uint16, subindex uint8) ([]
 		ret, err := client.upload(timeDifferenceUs, false, &abortCode, nil, nil, nil)
 		if err != nil {
 			return nil, abortCode
-		} else if uint8(ret) == 0 {
+		} else if ret == SDO_SUCCESS {
 			break
 		} else if ret == SDO_UPLOAD_DATA_FULL {
-			singleRead = client.uploadBufRead(buffer)
+			singleRead = client.fifo.Read(buffer, nil)
 			returnBuffer = append(returnBuffer, buffer[0:singleRead]...)
 		}
 		time.Sleep(time.Duration(timeDifferenceUs) * time.Microsecond)
 	}
-	singleRead = client.uploadBufRead(buffer)
+	singleRead = client.fifo.Read(buffer, nil)
 	returnBuffer = append(returnBuffer, buffer[0:singleRead]...)
 	return returnBuffer, abortCode
 }
 
+// Write to a given index/subindex to node using raw data
+// Similar to io.Write
 func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, data []byte, forceSegmented bool) error {
 	bufferPartial := false
-	err := client.setup(uint32(SDO_CLIENT_ID)+uint32(nodeId), uint32(SDO_SERVER_ID)+uint32(nodeId), nodeId)
+	err := client.setup(
+		uint32(SDO_CLIENT_ID)+uint32(nodeId),
+		uint32(SDO_SERVER_ID)+uint32(nodeId),
+		nodeId,
+	)
 	if err != nil {
-		log.Errorf("Error when setting up SDO client reason : %v", err)
-		return SDO_ABORT_GENERAL
+		return err
 	}
-	err = client.DownloadInitiate(index, subindex, 0, 1000, true)
+	err = client.DownloadInitiate(index, subindex, 0, true)
 	if err != nil {
-		log.Errorf("Failed to initiate SDO client : %v", err)
+		return err
 	}
-
 	// Fill buffer
-	nWritten := client.fifo.Write(data, nil)
-	if nWritten < len(data) {
+	totalWritten := client.fifo.Write(data, nil)
+	if totalWritten < len(data) {
 		bufferPartial = true
-		log.Info("Not enough space in buffer so using buffer partial")
 	}
-	var timeDifferenceUs uint32 = 10000
+	var timeDifferenceUs uint32 = 100
 	abortCode := SDO_ABORT_NONE
+	total := 0
 
 	for {
-		ret, err := client.download(timeDifferenceUs, false, bufferPartial, &abortCode, nil, nil, forceSegmented)
-		log.Warn(err)
+		before := time.Now().UnixMicro()
+		ret, err := client.download(
+			timeDifferenceUs,
+			false,
+			bufferPartial,
+			&abortCode,
+			nil,
+			nil,
+			forceSegmented,
+		)
+		duration := time.Now().UnixMilli() - before
 		if err != nil {
-			return SDO_ABORT_GENERAL
-		} else if uint8(ret) == 0 {
+			return err
+		} else if ret == SDO_BLOCK_DOWNLOAD_IN_PROGRESS && bufferPartial {
+			totalWritten += client.fifo.Write(data[totalWritten:], nil)
+			if totalWritten == len(data) {
+				bufferPartial = false
+			}
+		} else if ret == SDO_SUCCESS {
 			break
 		}
+		total += int(duration)
 		time.Sleep(time.Duration(timeDifferenceUs) * time.Microsecond)
 	}
-
 	return nil
 }
 
-func NewSDOClient(busManager *BusManager, od *ObjectDictionary, nodeId uint8, entry1280 *Entry) (*SDOClient, error) {
+func NewSDOClient(
+	busManager *BusManager,
+	od *ObjectDictionary,
+	nodeId uint8,
+	timeoutMs uint32,
+	entry1280 *Entry,
+) (*SDOClient, error) {
 
 	if busManager == nil {
 		return nil, ErrIllegalArgument
@@ -1174,13 +1184,13 @@ func NewSDOClient(busManager *BusManager, od *ObjectDictionary, nodeId uint8, en
 		return nil, ErrIllegalArgument
 	}
 	client := &SDOClient{}
+	client.busManager = busManager
 	client.od = od
 	client.NodeId = nodeId
-	client.busManager = busManager
+	client.TimeoutTimeUs = 1000 * timeoutMs
+	client.TimeoutTimeBlockTransferUs = client.TimeoutTimeUs
 	client.streamer = &Streamer{}
-
-	fifo := NewFifo(300)
-	client.fifo = fifo
+	client.fifo = NewFifo(1000) // At least 127*7
 
 	var nodeIdServer uint8
 	var CobIdClientToServer, CobIdServerToClient uint32
