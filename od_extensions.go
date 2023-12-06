@@ -656,8 +656,6 @@ type FileObject struct {
 	WriteMode int
 	ReadMode  int
 	File      *os.File
-	Reader    *io.Reader
-	Writer    *io.Writer
 }
 
 // [SDO] Custom function for reading a file like object
@@ -724,6 +722,7 @@ func WriteEntryFileObject(stream *Stream, data []byte, countWritten *uint16) err
 		stream.DataOffset += uint32(countWrittenInt)
 		if stream.DataLength == stream.DataOffset {
 			log.Infof("[FILE EXTENSION] finished writing %v", fileObject.FilePath)
+			fileObject.File.Close()
 			return nil
 		} else {
 			return ODR_PARTIAL
