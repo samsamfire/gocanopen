@@ -77,7 +77,9 @@ func (fifo *Fifo) Write(buffer []byte, crc *CRC16) int {
 // Read data from fifo and return number of bytes read
 func (fifo *Fifo) Read(buffer []byte, eof *bool) int {
 	var readCounter int = 0
-
+	if buffer == nil {
+		return 0
+	}
 	if eof != nil {
 		*eof = false
 	}
