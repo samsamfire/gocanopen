@@ -9,7 +9,33 @@ import (
 
 func init() {
 	// Set the logger to debug
-	log.SetLevel(log.WarnLevel)
+	log.SetLevel(log.DebugLevel)
+}
+
+func TestSDOReadExpedited(t *testing.T) {
+	network := createNetwork()
+	data := make([]byte, 10)
+	for i := 0; i < 8; i++ {
+		_, err := network.sdoClient.ReadRaw(NODE_ID_TEST, 0x2001+uint16(i), 0, data)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestSDOLocal(t *testing.T) {
+	network := createNetwork()
+	_, err := network.CreateNode(0x55, "./testdata/base.eds")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := []byte{0x10}
+	for i := 0; i < 8; i++ {
+		err := network.sdoClient.WriteRaw(0x55, 0x2001+uint16(i), 0, data, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func TestSDOReadBlock(t *testing.T) {
