@@ -160,8 +160,8 @@ func NewNode(
 	nodeId uint8,
 	nmtControl uint16,
 	firstHbTimeMs uint16,
-	sdoServerTimeoutMs uint16,
-	sdoClientTimeoutMs uint16,
+	sdoServerTimeoutMs uint32,
+	sdoClientTimeoutMs uint32,
 	blockTransferEnabled bool,
 	statusBits *Entry,
 
@@ -260,7 +260,7 @@ func NewNode(
 		log.Info("[NODE][SDO CLIENT] no SDO clients initialized for node")
 	} else {
 
-		client, err := NewSDOClient(busManager, od, nodeId, entry1280)
+		client, err := NewSDOClient(busManager, od, nodeId, sdoClientTimeoutMs, entry1280)
 		if err != nil {
 			log.Errorf("[NODE][SDO CLIENT] error when initializing SDO client object %v", err)
 		} else {
