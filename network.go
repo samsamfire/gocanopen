@@ -69,7 +69,7 @@ func (network *Network) Connect(args ...any) error {
 		return err
 	}
 	// Add SDO client to network by default
-	client, err := NewSDOClient(busManager, nil, 0, nil)
+	client, err := NewSDOClient(busManager, nil, 0, DEFAULT_SDO_CLIENT_TIMEOUT_MS, nil)
 	network.sdoClient = client
 	return err
 }
