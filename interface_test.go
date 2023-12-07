@@ -8,7 +8,7 @@ import (
 
 var BaseObjectDictionaryParsed ObjectDictionary
 
-func createOD() ObjectDictionary {
+func createOD() *ObjectDictionary {
 	od := NewOD()
 	od.AddVariable(0x1016, "entry1016", Variable{Data: []byte{0x10, 0x20}, Attribute: ATTRIBUTE_SDO_R | ATTRIBUTE_SDO_W})
 	od.AddVariable(0x1017, "entry1017", Variable{Data: []byte{0x10, 0x20}, Attribute: ATTRIBUTE_SDO_R | ATTRIBUTE_SDO_W})
@@ -64,7 +64,7 @@ func TestSub(t *testing.T) {
 
 // Test reading OD variables
 func TestGetUint(t *testing.T) {
-	BaseObjectDictionaryParsed, err := ParseEDS("testdata/base.eds", 0x10)
+	BaseObjectDictionaryParsed, err := ParseEDSFromFile("testdata/base.eds", 0x10)
 	if err != nil {
 		t.Error(err)
 	}
@@ -88,7 +88,7 @@ func TestGetUint(t *testing.T) {
 
 // Test reading SDO client parameter entry
 func TestReadSDO1280(t *testing.T) {
-	od, err := ParseEDS("testdata/base.eds", 0x10)
+	od, err := ParseEDSFromFile("testdata/base.eds", 0x10)
 	if err != nil {
 		t.Fatalf("could not parse eds : %v", err)
 	}
@@ -108,7 +108,7 @@ func TestReadSDO1280(t *testing.T) {
 // Test reader writer disabled
 func TestReadWriteDisabled(t *testing.T) {
 	//var streamer ObjectStreamer
-	od, err := ParseEDS("testdata/base.eds", 0x10)
+	od, err := ParseEDSFromFile("testdata/base.eds", 0x10)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,9 +1,11 @@
 package canopen
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -271,7 +273,7 @@ func (network *Network) CreateNode(nodeId uint8, od any) (*Node, error) {
 	var err error
 	switch odType := od.(type) {
 	case string:
-		odNode, err = ParseEDS(odType, nodeId)
+		odNode, err = ParseEDSFromFile(odType, nodeId)
 		if err != nil {
 			return nil, err
 		}
@@ -308,7 +310,6 @@ func (network *Network) CreateNode(nodeId uint8, od any) (*Node, error) {
 // If already present, OD will be overwritten
 // User can then access the node via OD naming
 // A same OD can be used for multiple nodes
-// Loading from node using object x1020 is not supported yet
 func (network *Network) AddNode(nodeId uint8, od any) error {
 	var odNode *ObjectDictionary
 	var err error
@@ -317,7 +318,7 @@ func (network *Network) AddNode(nodeId uint8, od any) error {
 	}
 	switch odType := od.(type) {
 	case string:
-		odNode, err = ParseEDS(odType, nodeId)
+		odNode, err = ParseEDSFromFile(odType, nodeId)
 		if err != nil {
 			return err
 		}
@@ -331,4 +332,48 @@ func (network *Network) AddNode(nodeId uint8, od any) error {
 
 	return nil
 
+}
+
+// Same as AddNode, except od is downloaded from remote node
+// Optional callback can be provided to perform unzip, untar etc if a specific storage format is used
+func (network *Network) AddNodeFromSDO(
+	nodeId uint8,
+	formatHandlerCallback func(formatType uint8, reader io.Reader) (*ObjectDictionary, error),
+) error {
+	rawEds, err := network.sdoClient.ReadAll(nodeId, 0x1021, 0)
+	if err != nil {
+		return err
+	}
+	edsFormat := []byte{0}
+	_, err = network.sdoClient.ReadRaw(nodeId, 0x1022, 0, edsFormat)
+
+	if (err != nil && edsFormat[0] == 0) || (formatHandlerCallback == nil && err != nil) {
+		// No callback & format is not specified or
+		// Storage format is 0
+		// Use default ASCII format
+		od, err := ParseEDSFromString(string(rawEds), nodeId)
+		if err != nil {
+			return err
+		}
+		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: od, edsPath: ""}
+		return nil
+	} else if formatHandlerCallback != nil && err != nil {
+		odReader := bytes.NewBuffer(rawEds)
+		od, err := formatHandlerCallback(edsFormat[0], odReader)
+		if err != nil {
+			return nil
+		}
+		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: od, edsPath: ""}
+	} else if formatHandlerCallback != nil {
+		odReader := bytes.NewBuffer(rawEds)
+		// Instead of failing if format doesn't exist, just supply 0
+		od, err := formatHandlerCallback(0, odReader)
+		if err != nil {
+			return nil
+		}
+		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: od, edsPath: ""}
+	} else {
+		return fmt.Errorf("supply a handler for the format : %v", edsFormat[0])
+	}
+	return nil
 }

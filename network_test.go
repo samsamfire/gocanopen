@@ -29,3 +29,12 @@ func TestRead(t *testing.T) {
 	}
 
 }
+
+func TestAddNodeLoadODFromSDO(t *testing.T) {
+	network := createNetwork()
+	defer network.Disconnect()
+	err := network.AddNodeFromSDO(NODE_ID_TEST, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+}

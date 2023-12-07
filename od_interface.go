@@ -125,8 +125,8 @@ func isIDRestricted(canId uint16) bool {
 		canId >= 0x701
 }
 
-func NewOD() ObjectDictionary {
-	return ObjectDictionary{
+func NewOD() *ObjectDictionary {
+	return &ObjectDictionary{
 		entriesByIndexValue: make(map[uint16]*Entry),
 		entriesByIndexName:  make(map[string]*Entry),
 	}
