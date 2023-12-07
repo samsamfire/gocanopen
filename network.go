@@ -76,6 +76,10 @@ func (network *Network) Connect(args ...any) error {
 
 // Disconnects from CAN bus and stops cleanly everything
 func (network *Network) Disconnect() {
+	for _, node := range network.Nodes {
+		node.exit <- true
+	}
+	network.busManager.Bus.Disconnect()
 
 }
 
