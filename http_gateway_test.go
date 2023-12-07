@@ -35,9 +35,9 @@ func createGateway() *HTTPGatewayServer {
 
 func TestHTTPRead(t *testing.T) {
 	gateway := createGateway()
-	go func() {
-		createNetwork()
-	}()
+	net := createNetwork()
+	defer net.Disconnect()
+	defer gateway.network.Disconnect()
 	time.Sleep(1 * time.Second)
 	ts := httptest.NewServer(gateway.serveMux)
 	defer ts.Close()

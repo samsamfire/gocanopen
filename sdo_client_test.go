@@ -14,6 +14,7 @@ func init() {
 
 func TestSDOReadExpedited(t *testing.T) {
 	network := createNetwork()
+	defer network.Disconnect()
 	data := make([]byte, 10)
 	for i := 0; i < 8; i++ {
 		_, err := network.sdoClient.ReadRaw(NODE_ID_TEST, 0x2001+uint16(i), 0, data)
@@ -40,6 +41,7 @@ func TestSDOReadExpedited(t *testing.T) {
 
 func TestSDOReadBlock(t *testing.T) {
 	network := createNetwork()
+	defer network.Disconnect()
 	_, err := network.sdoClient.ReadAll(NODE_ID_TEST, 0x1021, 0)
 	if err != SDO_ABORT_NONE {
 		t.Fatal(err)
@@ -49,6 +51,7 @@ func TestSDOReadBlock(t *testing.T) {
 
 func TestSDOWriteBlock(t *testing.T) {
 	network := createNetwork()
+	defer network.Disconnect()
 	data := []byte("some random string some random string some random string some random string some random stringsome random string some random string")
 	node := network.Nodes[NODE_ID_TEST]
 	node.OD.AddFile(0x3333, "File entry", "./here.txt", os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
