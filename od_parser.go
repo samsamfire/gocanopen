@@ -48,14 +48,25 @@ var OBJ_NAME_MAP = map[byte]string{
 	OBJ_RECORD: "RECORD  ",
 }
 
+func ParseEDSFromFile(filePath string, nodeId uint8) (*ObjectDictionary, error) {
+	od, err := parseEDS(filePath, nodeId)
+	if err != nil {
+		return nil, err
+	}
+	od.filePath = filePath
+	return od, nil
+}
+
+func ParseEDSFromString(edsString string, nodeId uint8) (*ObjectDictionary, error) {
+	return parseEDS(edsString, nodeId)
+}
+
 // Parse an EDS and file and return an ObjectDictionary
-func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
+func parseEDS(filePathOrData string, nodeId uint8) (*ObjectDictionary, error) {
 
 	od := NewOD()
-	od.filePath = filePath
-
 	// Open the EDS file
-	edsFile, err := ini.Load(filePath)
+	edsFile, err := ini.Load(filePathOrData)
 	if err != nil {
 		return nil, err
 	}
@@ -145,8 +156,7 @@ func ParseEDS(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 		}
 	}
 
-	return &od, nil
-
+	return od, nil
 }
 
 // Print od out
