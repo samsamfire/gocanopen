@@ -19,6 +19,7 @@ const (
 	NODE_INIT     uint8 = 0
 	NODE_RUNNING  uint8 = 1
 	NODE_RESETING uint8 = 2
+	NODE_EXIT     uint8 = 3
 )
 
 type Node struct {
@@ -37,6 +38,7 @@ type Node struct {
 	MainCallback       func(args ...any)
 	State              uint8
 	id                 uint8
+	reset              chan bool
 	exit               chan bool
 }
 
@@ -176,6 +178,7 @@ func NewNode(
 	node.NodeIdUnconfigured = false
 	node.OD = od
 	node.exit = make(chan bool)
+	node.reset = make(chan bool)
 	node.id = nodeId
 	node.State = NODE_INIT
 
