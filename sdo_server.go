@@ -354,7 +354,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.SizeTransferred = 0
 				server.Finished = false
 				abortCode = server.readObjectDictionary(7, false)
-				if abortCode != nil {
+				if abortCode == nil {
 					if server.Finished {
 						server.SizeIndicated = server.streamer.stream.DataLength
 						if server.SizeIndicated == 0 {
