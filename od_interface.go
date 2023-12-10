@@ -46,7 +46,7 @@ func (od *ObjectDictionary) AddFile(index uint16, indexName string, filePath str
 		DataType:       DOMAIN,
 		Attribute:      ATTRIBUTE_SDO_RW,
 		ParameterValue: "",
-		DefaultValue:   []byte{},
+		defaultValue:   []byte{},
 		Index:          index,
 		SubIndex:       0,
 	}
@@ -98,7 +98,7 @@ type Variable struct {
 	DataType        byte
 	Attribute       uint8 // Attribute contains the access type and pdo mapping info
 	ParameterValue  string
-	DefaultValue    []byte
+	defaultValue    []byte
 	StorageLocation string
 	LowLimit        int
 	HighLimit       int
