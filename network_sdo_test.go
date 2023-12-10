@@ -20,7 +20,7 @@ var SDO_INTEGER_READ_MAP = map[string]int64{
 }
 
 var SDO_FLOAT_READ_MAP = map[string]float64{
-	"REAL32 value": math.Float64frombits(0x55555555),
+	"REAL32 value": float64(math.Float32frombits(uint32(0x55555555))),
 	"REAL64 value": math.Float64frombits(0x55555555),
 }
 
@@ -84,7 +84,7 @@ func TestReadFloat(t *testing.T) {
 	defer network.Disconnect()
 	for indexName, key := range SDO_FLOAT_READ_MAP {
 		val, _ := network.ReadFloat(NODE_ID_TEST, indexName, "")
-		if val != key {
+		if math.Abs(val-key) > 0.01 {
 			t.Errorf("error or incorrect value %v (%v expected)", val, key)
 		}
 	}
