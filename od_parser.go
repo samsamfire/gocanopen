@@ -57,12 +57,12 @@ func ParseEDSFromFile(filePath string, nodeId uint8) (*ObjectDictionary, error) 
 	return od, nil
 }
 
-func ParseEDSFromString(edsString string, nodeId uint8) (*ObjectDictionary, error) {
-	return parseEDS(edsString, nodeId)
+func ParseEDSFromRaw(edsBytes []byte, nodeId uint8) (*ObjectDictionary, error) {
+	return parseEDS(edsBytes, nodeId)
 }
 
 // Parse an EDS and file and return an ObjectDictionary
-func parseEDS(filePathOrData string, nodeId uint8) (*ObjectDictionary, error) {
+func parseEDS(filePathOrData any, nodeId uint8) (*ObjectDictionary, error) {
 
 	od := NewOD()
 	// Open the EDS file

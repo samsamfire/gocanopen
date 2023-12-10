@@ -43,7 +43,7 @@ func TestSDOReadBlock(t *testing.T) {
 	network := createNetwork()
 	defer network.Disconnect()
 	_, err := network.sdoClient.ReadAll(NODE_ID_TEST, 0x1021, 0)
-	if err != SDO_ABORT_NONE {
+	if err != nil {
 		t.Fatal(err)
 	}
 

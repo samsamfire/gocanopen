@@ -174,7 +174,6 @@ func (client *SDOClient) downloadMain(
 	timeDifferenceUs uint32,
 	abort bool,
 	bufferPartial bool,
-	sdoAbortCode *SDOAbortCode,
 	sizeTransferred *uint32,
 	timerNextUs *uint32,
 	forceSegmented bool,
@@ -205,11 +204,7 @@ func (client *SDOClient) downloadMain(
 			err = ErrSDOEndedWithServerAbort
 			// Abort from the client
 		} else if abort {
-			if sdoAbortCode == nil {
-				abortCode = SDO_ABORT_DEVICE_INCOMPAT
-			} else {
-				abortCode = *sdoAbortCode
-			}
+			abortCode = SDO_ABORT_DEVICE_INCOMPAT
 			client.State = SDO_STATE_ABORT
 
 		} else if !response.isResponseValid(client.State) {
@@ -313,12 +308,7 @@ func (client *SDOClient) downloadMain(
 		}
 
 	} else if abort {
-		if sdoAbortCode == nil {
-			abortCode = SDO_ABORT_DEVICE_INCOMPAT
-		} else {
-			abortCode = *sdoAbortCode
-		}
-		log.Warnf("Client is aborting : %x", abortCode)
+		abortCode = SDO_ABORT_DEVICE_INCOMPAT
 		client.State = SDO_STATE_ABORT
 	}
 
@@ -394,11 +384,6 @@ func (client *SDOClient) downloadMain(
 	if sizeTransferred != nil {
 		*sizeTransferred = client.SizeTransferred
 	}
-
-	if sdoAbortCode != nil && abortCode != nil {
-		*sdoAbortCode = abortCode.(SDOAbortCode)
-	}
-
 	return ret, err
 }
 
@@ -499,7 +484,7 @@ func (client *SDOClient) downloadLocal(bufferPartial bool, timerNextUs *uint32) 
 			}
 		}
 
-		if abortCode == SDO_ABORT_NONE || abortCode == nil {
+		if abortCode == nil {
 			_, err := client.streamer.Write(buffer)
 			odErr, ok := err.(ODR)
 			if err != nil && odErr != ODR_PARTIAL {
@@ -653,7 +638,6 @@ func (client *SDOClient) uploadSetup(index uint16, subindex uint8, blockEnabled 
 func (client *SDOClient) upload(
 	timeDifferenceUs uint32,
 	abort bool,
-	sdoAbortCode *SDOAbortCode,
 	sizeIndicated *uint32,
 	sizeTransferred *uint32,
 	timerNextUs *uint32,
@@ -678,11 +662,7 @@ func (client *SDOClient) upload(
 			client.State = SDO_STATE_IDLE
 			err = ErrSDOEndedWithServerAbort
 		} else if abort {
-			if sdoAbortCode == nil {
-				abortCode = SDO_ABORT_DEVICE_INCOMPAT
-			} else {
-				abortCode = *sdoAbortCode
-			}
+			abortCode = SDO_ABORT_DEVICE_INCOMPAT
 			client.State = SDO_STATE_ABORT
 
 		} else if !response.isResponseValid(client.State) {
@@ -855,11 +835,7 @@ func (client *SDOClient) upload(
 		timeDifferenceUs = 0
 		client.RxNew = false
 	} else if abort {
-		if sdoAbortCode == nil {
-			abortCode = SDO_ABORT_DEVICE_INCOMPAT
-		} else {
-			abortCode = *sdoAbortCode
-		}
+		abortCode = SDO_ABORT_DEVICE_INCOMPAT
 		client.State = SDO_STATE_ABORT
 	}
 
@@ -1025,10 +1001,6 @@ func (client *SDOClient) upload(
 		*sizeTransferred = client.SizeTransferred
 	}
 
-	if sdoAbortCode != nil && abortCode != nil {
-		*sdoAbortCode = abortCode.(SDOAbortCode)
-	}
-
 	return ret, err
 
 }
@@ -1037,9 +1009,12 @@ func (client *SDOClient) upload(
 // Similar to io.Read
 func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, data []byte) (int, error) {
 	var timeDifferenceUs uint32 = 10000
-	abortCode := SDO_ABORT_NONE
 
-	err := client.setupServer(uint32(SDO_CLIENT_ID)+uint32(nodeId), uint32(SDO_SERVER_ID)+uint32(nodeId), nodeId)
+	err := client.setupServer(
+		uint32(SDO_CLIENT_ID)+uint32(nodeId),
+		uint32(SDO_SERVER_ID)+uint32(nodeId),
+		nodeId,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -1049,25 +1024,24 @@ func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, dat
 	}
 
 	for {
-		ret, err := client.upload(timeDifferenceUs, false, &abortCode, nil, nil, nil)
+		ret, err := client.upload(timeDifferenceUs, false, nil, nil, nil)
 		if err != nil {
-			return 0, abortCode
+			return 0, err
 		} else if ret == SDO_SUCCESS {
 			break
 		}
 		time.Sleep(time.Duration(timeDifferenceUs) * time.Microsecond)
 	}
-	if abortCode == SDO_ABORT_NONE {
-		return client.fifo.Read(data, nil), nil
+	if err != nil {
+		return 0, err
 	}
-	return 0, abortCode
+	return client.fifo.Read(data, nil), nil
 }
 
 // Read everything from a given index/subindex from node and return all bytes
 // Similar to io.ReadAll
 func (client *SDOClient) ReadAll(nodeId uint8, index uint16, subindex uint8) ([]byte, error) {
 	var timeDifferenceUs uint32 = 10000
-	abortCode := SDO_ABORT_NONE
 	err := client.setupServer(
 		uint32(SDO_CLIENT_ID)+uint32(nodeId),
 		uint32(SDO_SERVER_ID)+uint32(nodeId),
@@ -1086,9 +1060,9 @@ func (client *SDOClient) ReadAll(nodeId uint8, index uint16, subindex uint8) ([]
 	returnBuffer := make([]byte, 0)
 
 	for {
-		ret, err := client.upload(timeDifferenceUs, false, &abortCode, nil, nil, nil)
+		ret, err := client.upload(timeDifferenceUs, false, nil, nil, nil)
 		if err != nil {
-			return nil, abortCode
+			return nil, err
 		} else if ret == SDO_SUCCESS {
 			break
 		} else if ret == SDO_UPLOAD_DATA_FULL {
@@ -1099,7 +1073,7 @@ func (client *SDOClient) ReadAll(nodeId uint8, index uint16, subindex uint8) ([]
 	}
 	singleRead = client.fifo.Read(buffer, nil)
 	returnBuffer = append(returnBuffer, buffer[0:singleRead]...)
-	return returnBuffer, abortCode
+	return returnBuffer, err
 }
 
 // Write to a given index/subindex to node using raw data
@@ -1124,14 +1098,12 @@ func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, da
 		bufferPartial = true
 	}
 	var timeDifferenceUs uint32 = 10000
-	abortCode := SDO_ABORT_NONE
 
 	for {
 		ret, err := client.downloadMain(
 			timeDifferenceUs,
 			false,
 			bufferPartial,
-			&abortCode,
 			nil,
 			nil,
 			forceSegmented,
