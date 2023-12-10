@@ -172,9 +172,9 @@ func (network *Network) Read(nodeId uint8, index any, subindex any) (value any, 
 	if e != nil {
 		return nil, e
 	}
-	data := make([]byte, odVar.DataLength)
+	data := make([]byte, odVar.DataLength())
 	nbRead, e := network.sdoClient.ReadRaw(nodeId, odVar.Index, odVar.SubIndex, data)
-	if e != SDO_ABORT_NONE {
+	if e != nil {
 		return nil, e
 	}
 	return decode(data[:nbRead], odVar.DataType)

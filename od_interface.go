@@ -41,8 +41,7 @@ func (od *ObjectDictionary) AddFile(index uint16, indexName string, filePath str
 	log.Infof("[OD] adding file object entry : %v at x%x", filePath, index)
 	fileObject := &FileObject{FilePath: filePath, ReadMode: readMode, WriteMode: writeMode}
 	variable := Variable{
-		Data:           []byte{},
-		DataLength:     0,
+		data:           []byte{},
 		Name:           indexName,
 		DataType:       DOMAIN,
 		Attribute:      ATTRIBUTE_SDO_RW,
@@ -94,8 +93,7 @@ type FileInfo struct {
 
 // OD object of type "VAR" object used for holding any sub object
 type Variable struct {
-	Data            []byte
-	DataLength      uint32 //Can be different than len(Data) for strings
+	data            []byte
 	Name            string
 	DataType        byte
 	Attribute       uint8 // Attribute contains the access type and pdo mapping info

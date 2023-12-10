@@ -11,6 +11,11 @@ import (
 	"gopkg.in/ini.v1"
 )
 
+// Return number of bytes
+func (variable *Variable) DataLength() uint32 {
+	return uint32(len(variable.data))
+}
+
 // Create variable from section entry
 func NewVariable(
 	section *ini.Section,
@@ -81,7 +86,7 @@ func NewVariable(
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse DefaultValue for %x : %x, because %v", index, subindex, err)
 		}
-		variable.Data = variable.DefaultValue
+		variable.data = variable.DefaultValue
 	}
 
 	return variable, nil
