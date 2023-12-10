@@ -39,7 +39,6 @@ const (
 )
 
 const (
-	SDO_ABORT_NONE               SDOAbortCode = 0x00000000
 	SDO_ABORT_TOGGLE_BIT         SDOAbortCode = 0x05030000
 	SDO_ABORT_TIMEOUT            SDOAbortCode = 0x05040000
 	SDO_ABORT_CMD                SDOAbortCode = 0x05040001
@@ -74,7 +73,6 @@ const (
 )
 
 var SDO_ABORT_EXPLANATION_MAP = map[SDOAbortCode]string{
-	SDO_ABORT_NONE:               "No abort",
 	SDO_ABORT_TOGGLE_BIT:         "Toggle bit not altered",
 	SDO_ABORT_TIMEOUT:            "SDO protocol timed out",
 	SDO_ABORT_CMD:                "Command specifier not valid or unknown",

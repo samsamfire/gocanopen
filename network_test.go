@@ -25,7 +25,7 @@ func TestRead(t *testing.T) {
 	defer network.Disconnect()
 	val, err := network.Read(NODE_ID_TEST, "UNSIGNED8 value", "")
 
-	if err != nil || val != 0x10 {
+	if err != nil || val.(uint64) != 0x10 {
 		t.Errorf("error or incorrect value %v (0x10 expected)", val)
 	}
 
