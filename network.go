@@ -77,6 +77,7 @@ func (network *Network) Connect(args ...any) error {
 
 // Disconnects from CAN bus and stops cleanly everything
 func (network *Network) Disconnect() {
+	log.Infof("[NETWORK] disconnecting from network")
 	for _, node := range network.Nodes {
 		node.exit <- true
 	}
@@ -92,6 +93,7 @@ func (network *Network) Process() error {
 		log.Infof("[NETWORK][x%x] adding node to nodes being processed", id)
 		go func(node *Node) {
 			defer wg.Done()
+			var nodeWg sync.WaitGroup
 			// These are timer values and can be adjusted
 			startBackground := time.Now()
 			backgroundPeriod := time.Duration(10 * time.Millisecond)
@@ -100,12 +102,13 @@ func (network *Network) Process() error {
 			for {
 				switch node.State {
 				case NODE_INIT:
-					// TODO : init node
 					log.Infof("[NETWORK][x%x] starting node background process", node.id)
+					nodeWg.Add(1)
 					go func() {
+						defer nodeWg.Done()
 						for {
 							select {
-							case <-node.exit:
+							case <-node.reset:
 								log.Infof("[NETWORK][x%x] exited node background process", node.id)
 								return
 							default:
@@ -130,10 +133,21 @@ func (network *Network) Process() error {
 					time.Sleep(mainPeriod)
 					if state == RESET_APP || state == RESET_COMM {
 						node.State = NODE_RESETING
+					} else {
+						select {
+						case <-node.exit:
+							log.Infof("[NETWORK][x%x] request to stop local node", node.id)
+							node.State = NODE_EXIT
+						default:
+						}
 					}
 				case NODE_RESETING:
-					node.exit <- true
+					node.reset <- true
 					node.State = NODE_INIT
+
+				case NODE_EXIT:
+					node.reset <- true
+					nodeWg.Wait()
 
 				}
 			}
