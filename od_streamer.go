@@ -72,8 +72,8 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 			return streamer, nil
 		}
 		streamer.stream.Attribute = object.Attribute
-		streamer.stream.Data = object.Data
-		streamer.stream.DataLength = uint32(len(object.Data))
+		streamer.stream.Data = object.data
+		streamer.stream.DataLength = object.DataLength()
 
 	case Array:
 		subEntriesCount := len(object.Variables)
@@ -81,8 +81,8 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 			return nil, ODR_SUB_NOT_EXIST
 		}
 		streamer.stream.Attribute = object.Variables[subIndex].Attribute
-		streamer.stream.Data = object.Variables[subIndex].Data
-		streamer.stream.DataLength = uint32(len(object.Variables[subIndex].Data))
+		streamer.stream.Data = object.Variables[subIndex].data
+		streamer.stream.DataLength = object.Variables[subIndex].DataLength()
 
 	case []Record:
 		records := object
@@ -97,8 +97,8 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 			return nil, ODR_SUB_NOT_EXIST
 		}
 		streamer.stream.Attribute = record.Variable.Attribute
-		streamer.stream.Data = record.Variable.Data
-		streamer.stream.DataLength = uint32(len(record.Variable.Data))
+		streamer.stream.Data = record.Variable.data
+		streamer.stream.DataLength = record.Variable.DataLength()
 
 	default:
 		log.Errorf("[OD][x%x] error, unknown type : %+v", entry.Index, object)

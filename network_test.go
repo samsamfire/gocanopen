@@ -23,9 +23,10 @@ func createNetwork() *Network {
 func TestRead(t *testing.T) {
 	network := createNetwork()
 	defer network.Disconnect()
-	_, err := network.Read(NODE_ID_TEST, "UNSIGNED8 value", "")
-	if err != nil {
-		t.Fatal(err)
+	val, err := network.Read(NODE_ID_TEST, "UNSIGNED8 value", "")
+
+	if err != nil || val != 0x10 {
+		t.Errorf("error or incorrect value %v (0x10 expected)", val)
 	}
 
 }
