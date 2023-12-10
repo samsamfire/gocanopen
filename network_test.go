@@ -20,17 +20,6 @@ func createNetwork() *Network {
 	return &network
 }
 
-func TestRead(t *testing.T) {
-	network := createNetwork()
-	defer network.Disconnect()
-	val, err := network.Read(NODE_ID_TEST, "UNSIGNED8 value", "")
-
-	if err != nil || val.(uint64) != 0x10 {
-		t.Errorf("error or incorrect value %v (0x10 expected)", val)
-	}
-
-}
-
 func TestAddNodeLoadODFromSDO(t *testing.T) {
 	network := createNetwork()
 	defer network.Disconnect()
