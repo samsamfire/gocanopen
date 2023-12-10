@@ -47,10 +47,9 @@ func (server *SDOServer) Handle(frame Frame) {
 		return
 	}
 	if frame.Data[0] == 0x80 {
-		// Client abort
 		server.State = SDO_STATE_IDLE
 		abortCode := binary.LittleEndian.Uint32(frame.Data[4:])
-		log.Warnf("[SERVER][RX] abort received from client : x%x (%v)", abortCode, SDOAbortCode(abortCode))
+		log.Warnf("[SERVER][RX] CLIENT ABORT | %v", SDOAbortCode(abortCode))
 	} else if server.RxNew {
 		// Ignore message if previous message not processed
 		log.Info("[SERVER][RX] ignoring message because still processing")
@@ -968,7 +967,7 @@ func (server *SDOServer) Abort(abortCode SDOAbortCode) {
 	server.txBuffer.Data[3] = server.Subindex
 	binary.LittleEndian.PutUint32(server.txBuffer.Data[4:], code)
 	server.BusManager.Send(server.txBuffer)
-	log.Warnf("[SERVER][TX] SERVER ABORT | x%x:x%x | %v (x%x)", server.Index, server.Subindex, abortCode, code)
+	log.Warnf("[SERVER][TX] SERVER ABORT | x%x:x%x | %v", server.Index, server.Subindex, abortCode)
 	if server.ErrorExtraInfo != nil {
 		log.Warnf("[SERVER][TX] SERVER ABORT | %v", server.ErrorExtraInfo)
 		server.ErrorExtraInfo = nil

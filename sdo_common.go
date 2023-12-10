@@ -2,6 +2,7 @@ package canopen
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -9,6 +10,9 @@ import (
 // Common defines to both SDO server and SDO client
 type SDOAbortCode uint32
 type SDOState uint8
+
+const SDO_CLIENT_TIMEOUT = 1000
+const SDO_SERVER_TIMEOUT = 1000
 
 const (
 	SDO_STATE_IDLE                      SDOState = 0x00
@@ -107,18 +111,16 @@ var SDO_ABORT_EXPLANATION_MAP = map[SDOAbortCode]string{
 }
 
 func (abort SDOAbortCode) Error() string {
-
-	err_string, ok := SDO_ABORT_EXPLANATION_MAP[abort]
-	if ok {
-		return err_string
-	} else {
-		log.Errorf("Abort is %x", uint32(abort))
-		return SDO_ABORT_EXPLANATION_MAP[SDO_ABORT_GENERAL]
-	}
+	return fmt.Sprintf("x%x : %s", uint32(abort), abort.Description())
 }
 
-const SDO_CLIENT_TIMEOUT = 1000
-const SDO_SERVER_TIMEOUT = 1000
+func (abort SDOAbortCode) Description() string {
+	description, ok := SDO_ABORT_EXPLANATION_MAP[abort]
+	if ok {
+		return description
+	}
+	return SDO_ABORT_EXPLANATION_MAP[SDO_ABORT_GENERAL]
+}
 
 type SDOResponse struct {
 	raw [8]byte

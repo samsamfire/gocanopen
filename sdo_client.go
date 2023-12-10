@@ -199,7 +199,7 @@ func (client *SDOClient) downloadMain(
 		response := client.Response
 		if response.IsAbort() {
 			abortCode = response.GetAbortCode()
-			log.Debugf("[CLIENT][RX][x%x] SERVER ABORT | x%x:x%x | %v (x%x)", client.NodeIdServer, client.Index, client.Subindex, abortCode, uint32(response.GetAbortCode()))
+			log.Debugf("[CLIENT][RX][x%x] SERVER ABORT | x%x:x%x | %v", client.NodeIdServer, client.Index, client.Subindex, abortCode)
 			client.State = SDO_STATE_IDLE
 			err = ErrSDOEndedWithServerAbort
 			// Abort from the client
@@ -603,7 +603,7 @@ func (client *SDOClient) abort(abortCode SDOAbortCode) {
 	client.txBuffer.Data[2] = uint8(client.Index >> 8)
 	client.txBuffer.Data[3] = client.Subindex
 	binary.LittleEndian.PutUint32(client.txBuffer.Data[4:], code)
-	log.Warnf("[CLIENT][TX][x%x] CLIENT ABORT | x%x:x%x | %v (x%x)", client.NodeIdServer, client.Index, client.Subindex, abortCode, code)
+	log.Warnf("[CLIENT][TX][x%x] CLIENT ABORT | x%x:x%x | %v", client.NodeIdServer, client.Index, client.Subindex, abortCode)
 	client.busManager.Send(client.txBuffer)
 
 }
@@ -658,7 +658,7 @@ func (client *SDOClient) upload(
 		response := client.Response
 		if response.IsAbort() {
 			abortCode = response.GetAbortCode()
-			log.Debugf("[CLIENT][RX][x%x] SERVER ABORT | x%x:x%x | %v (x%x)", client.NodeIdServer, client.Index, client.Subindex, abortCode, uint32(response.GetAbortCode()))
+			log.Debugf("[CLIENT][RX][x%x] SERVER ABORT | x%x:x%x | %v", client.NodeIdServer, client.Index, client.Subindex, abortCode)
 			client.State = SDO_STATE_IDLE
 			err = ErrSDOEndedWithServerAbort
 		} else if abort {
