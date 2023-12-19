@@ -11,6 +11,7 @@ import (
 const SDO_CLI_BUFFER_SIZE = 1000
 const CO_CONFIG_SDO_CLI_PST = 21
 const DEFAULT_SDO_CLIENT_TIMEOUT_MS = 1000
+const DEFAULT_SDO_WAIT_US = 10000
 
 type SDOReturn int8
 
@@ -1008,7 +1009,6 @@ func (client *SDOClient) upload(
 // Read a given index/subindex from node into data
 // Similar to io.Read
 func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, data []byte) (int, error) {
-	var timeDifferenceUs uint32 = 10000
 
 	err := client.setupServer(
 		uint32(SDO_CLIENT_ID)+uint32(nodeId),
@@ -1024,13 +1024,13 @@ func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, dat
 	}
 
 	for {
-		ret, err := client.upload(timeDifferenceUs, false, nil, nil, nil)
+		ret, err := client.upload(DEFAULT_SDO_WAIT_US, false, nil, nil, nil)
 		if err != nil {
 			return 0, err
 		} else if ret == SDO_SUCCESS {
 			break
 		}
-		time.Sleep(time.Duration(timeDifferenceUs) * time.Microsecond)
+		time.Sleep(time.Duration(DEFAULT_SDO_WAIT_US) * time.Microsecond)
 	}
 	if err != nil {
 		return 0, err
@@ -1041,7 +1041,6 @@ func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, dat
 // Read everything from a given index/subindex from node and return all bytes
 // Similar to io.ReadAll
 func (client *SDOClient) ReadAll(nodeId uint8, index uint16, subindex uint8) ([]byte, error) {
-	var timeDifferenceUs uint32 = 10000
 	err := client.setupServer(
 		uint32(SDO_CLIENT_ID)+uint32(nodeId),
 		uint32(SDO_SERVER_ID)+uint32(nodeId),
@@ -1060,7 +1059,7 @@ func (client *SDOClient) ReadAll(nodeId uint8, index uint16, subindex uint8) ([]
 	returnBuffer := make([]byte, 0)
 
 	for {
-		ret, err := client.upload(timeDifferenceUs, false, nil, nil, nil)
+		ret, err := client.upload(DEFAULT_SDO_WAIT_US, false, nil, nil, nil)
 		if err != nil {
 			return nil, err
 		} else if ret == SDO_SUCCESS {
@@ -1069,7 +1068,7 @@ func (client *SDOClient) ReadAll(nodeId uint8, index uint16, subindex uint8) ([]
 			singleRead = client.fifo.Read(buffer, nil)
 			returnBuffer = append(returnBuffer, buffer[0:singleRead]...)
 		}
-		time.Sleep(time.Duration(timeDifferenceUs) * time.Microsecond)
+		time.Sleep(time.Duration(DEFAULT_SDO_WAIT_US) * time.Microsecond)
 	}
 	singleRead = client.fifo.Read(buffer, nil)
 	returnBuffer = append(returnBuffer, buffer[0:singleRead]...)
@@ -1097,11 +1096,10 @@ func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, da
 	if totalWritten < len(data) {
 		bufferPartial = true
 	}
-	var timeDifferenceUs uint32 = 10000
 
 	for {
 		ret, err := client.downloadMain(
-			timeDifferenceUs,
+			DEFAULT_SDO_WAIT_US,
 			false,
 			bufferPartial,
 			nil,
@@ -1118,7 +1116,7 @@ func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, da
 		} else if ret == SDO_SUCCESS {
 			break
 		}
-		time.Sleep(time.Duration(timeDifferenceUs) * time.Microsecond)
+		time.Sleep(time.Duration(DEFAULT_SDO_WAIT_US) * time.Microsecond)
 	}
 	return nil
 }
