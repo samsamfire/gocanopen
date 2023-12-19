@@ -53,7 +53,9 @@ SupportedObjects=3
 1=0x1000
 2=0x1001
 3=0x1008
-4=0x1018
+4=0x1009
+5=0x100A
+6=0x1018
 
 [1000]
 ParameterName=Device type
@@ -79,7 +81,25 @@ ObjectType=0x7
 ;StorageLocation=RAM
 DataType=0x0009
 AccessType=const
-DefaultValue=Im a CANopen device
+DefaultValue=DUT
+PDOMapping=0
+
+[1009]
+ParameterName=Manufacturer hardware version
+ObjectType=0x7
+;StorageLocation=RAM
+DataType=0x0009
+AccessType=const
+DefaultValue=v400
+PDOMapping=0
+
+[100A]
+ParameterName=Manufacturer software version
+ObjectType=0x7
+;StorageLocation=RAM
+DataType=0x0009
+AccessType=const
+DefaultValue=v1.1.2r
 PDOMapping=0
 
 
