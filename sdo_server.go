@@ -949,7 +949,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.Abort(sdoAbort)
 			}
 			server.State = SDO_STATE_IDLE
-			err = ErrSDOEndedWithServerAbort
+			err = abortCode
 		case SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_REQ:
 			ret = SDO_BLOCK_DOWNLOAD_IN_PROGRESS
 		case SDO_STATE_UPLOAD_BLK_SUBBLOCK_SREQ:
