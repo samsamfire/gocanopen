@@ -62,7 +62,7 @@ func (pdo *PDOCommon) configureMap(mapParam uint32, mapIndex uint32, isRPDO bool
 
 	// Total PDO length should be smaller than the max possible size
 	if mappedLength > MAX_PDO_LENGTH {
-		log.Warnf("[%v][x%x|x%x] mapped parameter is too long", pdo.Type(), index, subIndex)
+		log.Warnf("[%v] mapped parameter [x%x|x%x] is too long", pdo.Type(), index, subIndex)
 		return ODR_MAP_LEN
 	}
 	// Dummy entries map to "fake" entries
@@ -77,20 +77,20 @@ func (pdo *PDOCommon) configureMap(mapParam uint32, mapIndex uint32, isRPDO bool
 	entry := pdo.od.Index(index)
 	streamerCopy, ret := NewStreamer(entry, subIndex, false)
 	if ret != nil {
-		log.Warnf("[%v][x%x|x%x] mapping failed : %v", pdo.Type(), index, subIndex, ret)
+		log.Warnf("[%v] mapping failed [x%x|x%x] : %v", pdo.Type(), index, subIndex, ret)
 		return ret
 	}
 
 	// Check correct attribute, length, and alignment
 	switch {
 	case streamerCopy.stream.Attribute&pdo.attribute() == 0:
-		log.Warnf("[%v][x%x|x%x] mapping failed : attribute error", pdo.Type(), index, subIndex)
+		log.Warnf("[%v] mapping failed [x%x|x%x] : attribute error", pdo.Type(), index, subIndex)
 		return ODR_NO_MAP
 	case (mappedLengthBits & 0x07) != 0:
-		log.Warnf("[%v][x%x|x%x] mapping failed : alignment error", pdo.Type(), index, subIndex)
+		log.Warnf("[%v] mapping failed [x%x|x%x] : alignment error", pdo.Type(), index, subIndex)
 		return ODR_NO_MAP
 	case streamerCopy.stream.DataLength < uint32(mappedLength):
-		log.Warnf("[%v][x%x|x%x] mapping failed : length error", pdo.Type(), index, subIndex)
+		log.Warnf("[%v] mapping failed [x%x|x%x] : length error", pdo.Type(), index, subIndex)
 		return ODR_NO_MAP
 	default:
 	}
@@ -109,7 +109,7 @@ func (pdo *PDOCommon) configureMap(mapParam uint32, mapIndex uint32, isRPDO bool
 	} else {
 		pdo.flagPDOByte[mapIndex] = nil
 	}
-	log.Infof("[%v][x%x|x%x] update mapping successful", pdo.Type(), index, subIndex)
+	log.Infof("[%v] update mapping successful [x%x|x%x]", pdo.Type(), index, subIndex)
 	return nil
 
 }

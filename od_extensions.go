@@ -410,6 +410,7 @@ func WriteEntry1280(stream *Stream, data []byte, countWritten *uint16) error {
 
 // [RPDO] update communication parameter
 func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
+	log.Debug("[RPDO][EXTENSION] updating communication parameter")
 	if stream == nil || data == nil || countWritten == nil || len(data) > 4 {
 		return ODR_DEV_INCOMPAT
 	}
@@ -458,7 +459,7 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 					return ODR_DEV_INCOMPAT
 				}
 			}
-			log.Debugf("[%v] Updated pdo with cobId : x%x, valid : %v", pdo.Type(), pdo.configuredId&0x7FF, pdo.Valid)
+			log.Debugf("[%v][EXTENSION] updated pdo with cobId : x%x, valid : %v", pdo.Type(), pdo.configuredId&0x7FF, pdo.Valid)
 		}
 
 	case 2:
@@ -473,14 +474,14 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 			rpdo.RxNew[1] = false
 		}
 		rpdo.Synchronous = synchronous
-		log.Debugf("[%v] Updated pdo transmission type : %v", pdo.Type(), transmissionType)
+		log.Debugf("[%v][EXTENSION] updated pdo transmission type to : %v", pdo.Type(), transmissionType)
 
 	case 5:
 		// Event timer
 		eventTime := binary.LittleEndian.Uint16(data)
 		rpdo.TimeoutTimeUs = uint32(eventTime) * 1000
 		rpdo.TimeoutTimer = 0
-		log.Debugf("[%v] Updated pdo event timer : %v us", pdo.Type(), eventTime)
+		log.Debugf("[%v][EXTENSION] updated pdo event timer to : %v us", pdo.Type(), eventTime)
 	}
 
 	return WriteEntryDefault(stream, bufCopy, countWritten)
@@ -531,6 +532,7 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 	default:
 		return ODR_DEV_INCOMPAT
 	}
+	log.Debugf("[%v][EXTENSION] updating mapping parameter", pdo.Type())
 	// PDO must be disabled in order to allow mapping
 	if pdo.Valid || pdo.nbMapped != 0 && stream.Subindex > 0 {
 		return ODR_UNSUPP_ACCESS
@@ -552,8 +554,6 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 			pdoDataLength += mappedLength
 		}
 		if pdoDataLength > uint32(MAX_PDO_LENGTH) {
-			log.Infof("value of streamers : %+v", pdo.streamers)
-			log.Infof("nb of mapped objects : %v", pdo.nbMapped)
 			return ODR_MAP_LEN
 		}
 		if pdoDataLength == 0 && mappedObjectsCount > 0 {
@@ -561,7 +561,7 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 		}
 		pdo.dataLength = pdoDataLength
 		pdo.nbMapped = mappedObjectsCount
-		log.Debugf("[%v][x%x] Updated pdo number of mapped objects to : %v", pdo.configuredId, pdo.Type(), mappedObjectsCount)
+		log.Debugf("[%v][EXTENSION] updated pdo number of mapped objects to : %v", pdo.Type(), mappedObjectsCount)
 
 	} else {
 		err := pdo.configureMap(binary.LittleEndian.Uint32(data), uint32(stream.Subindex)-1, pdo.IsRPDO)
