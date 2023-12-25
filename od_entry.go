@@ -181,7 +181,7 @@ func (entry *Entry) writeSubExactly(subIndex uint8, b []byte, origin bool) error
 }
 
 // Getptr inside OD, similar to read
-func (entry *Entry) GetPtr(subIndex uint8, length uint16) (*[]byte, error) {
+func (entry *Entry) GetRawData(subIndex uint8, length uint16) ([]byte, error) {
 	streamer, err := NewStreamer(entry, subIndex, true)
 	if err != nil {
 		return nil, err
@@ -189,7 +189,7 @@ func (entry *Entry) GetPtr(subIndex uint8, length uint16) (*[]byte, error) {
 	if int(streamer.stream.DataLength) != int(length) && length != 0 {
 		return nil, ODR_TYPE_MISMATCH
 	}
-	return &streamer.stream.Data, nil
+	return streamer.stream.Data, nil
 }
 
 // Read Uint8 inside object dictionary

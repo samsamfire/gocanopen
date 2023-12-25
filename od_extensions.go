@@ -65,6 +65,7 @@ func WriteEntry1003(stream *Stream, data []byte, countWritten *uint16) error {
 
 // [SYNC] update cob id & if should be producer
 func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
+	log.Debugf("[SYNC][EXTENSION] updating COB-ID SYNC")
 	// Expect a uint32 and subindex 0 and no nill pointers
 	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
 		return ODR_DEV_INCOMPAT
@@ -89,16 +90,39 @@ func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 		if sync.CounterOverflowValue != 0 {
 			frameSize = 1
 		}
+		log.Debugf("[SYNC][EXTENSION] updated COB-ID SYNC to x%x (prev x%x)", canId, sync.cobId)
 		sync.txBuffer = NewFrame(uint32(canId), 0, frameSize)
 		sync.cobId = uint32(canId)
 	}
 	// Reset in case sync is producer
 	sync.IsProducer = isProducer
 	if isProducer {
+		log.Debug("[SYNC][EXTENSION] SYNC is producer")
 		sync.Counter = 0
 		sync.Timer = 0
+	} else {
+		log.Debug("[SYNC][EXTENSION] SYNC is not producer")
 	}
-	log.Debugf("[SYNC] cob-id request : %x | producer request : %v", cobIdSync, isProducer)
+	return WriteEntryDefault(stream, data, countWritten)
+}
+
+// [SYNC] update communication cycle period
+func WriteEntry1006(stream *Stream, data []byte, countWritten *uint16) error {
+	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
+		return ODR_DEV_INCOMPAT
+	}
+	cyclePeriodUs := binary.LittleEndian.Uint32(data)
+	log.Debugf("[SYNC][EXTENSION] updating communication cycle period to %v us (%v ms)", cyclePeriodUs, cyclePeriodUs/1000)
+	return WriteEntryDefault(stream, data, countWritten)
+}
+
+// [SYNC] update pdo synchronous window length
+func WriteEntry1007(stream *Stream, data []byte, countWritten *uint16) error {
+	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
+		return ODR_DEV_INCOMPAT
+	}
+	windowLengthUs := binary.LittleEndian.Uint32(data)
+	log.Debugf("[SYNC][EXTENSION] updating synchronous window length to %v us (%v ms)", windowLengthUs, windowLengthUs/1000)
 	return WriteEntryDefault(stream, data, countWritten)
 }
 
@@ -252,8 +276,8 @@ func WriteEntry1019(stream *Stream, data []byte, countWritten *uint16) error {
 	if syncCounterOverflow == 1 || syncCounterOverflow > 240 {
 		return ODR_INVALID_VALUE
 	}
-	OD1006Period := binary.LittleEndian.Uint32(*sync.OD1006Period)
-	if OD1006Period != 0 {
+	communicationCyclePeriod := binary.LittleEndian.Uint32(sync.rawCommunicationCyclePeriod)
+	if communicationCyclePeriod != 0 {
 		return ODR_DATA_DEV_STATE
 	}
 	var nbBytes = uint8(0)
@@ -262,6 +286,7 @@ func WriteEntry1019(stream *Stream, data []byte, countWritten *uint16) error {
 	}
 	sync.txBuffer = NewFrame(sync.cobId, 0, nbBytes)
 	sync.CounterOverflowValue = syncCounterOverflow
+	log.Debugf("[SYNC][EXTENSION] updated synchronous counter overflow to %v", syncCounterOverflow)
 	return WriteEntryDefault(stream, data, countWritten)
 }
 
@@ -451,7 +476,7 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 		log.Debugf("[%v] Updated pdo transmission type : %v", pdo.Type(), transmissionType)
 
 	case 5:
-		// Envent timer
+		// Event timer
 		eventTime := binary.LittleEndian.Uint16(data)
 		rpdo.TimeoutTimeUs = uint32(eventTime) * 1000
 		rpdo.TimeoutTimer = 0

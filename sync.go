@@ -7,21 +7,21 @@ import (
 )
 
 type SYNC struct {
-	emergency            *EM
-	RxNew                bool
-	ReceiveError         uint8
-	RxToggle             bool
-	TimeoutError         uint8
-	CounterOverflowValue uint8
-	Counter              uint8
-	SyncIsOutsideWindow  bool
-	Timer                uint32
-	OD1006Period         *[]byte
-	OD1007Window         *[]byte
-	IsProducer           bool
-	BusManager           *BusManager
-	cobId                uint32
-	txBuffer             Frame
+	emergency                   *EM
+	RxNew                       bool
+	ReceiveError                uint8
+	RxToggle                    bool
+	TimeoutError                uint8
+	CounterOverflowValue        uint8
+	Counter                     uint8
+	SyncIsOutsideWindow         bool
+	Timer                       uint32
+	rawCommunicationCyclePeriod []byte
+	rawSynchronousWindowLength  []byte
+	IsProducer                  bool
+	BusManager                  *BusManager
+	cobId                       uint32
+	txBuffer                    Frame
 }
 
 const (
@@ -82,22 +82,22 @@ func (sync *SYNC) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 		sync.Timer = 0
 		sync.RxNew = false
 	}
-	entry1006Period := binary.LittleEndian.Uint32(*sync.OD1006Period)
-	if entry1006Period > 0 {
+	communicationCyclePeriod := binary.LittleEndian.Uint32(sync.rawCommunicationCyclePeriod)
+	if communicationCyclePeriod > 0 {
 		if sync.IsProducer {
-			if sync.Timer >= entry1006Period {
+			if sync.Timer >= communicationCyclePeriod {
 				status = CO_SYNC_RX_TX
 				sync.sendSync()
 			}
 			if timerNextUs != nil {
-				diff := entry1006Period - sync.Timer
+				diff := communicationCyclePeriod - sync.Timer
 				if *timerNextUs > diff {
 					*timerNextUs = diff
 				}
 			}
 		} else if sync.TimeoutError == 1 {
-			periodTimeout := entry1006Period + entry1006Period>>1
-			if periodTimeout < entry1006Period {
+			periodTimeout := communicationCyclePeriod + communicationCyclePeriod>>1
+			if periodTimeout < communicationCyclePeriod {
 				periodTimeout = 0xFFFFFFFF
 			}
 			if sync.Timer > periodTimeout {
@@ -112,12 +112,10 @@ func (sync *SYNC) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 			}
 		}
 	}
-	if sync.OD1007Window != nil {
-		entry1007Window := binary.LittleEndian.Uint32(*sync.OD1007Window)
-		if entry1007Window > 0 && sync.Timer > entry1007Window {
-			if !sync.SyncIsOutsideWindow {
-				status = CO_SYNC_PASSED_WINDOW
-			}
+	synchronousWindowLength := binary.LittleEndian.Uint32(sync.rawSynchronousWindowLength)
+	if synchronousWindowLength > 0 && sync.Timer > synchronousWindowLength {
+		if !sync.SyncIsOutsideWindow {
+			status = CO_SYNC_PASSED_WINDOW
 		}
 		sync.SyncIsOutsideWindow = true
 	} else {
@@ -172,19 +170,21 @@ func NewSYNC(
 		return nil, ErrOdParameters
 	}
 
-	sync.OD1006Period, err = entry1006.GetPtr(0, 4)
+	entry1006.AddExtension(sync, ReadEntryDefault, WriteEntry1006)
+	sync.rawCommunicationCyclePeriod, err = entry1006.GetRawData(0, 4)
 	if err != nil {
 		log.Errorf("[SYNC][%x] %v read error", entry1006.Index, entry1006.Name)
 		return nil, ErrOdParameters
 	}
-	log.Infof("[SYNC][%x] %v : %v", entry1006.Index, entry1006.Name, binary.LittleEndian.Uint32(*sync.OD1006Period))
+	log.Infof("[SYNC][%x] %v : %v", entry1006.Index, entry1006.Name, binary.LittleEndian.Uint32(sync.rawCommunicationCyclePeriod))
 
-	sync.OD1007Window, err = entry1007.GetPtr(0, 4)
+	entry1007.AddExtension(sync, ReadEntryDefault, WriteEntry1007)
+	sync.rawSynchronousWindowLength, err = entry1007.GetRawData(0, 4)
 	if err != nil {
 		log.Errorf("[SYNC][%x] %v read error", entry1007.Index, entry1007.Name)
 		return nil, ErrOdParameters
 	}
-	log.Infof("[SYNC][%x] %v : %v", entry1007.Index, entry1007.Name, binary.LittleEndian.Uint32(*sync.OD1007Window))
+	log.Infof("[SYNC][%x] %v : %v", entry1007.Index, entry1007.Name, binary.LittleEndian.Uint32(sync.rawSynchronousWindowLength))
 
 	// This one is not mandatory
 	var syncCounterOverflow uint8 = 0
