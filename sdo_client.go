@@ -3,6 +3,7 @@ package canopen
 import (
 	"encoding/binary"
 	"errors"
+	"math"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -15,8 +16,6 @@ const DEFAULT_SDO_CLIENT_TIMEOUT_MS = 1000
 type SDOReturn int8
 
 var ErrSDOInvalidArguments = errors.New("error in arguments")
-var ErrSDOEndedWithClientAbort = errors.New("communication ended with client abort")
-var ErrSDOEndedWithServerAbort = errors.New("communication ended with server abort")
 
 const (
 	SDO_WAITING_LOCAL_TRANSFER     uint8 = 6 // Waiting in client local transfer.
@@ -201,7 +200,7 @@ func (client *SDOClient) downloadMain(
 			abortCode = response.GetAbortCode()
 			log.Debugf("[CLIENT][RX][x%x] SERVER ABORT | x%x:x%x | %v (x%x)", client.NodeIdServer, client.Index, client.Subindex, abortCode, uint32(response.GetAbortCode()))
 			client.State = SDO_STATE_IDLE
-			err = ErrSDOEndedWithServerAbort
+			err = abortCode
 			// Abort from the client
 		} else if abort {
 			abortCode = SDO_ABORT_DEVICE_INCOMPAT
@@ -334,7 +333,7 @@ func (client *SDOClient) downloadMain(
 			abortCode = client.downloadInitiate(forceSegmented)
 			if abortCode != nil {
 				client.State = SDO_STATE_IDLE
-				err = ErrSDOEndedWithClientAbort
+				err = abortCode
 				break
 			}
 			client.State = SDO_STATE_DOWNLOAD_INITIATE_RSP
@@ -343,7 +342,7 @@ func (client *SDOClient) downloadMain(
 			abortCode = client.downloadSegment(bufferPartial)
 			if abortCode != nil {
 				client.State = SDO_STATE_ABORT
-				err = ErrSDOEndedWithClientAbort
+				err = abortCode
 				break
 			}
 			client.State = SDO_STATE_DOWNLOAD_SEGMENT_RSP
@@ -374,7 +373,7 @@ func (client *SDOClient) downloadMain(
 		switch client.State {
 		case SDO_STATE_ABORT:
 			client.abort(abortCode.(SDOAbortCode))
-			err = ErrSDOEndedWithClientAbort
+			err = abortCode
 			client.State = SDO_STATE_IDLE
 		case SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_REQ:
 			ret = SDO_BLOCK_DOWNLOAD_IN_PROGRESS
@@ -660,7 +659,7 @@ func (client *SDOClient) upload(
 			abortCode = response.GetAbortCode()
 			log.Debugf("[CLIENT][RX][x%x] SERVER ABORT | x%x:x%x | %v (x%x)", client.NodeIdServer, client.Index, client.Subindex, abortCode, uint32(response.GetAbortCode()))
 			client.State = SDO_STATE_IDLE
-			err = ErrSDOEndedWithServerAbort
+			err = abortCode
 		} else if abort {
 			abortCode = SDO_ABORT_DEVICE_INCOMPAT
 			client.State = SDO_STATE_ABORT
@@ -987,7 +986,7 @@ func (client *SDOClient) upload(
 		switch client.State {
 		case SDO_STATE_ABORT:
 			client.abort(abortCode.(SDOAbortCode))
-			err = ErrSDOEndedWithClientAbort
+			err = abortCode
 			client.State = SDO_STATE_IDLE
 		case SDO_STATE_UPLOAD_BLK_SUBBLOCK_SREQ:
 			ret = SDO_BLOCK_UPLOAD_IN_PROGRESS
@@ -1038,6 +1037,18 @@ func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, dat
 	return client.fifo.Read(data, nil), nil
 }
 
+// Read uint32
+func (client *SDOClient) ReadUint32(nodeId uint8, index uint16, subindex uint8) (uint32, error) {
+	buf := make([]byte, 4)
+	n, err := client.ReadRaw(nodeId, index, subindex, buf)
+	if err != nil {
+		return 0, err
+	} else if n != 4 {
+		return 0, ODR_TYPE_MISMATCH
+	}
+	return binary.LittleEndian.Uint32(buf), nil
+}
+
 // Read everything from a given index/subindex from node and return all bytes
 // Similar to io.ReadAll
 func (client *SDOClient) ReadAll(nodeId uint8, index uint16, subindex uint8) ([]byte, error) {
@@ -1078,7 +1089,7 @@ func (client *SDOClient) ReadAll(nodeId uint8, index uint16, subindex uint8) ([]
 
 // Write to a given index/subindex to node using raw data
 // Similar to io.Write
-func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, data []byte, forceSegmented bool) error {
+func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, data any, forceSegmented bool) error {
 	bufferPartial := false
 	err := client.setupServer(
 		uint32(SDO_CLIENT_ID)+uint32(nodeId),
@@ -1088,13 +1099,51 @@ func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, da
 	if err != nil {
 		return err
 	}
-	err = client.downloadSetup(index, subindex, uint32(len(data)), true)
+	var encoded []byte
+	switch val := data.(type) {
+	case uint8:
+		encoded = []byte{val}
+	case int8:
+		encoded = []byte{byte(val)}
+	case uint16:
+		encoded = make([]byte, 2)
+		binary.LittleEndian.PutUint16(encoded, val)
+	case int16:
+		encoded = make([]byte, 2)
+		binary.LittleEndian.PutUint16(encoded, uint16(val))
+	case uint32:
+		encoded = make([]byte, 4)
+		binary.LittleEndian.PutUint32(encoded, val)
+	case int32:
+		encoded = make([]byte, 4)
+		binary.LittleEndian.PutUint32(encoded, uint32(val))
+	case uint64:
+		encoded = make([]byte, 8)
+		binary.LittleEndian.PutUint64(encoded, val)
+	case int64:
+		encoded = make([]byte, 8)
+		binary.LittleEndian.PutUint64(encoded, uint64(val))
+	case string:
+		encoded = []byte(val)
+	case float32:
+		encoded = make([]byte, 4)
+		binary.LittleEndian.PutUint32(encoded, math.Float32bits(val))
+	case float64:
+		encoded = make([]byte, 8)
+		binary.LittleEndian.PutUint64(encoded, math.Float64bits(val))
+	case []byte:
+		encoded = val
+	default:
+		return ODR_TYPE_MISMATCH
+	}
+
+	err = client.downloadSetup(index, subindex, uint32(len(encoded)), true)
 	if err != nil {
 		return err
 	}
 	// Fill buffer
-	totalWritten := client.fifo.Write(data, nil)
-	if totalWritten < len(data) {
+	totalWritten := client.fifo.Write(encoded, nil)
+	if totalWritten < len(encoded) {
 		bufferPartial = true
 	}
 	var timeDifferenceUs uint32 = 10000
@@ -1111,8 +1160,8 @@ func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, da
 		if err != nil {
 			return err
 		} else if ret == SDO_BLOCK_DOWNLOAD_IN_PROGRESS && bufferPartial {
-			totalWritten += client.fifo.Write(data[totalWritten:], nil)
-			if totalWritten == len(data) {
+			totalWritten += client.fifo.Write(encoded[totalWritten:], nil)
+			if totalWritten == len(encoded) {
 				bufferPartial = false
 			}
 		} else if ret == SDO_SUCCESS {
