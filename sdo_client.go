@@ -633,6 +633,81 @@ func (client *SDOClient) uploadSetup(index uint16, subindex uint8, blockEnabled 
 	return nil
 }
 
+func (client *SDOClient) uploadLocal() (ret uint8, err error) {
+
+	if client.streamer.read == nil {
+		client.streamer, err = NewStreamer(client.od.Index(client.Index), client.Subindex, false)
+		odErr, ok := err.(ODR)
+		if err != nil {
+			if !ok {
+				return 0, SDO_ABORT_GENERAL
+			}
+			return 0, odErr.GetSDOAbordCode()
+		} else if (client.streamer.stream.Attribute & ATTRIBUTE_SDO_RW) == 0 {
+			return 0, SDO_ABORT_UNSUPPORTED_ACCESS
+		} else if (client.streamer.stream.Attribute & ATTRIBUTE_SDO_R) == 0 {
+			return 0, SDO_ABORT_WRITEONLY
+		} else if client.streamer.read == nil {
+			return 0, SDO_ABORT_DEVICE_INCOMPAT
+		}
+	}
+	countFifo := client.fifo.GetSpace()
+	if countFifo == 0 {
+		ret = SDO_UPLOAD_DATA_FULL
+	} else if client.streamer.read != nil {
+		countData := client.streamer.stream.DataLength
+		countBuffer := uint32(0)
+		countRead := 0
+		if countData > 0 && countData <= uint32(countFifo) {
+			countBuffer = countData
+		} else {
+			countBuffer = uint32(countFifo)
+		}
+		buffer := make([]byte, SDO_CLI_BUFFER_SIZE+1)
+		countRead, err = client.streamer.Read(buffer[:countBuffer])
+		odErr, ok := err.(ODR)
+		if err != nil && err != ODR_PARTIAL {
+			if !ok {
+				return 0, SDO_ABORT_GENERAL
+			}
+			return 0, odErr.GetSDOAbordCode()
+		} else {
+			if countRead > 0 && client.streamer.stream.Attribute&ATTRIBUTE_STR != 0 {
+				buffer[countRead] = 0
+				countStr := 0
+				for i, v := range buffer {
+					if v == 0 {
+						countStr = i
+						break
+					}
+				}
+				if countStr == 0 {
+					countStr = 1
+				}
+				if countStr < countRead {
+					countRead = countStr
+					odErr = ODR_OK
+					client.streamer.stream.DataLength = client.SizeTransferred + uint32(countRead)
+				}
+			}
+			client.fifo.Write(buffer[:countRead], nil)
+			client.SizeTransferred += uint32(countRead)
+			client.SizeIndicated = client.streamer.stream.DataLength
+			if client.SizeIndicated > 0 && client.SizeTransferred > client.SizeIndicated {
+				err = SDO_ABORT_DATA_LONG
+			} else if odErr == ODR_OK {
+				if client.SizeIndicated > 0 && client.SizeTransferred < client.SizeIndicated {
+					err = SDO_ABORT_DATA_SHORT
+				}
+			} else {
+				ret = SDO_WAITING_LOCAL_TRANSFER
+			}
+		}
+
+	}
+	return ret, err
+}
+
 // Main state machine
 func (client *SDOClient) upload(
 	timeDifferenceUs uint32,
@@ -652,7 +727,12 @@ func (client *SDOClient) upload(
 	} else if client.State == SDO_STATE_IDLE {
 		ret = SDO_SUCCESS
 	} else if client.State == SDO_STATE_UPLOAD_LOCAL_TRANSFER && !abort {
-		// TODO
+		ret, err = client.uploadLocal()
+		if ret != SDO_UPLOAD_DATA_FULL && ret != SDO_WAITING_LOCAL_TRANSFER {
+			client.State = SDO_STATE_IDLE
+		} else if timerNextUs != nil {
+			*timerNextUs = 0
+		}
 	} else if client.RxNew {
 		response := client.Response
 		if response.IsAbort() {
