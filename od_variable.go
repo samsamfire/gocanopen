@@ -211,7 +211,7 @@ func decode(data []byte, dataType uint8) (v any, e error) {
 		return int64(binary.LittleEndian.Uint64(data)), nil
 	case REAL32:
 		parsed := binary.LittleEndian.Uint32(data)
-		return math.Float64frombits(uint64(parsed)), nil
+		return float64(math.Float32frombits(parsed)), nil
 	case REAL64:
 		parsed := binary.LittleEndian.Uint64(data)
 		return math.Float64frombits(parsed), nil

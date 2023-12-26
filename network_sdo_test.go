@@ -3,6 +3,8 @@ package canopen
 import (
 	"math"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var SDO_UNSIGNED_READ_MAP = map[string]uint64{
@@ -29,23 +31,16 @@ func TestRead(t *testing.T) {
 	defer network.Disconnect()
 	for indexName, key := range SDO_UNSIGNED_READ_MAP {
 		val, _ := network.Read(NODE_ID_TEST, indexName, "")
-		if val != key {
-			t.Errorf("error or incorrect value %v (%v expected)", val, key)
-		}
+		assert.Equal(t, key, val)
 	}
 	for indexName, key := range SDO_INTEGER_READ_MAP {
 		val, _ := network.Read(NODE_ID_TEST, indexName, "")
-		if val != key {
-			t.Errorf("error or incorrect value %v (%v expected)", val, key)
-		}
+		assert.Equal(t, key, val)
 	}
 	for indexName, key := range SDO_FLOAT_READ_MAP {
 		val, _ := network.Read(NODE_ID_TEST, indexName, "")
-		if val != key {
-			t.Errorf("error or incorrect value %v (%v expected)", val, key)
-		}
+		assert.Equal(t, key, val)
 	}
-
 }
 
 func TestReadUint(t *testing.T) {
@@ -53,15 +48,10 @@ func TestReadUint(t *testing.T) {
 	defer network.Disconnect()
 	for indexName, key := range SDO_UNSIGNED_READ_MAP {
 		val, _ := network.ReadUint(NODE_ID_TEST, indexName, "")
-		if val != key {
-			t.Errorf("error or incorrect value %v (%v expected)", val, key)
-		}
+		assert.Equal(t, key, val)
 	}
 	_, err := network.ReadUint(NODE_ID_TEST, "INTEGER8 value", "")
-	if err != ODR_TYPE_MISMATCH {
-		t.Errorf("should have type mismatch, instead %v", err)
-	}
-
+	assert.Equal(t, ODR_TYPE_MISMATCH, err)
 }
 
 func TestReadInt(t *testing.T) {
@@ -69,14 +59,10 @@ func TestReadInt(t *testing.T) {
 	defer network.Disconnect()
 	for indexName, key := range SDO_INTEGER_READ_MAP {
 		val, _ := network.ReadInt(NODE_ID_TEST, indexName, "")
-		if val != key {
-			t.Errorf("error or incorrect value %v (%v expected)", val, key)
-		}
+		assert.Equal(t, key, val)
 	}
 	_, err := network.ReadInt(NODE_ID_TEST, "UNSIGNED8 value", "")
-	if err != ODR_TYPE_MISMATCH {
-		t.Errorf("should have type mismatch, instead %v", err)
-	}
+	assert.Equal(t, ODR_TYPE_MISMATCH, err)
 }
 
 func TestReadFloat(t *testing.T) {
@@ -84,34 +70,24 @@ func TestReadFloat(t *testing.T) {
 	defer network.Disconnect()
 	for indexName, key := range SDO_FLOAT_READ_MAP {
 		val, _ := network.ReadFloat(NODE_ID_TEST, indexName, "")
-		if math.Abs(val-key) > 0.01 {
-			t.Errorf("error or incorrect value %v (%v expected)", val, key)
-		}
+		assert.InDelta(t, key, val, 0.01)
 	}
 	_, err := network.ReadFloat(NODE_ID_TEST, "UNSIGNED8 value", "")
-	if err != ODR_TYPE_MISMATCH {
-		t.Errorf("should have type mismatch, instead %v", err)
-	}
+	assert.Equal(t, ODR_TYPE_MISMATCH, err)
 }
 
 func TestReadString(t *testing.T) {
 	network := createNetwork()
 	defer network.Disconnect()
-	val, err := network.ReadString(NODE_ID_TEST, "VISIBLE STRING value", "")
-	if err != nil || val != "AStringCannotBeLongerThanTheDefaultValue" {
-		t.Fatal(err)
-	}
+	val, _ := network.ReadString(NODE_ID_TEST, "VISIBLE STRING value", "")
+	assert.Equal(t, "AStringCannotBeLongerThanTheDefaultValue", val)
 }
 
 func TestWrite(t *testing.T) {
 	network := createNetwork()
 	defer network.Disconnect()
 	err := network.Write(NODE_ID_TEST, "REAL32 value", "", float32(1500.1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	val, err := network.ReadFloat(NODE_ID_TEST, "REAL32 value", "")
-	if err != nil || val-1500.1 > 0.01 {
-		t.Errorf("value is %v (expected %v)", val, 1500.1)
-	}
+	assert.Nil(t, err)
+	val, _ := network.ReadFloat(NODE_ID_TEST, "REAL32 value", "")
+	assert.InDelta(t, 1500.1, val, 0.01)
 }
