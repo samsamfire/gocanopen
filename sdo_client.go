@@ -188,7 +188,7 @@ func (client *SDOClient) downloadMain(
 	} else if client.State == SDO_STATE_IDLE {
 		ret = SDO_SUCCESS
 	} else if client.State == SDO_STATE_DOWNLOAD_LOCAL_TRANSFER && !abort {
-		ret, abortCode = client.downloadLocal(bufferPartial, nil)
+		ret, err = client.downloadLocal(bufferPartial, nil)
 		if ret != SDO_WAITING_LOCAL_TRANSFER {
 			client.State = SDO_STATE_IDLE
 		} else if timerNextUs != nil {
@@ -432,6 +432,7 @@ func (client *SDOClient) downloadLocal(bufferPartial bool, timerNextUs *uint32) 
 	var err error
 
 	if client.streamer.write == nil {
+		log.Debugf("[CLIENT][TX][x%x] LOCAL TRANSFER WRITE | x%x:x%x", client.NodeId, client.Index, client.Subindex)
 		client.streamer, err = NewStreamer(client.od.Index(client.Index), client.Subindex, false)
 		odErr, ok := err.(ODR)
 		if err != nil {
@@ -505,7 +506,8 @@ func (client *SDOClient) downloadLocal(bufferPartial bool, timerNextUs *uint32) 
 			}
 		}
 	}
-	return 0, nil
+
+	return 0, abortCode
 }
 
 // Helper function for downloading a segement of segmented transfer
@@ -636,6 +638,7 @@ func (client *SDOClient) uploadSetup(index uint16, subindex uint8, blockEnabled 
 func (client *SDOClient) uploadLocal() (ret uint8, err error) {
 
 	if client.streamer.read == nil {
+		log.Debugf("[CLIENT][RX][x%x] LOCAL TRANSFER READ | x%x:x%x", client.NodeId, client.Index, client.Subindex)
 		client.streamer, err = NewStreamer(client.od.Index(client.Index), client.Subindex, false)
 		odErr, ok := err.(ODR)
 		if err != nil {
