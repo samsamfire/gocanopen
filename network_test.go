@@ -16,7 +16,6 @@ func createNetwork() *Network {
 	if e != nil {
 		panic(e)
 	}
-	go func() { network.Process() }()
 	return &network
 }
 
