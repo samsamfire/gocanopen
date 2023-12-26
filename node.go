@@ -12,6 +12,7 @@ const (
 	NODE_INIT     uint8 = 0
 	NODE_RUNNING  uint8 = 1
 	NODE_RESETING uint8 = 2
+	NODE_EXIT     uint8 = 3
 )
 
 type Node interface {
@@ -23,6 +24,8 @@ type Node interface {
 	GetID() uint8
 	GetState() uint8
 	SetState(newState uint8)
+	GetExitBackground() chan bool
+	SetExitBackground(exit bool) // Exit background processing
 	GetExit() chan bool
-	SetExit(exit bool)
+	SetExit(exit bool) // Exit node processing
 }

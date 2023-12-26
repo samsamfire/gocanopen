@@ -96,6 +96,7 @@ func (network *Network) Process() error {
 		log.Infof("[NETWORK][x%x] adding node to nodes being processed", id)
 		go func(node Node) {
 			defer wg.Done()
+			var wgBackground sync.WaitGroup
 			// These are timer values and can be adjusted
 			startBackground := time.Now()
 			backgroundPeriod := time.Duration(10 * time.Millisecond)
@@ -104,12 +105,13 @@ func (network *Network) Process() error {
 			for {
 				switch node.GetState() {
 				case NODE_INIT:
-					// TODO : init node
 					log.Infof("[NETWORK][x%x] starting node background process", node.GetID())
+					wgBackground.Add(1)
 					go func() {
+						defer wgBackground.Done()
 						for {
 							select {
-							case <-node.GetExit():
+							case <-node.GetExitBackground():
 								log.Infof("[NETWORK][x%x] exited node background process", node.GetID())
 								return
 							default:
@@ -135,10 +137,21 @@ func (network *Network) Process() error {
 					if state == RESET_APP || state == RESET_COMM {
 						node.SetState(NODE_RESETING)
 					}
+					select {
+					case <-node.GetExit():
+						log.Infof("[NETWORK][x%x] received exit request", node.GetID())
+						node.SetState(NODE_EXIT)
+					default:
+
+					}
 				case NODE_RESETING:
-					node.SetExit(true)
+					node.SetExitBackground(true)
 					node.SetState(NODE_INIT)
 
+				case NODE_EXIT:
+					node.SetExitBackground(true)
+					wgBackground.Wait()
+					return
 				}
 			}
 		}(network.Nodes[id])
