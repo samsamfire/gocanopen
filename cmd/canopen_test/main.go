@@ -38,7 +38,7 @@ func main() {
 		panic(err)
 	}
 	// Add file extension
-	node.OD.AddFile(0x200F, "File", "example.bin", os.O_RDONLY|os.O_CREATE, os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
+	node.GetOD().AddFile(0x200F, "File", "example.bin", os.O_RDONLY|os.O_CREATE, os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
 	if err != nil {
 		panic(err)
 	}
