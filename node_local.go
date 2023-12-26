@@ -23,6 +23,7 @@ type LocalNode struct {
 	MainCallback       func(args ...any)
 	State              uint8
 	id                 uint8
+	exitBackground     chan bool
 	exit               chan bool
 }
 
@@ -152,6 +153,14 @@ func (node *LocalNode) SetState(newState uint8) {
 	node.State = newState
 }
 
+func (node *LocalNode) GetExitBackground() chan bool {
+	return node.exitBackground
+}
+
+func (node *LocalNode) SetExitBackground(exit bool) {
+	node.exitBackground <- exit
+}
+
 func (node *LocalNode) GetExit() chan bool {
 	return node.exit
 }
@@ -184,6 +193,7 @@ func NewLocalNode(
 	node.BusManager = busManager
 	node.NodeIdUnconfigured = false
 	node.OD = od
+	node.exitBackground = make(chan bool)
 	node.exit = make(chan bool)
 	node.id = nodeId
 	node.State = NODE_INIT
