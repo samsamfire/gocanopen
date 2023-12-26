@@ -1019,11 +1019,9 @@ func NewSDOServer(
 			entry12xx.PutUint32(2, uint32(canIdServerToClient), true)
 		} else if entry12xx.Index > 0x1200 && entry12xx.Index <= 0x1200+0x7F {
 			// Configure other channels
-			var maxSubIndex uint8
-			var cobIdClientToServer32, cobIdServerToClient32 uint32
-			err0 := entry12xx.Uint8(0, &maxSubIndex)
-			err1 := entry12xx.Uint32(1, &cobIdClientToServer32)
-			err2 := entry12xx.Uint32(2, &cobIdServerToClient32)
+			maxSubIndex, err0 := entry12xx.Uint8(0)
+			cobIdClientToServer32, err1 := entry12xx.Uint32(1)
+			cobIdServerToClient32, err2 := entry12xx.Uint32(2)
 			if err0 != nil || (maxSubIndex != 2 && maxSubIndex != 3) ||
 				err1 != nil || err2 != nil {
 				log.Errorf("Error when retreiving sdo server parameters : %v, %v, %v, %v", err0, err1, err2, maxSubIndex)

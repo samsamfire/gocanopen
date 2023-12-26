@@ -198,8 +198,7 @@ func NewHBConsumer(busManager *BusManager, em *EM, entry1016 *Entry) (*HBConsume
 	log.Debugf("[HB CONSUMER] %v possible entries for nodes to monitor", consumer.nbMonitoredNodes)
 	consumer.monitoredNodes = make([]HBConsumerNode, consumer.nbMonitoredNodes)
 	for index := 0; index < int(consumer.nbMonitoredNodes); index++ {
-		var hbConsValue uint32
-		err := entry1016.Uint32(uint8(index)+1, &hbConsValue)
+		hbConsValue, err := entry1016.Uint32(uint8(index) + 1)
 		if err != nil {
 			log.Errorf("[HB CONSUMER][%x|%x] reading %v failed : %v", entry1016.Index, index+1, entry1016.Name, err)
 			return nil, ErrOdParameters

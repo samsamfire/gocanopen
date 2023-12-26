@@ -1278,12 +1278,12 @@ func NewSDOClient(
 
 	var nodeIdServer uint8
 	var CobIdClientToServer, CobIdServerToClient uint32
+	var err2, err3, err4 error
 	if entry1280 != nil {
-		var maxSubindex uint8
-		err1 := entry1280.Uint8(0, &maxSubindex)
-		err2 := entry1280.Uint32(1, &CobIdClientToServer)
-		err3 := entry1280.Uint32(2, &CobIdServerToClient)
-		err4 := entry1280.Uint8(3, &nodeIdServer)
+		maxSubindex, err1 := entry1280.Uint8(0)
+		CobIdClientToServer, err2 = entry1280.Uint32(1)
+		CobIdServerToClient, err3 = entry1280.Uint32(2)
+		nodeIdServer, err4 = entry1280.Uint8(3)
 		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || maxSubindex != 3 {
 			log.Errorf("[SDO CLIENT] error when reading SDO client parameters in OD 0:%v,1:%v,2:%v,3:%v,max sub-index(should be 3) : %v", err1, err2, err3, err4, maxSubindex)
 			return nil, ErrOdParameters

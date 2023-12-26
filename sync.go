@@ -154,8 +154,7 @@ func NewSYNC(
 	if emergency == nil || entry1005 == nil {
 		return nil, ErrIllegalArgument
 	}
-	var cobIdSync uint32 = 0
-	err := entry1005.Uint32(0, &cobIdSync)
+	cobIdSync, err := entry1005.Uint32(0)
 	if err != nil {
 		log.Errorf("[SYNC][%x] %v read error", entry1005.Index, entry1005.Name)
 		return nil, ErrOdParameters
@@ -189,7 +188,7 @@ func NewSYNC(
 	// This one is not mandatory
 	var syncCounterOverflow uint8 = 0
 	if entry1019 != nil {
-		err = entry1019.Uint8(0, &syncCounterOverflow)
+		syncCounterOverflow, err = entry1019.Uint8(0)
 		if err != nil {
 			log.Errorf("[SYNC][%x] %v read error", entry1019.Index, entry1019.Name)
 			return nil, ErrOdParameters

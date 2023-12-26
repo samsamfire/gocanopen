@@ -127,10 +127,9 @@ func NewPDO(
 	pdo.od = od
 	pdo.em = em
 	pdoDataLength := uint32(0)
-	mappedObjectsCount := uint8(0)
 
 	// Get number of mapped objects
-	ret := entry.Uint8(0, &mappedObjectsCount)
+	mappedObjectsCount, ret := entry.Uint8(0)
 	if ret != nil {
 		log.Errorf("[%v][%x|%x] reading nb mapped objects failed : %v", pdo.Type(), entry.Index, 0, ret)
 		return nil, ErrOdParameters
@@ -139,8 +138,7 @@ func NewPDO(
 	// Iterate over all the mapping objects
 	for i := range pdo.streamers {
 		streamer := &pdo.streamers[i]
-		mapParam := uint32(0)
-		ret := entry.Uint32(uint8(i)+1, &mapParam)
+		mapParam, ret := entry.Uint32(uint8(i) + 1)
 		if ret == ODR_SUB_NOT_EXIST {
 			continue
 		}

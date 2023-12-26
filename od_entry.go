@@ -193,47 +193,43 @@ func (entry *Entry) GetRawData(subIndex uint8, length uint16) ([]byte, error) {
 }
 
 // Read Uint8 inside object dictionary
-func (entry *Entry) Uint8(subIndex uint8, data *uint8) error {
+func (entry *Entry) Uint8(subIndex uint8) (uint8, error) {
 	b := make([]byte, 1)
 	err := entry.readSubExactly(subIndex, b, true)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	*data = b[0]
-	return nil
+	return b[0], nil
 }
 
 // Read Uint16 inside object dictionary
-func (entry *Entry) Uint16(subIndex uint8, data *uint16) error {
+func (entry *Entry) Uint16(subIndex uint8) (uint16, error) {
 	b := make([]byte, 2)
 	err := entry.readSubExactly(subIndex, b, true)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	*data = binary.LittleEndian.Uint16(b)
-	return nil
+	return binary.LittleEndian.Uint16(b), nil
 }
 
 // Read Uint32 inside object dictionary
-func (entry *Entry) Uint32(subIndex uint8, data *uint32) error {
+func (entry *Entry) Uint32(subIndex uint8) (uint32, error) {
 	b := make([]byte, 4)
 	err := entry.readSubExactly(subIndex, b, true)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	*data = binary.LittleEndian.Uint32(b)
-	return nil
+	return binary.LittleEndian.Uint32(b), nil
 }
 
 // Read Uint64 inside object dictionary
-func (entry *Entry) Uint64(subIndex uint8, data *uint64) error {
+func (entry *Entry) Uint64(subIndex uint8) (uint64, error) {
 	b := make([]byte, 8)
 	err := entry.readSubExactly(subIndex, b, true)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	*data = binary.LittleEndian.Uint64(b)
-	return nil
+	return binary.LittleEndian.Uint64(b), nil
 }
 
 // Set Uint8, 16 , 32 , 64

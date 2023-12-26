@@ -58,9 +58,8 @@ func (rpdo *RPDO) Handle(frame Frame) {
 }
 
 func (rpdo *RPDO) configureCOBID(entry14xx *Entry, predefinedIdent uint32, erroneousMap uint32) (canId uint32, e error) {
-	cobId := uint32(0)
 	pdo := &rpdo.pdo
-	ret := entry14xx.Uint32(1, &cobId)
+	cobId, ret := entry14xx.Uint32(1)
 	if ret != nil {
 		log.Errorf("[RPDO][%x|%x] reading %v failed : %v", entry14xx.Index, 1, entry14xx.Name, ret)
 		return 0, ErrOdParameters
@@ -208,8 +207,7 @@ func NewRPDO(
 		return nil, err
 	}
 	// Configure transmission type
-	transmissionType := uint8(TRANSMISSION_TYPE_SYNC_EVENT_LO)
-	ret := entry14xx.Uint8(2, &transmissionType)
+	transmissionType, ret := entry14xx.Uint8(2)
 	if ret != nil {
 		log.Errorf("[RPDO][%x|%x] reading transmission type failed : %v", entry14xx.Index, 2, ret)
 		return nil, ErrOdParameters
@@ -218,8 +216,7 @@ func NewRPDO(
 	rpdo.Synchronous = transmissionType <= TRANSMISSION_TYPE_SYNC_240
 
 	// Configure event timer
-	eventTime := uint16(0)
-	ret = entry14xx.Uint16(5, &eventTime)
+	eventTime, ret := entry14xx.Uint16(5)
 	if ret != nil {
 		log.Errorf("[RPDO][%x|%x] reading event timer failed : %v", entry14xx.Index, 5, ret)
 	}
