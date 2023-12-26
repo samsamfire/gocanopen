@@ -447,63 +447,66 @@ func (client *SDOClient) downloadLocal(bufferPartial bool, timerNextUs *uint32) 
 		} else if client.streamer.write == nil {
 			return 0, SDO_ABORT_DEVICE_INCOMPAT
 		}
-	} else {
-		buffer := make([]byte, SDO_CLI_BUFFER_SIZE+2)
-		count := client.fifo.Read(buffer, nil)
-		client.SizeTransferred += uint32(count)
-		// No data error
-		if count == 0 {
-			abortCode = SDO_ABORT_DEVICE_INCOMPAT
-			// Size transferred is too large
-		} else if client.SizeIndicated > 0 && client.SizeTransferred > client.SizeIndicated {
-			client.SizeTransferred -= uint32(count)
-			abortCode = SDO_ABORT_DATA_LONG
-			// Size transferred is too small (check on last call)
-		} else if !bufferPartial && client.SizeIndicated > 0 && client.SizeTransferred < client.SizeIndicated {
-			abortCode = SDO_ABORT_DATA_SHORT
-			// Last part of data !
-		} else if !bufferPartial {
-			odVarSize := client.streamer.stream.DataLength
-			// Special case for strings where the downloaded data may be shorter (nul character can be omitted)
-			if client.streamer.stream.Attribute&ATTRIBUTE_STR != 0 && odVarSize == 0 || client.SizeTransferred < uint32(odVarSize) {
+	}
+	// If still nil, return
+	if client.streamer.write == nil {
+		return
+	}
+
+	buffer := make([]byte, SDO_CLI_BUFFER_SIZE+2)
+	count := client.fifo.Read(buffer, nil)
+	client.SizeTransferred += uint32(count)
+	// No data error
+	if count == 0 {
+		abortCode = SDO_ABORT_DEVICE_INCOMPAT
+		// Size transferred is too large
+	} else if client.SizeIndicated > 0 && client.SizeTransferred > client.SizeIndicated {
+		client.SizeTransferred -= uint32(count)
+		abortCode = SDO_ABORT_DATA_LONG
+		// Size transferred is too small (check on last call)
+	} else if !bufferPartial && client.SizeIndicated > 0 && client.SizeTransferred < client.SizeIndicated {
+		abortCode = SDO_ABORT_DATA_SHORT
+		// Last part of data !
+	} else if !bufferPartial {
+		odVarSize := client.streamer.stream.DataLength
+		// Special case for strings where the downloaded data may be shorter (nul character can be omitted)
+		if client.streamer.stream.Attribute&ATTRIBUTE_STR != 0 && odVarSize == 0 || client.SizeTransferred < uint32(odVarSize) {
+			count += 1
+			buffer[count] = 0
+			client.SizeTransferred += 1
+			if odVarSize == 0 || odVarSize > client.SizeTransferred {
 				count += 1
 				buffer[count] = 0
 				client.SizeTransferred += 1
-				if odVarSize == 0 || odVarSize > client.SizeTransferred {
-					count += 1
-					buffer[count] = 0
-					client.SizeTransferred += 1
-				}
-				client.streamer.stream.DataLength = client.SizeTransferred
-			} else if odVarSize == 0 {
-				client.streamer.stream.DataLength = client.SizeTransferred
-			} else if client.SizeTransferred > uint32(odVarSize) {
-				abortCode = SDO_ABORT_DATA_LONG
-			} else if client.SizeTransferred < uint32(odVarSize) {
-				abortCode = SDO_ABORT_DATA_SHORT
 			}
+			client.streamer.stream.DataLength = client.SizeTransferred
+		} else if odVarSize == 0 {
+			client.streamer.stream.DataLength = client.SizeTransferred
+		} else if client.SizeTransferred > uint32(odVarSize) {
+			abortCode = SDO_ABORT_DATA_LONG
+		} else if client.SizeTransferred < uint32(odVarSize) {
+			abortCode = SDO_ABORT_DATA_SHORT
 		}
-
-		if abortCode == nil {
-			_, err := client.streamer.Write(buffer)
-			odErr, ok := err.(ODR)
-			if err != nil && odErr != ODR_PARTIAL {
-				if !ok {
-					return 0, SDO_ABORT_GENERAL
-				}
-				return 0, odErr.GetSDOAbordCode()
-			} else if bufferPartial && err == nil {
-				return 0, SDO_ABORT_DATA_LONG
-			} else if !bufferPartial {
-				// Error if not written completely but download end
-				if odErr == ODR_PARTIAL {
-					return 0, SDO_ABORT_DATA_SHORT
-				} else {
-					return SDO_SUCCESS, nil
-				}
-			} else {
-				return SDO_WAITING_LOCAL_TRANSFER, nil
+	}
+	if abortCode == nil {
+		_, err = client.streamer.Write(buffer[:count])
+		odErr, ok := err.(ODR)
+		if err != nil && odErr != ODR_PARTIAL {
+			if !ok {
+				return 0, SDO_ABORT_GENERAL
 			}
+			return 0, odErr.GetSDOAbordCode()
+		} else if bufferPartial && err == nil {
+			return 0, SDO_ABORT_DATA_LONG
+		} else if !bufferPartial {
+			// Error if not written completely but download end
+			if odErr == ODR_PARTIAL {
+				return 0, SDO_ABORT_DATA_SHORT
+			} else {
+				return SDO_SUCCESS, nil
+			}
+		} else {
+			return SDO_WAITING_LOCAL_TRANSFER, nil
 		}
 	}
 
