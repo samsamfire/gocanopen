@@ -13,6 +13,7 @@ import (
 
 type Network struct {
 	Nodes      map[uint8]Node
+	wgProcess  sync.WaitGroup
 	busManager *BusManager
 	sdoClient  *SDOClient // Network master has an sdo client to read/write nodes on network
 	// An sdo client does not have to be linked to a specific node
@@ -84,80 +85,76 @@ func (network *Network) Disconnect() {
 	for _, node := range network.Nodes {
 		node.SetExit(true)
 	}
+	network.wgProcess.Wait()
 	network.busManager.Bus.Disconnect()
 
 }
 
-// Process CANopen stack, this is blocking
-func (network *Network) Process() error {
-	var wg sync.WaitGroup
-	for id := range network.Nodes {
-		wg.Add(1)
-		log.Infof("[NETWORK][x%x] adding node to nodes being processed", id)
-		go func(node Node) {
-			defer wg.Done()
-			var wgBackground sync.WaitGroup
-			// These are timer values and can be adjusted
-			startBackground := time.Now()
-			backgroundPeriod := time.Duration(10 * time.Millisecond)
-			startMain := time.Now()
-			mainPeriod := time.Duration(1 * time.Millisecond)
-			for {
-				switch node.GetState() {
-				case NODE_INIT:
-					log.Infof("[NETWORK][x%x] starting node background process", node.GetID())
-					wgBackground.Add(1)
-					go func() {
-						defer wgBackground.Done()
-						for {
-							select {
-							case <-node.GetExitBackground():
-								log.Infof("[NETWORK][x%x] exited node background process", node.GetID())
-								return
-							default:
-								elapsed := time.Since(startBackground)
-								startBackground = time.Now()
-								timeDifferenceUs := uint32(elapsed.Microseconds())
-								syncWas := node.ProcessSync(timeDifferenceUs, nil)
-								node.ProcessTPDO(syncWas, timeDifferenceUs, nil)
-								node.ProcessRPDO(syncWas, timeDifferenceUs, nil)
-								time.Sleep(backgroundPeriod)
-							}
+func (network *Network) launchNodeProcess(node Node) {
+	log.Infof("[NETWORK][x%x] adding node to nodes being processed", node.GetID())
+	network.wgProcess.Add(1)
+	go func(node Node) {
+		defer network.wgProcess.Done()
+		var wgBackground sync.WaitGroup
+		// These are timer values and can be adjusted
+		startBackground := time.Now()
+		backgroundPeriod := time.Duration(10 * time.Millisecond)
+		startMain := time.Now()
+		mainPeriod := time.Duration(1 * time.Millisecond)
+		for {
+			switch node.GetState() {
+			case NODE_INIT:
+				log.Infof("[NETWORK][x%x] starting node background process", node.GetID())
+				wgBackground.Add(1)
+				go func() {
+					defer wgBackground.Done()
+					for {
+						select {
+						case <-node.GetExitBackground():
+							log.Infof("[NETWORK][x%x] exited node background process", node.GetID())
+							return
+						default:
+							elapsed := time.Since(startBackground)
+							startBackground = time.Now()
+							timeDifferenceUs := uint32(elapsed.Microseconds())
+							syncWas := node.ProcessSync(timeDifferenceUs, nil)
+							node.ProcessTPDO(syncWas, timeDifferenceUs, nil)
+							node.ProcessRPDO(syncWas, timeDifferenceUs, nil)
+							time.Sleep(backgroundPeriod)
 						}
-					}()
-					node.SetState(NODE_RUNNING)
-
-				case NODE_RUNNING:
-					elapsed := time.Since(startMain)
-					startMain = time.Now()
-					timeDifferenceUs := uint32(elapsed.Microseconds())
-					state := node.ProcessMain(false, timeDifferenceUs, nil)
-					// <-- Add application code HERE
-					time.Sleep(mainPeriod)
-					if state == RESET_APP || state == RESET_COMM {
-						node.SetState(NODE_RESETING)
 					}
-					select {
-					case <-node.GetExit():
-						log.Infof("[NETWORK][x%x] received exit request", node.GetID())
-						node.SetState(NODE_EXIT)
-					default:
+				}()
+				node.SetState(NODE_RUNNING)
 
-					}
-				case NODE_RESETING:
-					node.SetExitBackground(true)
-					node.SetState(NODE_INIT)
-
-				case NODE_EXIT:
-					node.SetExitBackground(true)
-					wgBackground.Wait()
-					return
+			case NODE_RUNNING:
+				elapsed := time.Since(startMain)
+				startMain = time.Now()
+				timeDifferenceUs := uint32(elapsed.Microseconds())
+				state := node.ProcessMain(false, timeDifferenceUs, nil)
+				// <-- Add application code HERE
+				time.Sleep(mainPeriod)
+				if state == RESET_APP || state == RESET_COMM {
+					node.SetState(NODE_RESETING)
 				}
+				select {
+				case <-node.GetExit():
+					log.Infof("[NETWORK][x%x] received exit request", node.GetID())
+					node.SetState(NODE_EXIT)
+				default:
+
+				}
+			case NODE_RESETING:
+				node.SetExitBackground(true)
+				node.SetState(NODE_INIT)
+
+			case NODE_EXIT:
+				node.SetExitBackground(true)
+				wgBackground.Wait()
+				log.Infof("[NETWORK][x%x] complete exit", node.GetID())
+				return
 			}
-		}(network.Nodes[id])
-	}
-	wg.Wait()
-	return nil
+		}
+	}(node)
 }
 
 // Get OD for a specific node id
@@ -225,8 +222,9 @@ func (network *Network) CreateNode(nodeId uint8, od any) (Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Return created node and add it to network
+	// Add to network, launch routine
 	network.Nodes[nodeId] = node
+	network.launchNodeProcess(node)
 	return node, nil
 }
 

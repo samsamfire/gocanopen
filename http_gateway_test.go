@@ -27,9 +27,6 @@ func createGateway() *HTTPGatewayServer {
 		panic(e)
 	}
 	gateway := NewGateway(1, 1, 100, &network)
-	go func() {
-		network.Process()
-	}()
 	return gateway
 }
 
