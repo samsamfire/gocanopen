@@ -73,13 +73,11 @@ func TestGetUint(t *testing.T) {
 		t.Error()
 	}
 
-	var data uint16
-	entry.Uint16(0, &data)
+	data, _ := entry.Uint16(0)
 	if data != 0x4444 {
 		t.Errorf("Wrong value : %x", data)
 	}
-	var data2 uint8
-	err = entry.Uint8(0, &data2)
+	_, err = entry.Uint8(0)
 	if err != ODR_TYPE_MISMATCH {
 		t.Error()
 	}
