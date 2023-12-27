@@ -36,7 +36,6 @@ func TestSDOReadWriteLocal(t *testing.T) {
 	val, err := localNode.SDOclients[0].ReadUint32(0x55, 0x2007, 0x0)
 	assert.Nil(t, err)
 	assert.Equal(t, uint32(5656), val)
-
 }
 
 func TestSDOReadBlock(t *testing.T) {
