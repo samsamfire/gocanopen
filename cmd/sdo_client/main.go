@@ -24,16 +24,15 @@ func main() {
 	flag.Parse()
 
 	network := canopen.NewNetwork(nil)
-	e := network.Connect("", *channel, 500000)
-	if e != nil {
-		panic(e)
+	err := network.Connect("", *channel, 500000)
+	if err != nil {
+		panic(err)
 	}
-	go func() { network.Process() }()
 
 	// Load corresponding OD to be able to read values from strings
-	e = network.AddNode(0x10, "../../testdata/base.eds")
-	if e != nil {
-		panic(e)
+	err = network.AddNode(0x10, "../../testdata/base.eds")
+	if err != nil {
+		panic(err)
 	}
 	network.Read(0x10, "INTEGER16 value", "")
 	network.Read(0x10, "INTEGER8 value", "")

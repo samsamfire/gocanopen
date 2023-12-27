@@ -38,15 +38,8 @@ func main() {
 		panic(err)
 	}
 	// Add file extension
-	node.GetOD().AddFile(0x200F, "File", "example.bin", os.O_RDONLY|os.O_CREATE, os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
+	err = node.GetOD().AddFile(0x200F, "File", "example.bin", os.O_RDONLY|os.O_CREATE, os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
 	if err != nil {
 		panic(err)
-	}
-	if err != nil {
-		panic(err)
-	}
-	e := network.Process()
-	if e != nil {
-		panic(e)
 	}
 }
