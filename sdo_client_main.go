@@ -431,7 +431,10 @@ func (client *SDOClient) downloadLocal(bufferPartial bool, timerNextUs *uint32) 
 
 	if client.streamer.write == nil {
 		log.Debugf("[CLIENT][TX][x%x] LOCAL TRANSFER WRITE | x%x:x%x", client.NodeId, client.Index, client.Subindex)
-		client.streamer, err = NewStreamer(client.od.Index(client.Index), client.Subindex, false)
+		streamer, err := NewStreamer(client.od.Index(client.Index), client.Subindex, false)
+		if streamer != nil {
+			client.streamer = streamer
+		}
 		odErr, ok := err.(ODR)
 		if err != nil {
 			if !ok {
@@ -640,7 +643,10 @@ func (client *SDOClient) uploadLocal() (ret uint8, err error) {
 
 	if client.streamer.read == nil {
 		log.Debugf("[CLIENT][RX][x%x] LOCAL TRANSFER READ | x%x:x%x", client.NodeId, client.Index, client.Subindex)
-		client.streamer, err = NewStreamer(client.od.Index(client.Index), client.Subindex, false)
+		streamer, err := NewStreamer(client.od.Index(client.Index), client.Subindex, false)
+		if streamer != nil {
+			client.streamer = streamer
+		}
 		odErr, ok := err.(ODR)
 		if err != nil {
 			if !ok {
