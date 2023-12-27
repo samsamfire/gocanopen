@@ -155,7 +155,7 @@ func (client *SDOClient) downloadSetup(index uint16, subindex uint8, sizeIndicat
 	client.TimeoutTimer = 0
 	client.fifo.Reset()
 
-	if client.od != nil && client.NodeId != 0 && client.NodeIdServer == client.NodeId {
+	if client.od != nil && client.NodeIdServer == client.NodeId {
 		client.streamer.write = nil
 		client.State = SDO_STATE_DOWNLOAD_LOCAL_TRANSFER
 	} else if blockEnabled && (sizeIndicated == 0 || sizeIndicated > CO_CONFIG_SDO_CLI_PST) {
@@ -624,7 +624,7 @@ func (client *SDOClient) uploadSetup(index uint16, subindex uint8, blockEnabled 
 	client.SizeTransferred = 0
 	client.Finished = false
 	client.fifo.Reset()
-	if client.od != nil && client.NodeId != 0 && client.NodeIdServer == client.NodeId {
+	if client.od != nil && client.NodeIdServer == client.NodeId {
 		client.streamer.read = nil
 		client.State = SDO_STATE_UPLOAD_LOCAL_TRANSFER
 	} else if blockEnabled {
