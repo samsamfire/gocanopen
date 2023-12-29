@@ -30,7 +30,7 @@ func main() {
 	}
 
 	// Load corresponding OD to be able to read values from strings
-	err = network.AddNode(0x10, "../../testdata/base.eds")
+	_, err = network.AddNode(0x10, "../../testdata/base.eds")
 	if err != nil {
 		panic(err)
 	}
