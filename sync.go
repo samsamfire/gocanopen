@@ -219,3 +219,28 @@ func NewSYNC(
 	log.Infof("[SYNC] Initialisation finished")
 	return sync, nil
 }
+
+// Sync object used for remote nodes
+// Only a consumer
+func NewSYNCConsumer(
+	busManager *BusManager,
+	emergency *EM,
+	cobId uint8,
+) (*SYNC, error) {
+
+	sync := &SYNC{}
+	var cobIdSync uint32 = uint32(cobId)
+	sync.CounterOverflowValue = 0
+	sync.emergency = emergency
+	sync.IsProducer = (cobIdSync & 0x40000000) != 0
+	sync.cobId = cobIdSync & 0x7FF
+	sync.BusManager = busManager
+
+	err := sync.BusManager.Subscribe(sync.cobId, 0x7FF, false, sync)
+	if err != nil {
+		return nil, err
+	}
+	sync.txBuffer = NewFrame(sync.cobId, 0, 0)
+	log.Infof("[SYNC] Initialisation finished")
+	return sync, nil
+}
