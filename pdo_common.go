@@ -126,6 +126,7 @@ func NewPDO(
 	pdo := &PDOCommon{}
 	pdo.od = od
 	pdo.em = em
+	pdo.IsRPDO = isRPDO
 	pdoDataLength := uint32(0)
 
 	// Get number of mapped objects
