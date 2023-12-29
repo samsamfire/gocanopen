@@ -26,16 +26,24 @@ type PDOConfigurator struct {
 	nodeId      uint8      // Node id being controlled
 	sdoClient   *SDOClient // Standard sdo client
 	indexOffset uint16     // 0 for RPDO, 0x200 for TPDO
+	isRPDO      bool       // Useful for logging
 }
 
 // PDO configurator is used for configurating node PDOs
 // It has helper functions for accessing the common PDO mandatory objects
 func NewRPDOConfigurator(nodeId uint8, sdoClient *SDOClient) *PDOConfigurator {
-	return &PDOConfigurator{nodeId: nodeId, sdoClient: sdoClient, indexOffset: 0}
+	return &PDOConfigurator{nodeId: nodeId, sdoClient: sdoClient, indexOffset: 0, isRPDO: true}
 }
 
 func NewTPDOConfigurator(nodeId uint8, sdoClient *SDOClient) *PDOConfigurator {
-	return &PDOConfigurator{nodeId: nodeId, sdoClient: sdoClient, indexOffset: 0x400}
+	return &PDOConfigurator{nodeId: nodeId, sdoClient: sdoClient, indexOffset: 0x400, isRPDO: false}
+}
+
+func (conf *PDOConfigurator) getType() string {
+	if conf.isRPDO {
+		return "RPDO"
+	}
+	return "TPDO"
 }
 
 func (conf *PDOConfigurator) getMappingIndex(pdoNb uint16) uint16 {
@@ -97,7 +105,6 @@ func (config *PDOConfigurator) ReadMappings(pdoNb uint16) ([]PDOMapping, error) 
 		mapping.Index = uint16(rawMap >> 16)
 		mappings = append(mappings, mapping)
 	}
-	log.Debugf("[PDO][x%x] mapping : %+v ", pdoMappingIndex, mappings)
 	return mappings, nil
 }
 
@@ -119,6 +126,7 @@ func (config *PDOConfigurator) ReadConfiguration(pdoNb uint16) (PDOConfiguration
 	// Optional
 	conf.EventTimer, _ = config.ReadEventTimer(pdoNb)
 	conf.Mappings, err = config.ReadMappings(pdoNb)
+	log.Debugf("[CONFIGURATOR][%s%v] read configuration : %+v", config.getType(), pdoNb, conf)
 	return conf, err
 }
 
@@ -187,7 +195,6 @@ func (config *PDOConfigurator) ClearMappings(pdoNb uint16) error {
 			return err
 		}
 	}
-	log.Debugf("[PDO][x%x] mapping cleared", pdoMappingIndex)
 	return nil
 }
 
@@ -214,6 +221,7 @@ func (config *PDOConfigurator) WriteMappings(pdoNb uint16, mappings []PDOMapping
 
 // Update hole configuration
 func (config *PDOConfigurator) WriteConfiguration(pdoNb uint16, conf PDOConfiguration) error {
+	log.Debugf("[CONFIGURATOR][%s%v] updating configuration : %+v", config.getType(), pdoNb, conf)
 	err := config.WriteCanId(pdoNb, conf.CanId)
 	if err != nil {
 		return err
