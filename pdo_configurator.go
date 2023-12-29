@@ -15,7 +15,7 @@ type PDOMapping struct {
 
 // Holds a PDO configuration
 type PDOConfiguration struct {
-	CobId            uint32
+	CanId            uint16
 	TransmissionType uint8
 	InhibitTime      uint16
 	EventTimer       uint16
@@ -49,6 +49,14 @@ func (conf *PDOConfigurator) getCommunicationIndex(pdoNb uint16) uint16 {
 func (config *PDOConfigurator) ReadCobId(pdoNb uint16) (uint32, error) {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
 	return config.sdoClient.ReadUint32(config.nodeId, pdoCommIndex, 1)
+}
+
+func (config *PDOConfigurator) ReadEnabled(pdoNb uint16) (bool, error) {
+	cobId, err := config.ReadCobId(pdoNb)
+	if err != nil {
+		return false, err
+	}
+	return (cobId>>31)&0b1 == 0, nil
 }
 
 func (config *PDOConfigurator) ReadTransmissionType(pdoNb uint16) (uint8, error) {
@@ -97,10 +105,11 @@ func (config *PDOConfigurator) ReadMappings(pdoNb uint16) ([]PDOMapping, error) 
 func (config *PDOConfigurator) ReadConfiguration(pdoNb uint16) (PDOConfiguration, error) {
 	conf := PDOConfiguration{}
 	var err error
-	conf.CobId, err = config.ReadCobId(pdoNb)
+	cobId, err := config.ReadCobId(pdoNb)
 	if err != nil {
 		return conf, err
 	}
+	conf.CanId = uint16(cobId & 0x7FF)
 	conf.TransmissionType, err = config.ReadTransmissionType(pdoNb)
 	if err != nil {
 		return conf, err
@@ -185,7 +194,7 @@ func (config *PDOConfigurator) ClearMappings(pdoNb uint16) error {
 // Write new PDO mapping
 // Takes a list of objects to map and will fill them up in the given order
 // This will first clear the current mapping
-func (config *PDOConfigurator) UpdateMappings(pdoNb uint16, mappings []PDOMapping) error {
+func (config *PDOConfigurator) WriteMappings(pdoNb uint16, mappings []PDOMapping) error {
 	pdoMappingIndex := config.getMappingIndex(pdoNb)
 	err := config.ClearMappings(pdoNb)
 	if err != nil {
@@ -201,4 +210,19 @@ func (config *PDOConfigurator) UpdateMappings(pdoNb uint16, mappings []PDOMappin
 	}
 	// Update number of mapped objects
 	return config.sdoClient.WriteRaw(config.nodeId, pdoMappingIndex, 0, uint8(len(mappings)), false)
+}
+
+// Update hole configuration
+func (config *PDOConfigurator) WriteConfiguration(pdoNb uint16, conf PDOConfiguration) error {
+	err := config.WriteCanId(pdoNb, conf.CanId)
+	if err != nil {
+		return err
+	}
+	err = config.WriteTransmissionType(pdoNb, conf.TransmissionType)
+	if err != nil {
+		return err
+	}
+	config.WriteEventTimer(pdoNb, conf.EventTimer)
+	config.WriteInhibitTime(pdoNb, conf.InhibitTime)
+	return config.WriteMappings(pdoNb, conf.Mappings)
 }
