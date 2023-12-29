@@ -8,8 +8,7 @@ import (
 )
 
 type LocalNode struct {
-	OD                 *ObjectDictionary
-	BusManager         *BusManager
+	*BaseNode
 	NodeIdUnconfigured bool
 	NMT                *NMT
 	HBConsumer         *HBConsumer
@@ -20,11 +19,6 @@ type LocalNode struct {
 	SYNC               *SYNC
 	EM                 *EM
 	TIME               *TIME
-	MainCallback       func(args ...any)
-	State              uint8
-	id                 uint8
-	exitBackground     chan bool
-	exit               chan bool
 }
 
 func (node *LocalNode) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
@@ -60,7 +54,7 @@ func (node *LocalNode) ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32)
 		case CO_SYNC_NONE, CO_SYNC_RX_TX:
 			syncWas = true
 		case CO_SYNC_PASSED_WINDOW:
-			node.BusManager.ClearSyncPDOs()
+			node.busManager.ClearSyncPDOs()
 		}
 	}
 	return syncWas
@@ -74,7 +68,7 @@ func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, 
 	NMTState := node.NMT.GetInternalState()
 	NMTisPreOrOperational := (NMTState == NMT_PRE_OPERATIONAL) || (NMTState == NMT_OPERATIONAL)
 
-	node.BusManager.process()
+	node.busManager.process()
 	node.EM.process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
 	reset = node.NMT.process(&NMTState, timeDifferenceUs, timerNextUs)
 	// Update NMTisPreOrOperational
@@ -103,13 +97,13 @@ func (node *LocalNode) initPDO() error {
 	// Iterate over all the possible entries : there can be a maximum of 512 maps
 	// Break loops when an entry doesn't exist (don't allow holes in mapping)
 	for i := uint16(0); i < 512; i++ {
-		entry14xx := node.OD.Index(0x1400 + i)
-		entry16xx := node.OD.Index(0x1600 + i)
+		entry14xx := node.GetOD().Index(0x1400 + i)
+		entry16xx := node.GetOD().Index(0x1600 + i)
 		preDefinedIdent := uint16(0)
 		pdoOffset := i % 4
 		nodeIdOffset := i / 4
 		preDefinedIdent = 0x200 + pdoOffset*0x100 + uint16(node.id) + nodeIdOffset
-		rpdo, err := NewRPDO(node.BusManager, node.OD, node.EM, node.SYNC, entry14xx, entry16xx, preDefinedIdent)
+		rpdo, err := NewRPDO(node.busManager, node.GetOD(), node.EM, node.SYNC, entry14xx, entry16xx, preDefinedIdent)
 		if err != nil {
 			log.Warnf("[NODE][RPDO] no more RPDO after RPDO %v", i-1)
 			break
@@ -119,13 +113,13 @@ func (node *LocalNode) initPDO() error {
 	}
 	// Do the same for TPDOS
 	for i := uint16(0); i < 512; i++ {
-		entry18xx := node.OD.Index(0x1800 + i)
-		entry1Axx := node.OD.Index(0x1A00 + i)
+		entry18xx := node.GetOD().Index(0x1800 + i)
+		entry1Axx := node.GetOD().Index(0x1A00 + i)
 		preDefinedIdent := uint16(0)
 		pdoOffset := i % 4
 		nodeIdOffset := i / 4
 		preDefinedIdent = 0x180 + pdoOffset*0x100 + uint16(node.id) + nodeIdOffset
-		tpdo, err := NewTPDO(node.BusManager, node.OD, node.EM, node.SYNC, entry18xx, entry1Axx, preDefinedIdent)
+		tpdo, err := NewTPDO(node.busManager, node.GetOD(), node.EM, node.SYNC, entry18xx, entry1Axx, preDefinedIdent)
 		if err != nil {
 			log.Warnf("[NODE][TPDO] no more TPDO after TPDO %v", i-1)
 			break
@@ -136,37 +130,6 @@ func (node *LocalNode) initPDO() error {
 	}
 
 	return nil
-}
-
-func (node *LocalNode) GetOD() *ObjectDictionary {
-	return node.OD
-}
-func (node *LocalNode) GetID() uint8 {
-	return node.id
-}
-
-func (node *LocalNode) GetState() uint8 {
-	return node.State
-}
-
-func (node *LocalNode) SetState(newState uint8) {
-	node.State = newState
-}
-
-func (node *LocalNode) GetExitBackground() chan bool {
-	return node.exitBackground
-}
-
-func (node *LocalNode) SetExitBackground(exit bool) {
-	node.exitBackground <- exit
-}
-
-func (node *LocalNode) GetExit() chan bool {
-	return node.exit
-}
-
-func (node *LocalNode) SetExit(exit bool) {
-	node.exit <- exit
 }
 
 // Create a new local node
@@ -183,20 +146,20 @@ func NewLocalNode(
 	blockTransferEnabled bool,
 	statusBits *Entry,
 
-) (Node, error) {
+) (*LocalNode, error) {
 
 	if busManager == nil || od == nil {
 		return nil, errors.New("need at least busManager and od parameters")
 	}
 	var err error
-	node := &LocalNode{}
-	node.BusManager = busManager
+	node := &LocalNode{BaseNode: &BaseNode{}}
+	node.busManager = busManager
 	node.NodeIdUnconfigured = false
-	node.OD = od
+	node.od = od
 	node.exitBackground = make(chan bool)
 	node.exit = make(chan bool)
 	node.id = nodeId
-	node.State = NODE_INIT
+	node.state = NODE_INIT
 
 	if emergency == nil {
 		emergency, err := NewEM(
