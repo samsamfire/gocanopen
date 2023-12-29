@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
 var BaseObjectDictionaryParsed ObjectDictionary
@@ -129,4 +130,10 @@ func TestReadWriteDisabled(t *testing.T) {
 	if err != ODR_UNSUPP_ACCESS {
 		t.Error(err)
 	}
+}
+
+func TestAddRPDO(t *testing.T) {
+	od := NewOD()
+	err := od.AddRPDO(1)
+	assert.Nil(t, err)
 }
