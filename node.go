@@ -15,6 +15,47 @@ const (
 	NODE_EXIT     uint8 = 3
 )
 
+type BaseNode struct {
+	od             *ObjectDictionary
+	busManager     *BusManager
+	MainCallback   func(args ...any)
+	state          uint8
+	id             uint8
+	exitBackground chan bool
+	exit           chan bool
+}
+
+func (node *BaseNode) GetOD() *ObjectDictionary {
+	return node.od
+}
+func (node *BaseNode) GetID() uint8 {
+	return node.id
+}
+
+func (node *BaseNode) GetState() uint8 {
+	return node.state
+}
+
+func (node *BaseNode) SetState(newState uint8) {
+	node.state = newState
+}
+
+func (node *BaseNode) GetExitBackground() chan bool {
+	return node.exitBackground
+}
+
+func (node *BaseNode) SetExitBackground(exit bool) {
+	node.exitBackground <- exit
+}
+
+func (node *BaseNode) GetExit() chan bool {
+	return node.exit
+}
+
+func (node *BaseNode) SetExit(exit bool) {
+	node.exit <- exit
+}
+
 type Node interface {
 	ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32)
 	ProcessRPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32)
