@@ -65,7 +65,7 @@ func WriteEntry1003(stream *Stream, data []byte, countWritten *uint16) error {
 
 // [SYNC] update cob id & if should be producer
 func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
-	log.Debugf("[SYNC][EXTENSION] updating COB-ID SYNC")
+	log.Debugf("[OD][EXTENSION][SYNC] updating COB-ID SYNC")
 	// Expect a uint32 and subindex 0 and no nill pointers
 	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
 		return ODR_DEV_INCOMPAT
@@ -90,18 +90,18 @@ func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 		if sync.CounterOverflowValue != 0 {
 			frameSize = 1
 		}
-		log.Debugf("[SYNC][EXTENSION] updated COB-ID SYNC to x%x (prev x%x)", canId, sync.cobId)
+		log.Debugf("[OD][EXTENSION][SYNC] updated COB-ID SYNC to x%x (prev x%x)", canId, sync.cobId)
 		sync.txBuffer = NewFrame(uint32(canId), 0, frameSize)
 		sync.cobId = uint32(canId)
 	}
 	// Reset in case sync is producer
 	sync.IsProducer = isProducer
 	if isProducer {
-		log.Debug("[SYNC][EXTENSION] SYNC is producer")
+		log.Debug("[OD][EXTENSION][SYNC] SYNC is producer")
 		sync.Counter = 0
 		sync.Timer = 0
 	} else {
-		log.Debug("[SYNC][EXTENSION] SYNC is not producer")
+		log.Debug("[OD][EXTENSION][SYNC] SYNC is not producer")
 	}
 	return WriteEntryDefault(stream, data, countWritten)
 }
@@ -112,7 +112,7 @@ func WriteEntry1006(stream *Stream, data []byte, countWritten *uint16) error {
 		return ODR_DEV_INCOMPAT
 	}
 	cyclePeriodUs := binary.LittleEndian.Uint32(data)
-	log.Debugf("[SYNC][EXTENSION] updating communication cycle period to %v us (%v ms)", cyclePeriodUs, cyclePeriodUs/1000)
+	log.Debugf("[OD][EXTENSION][SYNC] updating communication cycle period to %v us (%v ms)", cyclePeriodUs, cyclePeriodUs/1000)
 	return WriteEntryDefault(stream, data, countWritten)
 }
 
@@ -122,7 +122,7 @@ func WriteEntry1007(stream *Stream, data []byte, countWritten *uint16) error {
 		return ODR_DEV_INCOMPAT
 	}
 	windowLengthUs := binary.LittleEndian.Uint32(data)
-	log.Debugf("[SYNC][EXTENSION] updating synchronous window length to %v us (%v ms)", windowLengthUs, windowLengthUs/1000)
+	log.Debugf("[OD][EXTENSION][SYNC] updating synchronous window length to %v us (%v ms)", windowLengthUs, windowLengthUs/1000)
 	return WriteEntryDefault(stream, data, countWritten)
 }
 
@@ -286,7 +286,7 @@ func WriteEntry1019(stream *Stream, data []byte, countWritten *uint16) error {
 	}
 	sync.txBuffer = NewFrame(sync.cobId, 0, nbBytes)
 	sync.CounterOverflowValue = syncCounterOverflow
-	log.Debugf("[SYNC][EXTENSION] updated synchronous counter overflow to %v", syncCounterOverflow)
+	log.Debugf("[OD][EXTENSION][SYNC] updated synchronous counter overflow to %v", syncCounterOverflow)
 	return WriteEntryDefault(stream, data, countWritten)
 }
 
@@ -410,7 +410,7 @@ func WriteEntry1280(stream *Stream, data []byte, countWritten *uint16) error {
 
 // [RPDO] update communication parameter
 func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
-	log.Debug("[RPDO][EXTENSION] updating communication parameter")
+	log.Debug("[OD][EXTENSION][RPDO] updating communication parameter")
 	if stream == nil || data == nil || countWritten == nil || len(data) > 4 {
 		return ODR_DEV_INCOMPAT
 	}
@@ -459,7 +459,7 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 					return ODR_DEV_INCOMPAT
 				}
 			}
-			log.Debugf("[%v][EXTENSION] updated pdo with cobId : x%x, valid : %v", pdo.Type(), pdo.configuredId&0x7FF, pdo.Valid)
+			log.Debugf("[OD][EXTENSION][%v] updated pdo with cobId : x%x, valid : %v", pdo.Type(), pdo.configuredId&0x7FF, pdo.Valid)
 		}
 
 	case 2:
@@ -474,14 +474,14 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 			rpdo.RxNew[1] = false
 		}
 		rpdo.Synchronous = synchronous
-		log.Debugf("[%v][EXTENSION] updated pdo transmission type to : %v", pdo.Type(), transmissionType)
+		log.Debugf("[OD][EXTENSION][%v] updated pdo transmission type to : %v", pdo.Type(), transmissionType)
 
 	case 5:
 		// Event timer
 		eventTime := binary.LittleEndian.Uint16(data)
 		rpdo.TimeoutTimeUs = uint32(eventTime) * 1000
 		rpdo.TimeoutTimer = 0
-		log.Debugf("[%v][EXTENSION] updated pdo event timer to : %v us", pdo.Type(), eventTime)
+		log.Debugf("[OD][EXTENSION][%v] updated pdo event timer to : %v us", pdo.Type(), eventTime)
 	}
 
 	return WriteEntryDefault(stream, bufCopy, countWritten)
@@ -532,7 +532,7 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 	default:
 		return ODR_DEV_INCOMPAT
 	}
-	log.Debugf("[%v][EXTENSION] updating mapping parameter", pdo.Type())
+	log.Debugf("[OD][EXTENSION][%v] updating mapping parameter", pdo.Type())
 	// PDO must be disabled in order to allow mapping
 	if pdo.Valid || pdo.nbMapped != 0 && stream.Subindex > 0 {
 		return ODR_UNSUPP_ACCESS
@@ -561,7 +561,7 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 		}
 		pdo.dataLength = pdoDataLength
 		pdo.nbMapped = mappedObjectsCount
-		log.Debugf("[%v][EXTENSION] updated pdo number of mapped objects to : %v", pdo.Type(), mappedObjectsCount)
+		log.Debugf("[OD][EXTENSION][%v] updated pdo number of mapped objects to : %v", pdo.Type(), mappedObjectsCount)
 
 	} else {
 		err := pdo.configureMap(binary.LittleEndian.Uint32(data), uint32(stream.Subindex)-1, pdo.IsRPDO)
@@ -695,7 +695,7 @@ func ReadEntryFileObject(stream *Stream, data []byte, countRead *uint16) error {
 	}
 	if stream.DataOffset == 0 {
 		var err error
-		log.Infof("[FILE EXTENSION] opening %v for reading", fileObject.FilePath)
+		log.Infof("[OD][EXTENSION][FILE] opening %v for reading", fileObject.FilePath)
 		fileObject.File, err = os.OpenFile(fileObject.FilePath, fileObject.ReadMode, 0644)
 		if err != nil {
 			return ODR_DEV_INCOMPAT
@@ -710,12 +710,12 @@ func ReadEntryFileObject(stream *Stream, data []byte, countRead *uint16) error {
 		return ODR_PARTIAL
 	case io.EOF, io.ErrUnexpectedEOF:
 		*countRead = uint16(countReadInt)
-		log.Infof("[FILE EXTENSION] finished reading %v", fileObject.FilePath)
+		log.Infof("[OD][EXTENSION][FILE] finished reading %v", fileObject.FilePath)
 		fileObject.File.Close()
 		return nil
 	default:
 		//unexpected error
-		log.Errorf("[FILE EXTENSION] error reading file %v", err)
+		log.Errorf("[OD][EXTENSION][FILE] error reading file %v", err)
 		fileObject.File.Close()
 		return ODR_DEV_INCOMPAT
 
@@ -734,7 +734,7 @@ func WriteEntryFileObject(stream *Stream, data []byte, countWritten *uint16) err
 	}
 	if stream.DataOffset == 0 {
 		var err error
-		log.Infof("[FILE EXTENSION] opening %v for writing", fileObject.FilePath)
+		log.Infof("[OD][EXTENSION][FILE] opening %v for writing", fileObject.FilePath)
 		fileObject.File, err = os.OpenFile(fileObject.FilePath, fileObject.WriteMode, 0644)
 		if err != nil {
 			return ODR_DEV_INCOMPAT
@@ -746,14 +746,14 @@ func WriteEntryFileObject(stream *Stream, data []byte, countWritten *uint16) err
 		*countWritten = uint16(countWrittenInt)
 		stream.DataOffset += uint32(countWrittenInt)
 		if stream.DataLength == stream.DataOffset {
-			log.Infof("[FILE EXTENSION] finished writing %v", fileObject.FilePath)
+			log.Infof("[OD][EXTENSION][FILE] finished writing %v", fileObject.FilePath)
 			fileObject.File.Close()
 			return nil
 		} else {
 			return ODR_PARTIAL
 		}
 	} else {
-		log.Errorf("[FILE EXTENSION] error writing file %v", err)
+		log.Errorf("[OD][EXTENSION][FILE] error writing file %v", err)
 		fileObject.File.Close()
 		return ODR_DEV_INCOMPAT
 	}
