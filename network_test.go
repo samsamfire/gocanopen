@@ -4,6 +4,17 @@ import (
 	"testing"
 )
 
+func createNetworkEmpty() *Network {
+	bus := NewVirtualCanBus("localhost:18888")
+	bus.receiveOwn = true
+	network := NewNetwork(bus)
+	e := network.Connect()
+	if e != nil {
+		panic(e)
+	}
+	return &network
+}
+
 func createNetwork() *Network {
 	bus := NewVirtualCanBus("localhost:18888")
 	bus.receiveOwn = true
