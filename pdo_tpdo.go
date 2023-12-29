@@ -202,7 +202,7 @@ func NewTPDO(
 	predefinedIdent uint16,
 
 ) (*TPDO, error) {
-	if od == nil || em == nil || entry18xx == nil || entry1Axx == nil || busManager == nil {
+	if od == nil || entry18xx == nil || entry1Axx == nil || busManager == nil {
 		return nil, ErrIllegalArgument
 	}
 	tpdo := &TPDO{}

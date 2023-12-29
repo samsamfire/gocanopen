@@ -188,7 +188,7 @@ func NewRPDO(
 	entry16xx *Entry,
 	predefinedIdent uint16,
 ) (*RPDO, error) {
-	if od == nil || em == nil || entry14xx == nil || entry16xx == nil || busManager == nil {
+	if od == nil || entry14xx == nil || entry16xx == nil || busManager == nil {
 		return nil, ErrIllegalArgument
 	}
 	rpdo := &RPDO{}
@@ -218,7 +218,7 @@ func NewRPDO(
 	// Configure event timer
 	eventTime, ret := entry14xx.Uint16(5)
 	if ret != nil {
-		log.Errorf("[RPDO][%x|%x] reading event timer failed : %v", entry14xx.Index, 5, ret)
+		log.Warnf("[RPDO][%x|%x] reading event timer failed : %v", entry14xx.Index, 5, ret)
 	}
 	rpdo.TimeoutTimeUs = uint32(eventTime) * 1000
 	pdo.IsRPDO = true
