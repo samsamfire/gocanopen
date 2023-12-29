@@ -188,10 +188,9 @@ func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
 	return network.busManager.Send(frame)
 }
 
-// Create a local node with a given OD
-// Can be either a string : path to OD
-// Or it can be an OD object
-func (network *Network) CreateNode(nodeId uint8, od any) (Node, error) {
+// Create a local CANopen compliant node with a given OD
+// Can be either a string : path to OD or OD object
+func (network *Network) CreateNode(nodeId uint8, od any) (*LocalNode, error) {
 	var odNode *ObjectDictionary
 	var err error
 	switch odType := od.(type) {
@@ -229,32 +228,32 @@ func (network *Network) CreateNode(nodeId uint8, od any) (Node, error) {
 }
 
 // Add a remote node with a given OD
-// OD can be a path, ObjectDictionary or nil
+// Can be either a string : path to OD or OD object
 // This function will load and parse Object dictionnary (OD) into memory
 // If already present, OD will be overwritten
 // User can then access the node via OD naming
 // A same OD can be used for multiple nodes
-func (network *Network) AddNode(nodeId uint8, od any) error {
+func (network *Network) AddNode(nodeId uint8, od any) (*RemoteNode, error) {
 	var odNode *ObjectDictionary
 	var err error
 	if nodeId < 1 || nodeId > 127 {
-		return fmt.Errorf("nodeId should be between 1 and 127, value given : %v", nodeId)
+		return nil, fmt.Errorf("nodeId should be between 1 and 127, value given : %v", nodeId)
 	}
 	switch odType := od.(type) {
 	case string:
 		odNode, err = ParseEDSFromFile(odType, nodeId)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: odNode, edsPath: odType}
 	case ObjectDictionary:
 		odNode = &odType
 		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: odNode, edsPath: ""}
 	default:
-		return fmt.Errorf("expecting string or ObjectDictionary got : %T", od)
+		return nil, fmt.Errorf("expecting string or ObjectDictionary got : %T", od)
 	}
 
-	return nil
+	return NewRemoteNode(network.busManager, odNode, nodeId)
 
 }
 

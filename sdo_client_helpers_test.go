@@ -26,14 +26,14 @@ func TestSDOReadExpedited(t *testing.T) {
 func TestSDOReadWriteLocal(t *testing.T) {
 	network := createNetwork()
 	defer network.Disconnect()
-	node, err := network.CreateNode(0x55, "testdata/base.eds")
+	localNode, err := network.CreateNode(0x55, "testdata/base.eds")
 	assert.Nil(t, err)
-	localNode := node.(*LocalNode)
-	_, err = localNode.SDOclients[0].ReadUint32(0x55, 0x2007, 0x0)
+	client := localNode.SDOclients[0]
+	_, err = client.ReadUint32(0x55, 0x2007, 0x0)
 	assert.Nil(t, err)
-	err = localNode.SDOclients[0].WriteRaw(0x55, 0x2007, 0x0, uint32(5656), false)
+	err = client.WriteRaw(0x55, 0x2007, 0x0, uint32(5656), false)
 	assert.Nil(t, err)
-	val, err := localNode.SDOclients[0].ReadUint32(0x55, 0x2007, 0x0)
+	val, err := client.ReadUint32(0x55, 0x2007, 0x0)
 	assert.Nil(t, err)
 	assert.Equal(t, uint32(5656), val)
 }
