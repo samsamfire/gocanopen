@@ -87,6 +87,11 @@ func (entry *Entry) AddMember(section *ini.Section, name string, nodeId uint8, s
 // Add an extension to entry and return created extension
 // object can be any custom object
 func (entry *Entry) AddExtension(object any, read StreamReader, write StreamWriter) *Extension {
+	log.Debugf("[OD][EXTENSION][x%x] added an extension : %v, %v",
+		entry.Index,
+		getFunctionName(read),
+		getFunctionName(write),
+	)
 	extension := &Extension{Object: object, Read: read, Write: write}
 	entry.Extension = extension
 	return extension
