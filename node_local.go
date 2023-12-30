@@ -51,10 +51,11 @@ func (node *LocalNode) ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32)
 		syncProcess := sync.process(nmtIsPreOrOperational, timeDifferenceUs, timerNextUs)
 
 		switch syncProcess {
-		case CO_SYNC_NONE, CO_SYNC_RX_TX:
+		case CO_SYNC_RX_TX:
 			syncWas = true
 		case CO_SYNC_PASSED_WINDOW:
 			node.busManager.ClearSyncPDOs()
+		default:
 		}
 	}
 	return syncWas
