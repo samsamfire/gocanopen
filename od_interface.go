@@ -33,26 +33,44 @@ func (od *ObjectDictionary) AddArray(index uint16, name string, array Array) {
 	od.addEntry(&Entry{Index: index, Name: name, Object: array, Extension: nil, subEntriesNameMap: map[string]uint8{}})
 }
 
-// Add a variable to OD
-func (od *ObjectDictionary) AddVariable(index uint16, name string, variable Variable) {
-	od.addEntry(&Entry{Index: index, Name: name, Object: variable, Extension: nil, subEntriesNameMap: map[string]uint8{}})
+// Add a variable to OD with given Variable
+func (od *ObjectDictionary) AddVariable(variable *Variable) {
+	od.addEntry(&Entry{Index: variable.Index, Name: variable.Name, Object: variable, Extension: nil, subEntriesNameMap: map[string]uint8{}})
+}
+
+// Creates and adds a Variable to OD
+func (od *ObjectDictionary) AddVariableType(
+	index uint16,
+	subindex uint8,
+	name string,
+	datatype uint8,
+	attribute uint8,
+	value string,
+) (*Variable, error) {
+	encoded, err := encode(value, datatype, 0)
+	encodedCopy := make([]byte, len(encoded))
+	copy(encodedCopy, encoded)
+	if err != nil {
+		return nil, err
+	}
+	variable := &Variable{
+		Index:        index,
+		SubIndex:     subindex,
+		Name:         name,
+		data:         encoded,
+		defaultValue: encodedCopy,
+		Attribute:    attribute,
+		DataType:     datatype,
+	}
+	od.AddVariable(variable)
+	return variable, nil
 }
 
 // Add file like object entry to OD
 func (od *ObjectDictionary) AddFile(index uint16, indexName string, filePath string, readMode int, writeMode int) error {
 	log.Infof("[OD] adding file object entry : %v at x%x", filePath, index)
 	fileObject := &FileObject{FilePath: filePath, ReadMode: readMode, WriteMode: writeMode}
-	variable := Variable{
-		data:           []byte{},
-		Name:           indexName,
-		DataType:       DOMAIN,
-		Attribute:      ATTRIBUTE_SDO_RW,
-		ParameterValue: "",
-		defaultValue:   []byte{},
-		Index:          index,
-		SubIndex:       0,
-	}
-	od.AddVariable(index, indexName, variable)
+	od.AddVariableType(index, 0, indexName, DOMAIN, ATTRIBUTE_SDO_RW, "") // Cannot error
 	entry := od.Index(index)
 	entry.AddExtension(fileObject, ReadEntryFileObject, WriteEntryFileObject)
 	return nil

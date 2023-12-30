@@ -102,11 +102,11 @@ func parseEDS(filePathOrData any, nodeId uint8) (*ObjectDictionary, error) {
 			//objectType determines what type of entry we should add to dictionary : Variable, Array or Record
 			switch objectType {
 			case OBJ_VAR, OBJ_DOMAIN:
-				variable, err := NewVariable(section, name, nodeId, index, 0)
+				variable, err := NewVariableFromSection(section, name, nodeId, index, 0)
 				if err != nil {
 					return nil, err
 				}
-				od.AddVariable(index, name, *variable)
+				od.AddVariable(variable)
 			case OBJ_ARR:
 				// Get number of elements inside array
 				subNumber, err := strconv.ParseUint(section.Key("SubNumber").Value(), 0, 8)
