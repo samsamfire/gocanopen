@@ -91,7 +91,7 @@ func (network *Network) Disconnect() {
 }
 
 func (network *Network) launchNodeProcess(node Node) {
-	log.Infof("[NETWORK][x%x] adding node to nodes being processed", node.GetID())
+	log.Infof("[NETWORK][x%x] adding node to nodes being processed %T", node.GetID(), node)
 	network.wgProcess.Add(1)
 	go func(node Node) {
 		defer network.wgProcess.Done()
@@ -297,4 +297,10 @@ func (network *Network) AddNodeFromSDO(
 		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: od, edsPath: ""}
 		return nil
 	}
+}
+
+// Create a node configurator
+// This uses the network sdoclient
+func (network *Network) Configurator(nodeId uint8) NodeConfigurator {
+	return NewNodeConfigurator(nodeId, network.sdoClient)
 }
