@@ -3,7 +3,6 @@ package canopen
 import (
 	"testing"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -30,72 +29,48 @@ func TestFind(t *testing.T) {
 }
 
 // Test reading OD variables
-func TestGetUint(t *testing.T) {
-	BaseObjectDictionaryParsed, err := ParseEDSFromFile("testdata/base.eds", 0x10)
-	if err != nil {
-		t.Error(err)
-	}
-	entry := BaseObjectDictionaryParsed.Index(0x2003)
-	if entry == nil {
-		t.Error()
-	}
+func TestEntryUint(t *testing.T) {
+	odParsed, err := ParseEDSFromFile("testdata/base.eds", 0x10)
+	assert.Nil(t, err)
+
+	entry := odParsed.Index(0x2003)
+	assert.NotNil(t, entry)
 
 	data, _ := entry.Uint16(0)
-	if data != 0x4444 {
-		t.Errorf("Wrong value : %x", data)
-	}
-	_, err = entry.Uint8(0)
-	if err != ODR_TYPE_MISMATCH {
-		t.Error()
-	}
+	assert.EqualValues(t, 0x4444, data)
 
+	_, err = entry.Uint8(0)
+	assert.Equal(t, ODR_TYPE_MISMATCH, err)
 }
 
 // Test reading SDO client parameter entry
 func TestReadSDO1280(t *testing.T) {
 	od, err := ParseEDSFromFile("testdata/base.eds", 0x10)
-	if err != nil {
-		t.Fatalf("could not parse eds : %v", err)
-	}
+	assert.Nil(t, err)
 	entry := od.Index(0x1280)
-	log.Infof("Entry 1280 : %v", entry)
-	if entry == nil {
-		t.Error()
-	}
+	assert.NotNil(t, entry)
 	_, err = NewStreamer(entry, 0, true)
-
-	if err != nil {
-		t.Errorf("Failed to get sub object of 1280 %v", err)
-	}
-
+	assert.Nil(t, err)
 }
 
 // Test reader writer disabled
 func TestReadWriteDisabled(t *testing.T) {
 	//var streamer ObjectStreamer
 	od, err := ParseEDSFromFile("testdata/base.eds", 0x10)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Nil(t, err)
 	entry := od.Index(0x2001)
-	if entry == nil {
-		t.Fatal("Empty entry")
-	}
+	assert.NotNil(t, entry)
 	extension := Extension{Object: nil, Read: ReadEntryDisabled, Write: WriteEntryDisabled, flagsPDO: [32]uint8{0}}
 	entry.Extension = &extension
 	streamer, err := NewStreamer(entry, 0, false)
-	if err != nil {
-		t.Error()
-	}
+	assert.Nil(t, err)
+
 	_, err = streamer.Read([]byte{0})
-	if err != ODR_UNSUPP_ACCESS {
-		t.Error(err)
-	}
+	assert.Equal(t, ODR_UNSUPP_ACCESS, err)
+
 	var countWrite uint16
 	err = streamer.read(&streamer.stream, []byte{0}, &countWrite)
-	if err != ODR_UNSUPP_ACCESS {
-		t.Error(err)
-	}
+	assert.Equal(t, ODR_UNSUPP_ACCESS, err)
 }
 
 func TestAddRPDO(t *testing.T) {

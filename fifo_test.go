@@ -1,35 +1,28 @@
 package canopen
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestFifoWrite(t *testing.T) {
 	fifo := NewFifo(100)
 	res := fifo.Write([]byte{1, 2, 3, 4, 5}, nil)
-	if res != 5 {
-		t.Errorf("Written only %v", res)
-	}
-	if fifo.writePos != 5 {
-		t.Errorf("Write position is %v", fifo.writePos)
-	}
-	if fifo.readPos != 0 {
-		t.Error()
-	}
+	assert.Equal(t, 5, res)
+	assert.Equal(t, 5, fifo.writePos)
+	assert.Equal(t, 0, fifo.readPos)
+
 	res = fifo.Write(make([]byte, 500), nil)
-	if res != 94 {
-		t.Errorf("Wrote %v", res)
-	}
+	assert.Equal(t, 94, res)
 	res = fifo.Write([]byte{1}, nil)
-	if res != 0 {
-		t.Error()
-	}
+	assert.Equal(t, 0, res)
+
 	// Free up some space by reading then re writing
 	var eof bool = false
 	fifo.Read(make([]byte, 10), &eof)
 	res = fifo.Write(make([]byte, 10), nil)
-	if res != 10 {
-		t.Error()
-	}
-
+	assert.Equal(t, 10, res)
 }
 
 func TestFifoRead(t *testing.T) {
@@ -37,42 +30,31 @@ func TestFifoRead(t *testing.T) {
 	receive_buffer := make([]byte, 10)
 	var eof bool = false
 	res := fifo.Read(receive_buffer, &eof)
-	if res != 0 {
-		t.Error()
-	}
+	assert.Equal(t, 0, res)
+
 	// Write to fifo
 	res = fifo.Write([]byte{1, 2, 3, 4}, nil)
-	if res != 4 && fifo.writePos != 4 {
-		t.Error()
-	}
+	assert.Equal(t, 4, res)
+	assert.Equal(t, 4, fifo.writePos)
 	res = fifo.Read(receive_buffer, &eof)
-	if res != 4 {
-		t.Errorf("Res is %v", res)
-	}
+	assert.Equal(t, 4, res)
 }
 
 func TestFifoAltRead(t *testing.T) {
 	fifo := NewFifo(101)
-	if fifo.AltGetOccupied() != 0 {
-		t.Fatal("fifo should be empty")
-	}
+	assert.Equal(t, 0, fifo.AltGetOccupied())
+
 	rxBuffer := make([]byte, 7)
 	res := fifo.AltRead(rxBuffer)
-	if res != 0 {
-		t.Error()
-	}
+	assert.Equal(t, 0, res)
+
 	// Write to fifo
 	for i := 0; i < 10; i++ {
 		res = fifo.Write([]byte("1234567891"), nil)
-		if res != 10 {
-			t.Fatalf("should be exactly 10, got %v", res)
-		}
+		assert.Equal(t, 10, res)
 	}
 	res = fifo.AltRead(rxBuffer)
-	if res != 7 || string(rxBuffer) != "1234567" {
-		t.Fatal("alt read problem")
-	}
-	if fifo.AltGetOccupied() != 93 {
-		t.Fatalf("should be 93 left, instead %v", fifo.AltGetOccupied())
-	}
+	assert.Equal(t, 7, res)
+	assert.Equal(t, "1234567", string(rxBuffer))
+	assert.Equal(t, 93, fifo.AltGetOccupied())
 }
