@@ -23,6 +23,11 @@ func (od *ObjectDictionary) addEntry(entry *Entry) {
 	od.entriesByIndexName[entry.Name] = entry
 }
 
+// Add a variable type entry to OD with given variable, existing entry will be
+func (od *ObjectDictionary) addVariable(variable *Variable) {
+	od.addEntry(&Entry{Index: variable.Index, Name: variable.Name, Object: variable, Extension: nil, subEntriesNameMap: map[string]uint8{}})
+}
+
 // Add a record to OD
 func (od *ObjectDictionary) AddRecord(index uint16, name string, record []Record) {
 	od.addEntry(&Entry{Index: index, Name: name, Object: record, Extension: nil, subEntriesNameMap: map[string]uint8{}})
@@ -31,11 +36,6 @@ func (od *ObjectDictionary) AddRecord(index uint16, name string, record []Record
 // Add an array to OD
 func (od *ObjectDictionary) AddArray(index uint16, name string, array Array) {
 	od.addEntry(&Entry{Index: index, Name: name, Object: array, Extension: nil, subEntriesNameMap: map[string]uint8{}})
-}
-
-// Add a variable to OD with given Variable
-func (od *ObjectDictionary) AddVariable(variable *Variable) {
-	od.addEntry(&Entry{Index: variable.Index, Name: variable.Name, Object: variable, Extension: nil, subEntriesNameMap: map[string]uint8{}})
 }
 
 // Creates and adds a Variable to OD
@@ -62,7 +62,7 @@ func (od *ObjectDictionary) AddVariableType(
 		Attribute:    attribute,
 		DataType:     datatype,
 	}
-	od.AddVariable(variable)
+	od.addVariable(variable)
 	return variable, nil
 }
 
@@ -234,26 +234,13 @@ type Variable struct {
 	SubIndex        uint8
 }
 
+// OD object of type "ARRAY"
 type Array struct {
 	Variables []Variable
 }
+
+// OD object of type "RECORD"
 type Record struct {
-	Variable Variable
+	Variable Variable // An array is also a record type
 	Subindex uint8
-}
-
-func isIDRestricted(canId uint16) bool {
-	return canId <= 0x7f ||
-		(canId >= 0x101 && canId <= 0x180) ||
-		(canId >= 0x581 && canId <= 0x5FF) ||
-		(canId >= 0x601 && canId <= 0x67F) ||
-		(canId >= 0x6E0 && canId <= 0x6FF) ||
-		canId >= 0x701
-}
-
-func NewOD() *ObjectDictionary {
-	return &ObjectDictionary{
-		entriesByIndexValue: make(map[uint16]*Entry),
-		entriesByIndexName:  make(map[string]*Entry),
-	}
 }

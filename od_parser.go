@@ -9,6 +9,22 @@ import (
 	"gopkg.in/ini.v1"
 )
 
+// CANopen supported object types
+const (
+	OBJ_DOMAIN byte = 2
+	OBJ_VAR    byte = 7
+	OBJ_ARR    byte = 8
+	OBJ_RECORD byte = 9
+)
+
+var OBJ_NAME_MAP = map[byte]string{
+	OBJ_DOMAIN: "DOMAIN  ",
+	OBJ_VAR:    "VARIABLE",
+	OBJ_ARR:    "ARRAY   ",
+	OBJ_RECORD: "RECORD  ",
+}
+
+// CANopen supported datatypes
 const (
 	BOOLEAN        uint8 = 0x01
 	INTEGER8       uint8 = 0x02
@@ -27,6 +43,8 @@ const (
 	UNSIGNED64     uint8 = 0x1B
 )
 
+// Actual object type used in OD
+// Specifically, OBJ_DOMAIN is considered as an ODT_VAR
 const (
 	ODT_VAR       byte = 0x01
 	ODT_ARR       byte = 0x02
@@ -34,20 +52,7 @@ const (
 	ODT_TYPE_MASK byte = 0x0F
 )
 
-const (
-	OBJ_DOMAIN byte = 2
-	OBJ_VAR    byte = 7
-	OBJ_ARR    byte = 8
-	OBJ_RECORD byte = 9
-)
-
-var OBJ_NAME_MAP = map[byte]string{
-	OBJ_DOMAIN: "DOMAIN  ",
-	OBJ_VAR:    "VARIABLE",
-	OBJ_ARR:    "ARRAY   ",
-	OBJ_RECORD: "RECORD  ",
-}
-
+// Create an OD from a given file path on system
 func ParseEDSFromFile(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 	od, err := parseEDS(filePath, nodeId)
 	if err != nil {
@@ -57,13 +62,12 @@ func ParseEDSFromFile(filePath string, nodeId uint8) (*ObjectDictionary, error) 
 	return od, nil
 }
 
+// Create an OD from raw bytes
 func ParseEDSFromRaw(edsBytes []byte, nodeId uint8) (*ObjectDictionary, error) {
 	return parseEDS(edsBytes, nodeId)
 }
 
-// Parse an EDS and file and return an ObjectDictionary
 func parseEDS(filePathOrData any, nodeId uint8) (*ObjectDictionary, error) {
-
 	od := NewOD()
 	// Open the EDS file
 	edsFile, err := ini.Load(filePathOrData)
@@ -74,7 +78,7 @@ func parseEDS(filePathOrData any, nodeId uint8) (*ObjectDictionary, error) {
 	// Get all the sections in the file
 	sections := edsFile.Sections()
 
-	// Get the index sections
+	// Get index & subindex matching
 	matchIdxRegExp := regexp.MustCompile(`^[0-9A-Fa-f]{4}$`)
 	matchSubidxRegExp := regexp.MustCompile(`^([0-9A-Fa-f]{4})sub([0-9A-Fa-f]+)$`)
 
@@ -106,7 +110,7 @@ func parseEDS(filePathOrData any, nodeId uint8) (*ObjectDictionary, error) {
 				if err != nil {
 					return nil, err
 				}
-				od.AddVariable(variable)
+				od.addVariable(variable)
 			case OBJ_ARR:
 				// Get number of elements inside array
 				subNumber, err := strconv.ParseUint(section.Key("SubNumber").Value(), 0, 8)
@@ -175,5 +179,12 @@ func (od *ObjectDictionary) Print() {
 			}
 		}
 
+	}
+}
+
+func NewOD() *ObjectDictionary {
+	return &ObjectDictionary{
+		entriesByIndexValue: make(map[uint16]*Entry),
+		entriesByIndexName:  make(map[string]*Entry),
 	}
 }
