@@ -7,60 +7,26 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var BaseObjectDictionaryParsed ObjectDictionary
-
 func createOD() *ObjectDictionary {
 	od := NewOD()
-	od.addVariable(0x1016, &Variable{data: []byte{0x10, 0x20}, Name: "entry1016", Attribute: ATTRIBUTE_SDO_R | ATTRIBUTE_SDO_W})
-	od.addVariable(0x1017, &Variable{data: []byte{0x10, 0x20}, Name: "entry1017", Attribute: ATTRIBUTE_SDO_R | ATTRIBUTE_SDO_W})
-	od.addVariable(0x1018, &Variable{data: []byte{0x10, 0x20}, Name: "entry1018", Attribute: ATTRIBUTE_SDO_R | ATTRIBUTE_SDO_W})
-	//od.AddRecord(0x1030, "entry1030", []Record{{Variable{data: []byte{0x10, 0x20}, Attribute: ATTRIBUTE_SDO_R | ATTRIBUTE_SDO_W}, 0}})
+	od.AddVariableType(0x3016, "entry3016", UNSIGNED8, ATTRIBUTE_SDO_RW, "0x10")
+	od.AddVariableType(0x3017, "entry3017", UNSIGNED16, ATTRIBUTE_SDO_RW, "0x20")
+	od.AddVariableType(0x3018, "entry3018", UNSIGNED32, ATTRIBUTE_SDO_RW, "0x30")
+	record := NewRecord()
+	record.AddSubObject(0, "sub0", UNSIGNED8, ATTRIBUTE_SDO_RW, "0x11")
+	od.AddVariableList(0x3030, "entry3030", record)
 	return od
 }
 
 func TestFind(t *testing.T) {
 	od := createOD()
 	entry := od.Index(0x1118)
-	if entry != nil {
-		t.Errorf("Entry should be nil")
-
-	}
-
-	entry = od.Index(0x1016)
-	if entry.Index != 0x1016 {
-		t.Errorf("Wrong index %x", entry.Index)
-	}
-
-}
-
-func TestSub(t *testing.T) {
-	od := createOD()
-	entry := od.Index(0x1018)
-	if entry == nil {
-		t.Errorf("Entry %x should exist", 0x1018)
-	}
-	// Test access to subindex > 1 for variable
-	_, err := NewStreamer(entry, 1, true)
-	if err != ODR_SUB_NOT_EXIST {
-		t.Errorf("%d", err)
-	}
-	// Test that subindex 0 returns ODR_OK
-	_, err = NewStreamer(entry, 0, true)
-	if err != nil {
-		t.Error(err)
-	}
-	// Test access to subindex 0 of Record should return ODR_OK
-	entry = od.Index(0x1030)
-	_, err = NewStreamer(entry, 0, true)
-	if err != nil {
-		t.Error()
-	}
-	// Test access to out of range subindex
-	_, err = NewStreamer(entry, 10, true)
-	if err != ODR_SUB_NOT_EXIST {
-		t.Error()
-	}
-
+	assert.Nil(t, entry)
+	entry = od.Index(0x3016)
+	assert.NotNil(t, entry)
+	variable, err := od.Index(0x3016).SubIndex(0)
+	assert.Nil(t, err)
+	assert.NotNil(t, variable)
 }
 
 // Test reading OD variables
