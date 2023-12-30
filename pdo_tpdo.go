@@ -18,8 +18,7 @@ type TPDO struct {
 }
 
 func (tpdo *TPDO) configureTransmissionType(entry18xx *Entry) error {
-	transmissionType := uint8(TRANSMISSION_TYPE_SYNC_EVENT_LO)
-	ret := entry18xx.Uint8(2, &transmissionType)
+	transmissionType, ret := entry18xx.Uint8(2)
 	if ret != nil {
 		log.Errorf("[TPDO][%x|%x] reading %v failed : %v", entry18xx.Index, 2, entry18xx.Name, ret)
 		return ErrOdParameters
@@ -34,8 +33,7 @@ func (tpdo *TPDO) configureTransmissionType(entry18xx *Entry) error {
 
 func (tpdo *TPDO) configureCOBID(entry18xx *Entry, predefinedIdent uint16, erroneousMap uint32) (canId uint16, e error) {
 	pdo := &tpdo.pdo
-	cobId := uint32(0)
-	ret := entry18xx.Uint32(1, &cobId)
+	cobId, ret := entry18xx.Uint32(1)
 	if ret != nil {
 		log.Errorf("[TPDO][%x|%x] reading %v failed : %v", entry18xx.Index, 1, entry18xx.Name, ret)
 		return 0, ErrOdParameters
@@ -204,7 +202,7 @@ func NewTPDO(
 	predefinedIdent uint16,
 
 ) (*TPDO, error) {
-	if od == nil || em == nil || entry18xx == nil || entry1Axx == nil || busManager == nil {
+	if od == nil || entry18xx == nil || entry1Axx == nil || busManager == nil {
 		return nil, ErrIllegalArgument
 	}
 	tpdo := &TPDO{}
@@ -226,25 +224,22 @@ func NewTPDO(
 	if err != nil {
 		return nil, err
 	}
-	// Configure inhibit timer (not mandatory)
-	inhibitTime := uint16(0)
-	err = entry18xx.Uint16(3, &inhibitTime)
+	// Configure inhibit time (not mandatory)
+	inhibitTime, err := entry18xx.Uint16(3)
 	if err != nil {
-		log.Warnf("[TPDO][%x|%x] reading inhibit timer failed : %v", entry18xx.Index, 3, err)
+		log.Warnf("[TPDO][%x|%x] reading inhibit time failed : %v", entry18xx.Index, 3, err)
 	}
 	tpdo.InhibitTimeUs = uint32(inhibitTime) * 100
 
 	// Configure event timer (not mandatory)
-	eventTime := uint16(0)
-	err = entry18xx.Uint16(5, &eventTime)
+	eventTime, err := entry18xx.Uint16(5)
 	if err != nil {
 		log.Warnf("[TPDO][%x|%x] reading event timer failed : %v", entry18xx.Index, 5, err)
 	}
 	tpdo.EventTimeUs = uint32(eventTime) * 1000
 
 	// Configure sync start value (not mandatory)
-	tpdo.SyncStartValue = 0
-	err = entry18xx.Uint8(6, &tpdo.SyncStartValue)
+	tpdo.SyncStartValue, err = entry18xx.Uint8(6)
 	if err != nil {
 		log.Warnf("[TPDO][%x|%x] reading sync start failed : %v", entry18xx.Index, 6, err)
 	}

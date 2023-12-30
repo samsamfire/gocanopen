@@ -22,14 +22,11 @@ func createGateway() *HTTPGatewayServer {
 	if e != nil {
 		panic(e)
 	}
-	e = network.AddNode(NODE_ID_TEST, "testdata/base.eds")
+	_, e = network.AddNode(NODE_ID_TEST, "testdata/base.eds", true)
 	if e != nil {
 		panic(e)
 	}
 	gateway := NewGateway(1, 1, 100, &network)
-	go func() {
-		network.Process()
-	}()
 	return gateway
 }
 
