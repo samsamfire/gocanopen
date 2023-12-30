@@ -1,5 +1,10 @@
 package canopen
 
+import (
+	"reflect"
+	"runtime"
+)
+
 func isIDRestricted(canId uint16) bool {
 	return canId <= 0x7f ||
 		(canId >= 0x101 && canId <= 0x180) ||
@@ -7,4 +12,8 @@ func isIDRestricted(canId uint16) bool {
 		(canId >= 0x601 && canId <= 0x67F) ||
 		(canId >= 0x6E0 && canId <= 0x6FF) ||
 		canId >= 0x701
+}
+
+func getFunctionName(i interface{}) string {
+	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }
