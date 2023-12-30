@@ -136,7 +136,7 @@ func (od *ObjectDictionary) addPDO(pdoNb uint16, isRPDO bool) error {
 		fmt.Sprintf("%s mapping parameter", pdoType),
 		Array{Variables: variables},
 	)
-	log.Infof("[OD] Added new PDO object %s%v", pdoType, pdoNb)
+	log.Infof("[OD] Added new PDO object to OD : %s%v", pdoType, pdoNb)
 	return nil
 }
 

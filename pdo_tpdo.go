@@ -224,10 +224,10 @@ func NewTPDO(
 	if err != nil {
 		return nil, err
 	}
-	// Configure inhibit timer (not mandatory)
+	// Configure inhibit time (not mandatory)
 	inhibitTime, err := entry18xx.Uint16(3)
 	if err != nil {
-		log.Warnf("[TPDO][%x|%x] reading inhibit timer failed : %v", entry18xx.Index, 3, err)
+		log.Warnf("[TPDO][%x|%x] reading inhibit time failed : %v", entry18xx.Index, 3, err)
 	}
 	tpdo.InhibitTimeUs = uint32(inhibitTime) * 100
 
