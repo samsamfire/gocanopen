@@ -16,18 +16,12 @@ func createNetworkEmpty() *Network {
 }
 
 func createNetwork() *Network {
-	bus := NewVirtualCanBus("localhost:18888")
-	bus.receiveOwn = true
-	network := NewNetwork(bus)
-	e := network.Connect()
-	if e != nil {
-		panic(e)
+	network := createNetworkEmpty()
+	_, err := network.CreateNode(NODE_ID_TEST, "testdata/base.eds")
+	if err != nil {
+		panic(err)
 	}
-	_, e = network.CreateNode(NODE_ID_TEST, "testdata/base.eds")
-	if e != nil {
-		panic(e)
-	}
-	return &network
+	return network
 }
 
 func TestAddNodeLoadODFromSDO(t *testing.T) {

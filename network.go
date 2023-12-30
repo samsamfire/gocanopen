@@ -233,7 +233,7 @@ func (network *Network) CreateNode(nodeId uint8, od any) (*LocalNode, error) {
 // If already present, OD will be overwritten
 // User can then access the node via OD naming
 // A same OD can be used for multiple nodes
-func (network *Network) AddNode(nodeId uint8, od any) (*RemoteNode, error) {
+func (network *Network) AddNode(nodeId uint8, od any, useLocal bool) (*RemoteNode, error) {
 	var odNode *ObjectDictionary
 	var err error
 	if nodeId < 1 || nodeId > 127 {
@@ -253,8 +253,13 @@ func (network *Network) AddNode(nodeId uint8, od any) (*RemoteNode, error) {
 		return nil, fmt.Errorf("expecting string or ObjectDictionary got : %T", od)
 	}
 
-	return NewRemoteNode(network.busManager, odNode, nodeId)
-
+	node, err := NewRemoteNode(network.busManager, odNode, nodeId, useLocal)
+	if err != nil {
+		return nil, err
+	}
+	network.Nodes[nodeId] = node
+	network.launchNodeProcess(node)
+	return node, nil
 }
 
 // Same as AddNode, except od is downloaded from remote node

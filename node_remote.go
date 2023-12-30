@@ -57,7 +57,12 @@ func (node *RemoteNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32,
 }
 
 // Create a remote node
-func NewRemoteNode(busManager *BusManager, remoteOd *ObjectDictionary, remoteNodeId uint8) (*RemoteNode, error) {
+func NewRemoteNode(
+	busManager *BusManager,
+	remoteOd *ObjectDictionary,
+	remoteNodeId uint8,
+	useLocal bool,
+) (*RemoteNode, error) {
 	if busManager == nil || remoteOd == nil {
 		return nil, errors.New("need at least busManager and od parameters")
 	}
@@ -78,14 +83,24 @@ func NewRemoteNode(busManager *BusManager, remoteOd *ObjectDictionary, remoteNod
 		return nil, err
 	}
 	node.sdoClient = client
-	// Create a new SYNC consumer
-	sync, err := NewSYNCConsumer(busManager, nil, 0x80)
+	// Create a new SYNC object
+	node.od.AddSYNC()
+	//Initialize SYNC
+	sync, err := NewSYNC(
+		busManager,
+		nil,
+		node.od.Index(0x1005),
+		node.od.Index(0x1006),
+		node.od.Index(0x1007),
+		node.od.Index(0x1019),
+	)
 	if err != nil {
-		log.Errorf("[NODE][SYNC] error when initializing SYNC consumer object %v", err)
+		log.Errorf("[NODE][SYNC] error when initialising SYNC object %v", err)
 		return nil, err
 	}
 	node.sync = sync
-	return node, nil
+	err = node.InitPDOs(useLocal)
+	return node, err
 }
 
 // Initialize PDOs according to either local OD mapping or remote OD mapping
