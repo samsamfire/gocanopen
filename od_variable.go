@@ -22,7 +22,7 @@ func (variable *Variable) DefaultValue() []byte {
 }
 
 // Create variable from section entry
-func NewVariable(
+func NewVariableFromSection(
 	section *ini.Section,
 	name string,
 	nodeId uint8,
@@ -33,7 +33,6 @@ func NewVariable(
 	variable := &Variable{
 		Name:     name,
 		SubIndex: subindex,
-		Index:    index,
 	}
 
 	// Get AccessType
@@ -95,6 +94,31 @@ func NewVariable(
 		copy(variable.data, variable.defaultValue)
 	}
 
+	return variable, nil
+}
+
+// Create a new variable
+func NewVariable(
+	subindex uint8,
+	name string,
+	datatype uint8,
+	attribute uint8,
+	value string,
+) (*Variable, error) {
+	encoded, err := encode(value, datatype, 0)
+	encodedCopy := make([]byte, len(encoded))
+	copy(encodedCopy, encoded)
+	if err != nil {
+		return nil, err
+	}
+	variable := &Variable{
+		SubIndex:     subindex,
+		Name:         name,
+		data:         encoded,
+		defaultValue: encodedCopy,
+		Attribute:    attribute,
+		DataType:     datatype,
+	}
 	return variable, nil
 }
 
@@ -211,7 +235,7 @@ func decode(data []byte, dataType uint8) (v any, e error) {
 		return int64(binary.LittleEndian.Uint64(data)), nil
 	case REAL32:
 		parsed := binary.LittleEndian.Uint32(data)
-		return math.Float64frombits(uint64(parsed)), nil
+		return float64(math.Float32frombits(parsed)), nil
 	case REAL64:
 		parsed := binary.LittleEndian.Uint64(data)
 		return math.Float64frombits(parsed), nil

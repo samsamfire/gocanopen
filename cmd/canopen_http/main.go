@@ -29,7 +29,6 @@ func main() {
 	if e != nil {
 		panic(e)
 	}
-	go func() { network.Process() }()
 	gateway := canopen.NewGateway(1, 1, 100, &network)
 	gateway.ListenAndServe(fmt.Sprintf(":%d", DEFAULT_HTTP_PORT))
 

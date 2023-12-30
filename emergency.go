@@ -556,8 +556,7 @@ func NewEM(
 	emergency.Fifo = make([]EMFifo, fifoSize)
 
 	// Get cob id initial & verify
-	cobIdEmergency := uint32(0)
-	ret := entry1014.Uint32(0, &cobIdEmergency)
+	cobIdEmergency, ret := entry1014.Uint32(0)
 	if ret != nil || (cobIdEmergency&0x7FFFF800) != 0 {
 		// Don't break if only value is wrong
 		if ret != nil {
@@ -575,8 +574,7 @@ func NewEM(
 	emergency.txBuffer = NewFrame(producerCanId, 0, 8)
 	emergency.InhibitEmTimeUs = 0
 	emergency.InhibitEmTimer = 0
-	inhibitTime100us := uint16(0)
-	ret = entry1015.Uint16(0, &inhibitTime100us)
+	inhibitTime100us, ret := entry1015.Uint16(0)
 	if ret == nil {
 		emergency.InhibitEmTimeUs = uint32(inhibitTime100us) * 100
 		entry1015.AddExtension(emergency, ReadEntryDefault, WriteEntry1015)
