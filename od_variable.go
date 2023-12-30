@@ -22,7 +22,7 @@ func (variable *Variable) DefaultValue() []byte {
 }
 
 // Create variable from section entry
-func NewVariable(
+func NewVariableFromSection(
 	section *ini.Section,
 	name string,
 	nodeId uint8,

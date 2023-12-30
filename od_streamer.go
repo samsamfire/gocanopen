@@ -57,7 +57,7 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 	object := entry.Object
 	// attribute, dataOrig and dataLength, depends on object type
 	switch object := object.(type) {
-	case Variable:
+	case *Variable:
 		if subIndex > 0 {
 			return nil, ODR_SUB_NOT_EXIST
 		}
