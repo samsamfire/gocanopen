@@ -70,3 +70,18 @@ type Node interface {
 	GetExit() chan bool
 	SetExit(exit bool) // Exit node processing
 }
+
+type NodeConfigurator struct {
+	RPDO PDOConfigurator
+	TPDO PDOConfigurator
+	SYNC SYNCConfigurator
+	// Others to come
+}
+
+func NewNodeConfigurator(nodeId uint8, client *SDOClient) NodeConfigurator {
+	configurator := NodeConfigurator{}
+	configurator.RPDO = *NewRPDOConfigurator(nodeId, client)
+	configurator.TPDO = *NewTPDOConfigurator(nodeId, client)
+	configurator.SYNC = *NewSYNCConfigurator(nodeId, client)
+	return configurator
+}
