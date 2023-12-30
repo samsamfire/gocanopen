@@ -33,63 +33,27 @@ func (entry *Entry) SubIndex(subIndex any) (v *Variable, e error) {
 			return nil, ODR_SUB_NOT_EXIST
 		}
 		return object, nil
-	case Array:
-		subEntriesCount := len(object.Variables)
+	case *VariableList:
+		var convertedSubIndex uint8
+		var ok bool
 		switch sub := subIndex.(type) {
 		case string:
-			subIndexInt, ok := entry.subEntriesNameMap[sub]
-			if ok {
-				return &object.Variables[subIndexInt], nil
-			}
-			return nil, ODR_SUB_NOT_EXIST
-		case int:
-			if uint8(sub) >= uint8(subEntriesCount) {
+			convertedSubIndex, ok = entry.subEntriesNameMap[sub]
+			if !ok {
 				return nil, ODR_SUB_NOT_EXIST
 			}
-			return &object.Variables[uint8(sub)], nil
-		case uint8:
-			if sub >= uint8(subEntriesCount) {
-				return nil, ODR_SUB_NOT_EXIST
-			}
-			return &object.Variables[sub], nil
-		default:
-			return nil, ODR_DEV_INCOMPAT
-		}
-	case []Record:
-		records := object
-		var record *Record
-		switch sub := subIndex.(type) {
-		case string:
-			subIndexInt, ok := entry.subEntriesNameMap[sub]
-			if ok {
-				for i := range records {
-					if records[i].Subindex == subIndexInt {
-						record = &records[i]
-						return &record.Variable, nil
-					}
-				}
-			}
-			return nil, ODR_SUB_NOT_EXIST
 		case int:
-			for i := range records {
-				if records[i].Subindex == uint8(sub) {
-					record = &records[i]
-					return &record.Variable, nil
-				}
+			if sub >= 256 {
+				return nil, ODR_DEV_INCOMPAT
 			}
-			return nil, ODR_SUB_NOT_EXIST
+			convertedSubIndex = uint8(sub)
 		case uint8:
-			for i := range records {
-				if records[i].Subindex == sub {
-					record = &records[i]
-					return &record.Variable, nil
-				}
-			}
-			return nil, ODR_SUB_NOT_EXIST
+			convertedSubIndex = sub
 		default:
 			return nil, ODR_DEV_INCOMPAT
 
 		}
+		return object.GetSubObject(convertedSubIndex)
 	default:
 		// This is not normal
 		return nil, ODR_DEV_INCOMPAT
@@ -97,34 +61,27 @@ func (entry *Entry) SubIndex(subIndex any) (v *Variable, e error) {
 
 }
 
-// Add a member to Entry, this is only possible for Array or Record objects
+// Add a member to Entry, this is only possible for Record/Array objects
 func (entry *Entry) AddMember(section *ini.Section, name string, nodeId uint8, subIndex uint8) error {
-
-	switch object := entry.Object.(type) {
-	case Variable:
-		return fmt.Errorf("cannot add a member to variable type")
-	case Array:
-		variable, err := NewVariableFromSection(section, name, nodeId, entry.Index, subIndex)
-		if err != nil {
-			return err
-		}
-		object.Variables[subIndex] = *variable
-		entry.Object = object
-		entry.subEntriesNameMap[name] = subIndex
-		return nil
-
-	case []Record:
-		variable, err := NewVariableFromSection(section, name, nodeId, entry.Index, subIndex)
-		if err != nil {
-			return err
-		}
-		entry.Object = append(object, Record{Subindex: subIndex, Variable: *variable})
-		entry.subEntriesNameMap[name] = subIndex
-		return nil
-
-	default:
-		return fmt.Errorf("add member not supported for %T", object)
+	record, ok := entry.Object.(*VariableList)
+	if !ok {
+		return fmt.Errorf("cannot add member to type : %T", record)
 	}
+	variable, err := NewVariableFromSection(section, name, nodeId, entry.Index, subIndex)
+	if err != nil {
+		return err
+	}
+	switch entry.ObjectType {
+	case OBJ_ARR:
+		record.Variables[subIndex] = *variable
+		entry.subEntriesNameMap[name] = subIndex
+	case OBJ_RECORD:
+		record.Variables = append(record.Variables, *variable)
+		entry.subEntriesNameMap[name] = subIndex
+	default:
+		return fmt.Errorf("add member not supported for ObjectType : %v", entry.ObjectType)
+	}
+	return nil
 }
 
 // Add an extension to entry and return created extension
@@ -139,17 +96,13 @@ func (entry *Entry) AddExtension(object any, read StreamReader, write StreamWrit
 func (entry *Entry) SubCount() int {
 
 	switch object := entry.Object.(type) {
-	case Variable:
+	case *Variable:
 		return 1
-	case Array:
+	case *VariableList:
 		return len(object.Variables)
-
-	case []Record:
-		return len(object)
-
 	default:
 		// This is not normal
-		log.Errorf("The entry %v has an invalid type", entry)
+		log.Errorf("The entry %v has an invalid type %T", entry, entry)
 		return 1
 	}
 }

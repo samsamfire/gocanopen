@@ -110,23 +110,23 @@ func parseEDS(filePathOrData any, nodeId uint8) (*ObjectDictionary, error) {
 				if err != nil {
 					return nil, err
 				}
-				od.addVariable(variable)
+				od.addVariable(index, variable)
 			case OBJ_ARR:
-				// Get number of elements inside array
+				// Array objects do not allow holes in subindex numbers
+				// So pre-init slice up to subnumber
 				subNumber, err := strconv.ParseUint(section.Key("SubNumber").Value(), 0, 8)
 				if err != nil {
 					return nil, err
 				}
-				array := Array{Variables: make([]Variable, subNumber)}
-				od.AddArray(index, name, array)
+				od.AddVariableList(index, name, NewArray(uint8(subNumber)))
 			case OBJ_RECORD:
-				od.AddRecord(index, name, make([]Record, 0))
+				// Record objects allow holes in mapping
+				// Sub-objects will be added with "append"
+				od.AddVariableList(index, name, NewRecord())
 			default:
 				return nil, fmt.Errorf("[OD] unknown object type whilst parsing EDS %T", objType)
 			}
-
 			log.Debugf("[OD] adding %v | %v at %x", OBJ_NAME_MAP[objectType], name, index)
-
 		}
 
 		// Match subindexes, add the subindex values to Record or Array objects
@@ -164,23 +164,23 @@ func parseEDS(filePathOrData any, nodeId uint8) (*ObjectDictionary, error) {
 }
 
 // Print od out
-func (od *ObjectDictionary) Print() {
-	for k, v := range od.entriesByIndexValue {
-		fmt.Printf("Entry %x : %v\n", k, v.Name)
-		switch object := v.Object.(type) {
-		case Array:
-			for subindex, variable := range object.Variables {
-				fmt.Printf("\t\tSub Entry %x : %v \n", subindex, variable)
-			}
+// func (od *ObjectDictionary) Print() {
+// 	for k, v := range od.entriesByIndexValue {
+// 		fmt.Printf("Entry %x : %v\n", k, v.Name)
+// 		switch object := v.Object.(type) {
+// 		case Array:
+// 			for subindex, variable := range object.Variables {
+// 				fmt.Printf("\t\tSub Entry %x : %v \n", subindex, variable)
+// 			}
 
-		case []Record:
-			for _, subvalue := range object {
-				fmt.Printf("\t\tSub Entry %x : %v \n", subvalue.Subindex, subvalue.Variable.Name)
-			}
-		}
+// 		case []Record:
+// 			for _, subvalue := range object {
+// 				fmt.Printf("\t\tSub Entry %x : %v \n", subvalue.Subindex, subvalue.Variable.Name)
+// 			}
+// 		}
 
-	}
-}
+// 	}
+// }
 
 func NewOD() *ObjectDictionary {
 	return &ObjectDictionary{

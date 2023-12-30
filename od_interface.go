@@ -24,18 +24,8 @@ func (od *ObjectDictionary) addEntry(entry *Entry) {
 }
 
 // Add a variable type entry to OD with given variable, existing entry will be
-func (od *ObjectDictionary) addVariable(variable *Variable) {
-	od.addEntry(&Entry{Index: variable.Index, Name: variable.Name, Object: variable, Extension: nil, subEntriesNameMap: map[string]uint8{}})
-}
-
-// Add a record to OD
-func (od *ObjectDictionary) AddRecord(index uint16, name string, record []Record) {
-	od.addEntry(&Entry{Index: index, Name: name, Object: record, Extension: nil, subEntriesNameMap: map[string]uint8{}})
-}
-
-// Add an array to OD
-func (od *ObjectDictionary) AddArray(index uint16, name string, array Array) {
-	od.addEntry(&Entry{Index: index, Name: name, Object: array, Extension: nil, subEntriesNameMap: map[string]uint8{}})
+func (od *ObjectDictionary) addVariable(index uint16, variable *Variable) {
+	od.addEntry(&Entry{Index: index, Name: variable.Name, Object: variable, ObjectType: OBJ_VAR, Extension: nil, subEntriesNameMap: map[string]uint8{}})
 }
 
 // Creates and adds a Variable to OD
@@ -47,23 +37,17 @@ func (od *ObjectDictionary) AddVariableType(
 	attribute uint8,
 	value string,
 ) (*Variable, error) {
-	encoded, err := encode(value, datatype, 0)
-	encodedCopy := make([]byte, len(encoded))
-	copy(encodedCopy, encoded)
+	variable, err := NewVariable(subindex, name, datatype, attribute, value)
 	if err != nil {
 		return nil, err
 	}
-	variable := &Variable{
-		Index:        index,
-		SubIndex:     subindex,
-		Name:         name,
-		data:         encoded,
-		defaultValue: encodedCopy,
-		Attribute:    attribute,
-		DataType:     datatype,
-	}
-	od.addVariable(variable)
+	od.addVariable(index, variable)
 	return variable, nil
+}
+
+// Adds a record/variable to OD
+func (od *ObjectDictionary) AddVariableList(index uint16, name string, varList *VariableList) {
+	od.addEntry(&Entry{Index: index, Name: name, Object: varList, ObjectType: varList.objectType, Extension: nil, subEntriesNameMap: map[string]uint8{}})
 }
 
 // Add file like object entry to OD
@@ -85,75 +69,21 @@ func (od *ObjectDictionary) addPDO(pdoNb uint16, isRPDO bool) error {
 		pdoType = "TPDO"
 	}
 
-	variables := make([]Variable, 0)
-	variables = append(variables, Variable{
-		data:         []byte{0x5},
-		Name:         "Highest sub-index supported",
-		DataType:     UNSIGNED8,
-		Attribute:    ATTRIBUTE_SDO_R,
-		defaultValue: []byte{0x5},
-		Index:        BASE_RPDO_COMMUNICATION_INDEX + indexOffset,
-		SubIndex:     0,
-	})
-	variables = append(variables, Variable{
-		data:         []byte{0, 0, 0, 0},
-		Name:         fmt.Sprintf("COB-ID used by %s", pdoType),
-		DataType:     UNSIGNED32,
-		Attribute:    ATTRIBUTE_SDO_RW,
-		defaultValue: []byte{0, 0, 0, 0},
-		Index:        BASE_RPDO_COMMUNICATION_INDEX + indexOffset,
-		SubIndex:     1,
-	})
-	variables = append(variables, Variable{
-		data:         []byte{0},
-		Name:         "Transmission type",
-		DataType:     UNSIGNED8,
-		Attribute:    ATTRIBUTE_SDO_RW,
-		defaultValue: []byte{0},
-		Index:        BASE_RPDO_COMMUNICATION_INDEX + indexOffset,
-		SubIndex:     2,
-	})
-	variables = append(variables, Variable{
-		data:         []byte{0, 0},
-		Name:         "Event timer",
-		DataType:     UNSIGNED16,
-		Attribute:    ATTRIBUTE_SDO_RW,
-		defaultValue: []byte{0, 0},
-		Index:        BASE_RPDO_COMMUNICATION_INDEX + indexOffset,
-		SubIndex:     5,
-	})
-	od.AddArray(
-		BASE_RPDO_COMMUNICATION_INDEX+indexOffset,
-		fmt.Sprintf("%s communication parameter", pdoType),
-		Array{Variables: variables},
-	)
+	pdoComm := NewRecord()
+	pdoComm.AddSubObject(0, "Highest sub-index supported", UNSIGNED8, ATTRIBUTE_SDO_R, "0x5")
+	pdoComm.AddSubObject(1, fmt.Sprintf("COB-ID used by %s", pdoType), UNSIGNED32, ATTRIBUTE_SDO_RW, "0x0")
+	pdoComm.AddSubObject(2, "Transmission type", UNSIGNED8, ATTRIBUTE_SDO_RW, "0x0")
+	pdoComm.AddSubObject(5, "Event timer", UNSIGNED16, ATTRIBUTE_SDO_RW, "0x0")
 
-	variables = make([]Variable, 0)
-	variables = append(variables, Variable{
-		data:         []byte{0},
-		Name:         "Number of mapped application objects in PDO",
-		DataType:     UNSIGNED8,
-		Attribute:    ATTRIBUTE_SDO_RW,
-		defaultValue: []byte{0},
-		Index:        BASE_RPDO_MAPPING_INDEX + indexOffset,
-		SubIndex:     0,
-	})
+	od.AddVariableList(BASE_RPDO_COMMUNICATION_INDEX+indexOffset, fmt.Sprintf("%s communication parameter", pdoType), pdoComm)
+
+	pdoMap := NewRecord()
+	pdoMap.AddSubObject(0, "Number of mapped application objects in PDO", UNSIGNED8, ATTRIBUTE_SDO_RW, "0x0")
 	for i := uint8(1); i <= MAX_MAPPED_ENTRIES; i++ {
-		variables = append(variables, Variable{
-			data:         []byte{0, 0, 0, 0},
-			Name:         fmt.Sprintf("Application object %d", i),
-			DataType:     UNSIGNED32,
-			Attribute:    ATTRIBUTE_SDO_RW,
-			defaultValue: []byte{0, 0, 0, 0},
-			Index:        BASE_RPDO_MAPPING_INDEX + indexOffset,
-			SubIndex:     i,
-		})
+		pdoMap.AddSubObject(i, fmt.Sprintf("Application object %d", i), UNSIGNED32, ATTRIBUTE_SDO_RW, "0x0")
 	}
-	od.AddArray(
-		BASE_RPDO_MAPPING_INDEX+indexOffset,
-		fmt.Sprintf("%s mapping parameter", pdoType),
-		Array{Variables: variables},
-	)
+	od.AddVariableList(BASE_RPDO_MAPPING_INDEX+indexOffset, fmt.Sprintf("%s mapping parameter", pdoType), pdoMap)
+
 	log.Infof("[OD] Added new PDO object to OD : %s%v", pdoType, pdoNb)
 	return nil
 }
@@ -219,7 +149,7 @@ type FileInfo struct {
 	ModifiedBy       string
 }
 
-// OD object of type "VAR" object used for holding any sub object
+// OD object used to store a "VAR" or "DOMAIN" object type
 type Variable struct {
 	data            []byte
 	Name            string
@@ -230,17 +160,68 @@ type Variable struct {
 	StorageLocation string
 	LowLimit        int
 	HighLimit       int
-	Index           uint16
 	SubIndex        uint8
 }
 
-// OD object of type "ARRAY"
-type Array struct {
-	Variables []Variable
+// OD object used to store a "RECORD" or "ARRAY" object type
+type VariableList struct {
+	objectType uint8 // either "RECORD" or "ARRAY"
+	Variables  []Variable
 }
 
-// OD object of type "RECORD"
-type Record struct {
-	Variable Variable // An array is also a record type
-	Subindex uint8
+func (rec *VariableList) GetSubObject(subindex uint8) (*Variable, error) {
+	if rec.objectType == OBJ_ARR {
+		subEntriesCount := len(rec.Variables)
+		if subindex >= uint8(subEntriesCount) {
+			return nil, ODR_SUB_NOT_EXIST
+		}
+		return &rec.Variables[subindex], nil
+	}
+	for i, variable := range rec.Variables {
+		if variable.SubIndex == subindex {
+			return &rec.Variables[i], nil
+		}
+	}
+	return nil, ODR_SUB_NOT_EXIST
+}
+
+func (rec *VariableList) AddSubObject(
+	subindex uint8,
+	name string,
+	datatype uint8,
+	attribute uint8,
+	value string,
+) (*Variable, error) {
+	encoded, err := encode(value, datatype, 0)
+	encodedCopy := make([]byte, len(encoded))
+	copy(encodedCopy, encoded)
+	if err != nil {
+		return nil, err
+	}
+	if rec.objectType == OBJ_ARR {
+		if int(subindex) >= len(rec.Variables) {
+			log.Error("[OD] trying to add a sub object to array but out of bounds")
+			return nil, ODR_SUB_NOT_EXIST
+		}
+		variable, err := NewVariable(subindex, name, datatype, attribute, value)
+		if err != nil {
+			return nil, err
+		}
+		rec.Variables[subindex] = *variable
+		return &rec.Variables[subindex], nil
+	}
+	variable, err := NewVariable(subindex, name, datatype, attribute, value)
+	if err != nil {
+		return nil, err
+	}
+	rec.Variables = append(rec.Variables, *variable)
+	return &rec.Variables[len(rec.Variables)-1], nil
+}
+
+func NewRecord() *VariableList {
+	return &VariableList{objectType: OBJ_RECORD, Variables: make([]Variable, 0)}
+}
+
+func NewArray(length uint8) *VariableList {
+	return &VariableList{objectType: OBJ_ARR, Variables: make([]Variable, length)}
 }

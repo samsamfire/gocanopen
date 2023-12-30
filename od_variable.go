@@ -33,7 +33,6 @@ func NewVariableFromSection(
 	variable := &Variable{
 		Name:     name,
 		SubIndex: subindex,
-		Index:    index,
 	}
 
 	// Get AccessType
@@ -95,6 +94,31 @@ func NewVariableFromSection(
 		copy(variable.data, variable.defaultValue)
 	}
 
+	return variable, nil
+}
+
+// Create a new variable
+func NewVariable(
+	subindex uint8,
+	name string,
+	datatype uint8,
+	attribute uint8,
+	value string,
+) (*Variable, error) {
+	encoded, err := encode(value, datatype, 0)
+	encodedCopy := make([]byte, len(encoded))
+	copy(encodedCopy, encoded)
+	if err != nil {
+		return nil, err
+	}
+	variable := &Variable{
+		SubIndex:     subindex,
+		Name:         name,
+		data:         encoded,
+		defaultValue: encodedCopy,
+		Attribute:    attribute,
+		DataType:     datatype,
+	}
 	return variable, nil
 }
 

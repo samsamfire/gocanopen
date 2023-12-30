@@ -79,8 +79,9 @@ func TestReadFloat(t *testing.T) {
 func TestReadString(t *testing.T) {
 	network := createNetwork()
 	defer network.Disconnect()
-	val, _ := network.ReadString(NODE_ID_TEST, "VISIBLE STRING value", "")
+	val, err := network.ReadString(NODE_ID_TEST, "VISIBLE STRING value", "")
 	assert.Equal(t, "AStringCannotBeLongerThanTheDefaultValue", val)
+	assert.Equal(t, nil, err, err)
 }
 
 func TestWrite(t *testing.T) {
