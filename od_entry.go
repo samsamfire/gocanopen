@@ -25,11 +25,11 @@ func (entry *Entry) SubIndex(subIndex any) (v *Variable, e error) {
 		return nil, ODR_IDX_NOT_EXIST
 	}
 	switch object := entry.Object.(type) {
-	case Variable:
+	case *Variable:
 		if subIndex != 0 && subIndex != "" {
 			return nil, ODR_SUB_NOT_EXIST
 		}
-		return &object, nil
+		return object, nil
 	case Array:
 		subEntriesCount := len(object.Variables)
 		switch sub := subIndex.(type) {
