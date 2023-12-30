@@ -430,7 +430,7 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 		/* bits 11...29 must be zero, PDO must be disabled on change,
 		 * CAN_ID == 0 is not allowed, mapping must be configured before
 		 * enabling the PDO */
-
+		log.Debugf("[OD][EXTENSION][%v] updating pdo cob-id, valid : %v, canId : x%x", pdo.Type(), valid, canId)
 		if (cobId&0x3FFFF800) != 0 ||
 			valid && pdo.Valid && canId != uint32(pdo.configuredId) ||
 			valid && isIDRestricted(uint16(canId)) ||
@@ -594,6 +594,7 @@ func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 		// - PDO must be disabled on change
 		// - CAN_ID == 0 is not allowed
 		// - mapping must be configured before enabling the PDO
+		log.Debugf("[OD][EXTENSION][%v] updating pdo cob-id, valid : %v, canId : x%x", pdo.Type(), valid, canId)
 
 		if (cobId&0x3FFFF800) != 0 ||
 			(valid && pdo.Valid && canId != uint32(pdo.configuredId)) ||

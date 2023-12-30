@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"strconv"
 
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
 )
 
@@ -126,7 +125,6 @@ func parseEDS(filePathOrData any, nodeId uint8) (*ObjectDictionary, error) {
 			default:
 				return nil, fmt.Errorf("[OD] unknown object type whilst parsing EDS %T", objType)
 			}
-			log.Debugf("[OD] adding %v | %v at %x", OBJ_NAME_MAP[objectType], name, index)
 		}
 
 		// Match subindexes, add the subindex values to Record or Array objects

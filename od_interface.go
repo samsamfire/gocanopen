@@ -21,6 +21,7 @@ func (od *ObjectDictionary) addEntry(entry *Entry) {
 	}
 	od.entriesByIndexValue[entry.Index] = entry
 	od.entriesByIndexName[entry.Name] = entry
+	log.Debugf("[OD] adding %v | %v at %x", OBJ_NAME_MAP[entry.ObjectType], entry.Name, entry.Index)
 }
 
 // Add a variable type entry to OD with given variable, existing entry will be
