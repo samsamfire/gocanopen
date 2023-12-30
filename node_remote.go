@@ -180,7 +180,7 @@ func (node *RemoteNode) InitPDOs(useLocal bool) error {
 		if err != nil {
 			return err
 		}
-		err = localRPDOConfigurator.Disable(uint16(i) + 1)
+		err = localTPDOConfigurator.Disable(uint16(i) + 1)
 		if err != nil {
 			return err
 		}
