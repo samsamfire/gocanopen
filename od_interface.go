@@ -174,6 +174,16 @@ func (od *ObjectDictionary) AddTPDO(tpdoNb uint16) error {
 	return od.addPDO(tpdoNb, false)
 }
 
+// Add a SYNC object with defaults
+// This will add SYNC with 0x1005,0x1006,0x1007 & 0x1019
+func (od *ObjectDictionary) AddSYNC() {
+	od.AddVariableType(0x1005, 0, "COB-ID SYNC message", UNSIGNED32, ATTRIBUTE_SDO_RW, "0x80000080") // Disabled with standard cob-id
+	od.AddVariableType(0x1006, 0, "Communication cycle period", UNSIGNED32, ATTRIBUTE_SDO_RW, "0x0")
+	od.AddVariableType(0x1007, 0, "Synchronous window length", UNSIGNED32, ATTRIBUTE_SDO_RW, "0x0")
+	od.AddVariableType(0x1019, 0, "Synchronous counter overflow value", UNSIGNED8, ATTRIBUTE_SDO_RW, "0x0")
+	log.Infof("[OD] Added new SYNC object to OD")
+}
+
 // Get an entry corresponding to a given index
 // Index can either be a string, int or uint16
 // This method does not return an error for chaining
