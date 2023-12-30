@@ -2,6 +2,8 @@ package canopen
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func createNetworkEmpty() *Network {
@@ -28,7 +30,5 @@ func TestAddNodeLoadODFromSDO(t *testing.T) {
 	network := createNetwork()
 	defer network.Disconnect()
 	err := network.AddNodeFromSDO(NODE_ID_TEST, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Nil(t, err)
 }
