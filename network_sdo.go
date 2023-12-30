@@ -16,14 +16,15 @@ func (network *Network) readBytes(nodeId uint8, index any, subindex any) ([]byte
 	}
 	// Find corresponding Variable inside OD
 	// This will be used to determine information on the expected value
-	odVar, e := od.Index(index).SubIndex(subindex)
-	if e != nil {
-		return nil, 0, e
+	entry := od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
+	if err != nil {
+		return nil, 0, err
 	}
 	data := make([]byte, odVar.DataLength())
-	nbRead, e := network.sdoClient.ReadRaw(nodeId, odVar.Index, odVar.SubIndex, data)
-	if e != nil {
-		return nil, 0, e
+	nbRead, err := network.sdoClient.ReadRaw(nodeId, entry.Index, odVar.SubIndex, data)
+	if err != nil {
+		return nil, 0, err
 	}
 	return data[:nbRead], odVar.DataType, nil
 }
@@ -186,12 +187,13 @@ func (network *Network) Write(nodeId uint8, index any, subindex any, value any) 
 	}
 	// Find corresponding Variable inside OD
 	// This will be used to determine information on the expected value
-	odVar, err := od.Index(index).SubIndex(subindex)
+	entry := od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
 	if err != nil {
 		return err
 	}
 
-	err = network.sdoClient.WriteRaw(nodeId, odVar.Index, odVar.SubIndex, value, false)
+	err = network.sdoClient.WriteRaw(nodeId, entry.Index, odVar.SubIndex, value, false)
 	if err != nil {
 		return err
 	}
