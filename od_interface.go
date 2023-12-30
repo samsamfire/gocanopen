@@ -31,13 +31,12 @@ func (od *ObjectDictionary) addVariable(index uint16, variable *Variable) {
 // Creates and adds a Variable to OD
 func (od *ObjectDictionary) AddVariableType(
 	index uint16,
-	subindex uint8,
 	name string,
 	datatype uint8,
 	attribute uint8,
 	value string,
 ) (*Variable, error) {
-	variable, err := NewVariable(subindex, name, datatype, attribute, value)
+	variable, err := NewVariable(0, name, datatype, attribute, value)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +53,7 @@ func (od *ObjectDictionary) AddVariableList(index uint16, name string, varList *
 func (od *ObjectDictionary) AddFile(index uint16, indexName string, filePath string, readMode int, writeMode int) error {
 	log.Infof("[OD] adding file object entry : %v at x%x", filePath, index)
 	fileObject := &FileObject{FilePath: filePath, ReadMode: readMode, WriteMode: writeMode}
-	od.AddVariableType(index, 0, indexName, DOMAIN, ATTRIBUTE_SDO_RW, "") // Cannot error
+	od.AddVariableType(index, indexName, DOMAIN, ATTRIBUTE_SDO_RW, "") // Cannot error
 	entry := od.Index(index)
 	entry.AddExtension(fileObject, ReadEntryFileObject, WriteEntryFileObject)
 	return nil
@@ -107,10 +106,10 @@ func (od *ObjectDictionary) AddTPDO(tpdoNb uint16) error {
 // Add a SYNC object with defaults
 // This will add SYNC with 0x1005,0x1006,0x1007 & 0x1019
 func (od *ObjectDictionary) AddSYNC() {
-	od.AddVariableType(0x1005, 0, "COB-ID SYNC message", UNSIGNED32, ATTRIBUTE_SDO_RW, "0x80000080") // Disabled with standard cob-id
-	od.AddVariableType(0x1006, 0, "Communication cycle period", UNSIGNED32, ATTRIBUTE_SDO_RW, "0x0")
-	od.AddVariableType(0x1007, 0, "Synchronous window length", UNSIGNED32, ATTRIBUTE_SDO_RW, "0x0")
-	od.AddVariableType(0x1019, 0, "Synchronous counter overflow value", UNSIGNED8, ATTRIBUTE_SDO_RW, "0x0")
+	od.AddVariableType(0x1005, "COB-ID SYNC message", UNSIGNED32, ATTRIBUTE_SDO_RW, "0x80000080") // Disabled with standard cob-id
+	od.AddVariableType(0x1006, "Communication cycle period", UNSIGNED32, ATTRIBUTE_SDO_RW, "0x0")
+	od.AddVariableType(0x1007, "Synchronous window length", UNSIGNED32, ATTRIBUTE_SDO_RW, "0x0")
+	od.AddVariableType(0x1019, "Synchronous counter overflow value", UNSIGNED8, ATTRIBUTE_SDO_RW, "0x0")
 	log.Infof("[OD] Added new SYNC object to OD")
 }
 
