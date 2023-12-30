@@ -8,18 +8,21 @@ import (
 	"gopkg.in/ini.v1"
 )
 
-// An entry can be any object type : variable, array, record or domain
-// It is a specific index of the object dictionary and can contain multiple sub indexes
+// An entry holds an OD entry, i.e. an OD object at a specific index
+// An entry can be one of the following object types : variable, array, record or domain
+// Depending on the object type it may contain some some objects
 type Entry struct {
 	Index             uint16
 	Name              string
+	ObjectType        uint8
 	Object            any
 	Extension         *Extension
 	subEntriesNameMap map[string]uint8
 }
 
-// Get variable from given sub index
-// Subindex can either be a string or an int, or uint8
+// Get variable for a given sub index
+// Subindex can be a string,int, or uint8
+// When using a string it will try to find the subindex according to the OD naming
 func (entry *Entry) SubIndex(subIndex any) (v *Variable, e error) {
 	if entry == nil {
 		return nil, ODR_IDX_NOT_EXIST
