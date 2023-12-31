@@ -3,10 +3,10 @@ package main
 // Demo used for automated testing
 
 import (
-	"canopen"
 	"flag"
 	"os"
 
+	canopen "github.com/samsamfire/gocanopen"
 	log "github.com/sirupsen/logrus"
 )
 
