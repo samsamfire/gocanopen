@@ -1,4 +1,4 @@
-module canopen
+module github.com/samsamfire/gocanopen
 
 go 1.19
 

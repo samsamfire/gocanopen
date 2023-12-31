@@ -1,10 +1,10 @@
 package main
 
 import (
-	"canopen"
 	"io"
 	"os"
 
+	canopen "github.com/samsamfire/gocanopen"
 	log "github.com/sirupsen/logrus"
 )
 
