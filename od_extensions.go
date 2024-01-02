@@ -17,7 +17,7 @@ func ReadEntry1003(stream *Stream, data []byte, countRead *uint16) error {
 		len(data) < 1 {
 		return ODR_DEV_INCOMPAT
 	}
-	em, ok := stream.Object.(*EM)
+	em, ok := stream.Object.(*EMCY)
 	if !ok {
 		return ODR_DEV_INCOMPAT
 	}
@@ -53,7 +53,7 @@ func WriteEntry1003(stream *Stream, data []byte, countWritten *uint16) error {
 	if data[0] != 0 {
 		return ODR_INVALID_VALUE
 	}
-	em, ok := stream.Object.(*EM)
+	em, ok := stream.Object.(*EMCY)
 	if !ok {
 		return ODR_DEV_INCOMPAT
 	}
@@ -151,7 +151,7 @@ func ReadEntry1014(stream *Stream, data []byte, countRead *uint16) error {
 	if stream == nil || data == nil || countRead == nil || len(data) < 4 || stream.Subindex != 0 {
 		return ODR_DEV_INCOMPAT
 	}
-	em, ok := stream.Object.(*EM)
+	em, ok := stream.Object.(*EMCY)
 	if !ok {
 		return ODR_DEV_INCOMPAT
 	}
@@ -178,7 +178,7 @@ func WriteEntry1014(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || countWritten == nil || len(data) != 4 || stream.Subindex != 0 {
 		return ODR_DEV_INCOMPAT
 	}
-	em, ok := stream.Object.(*EM)
+	em, ok := stream.Object.(*EMCY)
 	if !ok {
 		return ODR_DEV_INCOMPAT
 	}
@@ -215,7 +215,7 @@ func WriteEntry1015(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || stream.Subindex != 0 || data == nil || len(data) != 2 || countWritten == nil {
 		return ODR_DEV_INCOMPAT
 	}
-	em, ok := stream.Object.(*EM)
+	em, ok := stream.Object.(*EMCY)
 	if !ok {
 		return ODR_DEV_INCOMPAT
 	}

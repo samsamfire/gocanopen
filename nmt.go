@@ -62,7 +62,7 @@ type NMT struct {
 	control                uint16
 	hearbeatProducerTimeUs uint32
 	hearbeatProducerTimer  uint32
-	emergency              *EM
+	emergency              *EMCY
 	nmtTxBuff              Frame
 	hbTxBuff               Frame
 	callback               func(nmtState uint8)
@@ -215,7 +215,7 @@ func (nmt *NMT) SendCommand(command NMTCommand, nodeId uint8) error {
 
 func NewNMT(
 	bm *busManager,
-	emergency *EM,
+	emergency *EMCY,
 	nodeId uint8,
 	control uint16,
 	firstHbTimeMs uint16,

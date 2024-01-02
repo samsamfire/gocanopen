@@ -17,7 +17,7 @@ type LocalNode struct {
 	TPDOs              []*TPDO
 	RPDOs              []*RPDO
 	SYNC               *SYNC
-	EM                 *EM
+	EM                 *EMCY
 	TIME               *TIME
 }
 
@@ -137,7 +137,7 @@ func NewLocalNode(
 	bm *busManager,
 	od *ObjectDictionary,
 	nmt *NMT,
-	emergency *EM,
+	emergency *EMCY,
 	nodeId uint8,
 	nmtControl uint16,
 	firstHbTimeMs uint16,
