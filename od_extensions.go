@@ -10,8 +10,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// [EMERGENCY] read emergency history
-func ReadEntry1003(stream *Stream, data []byte, countRead *uint16) error {
+// [EMCY] read emergency history
+func readEntry1003(stream *Stream, data []byte, countRead *uint16) error {
 	if stream == nil || data == nil || countRead == nil ||
 		(len(data) < 4 && stream.Subindex > 0) ||
 		len(data) < 1 {
@@ -45,8 +45,8 @@ func ReadEntry1003(stream *Stream, data []byte, countRead *uint16) error {
 	return nil
 }
 
-// [EMERGENCY] clear emergency history
-func WriteEntry1003(stream *Stream, data []byte, countWritten *uint16) error {
+// [EMCY] clear emergency history
+func writeEntry1003(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || stream.Subindex != 0 || data == nil || len(data) != 1 || countWritten == nil {
 		return ODR_DEV_INCOMPAT
 	}
@@ -64,7 +64,7 @@ func WriteEntry1003(stream *Stream, data []byte, countWritten *uint16) error {
 }
 
 // [SYNC] update cob id & if should be producer
-func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
+func writeEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 	log.Debugf("[OD][EXTENSION][SYNC] updating COB-ID SYNC")
 	// Expect a uint32 and subindex 0 and no nill pointers
 	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
@@ -107,7 +107,7 @@ func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 }
 
 // [SYNC] update communication cycle period
-func WriteEntry1006(stream *Stream, data []byte, countWritten *uint16) error {
+func writeEntry1006(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
 		return ODR_DEV_INCOMPAT
 	}
@@ -117,7 +117,7 @@ func WriteEntry1006(stream *Stream, data []byte, countWritten *uint16) error {
 }
 
 // [SYNC] update pdo synchronous window length
-func WriteEntry1007(stream *Stream, data []byte, countWritten *uint16) error {
+func writeEntry1007(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
 		return ODR_DEV_INCOMPAT
 	}
@@ -127,7 +127,7 @@ func WriteEntry1007(stream *Stream, data []byte, countWritten *uint16) error {
 }
 
 // [TIME] update cob id & if should be producer
-func WriteEntry1012(stream *Stream, data []byte, countWritten *uint16) error {
+func writeEntry1012(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
 		return ODR_DEV_INCOMPAT
 	}
@@ -146,8 +146,8 @@ func WriteEntry1012(stream *Stream, data []byte, countWritten *uint16) error {
 	return WriteEntryDefault(stream, data, countWritten)
 }
 
-// [EMERGENCY] read emergency cob id
-func ReadEntry1014(stream *Stream, data []byte, countRead *uint16) error {
+// [EMCY] read emergency cob id
+func readEntry1014(stream *Stream, data []byte, countRead *uint16) error {
 	if stream == nil || data == nil || countRead == nil || len(data) < 4 || stream.Subindex != 0 {
 		return ODR_DEV_INCOMPAT
 	}
@@ -173,8 +173,8 @@ func ReadEntry1014(stream *Stream, data []byte, countRead *uint16) error {
 	return nil
 }
 
-// [EMERGENCY] update emergency producer cob id
-func WriteEntry1014(stream *Stream, data []byte, countWritten *uint16) error {
+// [EMCY] update emergency producer cob id
+func writeEntry1014(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || countWritten == nil || len(data) != 4 || stream.Subindex != 0 {
 		return ODR_DEV_INCOMPAT
 	}
@@ -210,8 +210,8 @@ func WriteEntry1014(stream *Stream, data []byte, countWritten *uint16) error {
 
 }
 
-// [EMERGENCY] update inhibite time
-func WriteEntry1015(stream *Stream, data []byte, countWritten *uint16) error {
+// [EMCY] update inhibite time
+func writeEntry1015(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || stream.Subindex != 0 || data == nil || len(data) != 2 || countWritten == nil {
 		return ODR_DEV_INCOMPAT
 	}
@@ -227,7 +227,7 @@ func WriteEntry1015(stream *Stream, data []byte, countWritten *uint16) error {
 }
 
 // [HBConsumer] update heartbeat consumer
-func WriteEntry1016(stream *Stream, data []byte, countWritten *uint16) error {
+func writeEntry1016(stream *Stream, data []byte, countWritten *uint16) error {
 	consumer, ok := stream.Object.(*HBConsumer)
 	if !ok {
 		return ODR_DEV_INCOMPAT
@@ -251,7 +251,7 @@ func WriteEntry1016(stream *Stream, data []byte, countWritten *uint16) error {
 }
 
 // [NMT] update heartbeat period
-func WriteEntry1017(stream *Stream, data []byte, countWritten *uint16) error {
+func writeEntry1017(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream.Subindex != 0 || data == nil || len(data) != 2 || countWritten == nil || stream == nil {
 		return ODR_DEV_INCOMPAT
 	}
@@ -266,7 +266,7 @@ func WriteEntry1017(stream *Stream, data []byte, countWritten *uint16) error {
 }
 
 // [SYNC] update synchronous counter overflow
-func WriteEntry1019(stream *Stream, data []byte, countWritten *uint16) error {
+func writeEntry1019(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || countWritten == nil || len(data) != 1 {
 		return ODR_DEV_INCOMPAT
 	}
@@ -293,7 +293,7 @@ func WriteEntry1019(stream *Stream, data []byte, countWritten *uint16) error {
 }
 
 // [SDO server] update server parameters
-func WriteEntry1201(stream *Stream, data []byte, countWritten *uint16) error {
+func writeEntry1201(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || countWritten == nil {
 		return ODR_DEV_INCOMPAT
 	}
@@ -349,7 +349,7 @@ func WriteEntry1201(stream *Stream, data []byte, countWritten *uint16) error {
 }
 
 // [SDO Client] update parameters
-func WriteEntry1280(stream *Stream, data []byte, countWritten *uint16) error {
+func writeEntry1280(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || countWritten == nil {
 		return ODR_DEV_INCOMPAT
 	}
@@ -403,7 +403,7 @@ func WriteEntry1280(stream *Stream, data []byte, countWritten *uint16) error {
 }
 
 // [RPDO] update communication parameter
-func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
+func writeEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 	log.Debug("[OD][EXTENSION][RPDO] updating communication parameter")
 	if stream == nil || data == nil || countWritten == nil || len(data) > 4 {
 		return ODR_DEV_INCOMPAT
@@ -482,7 +482,7 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 }
 
 // [RPDO][TPDO] get communication parameter
-func ReadEntry14xxOr18xx(stream *Stream, data []byte, countRead *uint16) error {
+func readEntry14xxOr18xx(stream *Stream, data []byte, countRead *uint16) error {
 	err := ReadEntryDefault(stream, data, countRead)
 	// Add node id when reading subindex 1
 	if err == nil && stream.Subindex == 1 && *countRead == 4 {
@@ -512,7 +512,7 @@ func ReadEntry14xxOr18xx(stream *Stream, data []byte, countRead *uint16) error {
 }
 
 // [RPDO][TPDO] update mapping parameter
-func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) error {
+func writeEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || countWritten == nil || stream.Subindex > MAX_MAPPED_ENTRIES {
 		return ODR_DEV_INCOMPAT
 	}
@@ -567,7 +567,7 @@ func WriteEntry16xxOr1Axx(stream *Stream, data []byte, countWritten *uint16) err
 }
 
 // [TPDO] update communication parameter
-func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
+func writeEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || countWritten == nil || len(data) > 4 {
 		return ODR_DEV_INCOMPAT
 	}

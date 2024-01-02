@@ -159,7 +159,7 @@ func NewSYNC(
 		log.Errorf("[SYNC][%x] %v read error", entry1005.Index, entry1005.Name)
 		return nil, ErrOdParameters
 	}
-	entry1005.AddExtension(sync, ReadEntryDefault, WriteEntry1005)
+	entry1005.AddExtension(sync, ReadEntryDefault, writeEntry1005)
 
 	if entry1006 == nil {
 		log.Errorf("[SYNC][1006] COMM CYCLE PERIOD not found")
@@ -169,7 +169,7 @@ func NewSYNC(
 		return nil, ErrOdParameters
 	}
 
-	entry1006.AddExtension(sync, ReadEntryDefault, WriteEntry1006)
+	entry1006.AddExtension(sync, ReadEntryDefault, writeEntry1006)
 	sync.rawCommunicationCyclePeriod, err = entry1006.GetRawData(0, 4)
 	if err != nil {
 		log.Errorf("[SYNC][%x] %v read error", entry1006.Index, entry1006.Name)
@@ -177,7 +177,7 @@ func NewSYNC(
 	}
 	log.Infof("[SYNC][%x] %v : %v", entry1006.Index, entry1006.Name, binary.LittleEndian.Uint32(sync.rawCommunicationCyclePeriod))
 
-	entry1007.AddExtension(sync, ReadEntryDefault, WriteEntry1007)
+	entry1007.AddExtension(sync, ReadEntryDefault, writeEntry1007)
 	sync.rawSynchronousWindowLength, err = entry1007.GetRawData(0, 4)
 	if err != nil {
 		log.Errorf("[SYNC][%x] %v read error", entry1007.Index, entry1007.Name)
@@ -198,7 +198,7 @@ func NewSYNC(
 		} else if syncCounterOverflow > 240 {
 			syncCounterOverflow = 240
 		}
-		entry1019.AddExtension(sync, ReadEntryDefault, WriteEntry1019)
+		entry1019.AddExtension(sync, ReadEntryDefault, writeEntry1019)
 		log.Infof("[SYNC][%x] %v : %v", entry1019.Index, entry1019.Name, syncCounterOverflow)
 	}
 	sync.CounterOverflowValue = syncCounterOverflow

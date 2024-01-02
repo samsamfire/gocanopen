@@ -195,7 +195,7 @@ func NewHBConsumer(bm *busManager, em *EMCY, entry1016 *Entry) (*HBConsumer, err
 			return nil, err
 		}
 	}
-	entry1016.AddExtension(consumer, ReadEntryDefault, WriteEntry1016)
+	entry1016.AddExtension(consumer, ReadEntryDefault, writeEntry1016)
 	return consumer, nil
 
 }

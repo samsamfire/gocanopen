@@ -248,7 +248,7 @@ func NewNMT(
 	}
 	nmt.hearbeatProducerTimeUs = uint32(hbProdTimeMs) * 1000
 	// Extension needs to be initialized
-	entry1017.AddExtension(nmt, ReadEntryDefault, WriteEntry1017)
+	entry1017.AddExtension(nmt, ReadEntryDefault, writeEntry1017)
 
 	if nmt.hearbeatProducerTimer > nmt.hearbeatProducerTimeUs {
 		nmt.hearbeatProducerTimer = nmt.hearbeatProducerTimeUs

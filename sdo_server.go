@@ -1036,7 +1036,7 @@ func NewSDOServer(
 			} else {
 				canIdServerToClient = 0
 			}
-			entry12xx.AddExtension(server, ReadEntryDefault, WriteEntry1201)
+			entry12xx.AddExtension(server, ReadEntryDefault, writeEntry1201)
 
 		} else {
 			return nil, ErrIllegalArgument
