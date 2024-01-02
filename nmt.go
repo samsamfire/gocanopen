@@ -5,12 +5,12 @@ import (
 )
 
 const (
-	NMT_ERR_REG_MASK            uint16 = 0x00FF
-	NMT_STARTUP_TO_OPERATIONAL  uint16 = 0x0100
-	NMT_ERR_ON_BUSOFF_HB        uint16 = 0x1000
-	NMT_ERR_ON_ERR_REG          uint16 = 0x2000
-	NMT_ERR_TO_STOPPED          uint16 = 0x4000
-	NMT_ERR_FREE_TO_OPERATIONAL uint16 = 0x8000
+	nmtErrRegMask           uint16 = 0x00FF
+	nmtStartupToOperational uint16 = 0x0100
+	nmtErrOnBusOffHb        uint16 = 0x1000
+	nmtErrOnErrReg          uint16 = 0x2000
+	nmtErrToStopped         uint16 = 0x4000
+	nmtErrFreeToOperational uint16 = 0x8000
 )
 
 const (
@@ -20,6 +20,7 @@ const (
 	RESET_QUIT uint8 = 3
 )
 
+// Possible NMT states
 const (
 	NMT_INITIALIZING    uint8 = 0
 	NMT_PRE_OPERATIONAL uint8 = 127
@@ -38,6 +39,8 @@ var NMT_STATE_MAP = map[uint8]string{
 
 type NMTCommand uint8
 
+// Available NMT commands
+// They can be broadcasted to all nodes or to individual nodes
 const (
 	NMT_NO_COMMAND            NMTCommand = 0
 	NMT_ENTER_OPERATIONAL     NMTCommand = 1
@@ -47,7 +50,7 @@ const (
 	NMT_RESET_COMMUNICATION   NMTCommand = 130
 )
 
-var NMT_COMMAND_MAP = map[NMTCommand]string{
+var nmtCommandDescription = map[NMTCommand]string{
 	NMT_ENTER_OPERATIONAL:     "ENTER-OPERATIONAL",
 	NMT_ENTER_STOPPED:         "ENTER-STOPPED",
 	NMT_ENTER_PRE_OPERATIONAL: "ENTER-PREOPERATIONAL",
@@ -55,6 +58,7 @@ var NMT_COMMAND_MAP = map[NMTCommand]string{
 	NMT_RESET_COMMUNICATION:   "RESET-COMMUNICATION",
 }
 
+// NMT object for processing NMT behaviour, slave or master
 type NMT struct {
 	*busManager
 	operatingState         uint8
@@ -100,7 +104,7 @@ func (nmt *NMT) process(internalState *uint8, timeDifferenceUs uint32, timerNext
 		nmt.hbTxBuff.Data[0] = nmtStateCopy
 		nmt.Send(nmt.hbTxBuff)
 		if nmtStateCopy == NMT_INITIALIZING {
-			if nmt.control&NMT_STARTUP_TO_OPERATIONAL != 0 {
+			if nmt.control&nmtStartupToOperational != 0 {
 				nmtStateCopy = NMT_OPERATIONAL
 			} else {
 				nmtStateCopy = NMT_PRE_OPERATIONAL
@@ -132,26 +136,26 @@ func (nmt *NMT) process(internalState *uint8, timeDifferenceUs uint32, timerNext
 
 		}
 		if resetCommand != RESET_NOT {
-			log.Debugf("[NMT] received reset command %v this should be handled by user", NMT_COMMAND_MAP[nmt.internalCommand])
+			log.Debugf("[NMT] received reset command %v this should be handled by user", nmtCommandDescription[nmt.internalCommand])
 		}
 		nmt.internalCommand = NMT_NO_COMMAND
 	}
 
-	busOff_HB := nmt.control&NMT_ERR_ON_BUSOFF_HB != 0 &&
+	busOff_HB := nmt.control&nmtErrOnBusOffHb != 0 &&
 		(nmt.emergency.IsError(emCanTXBusPassive) ||
 			nmt.emergency.IsError(emHeartbeatConsumer) ||
 			nmt.emergency.IsError(emHBConsumerRemoteReset))
 
-	errRegMasked := (nmt.control&NMT_ERR_ON_ERR_REG != 0) &&
+	errRegMasked := (nmt.control&nmtErrOnErrReg != 0) &&
 		((nmt.emergency.GetErrorRegister() & byte(nmt.control)) != 0)
 
 	if nmtStateCopy == NMT_OPERATIONAL && (busOff_HB || errRegMasked) {
-		if nmt.control&NMT_ERR_TO_STOPPED != 0 {
+		if nmt.control&nmtErrToStopped != 0 {
 			nmtStateCopy = NMT_STOPPED
 		} else {
 			nmtStateCopy = NMT_PRE_OPERATIONAL
 		}
-	} else if (nmt.control&NMT_ERR_FREE_TO_OPERATIONAL) != 0 &&
+	} else if (nmt.control&nmtErrFreeToOperational) != 0 &&
 		nmtStateCopy == NMT_PRE_OPERATIONAL &&
 		!busOff_HB &&
 		!errRegMasked {
@@ -187,6 +191,7 @@ func (nmt *NMT) process(internalState *uint8, timeDifferenceUs uint32, timerNext
 
 }
 
+// Get a NMT state
 func (nmt *NMT) GetInternalState() uint8 {
 	if nmt == nil {
 		return NMT_INITIALIZING
@@ -202,9 +207,6 @@ func (nmt *NMT) SendInternalCommand(command uint8) {
 
 // Send an NMT command to the network
 func (nmt *NMT) SendCommand(command NMTCommand, nodeId uint8) error {
-	if nmt == nil {
-		return ErrIllegalArgument
-	}
 	// Also apply to node if concerned
 	if nodeId == 0 || nodeId == nmt.nodeId {
 		nmt.internalCommand = NMTCommand(command)
@@ -260,4 +262,23 @@ func NewNMT(
 	nmt.nmtTxBuff = NewFrame(uint32(canIdNmtTx), 0, 2)
 	nmt.hbTxBuff = NewFrame(uint32(canIdHbTx), 0, 1)
 	return nmt, nil
+}
+
+type NMTConfigurator struct {
+	nodeId    uint8
+	sdoClient *SDOClient
+}
+
+func NewNMTConfigurator(nodeId uint8, sdoClient *SDOClient) *NMTConfigurator {
+	return &NMTConfigurator{nodeId: nodeId, sdoClient: sdoClient}
+}
+
+// Read a nodes heartbeat period and returns it in milliseconds
+func (config *NMTConfigurator) ReadHeartbeatPeriod() (uint16, error) {
+	return config.sdoClient.ReadUint16(config.nodeId, 0x1017, 0)
+}
+
+// Update a nodes heartbeat period in milliseconds
+func (config *NMTConfigurator) WriteHeartbeatPeriod(periodMs uint16) error {
+	return config.sdoClient.WriteRaw(config.nodeId, 0x1017, 0, periodMs, false)
 }
