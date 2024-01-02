@@ -8,10 +8,10 @@ import (
 )
 
 type SDOServer struct {
+	*busManager
 	od                         *ObjectDictionary
 	streamer                   *Streamer
 	NodeId                     uint8
-	BusManager                 *BusManager
 	txBuffer                   Frame
 	CobIdClientToServer        uint32
 	CobIdServerToClient        uint32
@@ -119,7 +119,7 @@ func (server *SDOServer) Handle(frame Frame) {
 	}
 }
 
-func (server *SDOServer) InitRxTx(busManager *BusManager, cobIdClientToServer uint32, cobIdServerToClient uint32) error {
+func (server *SDOServer) initRxTx(cobIdClientToServer uint32, cobIdServerToClient uint32) error {
 	var ret error
 	// Only proceed if parameters change (i.e. different client)
 	if cobIdServerToClient == server.CobIdServerToClient && cobIdClientToServer == server.CobIdClientToServer {
@@ -148,14 +148,13 @@ func (server *SDOServer) InitRxTx(busManager *BusManager, cobIdClientToServer ui
 		server.Valid = false
 	}
 	// Configure buffers, if initializing then insert in buffer, otherwise, update
-	ret = server.BusManager.Subscribe(uint32(CanIdC2S), 0x7FF, false, server)
+	ret = server.Subscribe(uint32(CanIdC2S), 0x7FF, false, server)
 	if ret != nil {
 		server.Valid = false
 		return ret
 	}
 	server.txBuffer = NewFrame(uint32(CanIdS2C), 0, 8)
 	return ret
-
 }
 
 func (server *SDOServer) writeObjectDictionary(crcOperation uint, crcClient CRC16) error {
@@ -698,7 +697,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.txBuffer.Data[2] = byte(server.Index >> 8)
 			server.txBuffer.Data[3] = server.Subindex
 			server.TimeoutTimer = 0
-			server.BusManager.Send(server.txBuffer)
+			server.Send(server.txBuffer)
 			if server.Finished {
 				log.Debugf("[SERVER][TX] DOWNLOAD EXPEDITED | x%x:x%x %v", server.Index, server.Subindex, server.txBuffer.Data)
 				server.State = SDO_STATE_IDLE
@@ -717,7 +716,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.Toggle ^= 0x10
 			server.TimeoutTimer = 0
 			log.Debugf("[SERVER][TX] DOWNLOAD SEGMENT | x%x:x%x %v", server.Index, server.Subindex, server.txBuffer.Data)
-			server.BusManager.Send(server.txBuffer)
+			server.Send(server.txBuffer)
 			if server.Finished {
 				server.State = SDO_STATE_IDLE
 				ret = SDO_SUCCESS
@@ -750,7 +749,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.txBuffer.Data[1] = byte(server.Index)
 			server.txBuffer.Data[2] = byte(server.Index >> 8)
 			server.txBuffer.Data[3] = server.Subindex
-			server.BusManager.Send(server.txBuffer)
+			server.Send(server.txBuffer)
 
 		case SDO_STATE_UPLOAD_SEGMENT_RSP:
 			// Refill buffer if needed
@@ -788,7 +787,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				}
 			}
 			log.Debugf("[SERVER][TX] UPLOAD SEGMENTED | x%x:x%x %v", server.Index, server.Subindex, server.txBuffer.Data)
-			server.BusManager.Send(server.txBuffer)
+			server.Send(server.txBuffer)
 
 		case SDO_STATE_DOWNLOAD_BLK_INITIATE_RSP:
 			server.txBuffer.Data[0] = 0xA4
@@ -814,7 +813,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.State = SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_REQ
 			server.RxNew = false
 			log.Debugf("[SERVER][TX] BLOCK DOWNLOAD INIT | x%x:x%x %v", server.Index, server.Subindex, server.txBuffer.Data)
-			server.BusManager.Send(server.txBuffer)
+			server.Send(server.txBuffer)
 
 		case SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_RSP:
 			server.txBuffer.Data[0] = 0xA2
@@ -847,7 +846,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			}
 			server.txBuffer.Data[2] = server.BlockSize
 			server.TimeoutTimerBlock = 0
-			server.BusManager.Send(server.txBuffer)
+			server.Send(server.txBuffer)
 
 			if transferShort && !server.Finished {
 				log.Debugf("[SERVER][TX] BLOCK DOWNLOAD RESTART seqno prev=%v, blksize=%v", seqnoStart, server.BlockSize)
@@ -863,7 +862,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 		case SDO_STATE_DOWNLOAD_BLK_END_RSP:
 			server.txBuffer.Data[0] = 0xA1
 			log.Debugf("[SERVER][TX] BLOCK DOWNLOAD END | x%x:x%x %v", server.Index, server.Subindex, server.txBuffer.Data)
-			server.BusManager.Send(server.txBuffer)
+			server.Send(server.txBuffer)
 			server.State = SDO_STATE_IDLE
 			ret = SDO_SUCCESS
 
@@ -880,7 +879,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			// Reset timer & send
 			server.TimeoutTimer = 0
 			log.Debugf("[SERVER][TX] BLOCK UPLOAD INIT | x%x:x%x %v", server.Index, server.Subindex, server.txBuffer.Data)
-			server.BusManager.Send(server.txBuffer)
+			server.Send(server.txBuffer)
 			server.State = SDO_STATE_UPLOAD_BLK_INITIATE_REQ2
 
 		case SDO_STATE_UPLOAD_BLK_SUBBLOCK_SREQ:
@@ -922,7 +921,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			}
 			// Reset timer & send
 			server.TimeoutTimer = 0
-			server.BusManager.Send(server.txBuffer)
+			server.Send(server.txBuffer)
 
 		case SDO_STATE_UPLOAD_BLK_END_SREQ:
 			server.txBuffer.Data[0] = 0xC1 | (server.BlockNoData << 2)
@@ -930,7 +929,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			server.txBuffer.Data[2] = byte(server.BlockCRC >> 8)
 			server.TimeoutTimer = 0
 			log.Debugf("[SERVER][TX] BLOCK UPLOAD END | x%x:x%x %v", server.Index, server.Subindex, server.txBuffer.Data)
-			server.BusManager.Send(server.txBuffer)
+			server.Send(server.txBuffer)
 			server.State = SDO_STATE_UPLOAD_BLK_END_CRSP
 
 		default:
@@ -967,7 +966,7 @@ func (server *SDOServer) Abort(abortCode SDOAbortCode) {
 	server.txBuffer.Data[2] = uint8(server.Index >> 8)
 	server.txBuffer.Data[3] = server.Subindex
 	binary.LittleEndian.PutUint32(server.txBuffer.Data[4:], code)
-	server.BusManager.Send(server.txBuffer)
+	server.Send(server.txBuffer)
 	log.Warnf("[SERVER][TX] SERVER ABORT | x%x:x%x | %v (x%x)", server.Index, server.Subindex, abortCode, code)
 	if server.ErrorExtraInfo != nil {
 		log.Warnf("[SERVER][TX] SERVER ABORT | %v", server.ErrorExtraInfo)
@@ -976,14 +975,14 @@ func (server *SDOServer) Abort(abortCode SDOAbortCode) {
 }
 
 func NewSDOServer(
-	busManager *BusManager,
+	bm *busManager,
 	od *ObjectDictionary,
 	nodeId uint8,
 	timeoutMs uint32,
 	entry12xx *Entry,
 ) (*SDOServer, error) {
-	server := &SDOServer{}
-	if od == nil || busManager == nil || entry12xx == nil {
+	server := &SDOServer{busManager: bm}
+	if od == nil || bm == nil || entry12xx == nil {
 		return nil, ErrIllegalArgument
 	}
 	server.od = od
@@ -1044,9 +1043,8 @@ func NewSDOServer(
 		}
 	}
 	server.RxNew = false
-	server.BusManager = busManager
 	server.CobIdClientToServer = 0
 	server.CobIdServerToClient = 0
-	return server, server.InitRxTx(busManager, uint32(canIdClientToServer), uint32(canIdServerToClient))
+	return server, server.initRxTx(uint32(canIdClientToServer), uint32(canIdServerToClient))
 
 }

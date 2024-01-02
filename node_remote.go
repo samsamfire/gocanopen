@@ -46,7 +46,6 @@ func (node *RemoteNode) ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32
 		case CO_SYNC_NONE, CO_SYNC_RX_TX:
 			syncWas = true
 		case CO_SYNC_PASSED_WINDOW:
-			node.busManager.ClearSyncPDOs()
 		}
 	}
 	return syncWas
@@ -58,17 +57,16 @@ func (node *RemoteNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32,
 
 // Create a remote node
 func NewRemoteNode(
-	busManager *BusManager,
+	bm *busManager,
 	remoteOd *ObjectDictionary,
 	remoteNodeId uint8,
 	useLocal bool,
 ) (*RemoteNode, error) {
-	if busManager == nil || remoteOd == nil {
+	if bm == nil || remoteOd == nil {
 		return nil, errors.New("need at least busManager and od parameters")
 	}
 	var err error
-	node := &RemoteNode{BaseNode: &BaseNode{}}
-	node.busManager = busManager
+	node := &RemoteNode{BaseNode: &BaseNode{busManager: bm}}
 	node.od = remoteOd // Empty at the begining
 	node.remoteOd = remoteOd
 	node.id = remoteNodeId
@@ -77,7 +75,7 @@ func NewRemoteNode(
 	node.state = NODE_INIT
 
 	// Create a new SDO client for the remote node & for local access
-	client, err := NewSDOClient(busManager, remoteOd, 0, DEFAULT_SDO_CLIENT_TIMEOUT_MS, nil)
+	client, err := NewSDOClient(bm, remoteOd, 0, DEFAULT_SDO_CLIENT_TIMEOUT_MS, nil)
 	if err != nil {
 		log.Errorf("[NODE][SDO CLIENT] error when initializing SDO client object %v", err)
 		return nil, err
@@ -87,7 +85,7 @@ func NewRemoteNode(
 	node.od.AddSYNC()
 	//Initialize SYNC
 	sync, err := NewSYNC(
-		busManager,
+		bm,
 		nil,
 		node.od.Index(0x1005),
 		node.od.Index(0x1006),

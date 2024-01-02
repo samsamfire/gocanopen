@@ -12,10 +12,10 @@ import (
 )
 
 type Network struct {
-	Nodes      map[uint8]Node
-	wgProcess  sync.WaitGroup
-	busManager *BusManager
-	sdoClient  *SDOClient // Network master has an sdo client to read/write nodes on network
+	*busManager
+	Nodes     map[uint8]Node
+	wgProcess sync.WaitGroup
+	sdoClient *SDOClient // Network master has an sdo client to read/write nodes on network
 	// An sdo client does not have to be linked to a specific node
 	odMap map[uint8]*ObjectDictionaryInformation
 }
@@ -38,13 +38,12 @@ func NewNetwork(bus Bus) Network {
 // Custom CAN backend is possible using "Bus" interface
 // Otherwise it expects an interface name, channel and bitrate
 func (network *Network) Connect(args ...any) error {
-	if len(args) < 3 && network.busManager.Bus == nil {
+	if len(args) < 3 && network.bus == nil {
 		return errors.New("either provide custom backend, or provide interface, channel and bitrate")
 	}
 	var bus Bus
 	var err error
-	busManager := network.busManager
-	if busManager.Bus == nil {
+	if network.bus == nil {
 		canInterface, ok := args[0].(string)
 		if !ok {
 			return fmt.Errorf("expecting string for interface got : %v", args[0])
@@ -61,21 +60,21 @@ func (network *Network) Connect(args ...any) error {
 		if err != nil {
 			return err
 		}
-		busManager.Bus = bus
+		network.bus = bus
 	} else {
-		bus = busManager.Bus
+		bus = network.bus
 	}
 	// Connect to CAN bus and subscribe to CAN message reception
 	err = bus.Connect(args)
 	if err != nil {
 		return err
 	}
-	err = bus.Subscribe(busManager)
+	err = bus.Subscribe(network.busManager)
 	if err != nil {
 		return err
 	}
 	// Add SDO client to network by default
-	client, err := NewSDOClient(busManager, nil, 0, DEFAULT_SDO_CLIENT_TIMEOUT_MS, nil)
+	client, err := NewSDOClient(network.busManager, nil, 0, DEFAULT_SDO_CLIENT_TIMEOUT_MS, nil)
 	network.sdoClient = client
 	return err
 }
@@ -86,7 +85,7 @@ func (network *Network) Disconnect() {
 		node.SetExit(true)
 	}
 	network.wgProcess.Wait()
-	network.busManager.Bus.Disconnect()
+	network.bus.Disconnect()
 
 }
 
@@ -185,7 +184,7 @@ func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
 	frame.Data[0] = uint8(nmtCommand)
 	frame.Data[1] = nodeId
 	log.Debugf("[NMT] sending nmt command : %v to node(s) %v (x%x)", NMT_COMMAND_MAP[nmtCommand], nodeId, nodeId)
-	return network.busManager.Send(frame)
+	return network.Send(frame)
 }
 
 // Create a local CANopen compliant node with a given OD

@@ -54,6 +54,7 @@ var NMT_COMMAND_MAP = map[NMTCommand]string{
 }
 
 type NMT struct {
+	*busManager
 	operatingState         uint8
 	operatingStatePrev     uint8
 	internalCommand        NMTCommand
@@ -62,7 +63,6 @@ type NMT struct {
 	hearbeatProducerTimeUs uint32
 	hearbeatProducerTimer  uint32
 	emergency              *EM
-	busManager             *BusManager
 	nmtTxBuff              Frame
 	hbTxBuff               Frame
 	callback               func(nmtState uint8)
@@ -96,7 +96,7 @@ func (nmt *NMT) process(internalState *uint8, timeDifferenceUs uint32, timerNext
 	// - startup
 	if nmtInit || (nmt.hearbeatProducerTimeUs != 0 && (nmt.hearbeatProducerTimer == 0 || nmtStateCopy != nmt.operatingStatePrev)) {
 		nmt.hbTxBuff.Data[0] = nmtStateCopy
-		nmt.busManager.Send(nmt.hbTxBuff)
+		nmt.Send(nmt.hbTxBuff)
 		if nmtStateCopy == NMT_INITIALIZING {
 			if nmt.control&NMT_STARTUP_TO_OPERATIONAL != 0 {
 				nmtStateCopy = NMT_OPERATIONAL
@@ -210,11 +210,11 @@ func (nmt *NMT) SendCommand(command NMTCommand, nodeId uint8) error {
 	// Send NMT command
 	nmt.nmtTxBuff.Data[0] = uint8(command)
 	nmt.nmtTxBuff.Data[1] = nodeId
-	return nmt.busManager.Send(nmt.nmtTxBuff)
+	return nmt.Send(nmt.nmtTxBuff)
 }
 
 func NewNMT(
-	busManager *BusManager,
+	bm *busManager,
 	emergency *EM,
 	nodeId uint8,
 	control uint16,
@@ -225,8 +225,8 @@ func NewNMT(
 	entry1017 *Entry,
 ) (*NMT, error) {
 
-	nmt := &NMT{}
-	if entry1017 == nil || busManager == nil {
+	nmt := &NMT{busManager: bm}
+	if entry1017 == nil || bm == nil {
 		return nil, ErrIllegalArgument
 	}
 
@@ -251,8 +251,7 @@ func NewNMT(
 	}
 
 	// Configure NMT specific tx/rx buffers
-	nmt.busManager = busManager
-	err = busManager.Subscribe(uint32(canIdNmtRx), 0x7FF, false, nmt)
+	err = nmt.Subscribe(uint32(canIdNmtRx), 0x7FF, false, nmt)
 	if err != nil {
 		return nil, err
 	}

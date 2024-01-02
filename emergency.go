@@ -246,10 +246,10 @@ type EMFifo struct {
 }
 
 type EM struct {
+	*busManager
 	errorStatusBits     [CO_CONFIG_EM_ERR_STATUS_BITS_COUNT / 8]byte
 	errorRegister       *byte
 	CANerrorStatusOld   uint16
-	busManager          *BusManager
 	txBuffer            Frame
 	Fifo                []EMFifo
 	FifoWrPtr           byte
@@ -325,62 +325,62 @@ func (emergency *EM) Handle(frame Frame) {
 
 func (emergency *EM) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
 	// Check errors from driver
-	canErrStatus := emergency.busManager.CANerrorstatus
+	canErrStatus := emergency.busManager.canError
 	if canErrStatus != emergency.CANerrorStatusOld {
 		canErrStatusChanged := canErrStatus ^ emergency.CANerrorStatusOld
 		emergency.CANerrorStatusOld = canErrStatus
-		if (canErrStatusChanged & (CAN_ERRTX_WARNING | CAN_ERRRX_WARNING)) != 0 {
+		if (canErrStatusChanged & (canErrorTxWarning | canErrorRxWarning)) != 0 {
 			emergency.Error(
-				(canErrStatus&(CAN_ERRTX_WARNING|CAN_ERRRX_WARNING)) != 0,
+				(canErrStatus&(canErrorTxWarning|canErrorRxWarning)) != 0,
 				CO_EM_CAN_BUS_WARNING,
 				CO_EMC_NO_ERROR,
 				0,
 			)
 		}
-		if (canErrStatusChanged & CAN_ERRTX_PASSIVE) != 0 {
+		if (canErrStatusChanged & canErrorTxPassive) != 0 {
 			emergency.Error(
-				(canErrStatus&CAN_ERRTX_PASSIVE) != 0,
+				(canErrStatus&canErrorTxPassive) != 0,
 				CO_EM_CAN_TX_BUS_PASSIVE,
 				CO_EMC_CAN_PASSIVE,
 				0,
 			)
 		}
 
-		if (canErrStatusChanged & CAN_ERRTX_BUS_OFF) != 0 {
+		if (canErrStatusChanged & canErrorTxBusOff) != 0 {
 			emergency.Error(
-				(canErrStatus&CAN_ERRTX_BUS_OFF) != 0,
+				(canErrStatus&canErrorTxBusOff) != 0,
 				CO_EM_CAN_TX_BUS_OFF,
 				CO_EMC_BUS_OFF_RECOVERED,
 				0)
 		}
 
-		if (canErrStatusChanged & CAN_ERRTX_OVERFLOW) != 0 {
+		if (canErrStatusChanged & canErrorTxOverflow) != 0 {
 			emergency.Error(
-				(canErrStatus&CAN_ERRTX_OVERFLOW) != 0,
+				(canErrStatus&canErrorTxOverflow) != 0,
 				CO_EM_CAN_TX_OVERFLOW,
 				CO_EMC_CAN_OVERRUN,
 				0)
 		}
 
-		if (canErrStatusChanged & CAN_ERRTX_PDO_LATE) != 0 {
+		if (canErrStatusChanged & canErrorPdoLate) != 0 {
 			emergency.Error(
-				(canErrStatus&CAN_ERRTX_PDO_LATE) != 0,
+				(canErrStatus&canErrorPdoLate) != 0,
 				CO_EM_TPDO_OUTSIDE_WINDOW,
 				CO_EMC_COMMUNICATION,
 				0)
 		}
 
-		if (canErrStatusChanged & CAN_ERRRX_PASSIVE) != 0 {
+		if (canErrStatusChanged & canErrorRxPassive) != 0 {
 			emergency.Error(
-				(canErrStatus&CAN_ERRRX_PASSIVE) != 0,
+				(canErrStatus&canErrorRxPassive) != 0,
 				CO_EM_CAN_RX_BUS_PASSIVE,
 				CO_EMC_CAN_PASSIVE,
 				0)
 		}
 
-		if (canErrStatusChanged & CAN_ERRRX_OVERFLOW) != 0 {
+		if (canErrStatusChanged & canErrorRxOverflow) != 0 {
 			emergency.Error(
-				(canErrStatus&CAN_ERRRX_OVERFLOW) != 0,
+				(canErrStatus&canErrorRxOverflow) != 0,
 				CO_EM_CAN_RXB_OVERFLOW,
 				CO_EM_CAN_RXB_OVERFLOW,
 				0)
@@ -408,7 +408,7 @@ func (emergency *EM) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32
 
 			emergency.Fifo[fifoPpPtr].msg |= uint32(errorRegister) << 16
 			binary.LittleEndian.PutUint32(emergency.txBuffer.Data[:4], emergency.Fifo[fifoPpPtr].msg)
-			emergency.busManager.Send(emergency.txBuffer)
+			emergency.Send(emergency.txBuffer)
 			// Also report own emergency message
 			if emergency.EmergencyRxCallback != nil {
 				errMsg := uint32(emergency.Fifo[fifoPpPtr].msg)
@@ -534,7 +534,7 @@ func (emergency *EM) GetErrorRegister() byte {
 }
 
 func NewEM(
-	busManager *BusManager,
+	bm *busManager,
 	nodeId uint8,
 	entry1001 *Entry,
 	entry1014 *Entry,
@@ -542,14 +542,13 @@ func NewEM(
 	entry1003 *Entry,
 	entryStatusBits *Entry,
 ) (*EM, error) {
-	if entry1001 == nil || entry1014 == nil || busManager == nil ||
+	if entry1001 == nil || entry1014 == nil || bm == nil ||
 		nodeId < 1 || nodeId > 127 ||
 		entry1003 == nil {
 		return nil, ErrIllegalArgument
 
 	}
-	emergency := &EM{}
-	emergency.busManager = busManager
+	emergency := &EM{busManager: bm}
 	// TODO handle error register ptr
 	//emergency.errorRegister
 	fifoSize := entry1003.SubCount()
@@ -584,7 +583,7 @@ func NewEM(
 		entryStatusBits.AddExtension(emergency, ReadEntryStatusBits, WriteEntryStatusBits)
 	}
 
-	err := busManager.Subscribe(uint32(EMERGENCY_SERVICE_ID), 0x780, false, emergency)
+	err := emergency.Subscribe(uint32(EMERGENCY_SERVICE_ID), 0x780, false, emergency)
 	if err != nil {
 		return nil, err
 	}

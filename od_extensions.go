@@ -82,7 +82,7 @@ func WriteEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 	}
 	// Reconfigure the receive and transmit buffers only if changed
 	if canId != uint16(sync.cobId) {
-		err := sync.BusManager.Subscribe(uint32(canId), 0x7FF, false, sync)
+		err := sync.Subscribe(uint32(canId), 0x7FF, false, sync)
 		if err != nil {
 			return ODR_DEV_INCOMPAT
 		}
@@ -315,11 +315,7 @@ func WriteEntry1201(stream *Stream, data []byte, countWritten *uint16) error {
 			(valid && isIDRestricted(canId)) {
 			return ODR_INVALID_VALUE
 		}
-		server.InitRxTx(
-			server.BusManager,
-			cobId,
-			server.CobIdServerToClient,
-		)
+		server.initRxTx(cobId, server.CobIdServerToClient)
 	// cob id server to client
 	case 2:
 		cobId := binary.LittleEndian.Uint32(data)
@@ -331,11 +327,7 @@ func WriteEntry1201(stream *Stream, data []byte, countWritten *uint16) error {
 			(valid && isIDRestricted(canId)) {
 			return ODR_INVALID_VALUE
 		}
-		server.InitRxTx(
-			server.BusManager,
-			server.CobIdClientToServer,
-			cobId,
-		)
+		server.initRxTx(server.CobIdClientToServer, cobId)
 	// node id of server
 	case 3:
 		if len(data) != 1 {
@@ -447,7 +439,7 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 			if !valid {
 				canId = 0
 			}
-			err := rpdo.busManager.Subscribe(canId, 0x7FF, false, rpdo)
+			err := rpdo.Subscribe(canId, 0x7FF, false, rpdo)
 			if valid && err == nil {
 				pdo.Valid = true
 				pdo.configuredId = uint16(canId)

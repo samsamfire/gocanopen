@@ -7,6 +7,7 @@ import (
 )
 
 type SYNC struct {
+	*busManager
 	emergency                   *EM
 	RxNew                       bool
 	ReceiveError                uint8
@@ -19,7 +20,6 @@ type SYNC struct {
 	rawCommunicationCyclePeriod []byte
 	rawSynchronousWindowLength  []byte
 	IsProducer                  bool
-	BusManager                  *BusManager
 	cobId                       uint32
 	txBuffer                    Frame
 }
@@ -61,7 +61,7 @@ func (sync *SYNC) sendSync() {
 	sync.Timer = 0
 	sync.RxToggle = !sync.RxToggle
 	sync.txBuffer.Data[0] = sync.Counter
-	sync.BusManager.Send(sync.txBuffer)
+	sync.Send(sync.txBuffer)
 }
 
 func (sync *SYNC) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
@@ -142,7 +142,7 @@ func (sync *SYNC) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 }
 
 func NewSYNC(
-	busManager *BusManager,
+	bm *busManager,
 	emergency *EM,
 	entry1005 *Entry,
 	entry1006 *Entry,
@@ -150,7 +150,7 @@ func NewSYNC(
 	entry1019 *Entry,
 ) (*SYNC, error) {
 
-	sync := &SYNC{}
+	sync := &SYNC{busManager: bm}
 	if entry1005 == nil {
 		return nil, ErrIllegalArgument
 	}
@@ -205,9 +205,8 @@ func NewSYNC(
 	sync.emergency = emergency
 	sync.IsProducer = (cobIdSync & 0x40000000) != 0
 	sync.cobId = cobIdSync & 0x7FF
-	sync.BusManager = busManager
 
-	err = sync.BusManager.Subscribe(sync.cobId, 0x7FF, false, sync)
+	err = sync.Subscribe(sync.cobId, 0x7FF, false, sync)
 	if err != nil {
 		return nil, err
 	}

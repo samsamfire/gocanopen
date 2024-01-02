@@ -54,7 +54,6 @@ func (node *LocalNode) ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32)
 		case CO_SYNC_RX_TX:
 			syncWas = true
 		case CO_SYNC_PASSED_WINDOW:
-			node.busManager.ClearSyncPDOs()
 		default:
 		}
 	}
@@ -135,7 +134,7 @@ func (node *LocalNode) initPDO() error {
 
 // Create a new local node
 func NewLocalNode(
-	busManager *BusManager,
+	bm *busManager,
 	od *ObjectDictionary,
 	nmt *NMT,
 	emergency *EM,
@@ -149,12 +148,11 @@ func NewLocalNode(
 
 ) (*LocalNode, error) {
 
-	if busManager == nil || od == nil {
+	if bm == nil || od == nil {
 		return nil, errors.New("need at least busManager and od parameters")
 	}
 	var err error
-	node := &LocalNode{BaseNode: &BaseNode{}}
-	node.busManager = busManager
+	node := &LocalNode{BaseNode: &BaseNode{busManager: bm}}
 	node.NodeIdUnconfigured = false
 	node.od = od
 	node.exitBackground = make(chan bool)
@@ -164,7 +162,7 @@ func NewLocalNode(
 
 	if emergency == nil {
 		emergency, err := NewEM(
-			busManager,
+			bm,
 			nodeId,
 			od.Index(0x1001),
 			od.Index(0x1014),
@@ -185,7 +183,7 @@ func NewLocalNode(
 	// NMT object can either be supplied or created with automatically with an OD entry
 	if nmt == nil {
 		nmt, err := NewNMT(
-			busManager,
+			bm,
 			emergency,
 			nodeId,
 			nmtControl,
@@ -208,7 +206,7 @@ func NewLocalNode(
 	}
 
 	// Initialize HB consumer
-	hbCons, err := NewHBConsumer(busManager, emergency, od.Index(0x1016))
+	hbCons, err := NewHBConsumer(bm, emergency, od.Index(0x1016))
 	if err != nil {
 		log.Errorf("[NODE][HB Consumer] error when initializing HB consummers %v", err)
 		return nil, err
@@ -224,7 +222,7 @@ func NewLocalNode(
 	if entry1200 == nil {
 		log.Warnf("[NODE][SDO SERVER] no sdo servers initialized for node x%x", nodeId)
 	} else {
-		server, err := NewSDOServer(busManager, od, nodeId, sdoServerTimeoutMs, entry1200)
+		server, err := NewSDOServer(bm, od, nodeId, sdoServerTimeoutMs, entry1200)
 		if err != nil {
 			log.Errorf("[NODE][SDO SERVER] error when initializing SDO server object %v", err)
 			return nil, err
@@ -243,7 +241,7 @@ func NewLocalNode(
 		log.Info("[NODE][SDO CLIENT] no SDO clients initialized for node")
 	} else {
 
-		client, err := NewSDOClient(busManager, od, nodeId, sdoClientTimeoutMs, entry1280)
+		client, err := NewSDOClient(bm, od, nodeId, sdoClientTimeoutMs, entry1280)
 		if err != nil {
 			log.Errorf("[NODE][SDO CLIENT] error when initializing SDO client object %v", err)
 		} else {
@@ -254,7 +252,7 @@ func NewLocalNode(
 	}
 
 	//Initialize TIME
-	time, err := NewTIME(busManager, od.Index(0x1012), 1000) // hardcoded for now
+	time, err := NewTIME(bm, od.Index(0x1012), 1000) // hardcoded for now
 	if err != nil {
 		log.Errorf("[NODE][TIME] error when initializing TIME object %v", err)
 	} else {
@@ -263,7 +261,7 @@ func NewLocalNode(
 
 	//Initialize SYNC
 	sync, err := NewSYNC(
-		busManager,
+		bm,
 		emergency,
 		od.Index(0x1005),
 		od.Index(0x1006),
