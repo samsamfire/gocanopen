@@ -1,4 +1,3 @@
-// CiA 309-5 implementation
 package canopen
 
 import (
