@@ -249,8 +249,8 @@ func NewTPDO(
 	pdo.IsRPDO = false
 	pdo.predefinedId = predefinedIdent
 	pdo.configuredId = canId
-	entry18xx.AddExtension(tpdo, ReadEntry14xxOr18xx, WriteEntry18xx)
-	entry1Axx.AddExtension(tpdo, ReadEntryDefault, WriteEntry16xxOr1Axx)
+	entry18xx.AddExtension(tpdo, readEntry14xxOr18xx, writeEntry18xx)
+	entry1Axx.AddExtension(tpdo, ReadEntryDefault, writeEntry16xxOr1Axx)
 
 	log.Debugf("[TPDO][%x] Finished initializing | canId : %v | valid : %v | inhibit : %v | event timer : %v | transmission type : %v",
 		entry18xx.Index,

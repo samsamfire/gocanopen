@@ -1133,7 +1133,7 @@ func NewSDOClient(
 		nodeIdServer = 0
 	}
 	if entry1280 != nil {
-		entry1280.AddExtension(client, ReadEntryDefault, WriteEntry1280)
+		entry1280.AddExtension(client, ReadEntryDefault, writeEntry1280)
 	}
 	client.CobIdClientToServer = 0
 	client.CobIdServerToClient = 0

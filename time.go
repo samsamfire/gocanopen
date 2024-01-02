@@ -98,7 +98,7 @@ func NewTIME(bm *busManager, entry1012 *Entry, producerIntervalMs uint32) (*TIME
 		log.Errorf("[TIME][%x|%x] reading cob id timestamp failed : %v", entry1012.Index, 0x0, err)
 		return nil, ErrOdParameters
 	}
-	entry1012.AddExtension(time, ReadEntryDefault, WriteEntry1012)
+	entry1012.AddExtension(time, ReadEntryDefault, writeEntry1012)
 	cobId := cobIdTimestamp & 0x7FF
 	time.IsConsumer = (cobIdTimestamp & 0x80000000) != 0
 	time.IsProducer = (cobIdTimestamp & 0x40000000) != 0

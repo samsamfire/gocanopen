@@ -577,7 +577,7 @@ func NewEM(
 	}
 	producerCanId := cobIdEmergency & 0x7FF
 	emergency.producerEnabled = (cobIdEmergency&0x80000000) == 0 && producerCanId != 0
-	entry1014.AddExtension(emergency, ReadEntry1014, WriteEntry1014)
+	entry1014.AddExtension(emergency, readEntry1014, writeEntry1014)
 	emergency.producerIdent = uint16(producerCanId)
 	if producerCanId == uint32(EMERGENCY_SERVICE_ID) {
 		producerCanId += uint32(nodeId)
@@ -589,9 +589,9 @@ func NewEM(
 	inhibitTime100us, ret := entry1015.Uint16(0)
 	if ret == nil {
 		emergency.inhibitTimeUs = uint32(inhibitTime100us) * 100
-		entry1015.AddExtension(emergency, ReadEntryDefault, WriteEntry1015)
+		entry1015.AddExtension(emergency, ReadEntryDefault, writeEntry1015)
 	}
-	entry1003.AddExtension(emergency, ReadEntry1003, WriteEntry1003)
+	entry1003.AddExtension(emergency, readEntry1003, writeEntry1003)
 	if entryStatusBits != nil {
 		entryStatusBits.AddExtension(emergency, readEntryStatusBits, writeEntryStatusBits)
 	}

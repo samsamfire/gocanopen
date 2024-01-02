@@ -224,8 +224,8 @@ func NewRPDO(
 	pdo.od = od
 	pdo.predefinedId = predefinedIdent
 	pdo.configuredId = uint16(canId)
-	entry14xx.AddExtension(rpdo, ReadEntry14xxOr18xx, WriteEntry14xx)
-	entry16xx.AddExtension(rpdo, ReadEntryDefault, WriteEntry16xxOr1Axx)
+	entry14xx.AddExtension(rpdo, readEntry14xxOr18xx, writeEntry14xx)
+	entry16xx.AddExtension(rpdo, ReadEntryDefault, writeEntry16xxOr1Axx)
 	log.Debugf("[RPDO][%x] Finished initializing | canId : %v | valid : %v | event timer : %v | synchronous : %v",
 		entry14xx.Index,
 		canId,
