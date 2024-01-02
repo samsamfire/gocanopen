@@ -45,7 +45,7 @@ func (fifo *Fifo) GetOccupied() int {
 }
 
 // Write data to fifo
-func (fifo *Fifo) Write(buffer []byte, crc *CRC16) int {
+func (fifo *Fifo) Write(buffer []byte, crc *crc16) int {
 
 	if buffer == nil {
 		return 0
@@ -118,7 +118,7 @@ func (fifo *Fifo) AltBegin(offset int) int {
 	return offset - i
 }
 
-func (fifo *Fifo) AltFinish(crc *CRC16) {
+func (fifo *Fifo) AltFinish(crc *crc16) {
 
 	if crc == nil {
 		fifo.readPos = fifo.altReadPos

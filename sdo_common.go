@@ -209,6 +209,6 @@ func (response *SDOResponse) IsCRCEnabled() bool {
 	return (response.raw[0] & 0x04) != 0
 }
 
-func (response *SDOResponse) GetCRCClient() CRC16 {
-	return CRC16(binary.LittleEndian.Uint16(response.raw[1:3]))
+func (response *SDOResponse) GetCRCClient() crc16 {
+	return crc16(binary.LittleEndian.Uint16(response.raw[1:3]))
 }
