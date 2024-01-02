@@ -261,6 +261,7 @@ func WriteEntry1017(stream *Stream, data []byte, countWritten *uint16) error {
 	}
 	nmt.hearbeatProducerTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 1000
 	nmt.hearbeatProducerTimer = 0
+	log.Debugf("[OD][EXTENSION][NMT] updated heartbeat period to %v ms", nmt.hearbeatProducerTimeUs/1000)
 	return WriteEntryDefault(stream, data, countWritten)
 }
 
@@ -446,8 +447,8 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 				pdo.configuredId = uint16(canId)
 			} else {
 				pdo.Valid = false
-				rpdo.RxNew[0] = false
-				rpdo.RxNew[1] = false
+				rpdo.rxNew[0] = false
+				rpdo.rxNew[1] = false
 				if err != nil {
 					return ODR_DEV_INCOMPAT
 				}
@@ -463,17 +464,17 @@ func WriteEntry14xx(stream *Stream, data []byte, countWritten *uint16) error {
 		}
 		synchronous := transmissionType <= TRANSMISSION_TYPE_SYNC_240
 		// Remove old message from second buffer
-		if rpdo.Synchronous != synchronous {
-			rpdo.RxNew[1] = false
+		if rpdo.synchronous != synchronous {
+			rpdo.rxNew[1] = false
 		}
-		rpdo.Synchronous = synchronous
+		rpdo.synchronous = synchronous
 		log.Debugf("[OD][EXTENSION][%v] updated pdo transmission type to : %v", pdo.Type(), transmissionType)
 
 	case 5:
 		// Event timer
 		eventTime := binary.LittleEndian.Uint16(data)
-		rpdo.TimeoutTimeUs = uint32(eventTime) * 1000
-		rpdo.TimeoutTimer = 0
+		rpdo.timeoutTimeUs = uint32(eventTime) * 1000
+		rpdo.timeoutTimer = 0
 		log.Debugf("[OD][EXTENSION][%v] updated pdo event timer to : %v us", pdo.Type(), eventTime)
 	}
 
@@ -616,11 +617,11 @@ func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 		if transmissionType > TRANSMISSION_TYPE_SYNC_240 && transmissionType < TRANSMISSION_TYPE_SYNC_EVENT_LO {
 			return ODR_INVALID_VALUE
 		}
-		tpdo.SyncCounter = 255
-		tpdo.TransmissionType = transmissionType
-		tpdo.SendRequest = true
-		tpdo.InhibitTimer = 0
-		tpdo.EventTimer = 0
+		tpdo.syncCounter = 255
+		tpdo.transmissionType = transmissionType
+		tpdo.sendRequest = true
+		tpdo.inhibitTimer = 0
+		tpdo.eventTimer = 0
 
 	case 3:
 		//Inhibit time
@@ -628,21 +629,21 @@ func WriteEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 			return ODR_INVALID_VALUE
 		}
 		inhibitTime := binary.LittleEndian.Uint16(data)
-		tpdo.InhibitTimeUs = uint32(inhibitTime) * 100
-		tpdo.InhibitTimer = 0
+		tpdo.inhibitTimeUs = uint32(inhibitTime) * 100
+		tpdo.inhibitTimer = 0
 
 	case 5:
 		// Event timer
 		eventTime := binary.LittleEndian.Uint16(data)
-		tpdo.EventTimeUs = uint32(eventTime) * 1000
-		tpdo.EventTimer = 0
+		tpdo.eventTimeUs = uint32(eventTime) * 1000
+		tpdo.eventTimer = 0
 
 	case 6:
 		syncStartValue := data[0]
 		if pdo.Valid || syncStartValue > 240 {
 			return ODR_INVALID_VALUE
 		}
-		tpdo.SyncStartValue = syncStartValue
+		tpdo.syncStartValue = syncStartValue
 
 	}
 	return WriteEntryDefault(stream, bufCopy, countWritten)
