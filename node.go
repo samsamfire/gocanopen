@@ -16,8 +16,8 @@ const (
 )
 
 type BaseNode struct {
+	*busManager
 	od             *ObjectDictionary
-	busManager     *BusManager
 	MainCallback   func(args ...any)
 	state          uint8
 	id             uint8

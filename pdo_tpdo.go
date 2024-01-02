@@ -3,6 +3,7 @@ package canopen
 import log "github.com/sirupsen/logrus"
 
 type TPDO struct {
+	*busManager
 	pdo              PDOCommon
 	txBuffer         Frame
 	TransmissionType uint8
@@ -14,7 +15,6 @@ type TPDO struct {
 	EventTimeUs      uint32
 	InhibitTimer     uint32
 	EventTimer       uint32
-	busManager       *BusManager
 }
 
 func (tpdo *TPDO) configureTransmissionType(entry18xx *Entry) error {
@@ -193,7 +193,7 @@ func (tpdo *TPDO) Send() error {
 
 // Create a new TPDO
 func NewTPDO(
-	busManager *BusManager,
+	bm *busManager,
 	od *ObjectDictionary,
 	em *EM,
 	sync *SYNC,
@@ -202,15 +202,14 @@ func NewTPDO(
 	predefinedIdent uint16,
 
 ) (*TPDO, error) {
-	if od == nil || entry18xx == nil || entry1Axx == nil || busManager == nil {
+	if od == nil || entry18xx == nil || entry1Axx == nil || bm == nil {
 		return nil, ErrIllegalArgument
 	}
-	tpdo := &TPDO{}
+	tpdo := &TPDO{busManager: bm}
 	// Configure mapping parameters
 	erroneousMap := uint32(0)
 	pdo, err := NewPDO(od, entry1Axx, false, em, &erroneousMap)
 	tpdo.pdo = *pdo
-	tpdo.busManager = busManager
 	if err != nil {
 		return nil, err
 	}

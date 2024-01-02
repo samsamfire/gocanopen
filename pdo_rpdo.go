@@ -12,6 +12,7 @@ const (
 )
 
 type RPDO struct {
+	*busManager
 	pdo           PDOCommon
 	RxNew         [RPDO_BUFFER_COUNT]bool
 	RxData        [RPDO_BUFFER_COUNT][MAX_PDO_LENGTH]byte
@@ -20,7 +21,6 @@ type RPDO struct {
 	Synchronous   bool
 	TimeoutTimeUs uint32
 	TimeoutTimer  uint32
-	busManager    *BusManager
 }
 
 func (rpdo *RPDO) Handle(frame Frame) {
@@ -86,7 +86,7 @@ func (rpdo *RPDO) configureCOBID(entry14xx *Entry, predefinedIdent uint32, erron
 	if canId != 0 && canId == (predefinedIdent&0xFF80) {
 		canId = predefinedIdent
 	}
-	ret = rpdo.busManager.Subscribe(canId, 0x7FF, false, rpdo)
+	ret = rpdo.Subscribe(canId, 0x7FF, false, rpdo)
 	if ret != nil {
 		return 0, ret
 	}
@@ -180,7 +180,7 @@ func (rpdo *RPDO) process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 }
 
 func NewRPDO(
-	busManager *BusManager,
+	bm *busManager,
 	od *ObjectDictionary,
 	em *EM,
 	sync *SYNC,
@@ -188,15 +188,14 @@ func NewRPDO(
 	entry16xx *Entry,
 	predefinedIdent uint16,
 ) (*RPDO, error) {
-	if od == nil || entry14xx == nil || entry16xx == nil || busManager == nil {
+	if od == nil || entry14xx == nil || entry16xx == nil || bm == nil {
 		return nil, ErrIllegalArgument
 	}
-	rpdo := &RPDO{}
+	rpdo := &RPDO{busManager: bm}
 	// Configure mapping parameters
 	erroneousMap := uint32(0)
 	pdo, err := NewPDO(od, entry16xx, true, em, &erroneousMap)
 	rpdo.pdo = *pdo
-	rpdo.busManager = busManager
 	if err != nil {
 		return nil, err
 	}

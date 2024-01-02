@@ -8,6 +8,7 @@ import (
 )
 
 type TIME struct {
+	*busManager
 	RawTimestamp       [6]byte
 	Ms                 uint32 // Milliseconds after midnight
 	Days               uint16 // Days since 1st january 1984
@@ -17,7 +18,6 @@ type TIME struct {
 	RxNew              bool
 	ProducerIntervalMs uint32
 	ProducerTimerMs    uint32
-	busManager         *BusManager
 	cobId              uint32
 }
 
@@ -60,7 +60,7 @@ func (time *TIME) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) b
 			frame := NewFrame(time.cobId, 0, 6)
 			binary.LittleEndian.PutUint32(frame.Data[0:4], time.Ms)
 			binary.LittleEndian.PutUint16(frame.Data[4:6], time.Days)
-			time.busManager.Send(frame)
+			time.Send(frame)
 		} else {
 			time.ProducerTimerMs += ms
 		}
@@ -87,11 +87,11 @@ func (time_obj *TIME) SetInternalTime() {
 	log.Infof("[TIME] days since 01/01/1984 : %v | ms since 00:00 : %v", days, ms)
 }
 
-func NewTIME(busManager *BusManager, entry1012 *Entry, producerIntervalMs uint32) (*TIME, error) {
-	if entry1012 == nil || busManager == nil {
+func NewTIME(bm *busManager, entry1012 *Entry, producerIntervalMs uint32) (*TIME, error) {
+	if entry1012 == nil || bm == nil {
 		return nil, ErrIllegalArgument
 	}
-	time := &TIME{}
+	time := &TIME{busManager: bm}
 	// Read param from OD
 	cobIdTimestamp, err := entry1012.Uint32(0)
 	if err != nil {
@@ -105,12 +105,11 @@ func NewTIME(busManager *BusManager, entry1012 *Entry, producerIntervalMs uint32
 	time.RxNew = false
 	time.cobId = cobId
 	if time.IsConsumer {
-		err := busManager.Subscribe(cobId, 0x7FF, false, time)
+		err := bm.Subscribe(cobId, 0x7FF, false, time)
 		if err != nil {
 			return nil, ErrIllegalArgument
 		}
 	}
-	time.busManager = busManager
 	time.SetInternalTime()
 	time.ProducerIntervalMs = producerIntervalMs
 	time.ProducerTimerMs = producerIntervalMs

@@ -25,13 +25,13 @@ type HBConsumerNode struct {
 }
 
 type HBConsumer struct {
+	*busManager
 	em                        *EM
 	monitoredNodes            []HBConsumerNode
 	nbMonitoredNodes          uint8
 	AllMonitoredActive        bool
 	AllMonitoredOperational   bool
 	NMTisPreOrOperationalPrev bool
-	busManager                *BusManager
 }
 
 // Handle hearbeat reception specific to a node
@@ -64,7 +64,7 @@ func (consumer *HBConsumer) addHearbeatConsumerNode(index uint8, nodeId uint8, c
 	// Configure RX buffer for hearbeat reception
 	if consumerNode.HBState != HB_UNCONFIGURED {
 		log.Debugf("[HB CONSUMER] adding consumer for id %v | timeout %v us", consumerNode.NodeId, consumerNode.TimeUs)
-		err = consumer.busManager.Subscribe(uint32(consumerNode.cobId), 0x7FF, false, consumerNode)
+		err = consumer.Subscribe(uint32(consumerNode.cobId), 0x7FF, false, consumerNode)
 	}
 	if err != nil {
 		return err
@@ -184,14 +184,13 @@ func NewHBConsumerNode(index uint8, nodeId uint8, consumerTimeMs uint16) (*HBCon
 }
 
 // Initialize hearbeat consumer
-func NewHBConsumer(busManager *BusManager, em *EM, entry1016 *Entry) (*HBConsumer, error) {
+func NewHBConsumer(bm *busManager, em *EM, entry1016 *Entry) (*HBConsumer, error) {
 
-	if entry1016 == nil || busManager == nil || em == nil {
+	if entry1016 == nil || bm == nil || em == nil {
 		return nil, ErrIllegalArgument
 	}
-	consumer := &HBConsumer{}
+	consumer := &HBConsumer{busManager: bm}
 	consumer.em = em
-	consumer.busManager = busManager
 
 	// Get real number of monitored nodes
 	consumer.nbMonitoredNodes = uint8(entry1016.SubCount() - 1)
