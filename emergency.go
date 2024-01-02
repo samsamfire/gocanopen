@@ -10,221 +10,221 @@ const CO_CONFIG_EM_ERR_STATUS_BITS_COUNT = 80
 
 // Error register values
 const (
-	CO_ERR_REG_GENERIC_ERR   = 0x01 /**< bit 0, generic error */
-	CO_ERR_REG_CURRENT       = 0x02 /**< bit 1, current */
-	CO_ERR_REG_VOLTAGE       = 0x04 /**< bit 2, voltage */
-	CO_ERR_REG_TEMPERATURE   = 0x08 /**< bit 3, temperature */
-	CO_ERR_REG_COMMUNICATION = 0x10 /**< bit 4, communication error */
-	CO_ERR_REG_DEV_PROFILE   = 0x20 /**< bit 5, device profile specific */
-	CO_ERR_REG_RESERVED      = 0x40 /**< bit 6, reserved (always 0) */
-	CO_ERR_REG_MANUFACTURER  = 0x80 /**< bit 7, manufacturer specific */
+	emErrRegGeneric       = 0x01 // bit 0 - generic error
+	emErrRegCurrent       = 0x02 // bit 1 - current
+	emErrRegVoltage       = 0x04 // bit 2 - voltage
+	emErrRegTemperature   = 0x08 // bit 3 - temperature
+	emErrRegCommunication = 0x10 // bit 4 - communication error
+	emErrRegDevProfile    = 0x20 // bit 5 - device profile specific
+	emErrRegReserved      = 0x40 // bit 6 - reserved (always 0)
+	emErrRegManufacturer  = 0x80 // bit 7 - manufacturer specific
 )
 
 // Error codes
 const (
-	CO_EMC_NO_ERROR          = 0x0000
-	CO_EMC_GENERIC           = 0x1000
-	CO_EMC_CURRENT           = 0x2000
-	CO_EMC_CURRENT_INPUT     = 0x2100
-	CO_EMC_CURRENT_INSIDE    = 0x2200
-	CO_EMC_CURRENT_OUTPUT    = 0x2300
-	CO_EMC_VOLTAGE           = 0x3000
-	CO_EMC_VOLTAGE_MAINS     = 0x3100
-	CO_EMC_VOLTAGE_INSIDE    = 0x3200
-	CO_EMC_VOLTAGE_OUTPUT    = 0x3300
-	CO_EMC_TEMPERATURE       = 0x4000
-	CO_EMC_TEMP_AMBIENT      = 0x4100
-	CO_EMC_TEMP_DEVICE       = 0x4200
-	CO_EMC_HARDWARE          = 0x5000
-	CO_EMC_SOFTWARE_DEVICE   = 0x6000
-	CO_EMC_SOFTWARE_INTERNAL = 0x6100
-	CO_EMC_SOFTWARE_USER     = 0x6200
-	CO_EMC_DATA_SET          = 0x6300
-	CO_EMC_ADDITIONAL_MODUL  = 0x7000
-	CO_EMC_MONITORING        = 0x8000
-	CO_EMC_COMMUNICATION     = 0x8100
-	CO_EMC_CAN_OVERRUN       = 0x8110
-	CO_EMC_CAN_PASSIVE       = 0x8120
-	CO_EMC_HEARTBEAT         = 0x8130
-	CO_EMC_BUS_OFF_RECOVERED = 0x8140
-	CO_EMC_CAN_ID_COLLISION  = 0x8150
-	CO_EMC_PROTOCOL_ERROR    = 0x8200
-	CO_EMC_PDO_LENGTH        = 0x8210
-	CO_EMC_PDO_LENGTH_EXC    = 0x8220
-	CO_EMC_DAM_MPDO          = 0x8230
-	CO_EMC_SYNC_DATA_LENGTH  = 0x8240
-	CO_EMC_RPDO_TIMEOUT      = 0x8250
-	CO_EMC_EXTERNAL_ERROR    = 0x9000
-	CO_EMC_ADDITIONAL_FUNC   = 0xF000
-	CO_EMC_DEVICE_SPECIFIC   = 0xFF00
-	CO_EMC401_OUT_CUR_HI     = 0x2310
-	CO_EMC401_OUT_SHORTED    = 0x2320
-	CO_EMC401_OUT_LOAD_DUMP  = 0x2330
-	CO_EMC401_IN_VOLT_HI     = 0x3110
-	CO_EMC401_IN_VOLT_LOW    = 0x3120
-	CO_EMC401_INTERN_VOLT_HI = 0x3210
-	CO_EMC401_INTERN_VOLT_LO = 0x3220
-	CO_EMC401_OUT_VOLT_HIGH  = 0x3310
-	CO_EMC401_OUT_VOLT_LOW   = 0x3320
+	emErrNoError          = 0x0000
+	emErrGeneric          = 0x1000
+	emErrCurrent          = 0x2000
+	emErrCurrentInput     = 0x2100
+	emErrCurrentInside    = 0x2200
+	emErrCurrentOutput    = 0x2300
+	emErrVoltage          = 0x3000
+	emErrVoltageMains     = 0x3100
+	emErrVoltageInside    = 0x3200
+	emErrVoltageOutput    = 0x3300
+	emErrTemperature      = 0x4000
+	emErrTempAmbient      = 0x4100
+	emErrTempDevice       = 0x4200
+	emErrHardware         = 0x5000
+	emErrSoftwareDevice   = 0x6000
+	emErrSoftwareInternal = 0x6100
+	emErrSoftwareUser     = 0x6200
+	emErrDataSet          = 0x6300
+	emErrAdditionalModul  = 0x7000
+	emErrMonitoring       = 0x8000
+	emErrCommunication    = 0x8100
+	emErrCanOverrun       = 0x8110
+	emErrCanPassive       = 0x8120
+	emErrHeartbeat        = 0x8130
+	emErrBusOffRecovered  = 0x8140
+	emErrCanIdCollision   = 0x8150
+	emErrProtocolError    = 0x8200
+	emErrPdoLength        = 0x8210
+	emErrPdoLengthExc     = 0x8220
+	emErrDamMpdo          = 0x8230
+	emErrSyncDataLength   = 0x8240
+	emErrRpdoTimeout      = 0x8250
+	emErrExternalError    = 0x9000
+	emErrAdditionalFunc   = 0xF000
+	emErrDeviceSpecific   = 0xFF00
+	emErr401OutCurHi      = 0x2310
+	emErr401OutShorted    = 0x2320
+	emErr401OutLoadDump   = 0x2330
+	emErr401InVoltHi      = 0x3110
+	emErr401InVoltLow     = 0x3120
+	emErr401InternVoltHi  = 0x3210
+	emErr401InternVoltLow = 0x3220
+	emErr401OutVoltHigh   = 0x3310
+	emErr401OutVoltLow    = 0x3320
 )
 
-var ERROR_CODE_MAP = map[int]string{
-	CO_EMC_NO_ERROR:          "Reset or No Error",
-	CO_EMC_GENERIC:           "Generic Error",
-	CO_EMC_CURRENT:           "Current",
-	CO_EMC_CURRENT_INPUT:     "Current, device input side",
-	CO_EMC_CURRENT_INSIDE:    "Current inside the device",
-	CO_EMC_CURRENT_OUTPUT:    "Current, device output side",
-	CO_EMC_VOLTAGE:           "Voltage",
-	CO_EMC_VOLTAGE_MAINS:     "Mains Voltage",
-	CO_EMC_VOLTAGE_INSIDE:    "Voltage inside the device",
-	CO_EMC_VOLTAGE_OUTPUT:    "Output Voltage",
-	CO_EMC_TEMPERATURE:       "Temperature",
-	CO_EMC_TEMP_AMBIENT:      "Ambient Temperature",
-	CO_EMC_TEMP_DEVICE:       "Device Temperature",
-	CO_EMC_HARDWARE:          "Device Hardware",
-	CO_EMC_SOFTWARE_DEVICE:   "Device Software",
-	CO_EMC_SOFTWARE_INTERNAL: "Internal Software",
-	CO_EMC_SOFTWARE_USER:     "User Software",
-	CO_EMC_DATA_SET:          "Data Set",
-	CO_EMC_ADDITIONAL_MODUL:  "Additional Modules",
-	CO_EMC_MONITORING:        "Monitoring",
-	CO_EMC_COMMUNICATION:     "Communication",
-	CO_EMC_CAN_OVERRUN:       "CAN Overrun (Objects lost)",
-	CO_EMC_CAN_PASSIVE:       "CAN in Error Passive Mode",
-	CO_EMC_HEARTBEAT:         "Life Guard Error or Heartbeat Error",
-	CO_EMC_BUS_OFF_RECOVERED: "Recovered from bus off",
-	CO_EMC_CAN_ID_COLLISION:  "CAN-ID collision",
-	CO_EMC_PROTOCOL_ERROR:    "Protocol Error",
-	CO_EMC_PDO_LENGTH:        "PDO not processed due to length error",
-	CO_EMC_PDO_LENGTH_EXC:    "PDO length exceeded",
-	CO_EMC_DAM_MPDO:          "DAM MPDO not processed, destination object not available",
-	CO_EMC_SYNC_DATA_LENGTH:  "Unexpected SYNC data length",
-	CO_EMC_RPDO_TIMEOUT:      "RPDO timeout",
-	CO_EMC_EXTERNAL_ERROR:    "External Error",
-	CO_EMC_ADDITIONAL_FUNC:   "Additional Functions",
-	CO_EMC_DEVICE_SPECIFIC:   "Device specific",
-	CO_EMC401_OUT_CUR_HI:     "DS401, Current at outputs too high (overload)",
-	CO_EMC401_OUT_SHORTED:    "DS401, Short circuit at outputs",
-	CO_EMC401_OUT_LOAD_DUMP:  "DS401, Load dump at outputs",
-	CO_EMC401_IN_VOLT_HI:     "DS401, Input voltage too high",
-	CO_EMC401_IN_VOLT_LOW:    "DS401, Input voltage too low",
-	CO_EMC401_INTERN_VOLT_HI: "DS401, Internal voltage too high",
-	CO_EMC401_INTERN_VOLT_LO: "DS401, Internal voltage too low",
-	CO_EMC401_OUT_VOLT_HIGH:  "DS401, Output voltage too high",
-	CO_EMC401_OUT_VOLT_LOW:   "DS401, Output voltage too low",
+var errorCodeDescriptionMap = map[int]string{
+	emErrNoError:          "Reset or No Error",
+	emErrGeneric:          "Generic Error",
+	emErrCurrent:          "Current",
+	emErrCurrentInput:     "Current, device input side",
+	emErrCurrentInside:    "Current inside the device",
+	emErrCurrentOutput:    "Current, device output side",
+	emErrVoltage:          "Voltage",
+	emErrVoltageMains:     "Mains Voltage",
+	emErrVoltageInside:    "Voltage inside the device",
+	emErrVoltageOutput:    "Output Voltage",
+	emErrTemperature:      "Temperature",
+	emErrTempAmbient:      "Ambient Temperature",
+	emErrTempDevice:       "Device Temperature",
+	emErrHardware:         "Device Hardware",
+	emErrSoftwareDevice:   "Device Software",
+	emErrSoftwareInternal: "Internal Software",
+	emErrSoftwareUser:     "User Software",
+	emErrDataSet:          "Data Set",
+	emErrAdditionalModul:  "Additional Modules",
+	emErrMonitoring:       "Monitoring",
+	emErrCommunication:    "Communication",
+	emErrCanOverrun:       "CAN Overrun (Objects lost)",
+	emErrCanPassive:       "CAN in Error Passive Mode",
+	emErrHeartbeat:        "Life Guard Error or Heartbeat Error",
+	emErrBusOffRecovered:  "Recovered from bus off",
+	emErrCanIdCollision:   "CAN-ID collision",
+	emErrProtocolError:    "Protocol Error",
+	emErrPdoLength:        "PDO not processed due to length error",
+	emErrPdoLengthExc:     "PDO length exceeded",
+	emErrDamMpdo:          "DAM MPDO not processed, destination object not available",
+	emErrSyncDataLength:   "Unexpected SYNC data length",
+	emErrRpdoTimeout:      "RPDO timeout",
+	emErrExternalError:    "External Error",
+	emErrAdditionalFunc:   "Additional Functions",
+	emErrDeviceSpecific:   "Device specific",
+	emErr401OutCurHi:      "DS401, Current at outputs too high (overload)",
+	emErr401OutShorted:    "DS401, Short circuit at outputs",
+	emErr401OutLoadDump:   "DS401, Load dump at outputs",
+	emErr401InVoltHi:      "DS401, Input voltage too high",
+	emErr401InVoltLow:     "DS401, Input voltage too low",
+	emErr401InternVoltHi:  "DS401, Internal voltage too high",
+	emErr401InternVoltLow: "DS401, Internal voltage too low",
+	emErr401OutVoltHigh:   "DS401, Output voltage too high",
+	emErr401OutVoltLow:    "DS401, Output voltage too low",
 }
 
 // Error status bits
 const (
-	CO_EM_NO_ERROR                  = 0x00
-	CO_EM_CAN_BUS_WARNING           = 0x01
-	CO_EM_RXMSG_WRONG_LENGTH        = 0x02
-	CO_EM_RXMSG_OVERFLOW            = 0x03
-	CO_EM_RPDO_WRONG_LENGTH         = 0x04
-	CO_EM_RPDO_OVERFLOW             = 0x05
-	CO_EM_CAN_RX_BUS_PASSIVE        = 0x06
-	CO_EM_CAN_TX_BUS_PASSIVE        = 0x07
-	CO_EM_NMT_WRONG_COMMAND         = 0x08
-	CO_EM_TIME_TIMEOUT              = 0x09
-	CO_EM_0A_unused                 = 0x0A
-	CO_EM_0B_unused                 = 0x0B
-	CO_EM_0C_unused                 = 0x0C
-	CO_EM_0D_unused                 = 0x0D
-	CO_EM_0E_unused                 = 0x0E
-	CO_EM_0F_unused                 = 0x0F
-	CO_EM_10_unused                 = 0x10
-	CO_EM_11_unused                 = 0x11
-	CO_EM_CAN_TX_BUS_OFF            = 0x12
-	CO_EM_CAN_RXB_OVERFLOW          = 0x13
-	CO_EM_CAN_TX_OVERFLOW           = 0x14
-	CO_EM_TPDO_OUTSIDE_WINDOW       = 0x15
-	CO_EM_16_unused                 = 0x16
-	CO_EM_RPDO_TIME_OUT             = 0x17
-	CO_EM_SYNC_TIME_OUT             = 0x18
-	CO_EM_SYNC_LENGTH               = 0x19
-	CO_EM_PDO_WRONG_MAPPING         = 0x1A
-	CO_EM_HEARTBEAT_CONSUMER        = 0x1B
-	CO_EM_HB_CONSUMER_REMOTE_RESET  = 0x1C
-	CO_EM_1D_unused                 = 0x1D
-	CO_EM_1E_unused                 = 0x1E
-	CO_EM_1F_unused                 = 0x1F
-	CO_EM_EMERGENCY_BUFFER_FULL     = 0x20
-	CO_EM_21_unused                 = 0x21
-	CO_EM_MICROCONTROLLER_RESET     = 0x22
-	CO_EM_23_unused                 = 0x23
-	CO_EM_24_unused                 = 0x24
-	CO_EM_25_unused                 = 0x25
-	CO_EM_26_unused                 = 0x26
-	CO_EM_NON_VOLATILE_AUTO_SAVE    = 0x27
-	CO_EM_WRONG_ERROR_REPORT        = 0x28
-	CO_EM_ISR_TIMER_OVERFLOW        = 0x29
-	CO_EM_MEMORY_ALLOCATION_ERROR   = 0x2A
-	CO_EM_GENERIC_ERROR             = 0x2B
-	CO_EM_GENERIC_SOFTWARE_ERROR    = 0x2C
-	CO_EM_INCONSISTENT_OBJECT_DICT  = 0x2D
-	CO_EM_CALCULATION_OF_PARAMETERS = 0x2E
-	CO_EM_NON_VOLATILE_MEMORY       = 0x2F
-	CO_EM_MANUFACTURER_START        = 0x30
-	CO_EM_MANUFACTURER_END          = CO_CONFIG_EM_ERR_STATUS_BITS_COUNT - 1
+	emNoError                 = 0x00
+	emCanBusWarning           = 0x01
+	emRxMsgWrongLength        = 0x02
+	emRxMsgOverflow           = 0x03
+	emRPDOWrongLength         = 0x04
+	emRPDOOverflow            = 0x05
+	emCanRXBusPassive         = 0x06
+	emCanTXBusPassive         = 0x07
+	emNMTWrongCommand         = 0x08
+	emTimeTimeout             = 0x09
+	em0AUnused                = 0x0A
+	em0BUnused                = 0x0B
+	em0CUnused                = 0x0C
+	em0DUnused                = 0x0D
+	em0EUnused                = 0x0E
+	em0FUnused                = 0x0F
+	em10Unused                = 0x10
+	em11Unused                = 0x11
+	emCanTXBusOff             = 0x12
+	emCanRXBOverflow          = 0x13
+	emCanTXOverflow           = 0x14
+	emTPDOOutsideWindow       = 0x15
+	em16Unused                = 0x16
+	emRPDOTimeOut             = 0x17
+	emSyncTimeOut             = 0x18
+	emSyncLength              = 0x19
+	emPDOWrongMapping         = 0x1A
+	emHeartbeatConsumer       = 0x1B
+	emHBConsumerRemoteReset   = 0x1C
+	em1DUnused                = 0x1D
+	em1EUnused                = 0x1E
+	em1FUnused                = 0x1F
+	emEmergencyBufferFull     = 0x20
+	em21Unused                = 0x21
+	emMicrocontrollerReset    = 0x22
+	em23Unused                = 0x23
+	em24Unused                = 0x24
+	em25Unused                = 0x25
+	em26Unused                = 0x26
+	emNonVolatileAutoSave     = 0x27
+	emWrongErrorReport        = 0x28
+	emISRTimerOverflow        = 0x29
+	emMemoryAllocationError   = 0x2A
+	emGenericError            = 0x2B
+	emGenericSoftwareError    = 0x2C
+	emInconsistentObjectDict  = 0x2D
+	emCalculationOfParameters = 0x2E
+	emNonVolatileMemory       = 0x2F
+	emManufacturerStart       = 0x30
+	emManufacturerEnd         = CO_CONFIG_EM_ERR_STATUS_BITS_COUNT - 1
 )
 
-var ERROR_STATUS_MAP = map[uint8]string{
-	CO_EM_NO_ERROR:                  "Error Reset or No Error",
-	CO_EM_CAN_BUS_WARNING:           "CAN bus warning limit reached",
-	CO_EM_RXMSG_WRONG_LENGTH:        "Wrong data length of the received CAN message",
-	CO_EM_RXMSG_OVERFLOW:            "Previous received CAN message wasn't processed yet",
-	CO_EM_RPDO_WRONG_LENGTH:         "Wrong data length of received PDO",
-	CO_EM_RPDO_OVERFLOW:             "Previous received PDO wasn't processed yet",
-	CO_EM_CAN_RX_BUS_PASSIVE:        "CAN receive bus is passive",
-	CO_EM_CAN_TX_BUS_PASSIVE:        "CAN transmit bus is passive",
-	CO_EM_NMT_WRONG_COMMAND:         "Wrong NMT command received",
-	CO_EM_TIME_TIMEOUT:              "TIME message timeout",
-	CO_EM_0A_unused:                 "(unused)",
-	CO_EM_0B_unused:                 "(unused)",
-	CO_EM_0C_unused:                 "(unused)",
-	CO_EM_0D_unused:                 "(unused)",
-	CO_EM_0E_unused:                 "(unused)",
-	CO_EM_0F_unused:                 "(unused)",
-	CO_EM_10_unused:                 "(unused)",
-	CO_EM_11_unused:                 "(unused)",
-	CO_EM_CAN_TX_BUS_OFF:            "CAN transmit bus is off",
-	CO_EM_CAN_RXB_OVERFLOW:          "CAN module receive buffer has overflowed",
-	CO_EM_CAN_TX_OVERFLOW:           "CAN transmit buffer has overflowed",
-	CO_EM_TPDO_OUTSIDE_WINDOW:       "TPDO is outside SYNC window",
-	CO_EM_16_unused:                 "(unused)",
-	CO_EM_RPDO_TIME_OUT:             "RPDO message timeout",
-	CO_EM_SYNC_TIME_OUT:             "SYNC message timeout",
-	CO_EM_SYNC_LENGTH:               "Unexpected SYNC data length",
-	CO_EM_PDO_WRONG_MAPPING:         "Error with PDO mapping",
-	CO_EM_HEARTBEAT_CONSUMER:        "Heartbeat consumer timeout",
-	CO_EM_HB_CONSUMER_REMOTE_RESET:  "Heartbeat consumer detected remote node reset",
-	CO_EM_1D_unused:                 "(unused)",
-	CO_EM_1E_unused:                 "(unused)",
-	CO_EM_1F_unused:                 "(unused)",
-	CO_EM_EMERGENCY_BUFFER_FULL:     "Emergency buffer is full, Emergency message wasn't sent",
-	CO_EM_21_unused:                 "(unused)",
-	CO_EM_MICROCONTROLLER_RESET:     "Microcontroller has just started",
-	CO_EM_23_unused:                 "(unused)",
-	CO_EM_24_unused:                 "(unused)",
-	CO_EM_25_unused:                 "(unused)",
-	CO_EM_26_unused:                 "(unused)",
-	CO_EM_NON_VOLATILE_AUTO_SAVE:    "Automatic store to non-volatile memory failed",
-	CO_EM_WRONG_ERROR_REPORT:        "Wrong parameters to ErrorReport function",
-	CO_EM_ISR_TIMER_OVERFLOW:        "Timer task has overflowed",
-	CO_EM_MEMORY_ALLOCATION_ERROR:   "Unable to allocate memory for objects",
-	CO_EM_GENERIC_ERROR:             "Generic error, test usage",
-	CO_EM_GENERIC_SOFTWARE_ERROR:    "Software error",
-	CO_EM_INCONSISTENT_OBJECT_DICT:  "Object dictionary does not match the software",
-	CO_EM_CALCULATION_OF_PARAMETERS: "Error in calculation of device parameters",
-	CO_EM_NON_VOLATILE_MEMORY:       "Error with access to non-volatile device memory",
+var errorStatusMap = map[uint8]string{
+	emNoError:                 "Error Reset or No Error",
+	emCanBusWarning:           "CAN bus warning limit reached",
+	emRxMsgWrongLength:        "Wrong data length of the received CAN message",
+	emRxMsgOverflow:           "Previous received CAN message wasn't processed yet",
+	emRPDOWrongLength:         "Wrong data length of received PDO",
+	emRPDOOverflow:            "Previous received PDO wasn't processed yet",
+	emCanRXBusPassive:         "CAN receive bus is passive",
+	emCanTXBusPassive:         "CAN transmit bus is passive",
+	emNMTWrongCommand:         "Wrong NMT command received",
+	emTimeTimeout:             "TIME message timeout",
+	em0AUnused:                "(unused)",
+	em0BUnused:                "(unused)",
+	em0CUnused:                "(unused)",
+	em0DUnused:                "(unused)",
+	em0EUnused:                "(unused)",
+	em0FUnused:                "(unused)",
+	em10Unused:                "(unused)",
+	em11Unused:                "(unused)",
+	emCanTXBusOff:             "CAN transmit bus is off",
+	emCanRXBOverflow:          "CAN module receive buffer has overflowed",
+	emCanTXOverflow:           "CAN transmit buffer has overflowed",
+	emTPDOOutsideWindow:       "TPDO is outside SYNC window",
+	em16Unused:                "(unused)",
+	emRPDOTimeOut:             "RPDO message timeout",
+	emSyncTimeOut:             "SYNC message timeout",
+	emSyncLength:              "Unexpected SYNC data length",
+	emPDOWrongMapping:         "Error with PDO mapping",
+	emHeartbeatConsumer:       "Heartbeat consumer timeout",
+	emHBConsumerRemoteReset:   "Heartbeat consumer detected remote node reset",
+	em1DUnused:                "(unused)",
+	em1EUnused:                "(unused)",
+	em1FUnused:                "(unused)",
+	emEmergencyBufferFull:     "Emergency buffer is full, Emergency message wasn't sent",
+	em21Unused:                "(unused)",
+	emMicrocontrollerReset:    "Microcontroller has just started",
+	em23Unused:                "(unused)",
+	em24Unused:                "(unused)",
+	em25Unused:                "(unused)",
+	em26Unused:                "(unused)",
+	emNonVolatileAutoSave:     "Automatic store to non-volatile memory failed",
+	emWrongErrorReport:        "Wrong parameters to ErrorReport function",
+	emISRTimerOverflow:        "Timer task has overflowed",
+	emMemoryAllocationError:   "Unable to allocate memory for objects",
+	emGenericError:            "Generic error, test usage",
+	emGenericSoftwareError:    "Software error",
+	emInconsistentObjectDict:  "Object dictionary does not match the software",
+	emCalculationOfParameters: "Error in calculation of device parameters",
+	emNonVolatileMemory:       "Error with access to non-volatile device memory",
 }
 
 func getErrorStatusDescription(errorStatus uint8) string {
-	description, ok := ERROR_STATUS_MAP[errorStatus]
+	description, ok := errorStatusMap[errorStatus]
 	if ok {
 		return description
-	} else if errorStatus >= CO_EM_MANUFACTURER_START && errorStatus <= CO_EM_MANUFACTURER_END {
+	} else if errorStatus >= emManufacturerStart && errorStatus <= emManufacturerEnd {
 		return "Manufacturer error"
 	} else {
 		return "Invalid or not implemented error status"
@@ -232,7 +232,7 @@ func getErrorStatusDescription(errorStatus uint8) string {
 }
 
 func getErrorCodeDescription(errorCode int) string {
-	description, ok := ERROR_CODE_MAP[errorCode]
+	description, ok := errorCodeDescriptionMap[errorCode]
 	if ok {
 		return description
 	} else {
@@ -332,16 +332,16 @@ func (emergency *EM) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32
 		if (canErrStatusChanged & (canErrorTxWarning | canErrorRxWarning)) != 0 {
 			emergency.Error(
 				(canErrStatus&(canErrorTxWarning|canErrorRxWarning)) != 0,
-				CO_EM_CAN_BUS_WARNING,
-				CO_EMC_NO_ERROR,
+				emCanBusWarning,
+				emNoError,
 				0,
 			)
 		}
 		if (canErrStatusChanged & canErrorTxPassive) != 0 {
 			emergency.Error(
 				(canErrStatus&canErrorTxPassive) != 0,
-				CO_EM_CAN_TX_BUS_PASSIVE,
-				CO_EMC_CAN_PASSIVE,
+				emCanTXBusPassive,
+				emErrCanPassive,
 				0,
 			)
 		}
@@ -349,50 +349,50 @@ func (emergency *EM) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32
 		if (canErrStatusChanged & canErrorTxBusOff) != 0 {
 			emergency.Error(
 				(canErrStatus&canErrorTxBusOff) != 0,
-				CO_EM_CAN_TX_BUS_OFF,
-				CO_EMC_BUS_OFF_RECOVERED,
+				emCanTXBusOff,
+				emErrBusOffRecovered,
 				0)
 		}
 
 		if (canErrStatusChanged & canErrorTxOverflow) != 0 {
 			emergency.Error(
 				(canErrStatus&canErrorTxOverflow) != 0,
-				CO_EM_CAN_TX_OVERFLOW,
-				CO_EMC_CAN_OVERRUN,
+				emCanTXOverflow,
+				emErrCanOverrun,
 				0)
 		}
 
 		if (canErrStatusChanged & canErrorPdoLate) != 0 {
 			emergency.Error(
 				(canErrStatus&canErrorPdoLate) != 0,
-				CO_EM_TPDO_OUTSIDE_WINDOW,
-				CO_EMC_COMMUNICATION,
+				emTPDOOutsideWindow,
+				emErrCommunication,
 				0)
 		}
 
 		if (canErrStatusChanged & canErrorRxPassive) != 0 {
 			emergency.Error(
 				(canErrStatus&canErrorRxPassive) != 0,
-				CO_EM_CAN_RX_BUS_PASSIVE,
-				CO_EMC_CAN_PASSIVE,
+				emCanRXBusPassive,
+				emErrCanPassive,
 				0)
 		}
 
 		if (canErrStatusChanged & canErrorRxOverflow) != 0 {
 			emergency.Error(
 				(canErrStatus&canErrorRxOverflow) != 0,
-				CO_EM_CAN_RXB_OVERFLOW,
-				CO_EM_CAN_RXB_OVERFLOW,
+				emCanRXBOverflow,
+				emErrCanOverrun,
 				0)
 		}
 	}
-	errorRegister := CO_ERR_REG_GENERIC_ERR |
-		CO_ERR_REG_CURRENT |
-		CO_ERR_REG_VOLTAGE |
-		CO_ERR_REG_TEMPERATURE |
-		CO_ERR_REG_COMMUNICATION |
-		CO_ERR_REG_DEV_PROFILE |
-		CO_ERR_REG_MANUFACTURER
+	errorRegister := emErrRegGeneric |
+		emErrRegCurrent |
+		emErrRegVoltage |
+		emErrRegTemperature |
+		emErrRegCommunication |
+		emErrRegDevProfile |
+		emErrRegManufacturer
 
 	if !nmtIsPreOrOperational {
 		return
@@ -428,10 +428,10 @@ func (emergency *EM) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32
 			}
 			if emergency.FifoOverflow == 1 {
 				emergency.FifoOverflow = 2
-				emergency.ErrorReport(CO_EM_EMERGENCY_BUFFER_FULL, CO_EMC_GENERIC, 0)
+				emergency.ErrorReport(emEmergencyBufferFull, emErrGeneric, 0)
 			} else if emergency.FifoOverflow == 2 && fifoPpPtr == emergency.FifoWrPtr {
 				emergency.FifoOverflow = 0
-				emergency.ErrorReset(CO_EM_EMERGENCY_BUFFER_FULL, 0)
+				emergency.ErrorReset(emEmergencyBufferFull, 0)
 			}
 		} else if timerNextUs != nil && emergency.InhibitEmTimeUs < emergency.InhibitEmTimer {
 			diff := emergency.InhibitEmTimeUs - emergency.InhibitEmTimer
@@ -454,9 +454,9 @@ func (emergency *EM) Error(setError bool, errorBit byte, errorCode uint16, infoC
 
 	// Unsupported errorBit
 	if index >= CO_CONFIG_EM_ERR_STATUS_BITS_COUNT/8 {
-		index = CO_EM_WRONG_ERROR_REPORT >> 3
-		bitMask = 1 << (CO_EM_WRONG_ERROR_REPORT & 0x7)
-		errorCode = CO_EMC_SOFTWARE_INTERNAL
+		index = emWrongErrorReport >> 3
+		bitMask = 1 << (emWrongErrorReport & 0x7)
+		errorCode = emErrSoftwareInternal
 		infoCode = uint32(errorBit)
 	}
 	errorStatusBits := &emergency.errorStatusBits[index]
@@ -471,7 +471,7 @@ func (emergency *EM) Error(setError bool, errorBit byte, errorCode uint16, infoC
 		if errorStatusBitMasked == 0 {
 			return nil
 		}
-		errorCode = CO_EMC_NO_ERROR
+		errorCode = emErrNoError
 	}
 	errMsg := (uint32(errorBit) << 24) | uint32(errorCode)
 	if len(emergency.Fifo) >= 2 {
@@ -511,7 +511,7 @@ func (emergency *EM) ErrorReset(errorBit byte, infoCode uint32) error {
 		errorBit,
 		infoCode,
 	)
-	return emergency.Error(false, errorBit, CO_EMC_NO_ERROR, infoCode)
+	return emergency.Error(false, errorBit, emErrNoError, infoCode)
 }
 
 func (emergency *EM) IsError(errorBit byte) bool {

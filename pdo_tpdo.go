@@ -51,7 +51,7 @@ func (tpdo *TPDO) configureCOBID(entry18xx *Entry, predefinedIdent uint16, erron
 		if erroneousMap == 1 {
 			errorInfo = cobId
 		}
-		pdo.em.ErrorReport(CO_EM_PDO_WRONG_MAPPING, CO_EMC_PROTOCOL_ERROR, errorInfo)
+		pdo.em.ErrorReport(emPDOWrongMapping, emErrProtocolError, errorInfo)
 	}
 	if !valid {
 		canId = 0

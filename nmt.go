@@ -136,9 +136,9 @@ func (nmt *NMT) process(internalState *uint8, timeDifferenceUs uint32, timerNext
 	}
 
 	busOff_HB := nmt.control&NMT_ERR_ON_BUSOFF_HB != 0 &&
-		(nmt.emergency.IsError(CO_EM_CAN_TX_BUS_OFF) ||
-			nmt.emergency.IsError(CO_EM_HEARTBEAT_CONSUMER) ||
-			nmt.emergency.IsError(CO_EM_HB_CONSUMER_REMOTE_RESET))
+		(nmt.emergency.IsError(emCanTXBusPassive) ||
+			nmt.emergency.IsError(emHeartbeatConsumer) ||
+			nmt.emergency.IsError(emHBConsumerRemoteReset))
 
 	errRegMasked := (nmt.control&NMT_ERR_ON_ERR_REG != 0) &&
 		((nmt.emergency.GetErrorRegister() & byte(nmt.control)) != 0)
