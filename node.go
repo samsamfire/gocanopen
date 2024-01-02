@@ -75,6 +75,7 @@ type NodeConfigurator struct {
 	RPDO PDOConfigurator
 	TPDO PDOConfigurator
 	SYNC SYNCConfigurator
+	HB   HBConfigurator
 	// Others to come
 }
 
@@ -83,5 +84,6 @@ func NewNodeConfigurator(nodeId uint8, client *SDOClient) NodeConfigurator {
 	configurator.RPDO = *NewRPDOConfigurator(nodeId, client)
 	configurator.TPDO = *NewTPDOConfigurator(nodeId, client)
 	configurator.SYNC = *NewSYNCConfigurator(nodeId, client)
+	configurator.HB = *NewHBConfigurator(nodeId, client)
 	return configurator
 }

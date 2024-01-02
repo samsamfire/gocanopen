@@ -25,6 +25,7 @@ const (
 	NMT_PRE_OPERATIONAL uint8 = 127
 	NMT_OPERATIONAL     uint8 = 5
 	NMT_STOPPED         uint8 = 4
+	NMT_UNKNOWN         uint8 = 255
 )
 
 var NMT_STATE_MAP = map[uint8]string{
@@ -32,6 +33,7 @@ var NMT_STATE_MAP = map[uint8]string{
 	NMT_PRE_OPERATIONAL: "PRE-OPERATIONAL",
 	NMT_OPERATIONAL:     "OPERATIONAL",
 	NMT_STOPPED:         "STOPPED",
+	NMT_UNKNOWN:         "UNKNOWN",
 }
 
 type NMTCommand uint8

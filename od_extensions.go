@@ -226,7 +226,7 @@ func WriteEntry1015(stream *Stream, data []byte, countWritten *uint16) error {
 
 }
 
-// [HB Consumer] update heartbeat consumer
+// [HBConsumer] update heartbeat consumer
 func WriteEntry1016(stream *Stream, data []byte, countWritten *uint16) error {
 	consumer, ok := stream.Object.(*HBConsumer)
 	if !ok {
@@ -240,8 +240,9 @@ func WriteEntry1016(stream *Stream, data []byte, countWritten *uint16) error {
 	}
 
 	hbConsValue := binary.LittleEndian.Uint32(data)
-	nodeId := uint8(hbConsValue>>16) & 0xFF
+	nodeId := uint8(hbConsValue >> 16)
 	time := hbConsValue & 0xFFFF
+	log.Debugf("[OD][EXTENSION][HB CONSUMER] will monitor x%x with period %v ms", nodeId, time)
 	err := consumer.addHearbeatConsumerNode(stream.Subindex-1, nodeId, uint16(time))
 	if err != nil {
 		return ODR_PAR_INCOMPAT
