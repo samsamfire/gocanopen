@@ -77,7 +77,7 @@ func (rpdo *RPDO) configureCOBID(entry14xx *Entry, predefinedIdent uint32, erron
 		if erroneousMap == 1 {
 			errorInfo = cobId
 		}
-		pdo.em.ErrorReport(CO_EM_PDO_WRONG_MAPPING, CO_EMC_PROTOCOL_ERROR, errorInfo)
+		pdo.em.ErrorReport(emPDOWrongMapping, emErrProtocolError, errorInfo)
 	}
 	if !valid {
 		canId = 0
@@ -109,11 +109,11 @@ func (rpdo *RPDO) process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 	// Check errors in length of received messages
 	if rpdo.ReceiveError > CO_RPDO_RX_ACK {
 		setError := rpdo.ReceiveError != CO_RPDO_RX_OK
-		errorCode := CO_EMC_PDO_LENGTH
+		errorCode := emErrPdoLength
 		if rpdo.ReceiveError != CO_RPDO_RX_SHORT {
-			errorCode = CO_EMC_PDO_LENGTH_EXC
+			errorCode = emErrPdoLengthExc
 		}
-		pdo.em.Error(setError, CO_EM_RPDO_WRONG_LENGTH, uint16(errorCode), pdo.dataLength)
+		pdo.em.Error(setError, emRPDOWrongLength, uint16(errorCode), pdo.dataLength)
 		if setError {
 			rpdo.ReceiveError = CO_RPDO_RX_ACK_ERROR
 		} else {
@@ -161,13 +161,13 @@ func (rpdo *RPDO) process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 	//Check timeouts
 	if rpdoReceived {
 		if rpdo.TimeoutTimer > rpdo.TimeoutTimeUs {
-			pdo.em.ErrorReset(CO_EM_RPDO_TIME_OUT, rpdo.TimeoutTimer)
+			pdo.em.ErrorReset(emRPDOTimeOut, rpdo.TimeoutTimer)
 		}
 		rpdo.TimeoutTimer = 1
 	} else if rpdo.TimeoutTimer > 0 && rpdo.TimeoutTimer < rpdo.TimeoutTimeUs {
 		rpdo.TimeoutTimer += timeDifferenceUs
 		if rpdo.TimeoutTimer > rpdo.TimeoutTimeUs {
-			pdo.em.ErrorReport(CO_EM_RPDO_TIME_OUT, CO_EMC_RPDO_TIMEOUT, rpdo.TimeoutTimer)
+			pdo.em.ErrorReport(emRPDOTimeOut, emErrRpdoTimeout, rpdo.TimeoutTimer)
 		}
 	}
 	if timerNext != nil && rpdo.TimeoutTimer < rpdo.TimeoutTimeUs {

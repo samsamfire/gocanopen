@@ -98,7 +98,7 @@ func (consumer *HBConsumer) process(nmtIsPreOrOperational bool, timeDifferenceUs
 				if monitoredNode.NMTState == int16(NMT_INITIALIZING) {
 					// Boot up message is an error if previously received (means reboot)
 					if monitoredNode.HBState == HB_ACTIVE {
-						consumer.em.ErrorReport(CO_EM_HB_CONSUMER_REMOTE_RESET, CO_EMC_HEARTBEAT, uint32(i))
+						consumer.em.ErrorReport(emHBConsumerRemoteReset, emErrHeartbeat, uint32(i))
 					}
 					monitoredNode.HBState = HB_UNKNOWN
 				} else {
@@ -114,7 +114,7 @@ func (consumer *HBConsumer) process(nmtIsPreOrOperational bool, timeDifferenceUs
 				monitoredNode.TimeoutTimer += timeDifferenceUsCopy
 				if monitoredNode.TimeoutTimer >= monitoredNode.TimeUs {
 					// Timeout is expired
-					consumer.em.ErrorReport(CO_EM_HEARTBEAT_CONSUMER, CO_EMC_HEARTBEAT, uint32(i))
+					consumer.em.ErrorReport(emHBConsumerRemoteReset, emErrHeartbeat, uint32(i))
 					monitoredNode.NMTState = NMT_UNKNOWN
 					monitoredNode.HBState = HB_TIMEOUT
 				} else if timerNextUs != nil {
@@ -153,8 +153,8 @@ func (consumer *HBConsumer) process(nmtIsPreOrOperational bool, timeDifferenceUs
 
 	// Clear emergencies when all monitored nodes become active
 	if !consumer.AllMonitoredActive && allMonitoredActiveCurrent {
-		consumer.em.ErrorReset(CO_EM_HEARTBEAT_CONSUMER, 0)
-		consumer.em.ErrorReset(CO_EM_HB_CONSUMER_REMOTE_RESET, 0)
+		consumer.em.ErrorReset(emHeartbeatConsumer, 0)
+		consumer.em.ErrorReset(emHBConsumerRemoteReset, 0)
 	}
 	consumer.AllMonitoredActive = allMonitoredActiveCurrent
 	consumer.AllMonitoredOperational = allMonitoredOperationalCurrent
