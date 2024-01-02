@@ -1,3 +1,4 @@
+// This package is a pure golang implementation of the CANopen protocol
 package canopen
 
 import (

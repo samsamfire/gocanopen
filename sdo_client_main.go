@@ -44,7 +44,7 @@ type SDOClient struct {
 	State                      SDOState
 	TimeoutTimeUs              uint32
 	TimeoutTimer               uint32
-	fifo                       *Fifo
+	fifo                       *fifo
 	RxNew                      bool
 	Response                   SDOResponse
 	Toggle                     uint8
