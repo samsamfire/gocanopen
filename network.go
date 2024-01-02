@@ -184,7 +184,7 @@ func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
 	frame := NewFrame(uint32(NMT_SERVICE_ID), 0, 2)
 	frame.Data[0] = uint8(nmtCommand)
 	frame.Data[1] = nodeId
-	log.Debugf("[NMT] sending nmt command : %v to node(s) %v (x%x)", NMT_COMMAND_MAP[nmtCommand], nodeId, nodeId)
+	log.Debugf("[NMT] sending nmt command : %v to node(s) %v (x%x)", nmtCommandDescription[nmtCommand], nodeId, nodeId)
 	return network.Send(frame)
 }
 
@@ -211,7 +211,7 @@ func (network *Network) CreateNode(nodeId uint8, od any) (*LocalNode, error) {
 		nil, // Use definition from OD
 		nil, // Use definition from OD
 		nodeId,
-		NMT_STARTUP_TO_OPERATIONAL,
+		nmtStartupToOperational,
 		500,
 		SDO_CLIENT_TIMEOUT, // Not changeable currently
 		SDO_SERVER_TIMEOUT, // Not changeable currently
