@@ -6,15 +6,15 @@ type TPDO struct {
 	*busManager
 	pdo              PDOCommon
 	txBuffer         Frame
-	TransmissionType uint8
-	SendRequest      bool
+	transmissionType uint8
+	sendRequest      bool
 	sync             *SYNC
-	SyncStartValue   uint8
-	SyncCounter      uint8
-	InhibitTimeUs    uint32
-	EventTimeUs      uint32
-	InhibitTimer     uint32
-	EventTimer       uint32
+	syncStartValue   uint8
+	syncCounter      uint8
+	inhibitTimeUs    uint32
+	eventTimeUs      uint32
+	inhibitTimer     uint32
+	eventTimer       uint32
 }
 
 func (tpdo *TPDO) configureTransmissionType(entry18xx *Entry) error {
@@ -26,8 +26,8 @@ func (tpdo *TPDO) configureTransmissionType(entry18xx *Entry) error {
 	if transmissionType < TRANSMISSION_TYPE_SYNC_EVENT_LO && transmissionType > TRANSMISSION_TYPE_SYNC_240 {
 		transmissionType = TRANSMISSION_TYPE_SYNC_EVENT_LO
 	}
-	tpdo.TransmissionType = transmissionType
-	tpdo.SendRequest = true
+	tpdo.transmissionType = transmissionType
+	tpdo.sendRequest = true
 	return nil
 }
 
@@ -70,84 +70,84 @@ func (tpdo *TPDO) process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 
 	pdo := &tpdo.pdo
 	if !pdo.Valid || !nmtIsOperational {
-		tpdo.SendRequest = true
-		tpdo.InhibitTimer = 0
-		tpdo.EventTimer = 0
-		tpdo.SyncCounter = 255
+		tpdo.sendRequest = true
+		tpdo.inhibitTimer = 0
+		tpdo.eventTimer = 0
+		tpdo.syncCounter = 255
 		return
 	}
 
-	if tpdo.TransmissionType == TRANSMISSION_TYPE_SYNC_ACYCLIC || tpdo.TransmissionType >= TRANSMISSION_TYPE_SYNC_EVENT_LO {
-		if tpdo.EventTimeUs != 0 {
-			if tpdo.EventTimer > timeDifferenceUs {
-				tpdo.EventTimer = tpdo.EventTimer - timeDifferenceUs
+	if tpdo.transmissionType == TRANSMISSION_TYPE_SYNC_ACYCLIC || tpdo.transmissionType >= TRANSMISSION_TYPE_SYNC_EVENT_LO {
+		if tpdo.eventTimeUs != 0 {
+			if tpdo.eventTimer > timeDifferenceUs {
+				tpdo.eventTimer = tpdo.eventTimer - timeDifferenceUs
 			} else {
-				tpdo.EventTimer = 0
+				tpdo.eventTimer = 0
 			}
-			if tpdo.EventTimer == 0 {
-				tpdo.SendRequest = true
+			if tpdo.eventTimer == 0 {
+				tpdo.sendRequest = true
 			}
-			if timerNextUs != nil && *timerNextUs > tpdo.EventTimer {
-				*timerNextUs = tpdo.EventTimer
+			if timerNextUs != nil && *timerNextUs > tpdo.eventTimer {
+				*timerNextUs = tpdo.eventTimer
 			}
 		}
 		// Check for tpdo send requests
-		if !tpdo.SendRequest {
+		if !tpdo.sendRequest {
 			for i := 0; i < int(pdo.nbMapped); i++ {
 				flagPDOByte := pdo.flagPDOByte[i]
 				if flagPDOByte != nil {
 					if (*flagPDOByte & pdo.flagPDOBitmask[i]) == 0 {
-						tpdo.SendRequest = true
+						tpdo.sendRequest = true
 					}
 				}
 			}
 		}
 	}
 	// Send PDO by application request or event timer
-	if tpdo.TransmissionType >= TRANSMISSION_TYPE_SYNC_EVENT_LO {
-		if tpdo.InhibitTimer > timeDifferenceUs {
-			tpdo.InhibitTimer = tpdo.InhibitTimer - timeDifferenceUs
+	if tpdo.transmissionType >= TRANSMISSION_TYPE_SYNC_EVENT_LO {
+		if tpdo.inhibitTimer > timeDifferenceUs {
+			tpdo.inhibitTimer = tpdo.inhibitTimer - timeDifferenceUs
 		} else {
-			tpdo.InhibitTimer = 0
+			tpdo.inhibitTimer = 0
 		}
-		if tpdo.SendRequest && tpdo.InhibitTimer == 0 {
+		if tpdo.sendRequest && tpdo.inhibitTimer == 0 {
 			tpdo.Send()
 		}
-		if tpdo.SendRequest && timerNextUs != nil && *timerNextUs > tpdo.InhibitTimer {
-			*timerNextUs = tpdo.InhibitTimer
+		if tpdo.sendRequest && timerNextUs != nil && *timerNextUs > tpdo.inhibitTimer {
+			*timerNextUs = tpdo.inhibitTimer
 		}
 	} else if tpdo.sync != nil && syncWas {
 
 		// Send synchronous acyclic tpdo
-		if tpdo.TransmissionType == TRANSMISSION_TYPE_SYNC_ACYCLIC &&
-			tpdo.SendRequest {
+		if tpdo.transmissionType == TRANSMISSION_TYPE_SYNC_ACYCLIC &&
+			tpdo.sendRequest {
 			tpdo.Send()
 			return
 		}
 		// Send synchronous cyclic TPDOs
-		if tpdo.SyncCounter == 255 {
-			if tpdo.sync.CounterOverflowValue != 0 && tpdo.SyncStartValue != 0 {
+		if tpdo.syncCounter == 255 {
+			if tpdo.sync.CounterOverflowValue != 0 && tpdo.syncStartValue != 0 {
 				// Sync start value used
 
-				tpdo.SyncCounter = 254
+				tpdo.syncCounter = 254
 			} else {
-				tpdo.SyncCounter = tpdo.TransmissionType/2 + 1
+				tpdo.syncCounter = tpdo.transmissionType/2 + 1
 			}
 		}
 		// If sync start value is used , start first TPDO
 		//after sync with matched syncstartvalue
-		switch tpdo.SyncCounter {
+		switch tpdo.syncCounter {
 		case 254:
-			if tpdo.sync.Counter == tpdo.SyncStartValue {
-				tpdo.SyncCounter = tpdo.TransmissionType
+			if tpdo.sync.Counter == tpdo.syncStartValue {
+				tpdo.syncCounter = tpdo.transmissionType
 				tpdo.Send()
 			}
 		case 1:
-			tpdo.SyncCounter = tpdo.TransmissionType
+			tpdo.syncCounter = tpdo.transmissionType
 			tpdo.Send()
 
 		default:
-			tpdo.SyncCounter--
+			tpdo.syncCounter--
 		}
 
 	}
@@ -157,7 +157,7 @@ func (tpdo *TPDO) process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 // Send TPDO object
 func (tpdo *TPDO) Send() error {
 	pdo := &tpdo.pdo
-	eventDriven := tpdo.TransmissionType == TRANSMISSION_TYPE_SYNC_ACYCLIC || tpdo.TransmissionType >= uint8(TRANSMISSION_TYPE_SYNC_EVENT_LO)
+	eventDriven := tpdo.transmissionType == TRANSMISSION_TYPE_SYNC_ACYCLIC || tpdo.transmissionType >= uint8(TRANSMISSION_TYPE_SYNC_EVENT_LO)
 	dataTPDO := make([]byte, 0)
 	for i := 0; i < int(pdo.nbMapped); i++ {
 		streamer := &pdo.streamers[i]
@@ -183,9 +183,9 @@ func (tpdo *TPDO) Send() error {
 			*flagPDOByte |= pdo.flagPDOBitmask[i]
 		}
 	}
-	tpdo.SendRequest = false
-	tpdo.EventTimer = tpdo.EventTimeUs
-	tpdo.InhibitTimer = tpdo.InhibitTimeUs
+	tpdo.sendRequest = false
+	tpdo.eventTimer = tpdo.eventTimeUs
+	tpdo.inhibitTimer = tpdo.inhibitTimeUs
 	// Copy data to the buffer & send
 	copy(tpdo.txBuffer.Data[:], dataTPDO)
 	return tpdo.busManager.Send(tpdo.txBuffer)
@@ -228,22 +228,22 @@ func NewTPDO(
 	if err != nil {
 		log.Warnf("[TPDO][%x|%x] reading inhibit time failed : %v", entry18xx.Index, 3, err)
 	}
-	tpdo.InhibitTimeUs = uint32(inhibitTime) * 100
+	tpdo.inhibitTimeUs = uint32(inhibitTime) * 100
 
 	// Configure event timer (not mandatory)
 	eventTime, err := entry18xx.Uint16(5)
 	if err != nil {
 		log.Warnf("[TPDO][%x|%x] reading event timer failed : %v", entry18xx.Index, 5, err)
 	}
-	tpdo.EventTimeUs = uint32(eventTime) * 1000
+	tpdo.eventTimeUs = uint32(eventTime) * 1000
 
 	// Configure sync start value (not mandatory)
-	tpdo.SyncStartValue, err = entry18xx.Uint8(6)
+	tpdo.syncStartValue, err = entry18xx.Uint8(6)
 	if err != nil {
 		log.Warnf("[TPDO][%x|%x] reading sync start failed : %v", entry18xx.Index, 6, err)
 	}
 	tpdo.sync = sync
-	tpdo.SyncCounter = 255
+	tpdo.syncCounter = 255
 
 	// Configure OD extensions
 	pdo.IsRPDO = false
@@ -258,7 +258,7 @@ func NewTPDO(
 		pdo.Valid,
 		inhibitTime,
 		eventTime,
-		tpdo.TransmissionType,
+		tpdo.transmissionType,
 	)
 	return tpdo, nil
 
