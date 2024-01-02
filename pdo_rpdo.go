@@ -182,7 +182,7 @@ func (rpdo *RPDO) process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 func NewRPDO(
 	bm *busManager,
 	od *ObjectDictionary,
-	em *EM,
+	em *EMCY,
 	sync *SYNC,
 	entry14xx *Entry,
 	entry16xx *Entry,

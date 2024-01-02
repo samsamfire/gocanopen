@@ -247,10 +247,10 @@ type emfifo struct {
 }
 
 // Emergency object callback on message reception, including own
-type EMRxCallback func(ident uint16, errorCode uint16, errorRegister byte, errorBit byte, infoCode uint32)
+type EMCYRxCallback func(ident uint16, errorCode uint16, errorRegister byte, errorBit byte, infoCode uint32)
 
 // Emergency object for receiving & transmitting emergencies
-type EM struct {
+type EMCY struct {
 	*busManager
 	nodeId          byte
 	errorStatusBits [CO_CONFIG_EM_ERR_STATUS_BITS_COUNT / 8]byte
@@ -266,14 +266,14 @@ type EM struct {
 	producerIdent   uint16
 	inhibitTimeUs   uint32 // Changed by writing to object 0x1015
 	inhibitTimer    uint32
-	rxCallback      EMRxCallback
+	rxCallback      EMCYRxCallback
 }
 
 func readEntryStatusBits(stream *Stream, data []byte, countRead *uint16) error {
 	if stream == nil || stream.Subindex != 0 || data == nil || countRead == nil {
 		return ODR_DEV_INCOMPAT
 	}
-	em, ok := stream.Object.(*EM)
+	em, ok := stream.Object.(*EMCY)
 	if !ok {
 		return ODR_DEV_INCOMPAT
 	}
@@ -294,7 +294,7 @@ func writeEntryStatusBits(stream *Stream, data []byte, countWritten *uint16) err
 	if stream == nil || stream.Subindex != 0 || countWritten == nil || data == nil {
 		return ODR_DEV_INCOMPAT
 	}
-	em, ok := stream.Object.(*EM)
+	em, ok := stream.Object.(*EMCY)
 	if !ok {
 		return ODR_DEV_INCOMPAT
 	}
@@ -310,7 +310,7 @@ func writeEntryStatusBits(stream *Stream, data []byte, countWritten *uint16) err
 	return nil
 }
 
-func (emergency *EM) Handle(frame Frame) {
+func (emergency *EMCY) Handle(frame Frame) {
 	// Ignore sync messages and only accept 8 bytes size
 	if emergency == nil || emergency.rxCallback == nil ||
 		frame.ID == 0x80 ||
@@ -328,7 +328,7 @@ func (emergency *EM) Handle(frame Frame) {
 
 }
 
-func (emergency *EM) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
+func (emergency *EMCY) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
 	// Check errors from driver
 	canErrStatus := emergency.busManager.canError
 	if canErrStatus != emergency.canErrorOld {
@@ -450,7 +450,7 @@ func (emergency *EM) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32
 
 // Set or reset an error condition
 // Function adds a new error to the history & error will be processed by Process function
-func (emergency *EM) Error(setError bool, errorBit byte, errorCode uint16, infoCode uint32) error {
+func (emergency *EMCY) Error(setError bool, errorBit byte, errorCode uint16, infoCode uint32) error {
 	if emergency == nil {
 		return nil
 	}
@@ -499,7 +499,7 @@ func (emergency *EM) Error(setError bool, errorBit byte, errorCode uint16, infoC
 	return nil
 }
 
-func (emergency *EM) ErrorReport(errorBit byte, errorCode uint16, infoCode uint32) error {
+func (emergency *EMCY) ErrorReport(errorBit byte, errorCode uint16, infoCode uint32) error {
 	log.Warnf("[EMERGENCY][TX][ERROR] %v (x%x) | %v (x%x) | infoCode %v",
 		getErrorCodeDescription(int(errorCode)),
 		errorCode,
@@ -510,7 +510,7 @@ func (emergency *EM) ErrorReport(errorBit byte, errorCode uint16, infoCode uint3
 	return emergency.Error(true, errorBit, errorCode, infoCode)
 }
 
-func (emergency *EM) ErrorReset(errorBit byte, infoCode uint32) error {
+func (emergency *EMCY) ErrorReset(errorBit byte, infoCode uint32) error {
 	log.Warnf("[EMERGENCY][TX][RESET] reset emergency %v (x%x) | infoCode %v",
 		getErrorStatusDescription(errorBit),
 		errorBit,
@@ -519,7 +519,7 @@ func (emergency *EM) ErrorReset(errorBit byte, infoCode uint32) error {
 	return emergency.Error(false, errorBit, emErrNoError, infoCode)
 }
 
-func (emergency *EM) IsError(errorBit byte) bool {
+func (emergency *EMCY) IsError(errorBit byte) bool {
 	if emergency == nil {
 		return true
 	}
@@ -531,18 +531,18 @@ func (emergency *EM) IsError(errorBit byte) bool {
 	return (emergency.errorStatusBits[byteIndex] & bitMask) != 0
 }
 
-func (emergency *EM) GetErrorRegister() byte {
+func (emergency *EMCY) GetErrorRegister() byte {
 	if emergency == nil || emergency.errorRegister == nil {
 		return 0
 	}
 	return *emergency.errorRegister
 }
 
-func (emergency *EM) ProducerEnabled() bool {
+func (emergency *EMCY) ProducerEnabled() bool {
 	return emergency.producerEnabled
 }
 
-func (emergency *EM) SetCallback(callback EMRxCallback) {
+func (emergency *EMCY) SetCallback(callback EMCYRxCallback) {
 	emergency.rxCallback = callback
 }
 
@@ -554,14 +554,14 @@ func NewEM(
 	entry1015 *Entry,
 	entry1003 *Entry,
 	entryStatusBits *Entry,
-) (*EM, error) {
+) (*EMCY, error) {
 	if entry1001 == nil || entry1014 == nil || bm == nil ||
 		nodeId < 1 || nodeId > 127 ||
 		entry1003 == nil {
 		return nil, ErrIllegalArgument
 
 	}
-	emergency := &EM{busManager: bm}
+	emergency := &EMCY{busManager: bm}
 	// TODO handle error register ptr
 	//emergency.errorRegister
 	fifoSize := entry1003.SubCount()

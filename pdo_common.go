@@ -24,7 +24,7 @@ const (
 // Common to TPDO & RPDO
 type PDOCommon struct {
 	od             *ObjectDictionary
-	em             *EM
+	em             *EMCY
 	streamers      [MAX_MAPPED_ENTRIES]Streamer
 	Valid          bool
 	dataLength     uint32
@@ -119,7 +119,7 @@ func NewPDO(
 	od *ObjectDictionary,
 	entry *Entry,
 	isRPDO bool,
-	em *EM,
+	em *EMCY,
 	erroneoursMap *uint32,
 ) (*PDOCommon, error) {
 

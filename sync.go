@@ -8,7 +8,7 @@ import (
 
 type SYNC struct {
 	*busManager
-	emergency                   *EM
+	emergency                   *EMCY
 	RxNew                       bool
 	ReceiveError                uint8
 	RxToggle                    bool
@@ -143,7 +143,7 @@ func (sync *SYNC) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 
 func NewSYNC(
 	bm *busManager,
-	emergency *EM,
+	emergency *EMCY,
 	entry1005 *Entry,
 	entry1006 *Entry,
 	entry1007 *Entry,

@@ -195,7 +195,7 @@ func (tpdo *TPDO) Send() error {
 func NewTPDO(
 	bm *busManager,
 	od *ObjectDictionary,
-	em *EM,
+	em *EMCY,
 	sync *SYNC,
 	entry18xx *Entry,
 	entry1Axx *Entry,
