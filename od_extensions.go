@@ -21,26 +21,26 @@ func ReadEntry1003(stream *Stream, data []byte, countRead *uint16) error {
 	if !ok {
 		return ODR_DEV_INCOMPAT
 	}
-	if len(em.Fifo) < 2 {
+	if len(em.fifo) < 2 {
 		return ODR_DEV_INCOMPAT
 	}
 	if stream.Subindex == 0 {
-		data[0] = em.FifoCount
+		data[0] = em.fifoCount
 		*countRead = 1
 		return nil
 	}
-	if stream.Subindex > em.FifoCount {
+	if stream.Subindex > em.fifoCount {
 		return ODR_NO_DATA
 	}
 	// Most recent error is in subindex 1 and stored behind fifoWrPtr
-	index := int(em.FifoWrPtr) - int(stream.Subindex)
-	if index >= len(em.Fifo) {
+	index := int(em.fifoWrPtr) - int(stream.Subindex)
+	if index >= len(em.fifo) {
 		return ODR_DEV_INCOMPAT
 	}
 	if index < 0 {
-		index += len(em.Fifo)
+		index += len(em.fifo)
 	}
-	binary.LittleEndian.PutUint32(data, em.Fifo[index].msg)
+	binary.LittleEndian.PutUint32(data, em.fifo[index].msg)
 	*countRead = 4
 	return nil
 }
@@ -58,7 +58,7 @@ func WriteEntry1003(stream *Stream, data []byte, countWritten *uint16) error {
 		return ODR_DEV_INCOMPAT
 	}
 	// Clear error history
-	em.FifoCount = 0
+	em.fifoCount = 0
 	*countWritten = 1
 	return nil
 }
@@ -156,13 +156,13 @@ func ReadEntry1014(stream *Stream, data []byte, countRead *uint16) error {
 		return ODR_DEV_INCOMPAT
 	}
 	var canId uint16
-	if em.ProducerIdent == EMERGENCY_SERVICE_ID {
-		canId = EMERGENCY_SERVICE_ID + uint16(em.NodeId)
+	if em.producerIdent == EMERGENCY_SERVICE_ID {
+		canId = EMERGENCY_SERVICE_ID + uint16(em.nodeId)
 	} else {
-		canId = em.ProducerIdent
+		canId = em.producerIdent
 	}
 	var cobId uint32
-	if em.ProducerEnabled {
+	if em.producerEnabled {
 		cobId = 0
 	} else {
 		cobId = 0x80000000
@@ -186,21 +186,21 @@ func WriteEntry1014(stream *Stream, data []byte, countWritten *uint16) error {
 	cobId := binary.LittleEndian.Uint32(data)
 	newCanId := cobId & 0x7FF
 	var currentCanId uint16
-	if em.ProducerIdent == EMERGENCY_SERVICE_ID {
-		currentCanId = EMERGENCY_SERVICE_ID + uint16(em.NodeId)
+	if em.producerIdent == EMERGENCY_SERVICE_ID {
+		currentCanId = EMERGENCY_SERVICE_ID + uint16(em.nodeId)
 	} else {
-		currentCanId = em.ProducerIdent
+		currentCanId = em.producerIdent
 	}
 	newEnabled := (cobId&uint32(currentCanId)) == 0 && newCanId != 0
 	if cobId&0x7FFFF800 != 0 || isIDRestricted(uint16(newCanId)) ||
-		(em.ProducerEnabled && newEnabled && newCanId != uint32(currentCanId)) {
+		(em.producerEnabled && newEnabled && newCanId != uint32(currentCanId)) {
 		return ODR_INVALID_VALUE
 	}
-	em.ProducerEnabled = newEnabled
-	if newCanId == uint32(EMERGENCY_SERVICE_ID+uint16(em.NodeId)) {
-		em.ProducerIdent = EMERGENCY_SERVICE_ID
+	em.producerEnabled = newEnabled
+	if newCanId == uint32(EMERGENCY_SERVICE_ID+uint16(em.nodeId)) {
+		em.producerIdent = EMERGENCY_SERVICE_ID
 	} else {
-		em.ProducerIdent = uint16(newCanId)
+		em.producerIdent = uint16(newCanId)
 	}
 
 	if newEnabled {
@@ -219,8 +219,8 @@ func WriteEntry1015(stream *Stream, data []byte, countWritten *uint16) error {
 	if !ok {
 		return ODR_DEV_INCOMPAT
 	}
-	em.InhibitEmTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 100
-	em.InhibitEmTimer = 0
+	em.inhibitTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 100
+	em.inhibitTimer = 0
 
 	return WriteEntryDefault(stream, data, countWritten)
 

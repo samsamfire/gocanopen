@@ -240,31 +240,36 @@ func getErrorCodeDescription(errorCode int) string {
 	}
 }
 
-type EMFifo struct {
+// Fifo for emergency
+type emfifo struct {
 	msg  uint32
 	info uint32
 }
 
+// Emergency object callback on message reception, including own
+type EMRxCallback func(ident uint16, errorCode uint16, errorRegister byte, errorBit byte, infoCode uint32)
+
+// Emergency object for receiving & transmitting emergencies
 type EM struct {
 	*busManager
-	errorStatusBits     [CO_CONFIG_EM_ERR_STATUS_BITS_COUNT / 8]byte
-	errorRegister       *byte
-	CANerrorStatusOld   uint16
-	txBuffer            Frame
-	Fifo                []EMFifo
-	FifoWrPtr           byte
-	FifoPpPtr           byte
-	FifoOverflow        byte
-	FifoCount           byte
-	ProducerEnabled     bool
-	NodeId              byte
-	ProducerIdent       uint16
-	InhibitEmTimeUs     uint32
-	InhibitEmTimer      uint32
-	EmergencyRxCallback func(ident uint16, errorCode uint16, errorRegister byte, errorBit byte, infoCode uint32)
+	nodeId          byte
+	errorStatusBits [CO_CONFIG_EM_ERR_STATUS_BITS_COUNT / 8]byte
+	errorRegister   *byte
+	canErrorOld     uint16
+	txBuffer        Frame
+	fifo            []emfifo
+	fifoWrPtr       byte
+	fifoPpPtr       byte
+	fifoOverflow    byte
+	fifoCount       byte
+	producerEnabled bool
+	producerIdent   uint16
+	inhibitTimeUs   uint32 // Changed by writing to object 0x1015
+	inhibitTimer    uint32
+	rxCallback      EMRxCallback
 }
 
-func ReadEntryStatusBits(stream *Stream, data []byte, countRead *uint16) error {
+func readEntryStatusBits(stream *Stream, data []byte, countRead *uint16) error {
 	if stream == nil || stream.Subindex != 0 || data == nil || countRead == nil {
 		return ODR_DEV_INCOMPAT
 	}
@@ -285,7 +290,7 @@ func ReadEntryStatusBits(stream *Stream, data []byte, countRead *uint16) error {
 	return nil
 }
 
-func WriteEntryStatusBits(stream *Stream, data []byte, countWritten *uint16) error {
+func writeEntryStatusBits(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || stream.Subindex != 0 || countWritten == nil || data == nil {
 		return ODR_DEV_INCOMPAT
 	}
@@ -307,14 +312,14 @@ func WriteEntryStatusBits(stream *Stream, data []byte, countWritten *uint16) err
 
 func (emergency *EM) Handle(frame Frame) {
 	// Ignore sync messages and only accept 8 bytes size
-	if emergency == nil || emergency.EmergencyRxCallback == nil ||
+	if emergency == nil || emergency.rxCallback == nil ||
 		frame.ID == 0x80 ||
 		len(frame.Data) != 8 {
 		return
 	}
 	errorCode := binary.LittleEndian.Uint16(frame.Data[0:2])
 	infoCode := binary.LittleEndian.Uint32(frame.Data[4:8])
-	emergency.EmergencyRxCallback(
+	emergency.rxCallback(
 		uint16(frame.ID),
 		errorCode,
 		frame.Data[2],
@@ -326,9 +331,9 @@ func (emergency *EM) Handle(frame Frame) {
 func (emergency *EM) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
 	// Check errors from driver
 	canErrStatus := emergency.busManager.canError
-	if canErrStatus != emergency.CANerrorStatusOld {
-		canErrStatusChanged := canErrStatus ^ emergency.CANerrorStatusOld
-		emergency.CANerrorStatusOld = canErrStatus
+	if canErrStatus != emergency.canErrorOld {
+		canErrStatusChanged := canErrStatus ^ emergency.canErrorOld
+		emergency.canErrorOld = canErrStatus
 		if (canErrStatusChanged & (canErrorTxWarning | canErrorRxWarning)) != 0 {
 			emergency.Error(
 				(canErrStatus&(canErrorTxWarning|canErrorRxWarning)) != 0,
@@ -397,44 +402,44 @@ func (emergency *EM) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32
 	if !nmtIsPreOrOperational {
 		return
 	}
-	if len(emergency.Fifo) >= 2 {
-		fifoPpPtr := emergency.FifoPpPtr
-		if emergency.InhibitEmTimer < emergency.InhibitEmTimeUs {
-			emergency.InhibitEmTimer += timeDifferenceUs
+	if len(emergency.fifo) >= 2 {
+		fifoPpPtr := emergency.fifoPpPtr
+		if emergency.inhibitTimer < emergency.inhibitTimeUs {
+			emergency.inhibitTimer += timeDifferenceUs
 		}
-		if fifoPpPtr != emergency.FifoWrPtr &&
-			emergency.InhibitEmTimer >= emergency.InhibitEmTimeUs {
-			emergency.InhibitEmTimer = 0
+		if fifoPpPtr != emergency.fifoWrPtr &&
+			emergency.inhibitTimer >= emergency.inhibitTimeUs {
+			emergency.inhibitTimer = 0
 
-			emergency.Fifo[fifoPpPtr].msg |= uint32(errorRegister) << 16
-			binary.LittleEndian.PutUint32(emergency.txBuffer.Data[:4], emergency.Fifo[fifoPpPtr].msg)
+			emergency.fifo[fifoPpPtr].msg |= uint32(errorRegister) << 16
+			binary.LittleEndian.PutUint32(emergency.txBuffer.Data[:4], emergency.fifo[fifoPpPtr].msg)
 			emergency.Send(emergency.txBuffer)
 			// Also report own emergency message
-			if emergency.EmergencyRxCallback != nil {
-				errMsg := uint32(emergency.Fifo[fifoPpPtr].msg)
-				emergency.EmergencyRxCallback(
+			if emergency.rxCallback != nil {
+				errMsg := uint32(emergency.fifo[fifoPpPtr].msg)
+				emergency.rxCallback(
 					0,
 					uint16(errMsg),
 					byte(errorRegister),
 					byte(errMsg>>24),
-					emergency.Fifo[fifoPpPtr].info,
+					emergency.fifo[fifoPpPtr].info,
 				)
 			}
 			fifoPpPtr += 1
-			if int(fifoPpPtr) < len(emergency.Fifo) {
-				emergency.FifoPpPtr = fifoPpPtr
+			if int(fifoPpPtr) < len(emergency.fifo) {
+				emergency.fifoPpPtr = fifoPpPtr
 			} else {
-				emergency.FifoPpPtr = 0
+				emergency.fifoPpPtr = 0
 			}
-			if emergency.FifoOverflow == 1 {
-				emergency.FifoOverflow = 2
+			if emergency.fifoOverflow == 1 {
+				emergency.fifoOverflow = 2
 				emergency.ErrorReport(emEmergencyBufferFull, emErrGeneric, 0)
-			} else if emergency.FifoOverflow == 2 && fifoPpPtr == emergency.FifoWrPtr {
-				emergency.FifoOverflow = 0
+			} else if emergency.fifoOverflow == 2 && fifoPpPtr == emergency.fifoWrPtr {
+				emergency.fifoOverflow = 0
 				emergency.ErrorReset(emEmergencyBufferFull, 0)
 			}
-		} else if timerNextUs != nil && emergency.InhibitEmTimeUs < emergency.InhibitEmTimer {
-			diff := emergency.InhibitEmTimeUs - emergency.InhibitEmTimer
+		} else if timerNextUs != nil && emergency.inhibitTimeUs < emergency.inhibitTimer {
+			diff := emergency.inhibitTimeUs - emergency.inhibitTimer
 			if *timerNextUs > diff {
 				*timerNextUs = diff
 			}
@@ -474,20 +479,20 @@ func (emergency *EM) Error(setError bool, errorBit byte, errorCode uint16, infoC
 		errorCode = emErrNoError
 	}
 	errMsg := (uint32(errorBit) << 24) | uint32(errorCode)
-	if len(emergency.Fifo) >= 2 {
-		fifoWrPtr := emergency.FifoWrPtr
+	if len(emergency.fifo) >= 2 {
+		fifoWrPtr := emergency.fifoWrPtr
 		fifoWrPtrNext := fifoWrPtr + 1
-		if int(fifoWrPtrNext) >= len(emergency.Fifo) {
+		if int(fifoWrPtrNext) >= len(emergency.fifo) {
 			fifoWrPtrNext = 0
 		}
-		if fifoWrPtrNext == emergency.FifoPpPtr {
-			emergency.FifoOverflow = 1
+		if fifoWrPtrNext == emergency.fifoPpPtr {
+			emergency.fifoOverflow = 1
 		} else {
-			emergency.Fifo[fifoWrPtr].msg = errMsg
-			emergency.Fifo[fifoWrPtr].info = infoCode
-			emergency.FifoWrPtr = fifoWrPtrNext
-			if int(emergency.FifoCount) < len(emergency.Fifo)-1 {
-				emergency.FifoCount++
+			emergency.fifo[fifoWrPtr].msg = errMsg
+			emergency.fifo[fifoWrPtr].info = infoCode
+			emergency.fifoWrPtr = fifoWrPtrNext
+			if int(emergency.fifoCount) < len(emergency.fifo)-1 {
+				emergency.fifoCount++
 			}
 		}
 	}
@@ -533,6 +538,14 @@ func (emergency *EM) GetErrorRegister() byte {
 	return *emergency.errorRegister
 }
 
+func (emergency *EM) ProducerEnabled() bool {
+	return emergency.producerEnabled
+}
+
+func (emergency *EM) SetCallback(callback EMRxCallback) {
+	emergency.rxCallback = callback
+}
+
 func NewEM(
 	bm *busManager,
 	nodeId uint8,
@@ -552,7 +565,7 @@ func NewEM(
 	// TODO handle error register ptr
 	//emergency.errorRegister
 	fifoSize := entry1003.SubCount()
-	emergency.Fifo = make([]EMFifo, fifoSize)
+	emergency.fifo = make([]emfifo, fifoSize)
 
 	// Get cob id initial & verify
 	cobIdEmergency, ret := entry1014.Uint32(0)
@@ -563,24 +576,24 @@ func NewEM(
 		}
 	}
 	producerCanId := cobIdEmergency & 0x7FF
-	emergency.ProducerEnabled = (cobIdEmergency&0x80000000) == 0 && producerCanId != 0
+	emergency.producerEnabled = (cobIdEmergency&0x80000000) == 0 && producerCanId != 0
 	entry1014.AddExtension(emergency, ReadEntry1014, WriteEntry1014)
-	emergency.ProducerIdent = uint16(producerCanId)
+	emergency.producerIdent = uint16(producerCanId)
 	if producerCanId == uint32(EMERGENCY_SERVICE_ID) {
 		producerCanId += uint32(nodeId)
 	}
-	emergency.NodeId = nodeId
+	emergency.nodeId = nodeId
 	emergency.txBuffer = NewFrame(producerCanId, 0, 8)
-	emergency.InhibitEmTimeUs = 0
-	emergency.InhibitEmTimer = 0
+	emergency.inhibitTimeUs = 0
+	emergency.inhibitTimer = 0
 	inhibitTime100us, ret := entry1015.Uint16(0)
 	if ret == nil {
-		emergency.InhibitEmTimeUs = uint32(inhibitTime100us) * 100
+		emergency.inhibitTimeUs = uint32(inhibitTime100us) * 100
 		entry1015.AddExtension(emergency, ReadEntryDefault, WriteEntry1015)
 	}
 	entry1003.AddExtension(emergency, ReadEntry1003, WriteEntry1003)
 	if entryStatusBits != nil {
-		entryStatusBits.AddExtension(emergency, ReadEntryStatusBits, WriteEntryStatusBits)
+		entryStatusBits.AddExtension(emergency, readEntryStatusBits, writeEntryStatusBits)
 	}
 
 	err := emergency.Subscribe(uint32(EMERGENCY_SERVICE_ID), 0x780, false, emergency)
