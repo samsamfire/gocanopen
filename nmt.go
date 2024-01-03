@@ -61,6 +61,7 @@ var nmtCommandDescription = map[NMTCommand]string{
 // NMT object for processing NMT behaviour, slave or master
 type NMT struct {
 	*busManager
+	emcy                   *EMCY
 	operatingState         uint8
 	operatingStatePrev     uint8
 	internalCommand        NMTCommand
@@ -68,7 +69,6 @@ type NMT struct {
 	control                uint16
 	hearbeatProducerTimeUs uint32
 	hearbeatProducerTimer  uint32
-	emergency              *EMCY
 	nmtTxBuff              Frame
 	hbTxBuff               Frame
 	callback               func(nmtState uint8)
@@ -142,12 +142,12 @@ func (nmt *NMT) process(internalState *uint8, timeDifferenceUs uint32, timerNext
 	}
 
 	busOff_HB := nmt.control&nmtErrOnBusOffHb != 0 &&
-		(nmt.emergency.IsError(emCanTXBusPassive) ||
-			nmt.emergency.IsError(emHeartbeatConsumer) ||
-			nmt.emergency.IsError(emHBConsumerRemoteReset))
+		(nmt.emcy.IsError(emCanTXBusPassive) ||
+			nmt.emcy.IsError(emHeartbeatConsumer) ||
+			nmt.emcy.IsError(emHBConsumerRemoteReset))
 
 	errRegMasked := (nmt.control&nmtErrOnErrReg != 0) &&
-		((nmt.emergency.GetErrorRegister() & byte(nmt.control)) != 0)
+		((nmt.emcy.GetErrorRegister() & byte(nmt.control)) != 0)
 
 	if nmtStateCopy == NMT_OPERATIONAL && (busOff_HB || errRegMasked) {
 		if nmt.control&nmtErrToStopped != 0 {
@@ -238,7 +238,7 @@ func NewNMT(
 	nmt.operatingStatePrev = nmt.operatingState
 	nmt.nodeId = nodeId
 	nmt.control = control
-	nmt.emergency = emergency
+	nmt.emcy = emergency
 	nmt.hearbeatProducerTimer = uint32(firstHbTimeMs * 1000)
 
 	hbProdTimeMs, err := entry1017.Uint16(0)

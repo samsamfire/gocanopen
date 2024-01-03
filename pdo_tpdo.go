@@ -4,11 +4,11 @@ import log "github.com/sirupsen/logrus"
 
 type TPDO struct {
 	*busManager
+	sync             *SYNC
 	pdo              PDOCommon
 	txBuffer         Frame
 	transmissionType uint8
 	sendRequest      bool
-	sync             *SYNC
 	syncStartValue   uint8
 	syncCounter      uint8
 	inhibitTimeUs    uint32
@@ -51,7 +51,7 @@ func (tpdo *TPDO) configureCOBID(entry18xx *Entry, predefinedIdent uint16, erron
 		if erroneousMap == 1 {
 			errorInfo = cobId
 		}
-		pdo.em.ErrorReport(emPDOWrongMapping, emErrProtocolError, errorInfo)
+		pdo.emcy.ErrorReport(emPDOWrongMapping, emErrProtocolError, errorInfo)
 	}
 	if !valid {
 		canId = 0
