@@ -2,27 +2,36 @@ package canopen
 
 import log "github.com/sirupsen/logrus"
 
-// A Stream to an OD entry
+// A Stream object is used for streaming data from / to an OD entry.
+// It is meant to be used inside of a [StreamReader] or [StreamWriter] function
+// and provides low level access for defining custom behaviour when reading
+// or writing to an OD entry.
 type Stream struct {
-	Data       []byte
+	// The actual corresponding data stored inside of OD
+	Data []byte
+	// This is used to keep track of how much has been written or read.
+	// It is typically used for long running transfers i.e. block transfers.
 	DataOffset uint32
+	// The actual length of the data inside of the OD. This can be different
+	// from len(Data) when manipulating data with varying sizes like strings
+	// or buffers.
 	DataLength uint32
-	Object     any // Custom objects can be used when using an OD extension
-	Attribute  uint8
-	Subindex   uint8
+	// A custom object that can be used when using a custom extension
+	// see [AddExtension]
+	Object any
+	// The OD attribute of the entry inside OD. e.g. ATTRIBUTE_SDO_R
+	Attribute uint8
+	// The subindex of this OD entry. For a VAR type this is always 0.
+	Subindex uint8
 }
 
-type StreamReader func(stream *Stream, buffer []byte, countRead *uint16) error
-type StreamWriter func(stream *Stream, buffer []byte, countWritten *uint16) error
+// A StreamReader is a function that reads from a [Stream] object and
+// updates the countRead and the read slice with the read bytes
+type StreamReader func(stream *Stream, read []byte, countRead *uint16) error
 
-// Streamer is created before accessing an OD entry
-// It creates a buffer from OD Data []byte slice and provides a default reader
-// and a default writer
-type Streamer struct {
-	stream Stream
-	read   StreamReader
-	write  StreamWriter
-}
+// A StreamWriter is a function that writes to a [Stream] object
+// using the to_write slice and updates countWritten
+type StreamWriter func(stream *Stream, to_write []byte, countWritten *uint16) error
 
 // extension object, is used for extending functionnality of an OD entry
 // This package has some pre-made extensions for CiA defined entries
@@ -33,34 +42,43 @@ type extension struct {
 	flagsPDO [OD_FLAGS_PDO_SIZE]uint8
 }
 
+// streamer is created before accessing an OD entry
+// It creates a buffer from OD Data []byte slice and provides a default reader
+// and a default writer
+type streamer struct {
+	stream Stream
+	read   StreamReader
+	write  StreamWriter
+}
+
 // Implements io.Reader
-func (streamer *Streamer) Read(b []byte) (n int, err error) {
+func (s *streamer) Read(b []byte) (n int, err error) {
 	countRead := uint16(0)
-	err = streamer.read(&streamer.stream, b, &countRead)
+	err = s.read(&s.stream, b, &countRead)
 	return int(countRead), err
 }
 
 // Implements io.Writer
-func (streamer *Streamer) Write(b []byte) (n int, err error) {
+func (s *streamer) Write(b []byte) (n int, err error) {
 	countWritten := uint16(0)
-	err = streamer.write(&streamer.stream, b, &countWritten)
+	err = s.write(&s.stream, b, &countWritten)
 	return int(countWritten), err
 }
 
 // Create an object streamer for a given od entry + subindex
-func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
-	if entry == nil || entry.Object == nil {
+func newStreamer(entry *Entry, subIndex uint8, origin bool) (*streamer, error) {
+	if entry == nil || entry.object == nil {
 		return nil, ODR_IDX_NOT_EXIST
 	}
-	streamer := &Streamer{}
-	object := entry.Object
+	streamer := &streamer{}
+	object := entry.object
 	// attribute, dataOrig and dataLength, depends on object type
 	switch object := object.(type) {
 	case *Variable:
 		if subIndex > 0 {
 			return nil, ODR_SUB_NOT_EXIST
 		}
-		if object.DataType == DOMAIN && entry.Extension == nil {
+		if object.DataType == DOMAIN && entry.extension == nil {
 			// Domain entries require extensions to be used, by default they are disabled
 			streamer.read = ReadEntryDisabled
 			streamer.write = WriteEntryDisabled
@@ -88,7 +106,7 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 		return nil, ODR_DEV_INCOMPAT
 	}
 	// Add normal reader / writer for object
-	if entry.Extension == nil || origin {
+	if entry.extension == nil || origin {
 		streamer.read = ReadEntryDefault
 		streamer.write = WriteEntryDefault
 		streamer.stream.Object = nil
@@ -97,17 +115,17 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 		return streamer, nil
 	}
 	// Add extension reader / writer for object
-	if entry.Extension.read == nil {
+	if entry.extension.read == nil {
 		streamer.read = ReadEntryDisabled
 	} else {
-		streamer.read = entry.Extension.read
+		streamer.read = entry.extension.read
 	}
-	if entry.Extension.write == nil {
+	if entry.extension.write == nil {
 		streamer.write = WriteEntryDisabled
 	} else {
-		streamer.write = entry.Extension.write
+		streamer.write = entry.extension.write
 	}
-	streamer.stream.Object = entry.Extension.object
+	streamer.stream.Object = entry.extension.object
 	streamer.stream.DataOffset = 0
 	streamer.stream.Subindex = subIndex
 	return streamer, nil

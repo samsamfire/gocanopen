@@ -49,7 +49,7 @@ func TestReadSDO1280(t *testing.T) {
 	assert.Nil(t, err)
 	entry := od.Index(0x1280)
 	assert.NotNil(t, entry)
-	_, err = NewStreamer(entry, 0, true)
+	_, err = newStreamer(entry, 0, true)
 	assert.Nil(t, err)
 }
 
@@ -61,8 +61,8 @@ func TestReadWriteDisabled(t *testing.T) {
 	entry := od.Index(0x2001)
 	assert.NotNil(t, entry)
 	extension := extension{object: nil, read: ReadEntryDisabled, write: WriteEntryDisabled, flagsPDO: [32]uint8{0}}
-	entry.Extension = &extension
-	streamer, err := NewStreamer(entry, 0, false)
+	entry.extension = &extension
+	streamer, err := newStreamer(entry, 0, false)
 	assert.Nil(t, err)
 
 	_, err = streamer.Read([]byte{0})

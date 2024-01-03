@@ -150,7 +150,7 @@ func parseEDS(filePathOrData any, nodeId uint8) (*ObjectDictionary, error) {
 				return nil, fmt.Errorf("[OD] index with id %d not found", index)
 			}
 			// Add new subindex entry member
-			err = entry.AddMember(section, name, nodeId, subIndex)
+			err = entry.addSectionMember(section, name, nodeId, subIndex)
 			if err != nil {
 				return nil, err
 			}
