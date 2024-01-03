@@ -51,9 +51,9 @@ func (node *LocalNode) ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32)
 		syncProcess := sync.process(nmtIsPreOrOperational, timeDifferenceUs, timerNextUs)
 
 		switch syncProcess {
-		case CO_SYNC_RX_TX:
+		case syncRxOrTx:
 			syncWas = true
-		case CO_SYNC_PASSED_WINDOW:
+		case syncPassedWindow:
 		default:
 		}
 	}

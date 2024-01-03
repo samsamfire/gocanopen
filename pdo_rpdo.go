@@ -44,7 +44,7 @@ func (rpdo *RPDO) Handle(frame Frame) {
 		}
 		// Determine where to copy the message
 		bufNo := 0
-		if rpdo.synchronous && rpdo.sync != nil && rpdo.sync.RxToggle {
+		if rpdo.synchronous && rpdo.sync != nil && rpdo.sync.rxToggle {
 			bufNo = 1
 		}
 		rpdo.rxData[bufNo] = frame.Data
@@ -122,7 +122,7 @@ func (rpdo *RPDO) process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 	}
 	// Get the correct rx buffer
 	bufNo := uint8(0)
-	if rpdo.synchronous && rpdo.sync != nil && !rpdo.sync.RxToggle {
+	if rpdo.synchronous && rpdo.sync != nil && !rpdo.sync.rxToggle {
 		bufNo = 1
 	}
 	// Copy RPDO into OD variables

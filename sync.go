@@ -9,103 +9,103 @@ import (
 type SYNC struct {
 	*busManager
 	emergency                   *EMCY
-	RxNew                       bool
-	ReceiveError                uint8
-	RxToggle                    bool
-	TimeoutError                uint8
-	CounterOverflowValue        uint8
-	Counter                     uint8
-	SyncIsOutsideWindow         bool
-	Timer                       uint32
+	rxNew                       bool
+	receiveError                uint8
+	rxToggle                    bool
+	timeoutError                uint8
+	counterOverflow             uint8
+	counter                     uint8
+	syncIsOutsideWindow         bool
+	timer                       uint32
 	rawCommunicationCyclePeriod []byte
 	rawSynchronousWindowLength  []byte
-	IsProducer                  bool
+	isProducer                  bool
 	cobId                       uint32
 	txBuffer                    Frame
 }
 
 const (
-	CO_SYNC_NONE          uint8 = 0 /** No SYNC event in last cycle */
-	CO_SYNC_RX_TX         uint8 = 1 /** SYNC message was received or transmitted in last cycle */
-	CO_SYNC_PASSED_WINDOW uint8 = 2 /** Time has just passed SYNC window (OD_1007) in last cycle */
+	syncNone         uint8 = 0 // No SYNC event in last cycle
+	syncRxOrTx       uint8 = 1 // SYNC message was received or transmitted in last cycle
+	syncPassedWindow uint8 = 2 // Time has just passed SYNC window in last cycle (0x1007)
 )
 
 func (sync *SYNC) Handle(frame Frame) {
 	syncReceived := false
-	if sync.CounterOverflowValue == 0 {
+	if sync.counterOverflow == 0 {
 		if frame.DLC == 0 {
 			syncReceived = true
 		} else {
-			sync.ReceiveError = frame.DLC | 0x40
+			sync.receiveError = frame.DLC | 0x40
 		}
 	} else {
 		if frame.DLC == 1 {
-			sync.Counter = frame.Data[0]
+			sync.counter = frame.Data[0]
 			syncReceived = true
 		} else {
-			sync.ReceiveError = frame.DLC | 0x80
+			sync.receiveError = frame.DLC | 0x80
 		}
 	}
 	if syncReceived {
-		sync.RxToggle = !sync.RxToggle
-		sync.RxNew = true
+		sync.rxToggle = !sync.rxToggle
+		sync.rxNew = true
 	}
 
 }
 
 func (sync *SYNC) sendSync() {
-	sync.Counter += 1
-	if sync.Counter > sync.CounterOverflowValue {
-		sync.Counter = 1
+	sync.counter += 1
+	if sync.counter > sync.counterOverflow {
+		sync.counter = 1
 	}
-	sync.Timer = 0
-	sync.RxToggle = !sync.RxToggle
-	sync.txBuffer.Data[0] = sync.Counter
+	sync.timer = 0
+	sync.rxToggle = !sync.rxToggle
+	sync.txBuffer.Data[0] = sync.counter
 	sync.Send(sync.txBuffer)
 }
 
 func (sync *SYNC) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
-	status := CO_SYNC_NONE
+	status := syncNone
 	if !nmtIsPreOrOperational {
-		sync.RxNew = false
-		sync.ReceiveError = 0
-		sync.Counter = 0
-		sync.Timer = 0
-		return CO_SYNC_NONE
+		sync.rxNew = false
+		sync.receiveError = 0
+		sync.counter = 0
+		sync.timer = 0
+		return syncNone
 	}
 
-	timerNew := sync.Timer + timeDifferenceUs
-	if timerNew > sync.Timer {
-		sync.Timer = timerNew
+	timerNew := sync.timer + timeDifferenceUs
+	if timerNew > sync.timer {
+		sync.timer = timerNew
 	}
-	if sync.RxNew {
-		sync.Timer = 0
-		sync.RxNew = false
+	if sync.rxNew {
+		sync.timer = 0
+		sync.rxNew = false
 	}
 	communicationCyclePeriod := binary.LittleEndian.Uint32(sync.rawCommunicationCyclePeriod)
 	if communicationCyclePeriod > 0 {
-		if sync.IsProducer {
-			if sync.Timer >= communicationCyclePeriod {
-				status = CO_SYNC_RX_TX
+		if sync.isProducer {
+			if sync.timer >= communicationCyclePeriod {
+				status = syncRxOrTx
 				sync.sendSync()
 			}
 			if timerNextUs != nil {
-				diff := communicationCyclePeriod - sync.Timer
+				diff := communicationCyclePeriod - sync.timer
 				if *timerNextUs > diff {
 					*timerNextUs = diff
 				}
 			}
-		} else if sync.TimeoutError == 1 {
+		} else if sync.timeoutError == 1 {
 			periodTimeout := communicationCyclePeriod + communicationCyclePeriod>>1
 			if periodTimeout < communicationCyclePeriod {
 				periodTimeout = 0xFFFFFFFF
 			}
-			if sync.Timer > periodTimeout {
-				sync.emergency.Error(true, emSyncTimeOut, emErrCommunication, sync.Timer)
-				log.Warnf("[SYNC] time out error : %v", sync.Timer)
-				sync.TimeoutError = 2
+			if sync.timer > periodTimeout {
+				sync.emergency.Error(true, emSyncTimeOut, emErrCommunication, sync.timer)
+				log.Warnf("[SYNC] time out error : %v", sync.timer)
+				sync.timeoutError = 2
 			} else if timerNextUs != nil {
-				diff := periodTimeout - sync.Timer
+				diff := periodTimeout - sync.timer
 				if *timerNextUs > diff {
 					*timerNextUs = diff
 				}
@@ -113,29 +113,29 @@ func (sync *SYNC) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 		}
 	}
 	synchronousWindowLength := binary.LittleEndian.Uint32(sync.rawSynchronousWindowLength)
-	if synchronousWindowLength > 0 && sync.Timer > synchronousWindowLength {
-		if !sync.SyncIsOutsideWindow {
-			status = CO_SYNC_PASSED_WINDOW
+	if synchronousWindowLength > 0 && sync.timer > synchronousWindowLength {
+		if !sync.syncIsOutsideWindow {
+			status = syncPassedWindow
 		}
-		sync.SyncIsOutsideWindow = true
+		sync.syncIsOutsideWindow = true
 	} else {
-		sync.SyncIsOutsideWindow = false
+		sync.syncIsOutsideWindow = false
 	}
 
 	// Check reception errors in handler
-	if sync.ReceiveError != 0 {
-		sync.emergency.Error(true, emSyncLength, emErrSyncDataLength, sync.Timer)
-		log.Warnf("[SYNC] receive error : %v", sync.ReceiveError)
-		sync.ReceiveError = 0
+	if sync.receiveError != 0 {
+		sync.emergency.Error(true, emSyncLength, emErrSyncDataLength, sync.timer)
+		log.Warnf("[SYNC] receive error : %v", sync.receiveError)
+		sync.receiveError = 0
 
 	}
 
-	if status == CO_SYNC_RX_TX {
-		if sync.TimeoutError == 2 {
+	if status == syncRxOrTx {
+		if sync.timeoutError == 2 {
 			sync.emergency.Error(false, emSyncTimeOut, 0, 0)
 			log.Warnf("[SYNC] reset error")
 		}
-		sync.TimeoutError = 1
+		sync.timeoutError = 1
 	}
 
 	return status
@@ -201,9 +201,9 @@ func NewSYNC(
 		entry1019.AddExtension(sync, ReadEntryDefault, writeEntry1019)
 		log.Infof("[SYNC][%x] %v : %v", entry1019.Index, entry1019.Name, syncCounterOverflow)
 	}
-	sync.CounterOverflowValue = syncCounterOverflow
+	sync.counterOverflow = syncCounterOverflow
 	sync.emergency = emergency
-	sync.IsProducer = (cobIdSync & 0x40000000) != 0
+	sync.isProducer = (cobIdSync & 0x40000000) != 0
 	sync.cobId = cobIdSync & 0x7FF
 
 	err = sync.Subscribe(sync.cobId, 0x7FF, false, sync)

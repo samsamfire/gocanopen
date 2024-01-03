@@ -77,7 +77,7 @@ func writeEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 	cobIdSync := binary.LittleEndian.Uint32(data)
 	canId := uint16(cobIdSync & 0x7FF)
 	isProducer := (cobIdSync & 0x40000000) != 0
-	if (cobIdSync&0xBFFFF800) != 0 || isIDRestricted(canId) || (sync.IsProducer && isProducer && canId != uint16(sync.cobId)) {
+	if (cobIdSync&0xBFFFF800) != 0 || isIDRestricted(canId) || (sync.isProducer && isProducer && canId != uint16(sync.cobId)) {
 		return ODR_INVALID_VALUE
 	}
 	// Reconfigure the receive and transmit buffers only if changed
@@ -87,7 +87,7 @@ func writeEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 			return ODR_DEV_INCOMPAT
 		}
 		var frameSize uint8 = 0
-		if sync.CounterOverflowValue != 0 {
+		if sync.counterOverflow != 0 {
 			frameSize = 1
 		}
 		log.Debugf("[OD][EXTENSION][SYNC] updated COB-ID SYNC to x%x (prev x%x)", canId, sync.cobId)
@@ -95,11 +95,11 @@ func writeEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 		sync.cobId = uint32(canId)
 	}
 	// Reset in case sync is producer
-	sync.IsProducer = isProducer
+	sync.isProducer = isProducer
 	if isProducer {
 		log.Debug("[OD][EXTENSION][SYNC] SYNC is producer")
-		sync.Counter = 0
-		sync.Timer = 0
+		sync.counter = 0
+		sync.timer = 0
 	} else {
 		log.Debug("[OD][EXTENSION][SYNC] SYNC is not producer")
 	}
@@ -287,7 +287,7 @@ func writeEntry1019(stream *Stream, data []byte, countWritten *uint16) error {
 		nbBytes = 1
 	}
 	sync.txBuffer = NewFrame(sync.cobId, 0, nbBytes)
-	sync.CounterOverflowValue = syncCounterOverflow
+	sync.counterOverflow = syncCounterOverflow
 	log.Debugf("[OD][EXTENSION][SYNC] updated synchronous counter overflow to %v", syncCounterOverflow)
 	return WriteEntryDefault(stream, data, countWritten)
 }
