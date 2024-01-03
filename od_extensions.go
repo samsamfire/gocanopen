@@ -140,8 +140,8 @@ func writeEntry1012(stream *Stream, data []byte, countWritten *uint16) error {
 	if (cobIdTimestamp&0x3FFFF800) != 0 || isIDRestricted(canId) {
 		return ODR_INVALID_VALUE
 	}
-	time.IsConsumer = (cobIdTimestamp & 0x80000000) != 0
-	time.IsProducer = (cobIdTimestamp & 0x40000000) != 0
+	time.isConsumer = (cobIdTimestamp & 0x80000000) != 0
+	time.isProducer = (cobIdTimestamp & 0x40000000) != 0
 
 	return WriteEntryDefault(stream, data, countWritten)
 }
