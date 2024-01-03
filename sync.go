@@ -8,7 +8,7 @@ import (
 
 type SYNC struct {
 	*busManager
-	emergency                   *EMCY
+	emcy                        *EMCY
 	rxNew                       bool
 	receiveError                uint8
 	rxToggle                    bool
@@ -53,7 +53,7 @@ func (sync *SYNC) Handle(frame Frame) {
 
 }
 
-func (sync *SYNC) sendSync() {
+func (sync *SYNC) Send() {
 	sync.counter += 1
 	if sync.counter > sync.counterOverflow {
 		sync.counter = 1
@@ -61,7 +61,7 @@ func (sync *SYNC) sendSync() {
 	sync.timer = 0
 	sync.rxToggle = !sync.rxToggle
 	sync.txBuffer.Data[0] = sync.counter
-	sync.Send(sync.txBuffer)
+	sync.busManager.Send(sync.txBuffer)
 }
 
 func (sync *SYNC) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
@@ -87,7 +87,7 @@ func (sync *SYNC) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 		if sync.isProducer {
 			if sync.timer >= communicationCyclePeriod {
 				status = syncRxOrTx
-				sync.sendSync()
+				sync.Send()
 			}
 			if timerNextUs != nil {
 				diff := communicationCyclePeriod - sync.timer
@@ -101,7 +101,7 @@ func (sync *SYNC) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 				periodTimeout = 0xFFFFFFFF
 			}
 			if sync.timer > periodTimeout {
-				sync.emergency.Error(true, emSyncTimeOut, emErrCommunication, sync.timer)
+				sync.emcy.Error(true, emSyncTimeOut, emErrCommunication, sync.timer)
 				log.Warnf("[SYNC] time out error : %v", sync.timer)
 				sync.timeoutError = 2
 			} else if timerNextUs != nil {
@@ -124,7 +124,7 @@ func (sync *SYNC) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 
 	// Check reception errors in handler
 	if sync.receiveError != 0 {
-		sync.emergency.Error(true, emSyncLength, emErrSyncDataLength, sync.timer)
+		sync.emcy.Error(true, emSyncLength, emErrSyncDataLength, sync.timer)
 		log.Warnf("[SYNC] receive error : %v", sync.receiveError)
 		sync.receiveError = 0
 
@@ -132,7 +132,7 @@ func (sync *SYNC) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 
 	if status == syncRxOrTx {
 		if sync.timeoutError == 2 {
-			sync.emergency.Error(false, emSyncTimeOut, 0, 0)
+			sync.emcy.Error(false, emSyncTimeOut, 0, 0)
 			log.Warnf("[SYNC] reset error")
 		}
 		sync.timeoutError = 1
@@ -202,7 +202,7 @@ func NewSYNC(
 		log.Infof("[SYNC][%x] %v : %v", entry1019.Index, entry1019.Name, syncCounterOverflow)
 	}
 	sync.counterOverflow = syncCounterOverflow
-	sync.emergency = emergency
+	sync.emcy = emergency
 	sync.isProducer = (cobIdSync & 0x40000000) != 0
 	sync.cobId = cobIdSync & 0x7FF
 

@@ -26,7 +26,7 @@ type hbConsumerNode struct {
 // Hearbeat consumer object for monitoring node hearbeats
 type HBConsumer struct {
 	*busManager
-	em                        *EMCY
+	emcy                      *EMCY
 	monitoredNodes            []*hbConsumerNode
 	nbMonitoredNodes          uint8
 	allMonitoredActive        bool
@@ -84,7 +84,7 @@ func (consumer *HBConsumer) process(nmtIsPreOrOperational bool, timeDifferenceUs
 				if monitoredNode.nmtState == NMT_INITIALIZING {
 					// Boot up message is an error if previously received (means reboot)
 					if monitoredNode.hbState == HB_ACTIVE {
-						consumer.em.ErrorReport(emHBConsumerRemoteReset, emErrHeartbeat, uint32(i))
+						consumer.emcy.ErrorReport(emHBConsumerRemoteReset, emErrHeartbeat, uint32(i))
 					}
 					monitoredNode.hbState = HB_UNKNOWN
 				} else {
@@ -100,7 +100,7 @@ func (consumer *HBConsumer) process(nmtIsPreOrOperational bool, timeDifferenceUs
 				monitoredNode.timeoutTimer += timeDifferenceUsCopy
 				if monitoredNode.timeoutTimer >= monitoredNode.timeUs {
 					// Timeout is expired
-					consumer.em.ErrorReport(emHBConsumerRemoteReset, emErrHeartbeat, uint32(i))
+					consumer.emcy.ErrorReport(emHBConsumerRemoteReset, emErrHeartbeat, uint32(i))
 					monitoredNode.nmtState = NMT_UNKNOWN
 					monitoredNode.hbState = HB_TIMEOUT
 				} else if timerNextUs != nil {
@@ -139,8 +139,8 @@ func (consumer *HBConsumer) process(nmtIsPreOrOperational bool, timeDifferenceUs
 
 	// Clear emergencies when all monitored nodes become active
 	if !consumer.allMonitoredActive && allMonitoredActiveCurrent {
-		consumer.em.ErrorReset(emHeartbeatConsumer, 0)
-		consumer.em.ErrorReset(emHBConsumerRemoteReset, 0)
+		consumer.emcy.ErrorReset(emHeartbeatConsumer, 0)
+		consumer.emcy.ErrorReset(emHBConsumerRemoteReset, 0)
 	}
 	consumer.allMonitoredActive = allMonitoredActiveCurrent
 	consumer.allMonitoredOperational = allMonitoredOperationalCurrent
@@ -175,7 +175,7 @@ func NewHBConsumer(bm *busManager, em *EMCY, entry1016 *Entry) (*HBConsumer, err
 		return nil, ErrIllegalArgument
 	}
 	consumer := &HBConsumer{busManager: bm}
-	consumer.em = em
+	consumer.emcy = em
 
 	// Get real number of monitored nodes
 	consumer.nbMonitoredNodes = uint8(entry1016.SubCount() - 1)
