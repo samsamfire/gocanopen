@@ -10,6 +10,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var ErrIdConflict = errors.New("id already exists on network, this will create conflicts")
+
 // A Network is the main object of this package
 // It should be created before doint anything else
 // It acts as scheduler for locally created CANopen nodes
@@ -100,7 +102,6 @@ func (network *Network) launchNodeProcess(node Node) {
 	network.wgProcess.Add(1)
 	go func(node Node) {
 		defer network.wgProcess.Done()
-		var wgBackground sync.WaitGroup
 		// These are timer values and can be adjusted
 		startBackground := time.Now()
 		backgroundPeriod := time.Duration(10 * time.Millisecond)
@@ -110,9 +111,9 @@ func (network *Network) launchNodeProcess(node Node) {
 			switch node.GetState() {
 			case NODE_INIT:
 				log.Infof("[NETWORK][x%x] starting node background process", node.GetID())
-				wgBackground.Add(1)
+				node.wg().Add(1)
 				go func() {
-					defer wgBackground.Done()
+					defer node.wg().Done()
 					for {
 						select {
 						case <-node.GetExitBackground():
@@ -154,7 +155,7 @@ func (network *Network) launchNodeProcess(node Node) {
 
 			case NODE_EXIT:
 				node.SetExitBackground(true)
-				wgBackground.Wait()
+				node.wg().Wait()
 				log.Infof("[NETWORK][x%x] complete exit", node.GetID())
 				return
 			}
@@ -266,9 +267,23 @@ func (network *Network) AddRemoteNode(nodeId uint8, od any, useLocal bool) (*Rem
 	if err != nil {
 		return nil, err
 	}
+	if _, ok := network.nodes[nodeId]; ok {
+		return nil, ErrIdConflict
+	}
 	network.nodes[nodeId] = node
 	network.launchNodeProcess(node)
 	return node, nil
+}
+
+// RemoveNode gracefully exits any running go routine for this node
+func (network *Network) RemoveNode(nodeId uint8) {
+	node, ok := network.nodes[nodeId]
+	if !ok {
+		return
+	}
+	node.SetExit(true)
+	node.wg().Wait()
+	delete(network.nodes, nodeId)
 }
 
 // Create a node configurator
