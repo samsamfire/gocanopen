@@ -16,7 +16,7 @@ type Entry struct {
 	Name              string
 	ObjectType        uint8
 	Object            any
-	Extension         *Extension
+	Extension         *extension
 	subEntriesNameMap map[string]uint8
 }
 
@@ -86,13 +86,13 @@ func (entry *Entry) AddMember(section *ini.Section, name string, nodeId uint8, s
 
 // Add an extension to entry and return created extension
 // object can be any custom object
-func (entry *Entry) AddExtension(object any, read StreamReader, write StreamWriter) *Extension {
+func (entry *Entry) AddExtension(object any, read StreamReader, write StreamWriter) *extension {
 	log.Debugf("[OD][EXTENSION][x%x] added OD extension : %v, %v",
 		entry.Index,
 		getFunctionName(read),
 		getFunctionName(write),
 	)
-	extension := &Extension{Object: object, Read: read, Write: write}
+	extension := &extension{object: object, read: read, write: write}
 	entry.Extension = extension
 	return extension
 }

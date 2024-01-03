@@ -24,13 +24,12 @@ type Streamer struct {
 	write  StreamWriter
 }
 
-// Extension object, is used for extending some functionnality to some OD entries
-// Reader must be a custom reader for object
-// Writer must be a custom reader for object
-type Extension struct {
-	Object   any
-	Read     StreamReader
-	Write    StreamWriter
+// extension object, is used for extending functionnality of an OD entry
+// This package has some pre-made extensions for CiA defined entries
+type extension struct {
+	object   any          // Any object to link with extension
+	read     StreamReader // A [StreamReader] that will be called when reading entry
+	write    StreamWriter // A [StreamWriter] that will be called when writing to entry
 	flagsPDO [OD_FLAGS_PDO_SIZE]uint8
 }
 
@@ -98,24 +97,25 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 		return streamer, nil
 	}
 	// Add extension reader / writer for object
-	if entry.Extension.Read == nil {
+	if entry.Extension.read == nil {
 		streamer.read = ReadEntryDisabled
 	} else {
-		streamer.read = entry.Extension.Read
+		streamer.read = entry.Extension.read
 	}
-	if entry.Extension.Write == nil {
+	if entry.Extension.write == nil {
 		streamer.write = WriteEntryDisabled
 	} else {
-		streamer.write = entry.Extension.Write
+		streamer.write = entry.Extension.write
 	}
-	streamer.stream.Object = entry.Extension.Object
+	streamer.stream.Object = entry.Extension.object
 	streamer.stream.DataOffset = 0
 	streamer.stream.Subindex = subIndex
 	return streamer, nil
 }
 
 // This is the default "StreamReader" type for every OD entry
-// Read value from original OD location and transfer it into a new byte slice
+// It Reads a value from the original OD location i.e. [Stream] object
+// And writes it inside data. It also updates the actual read count, countRead
 func ReadEntryDefault(stream *Stream, data []byte, countRead *uint16) error {
 	if stream == nil || stream.Data == nil || data == nil || countRead == nil {
 		return ODR_DEV_INCOMPAT
@@ -148,9 +148,9 @@ func ReadEntryDefault(stream *Stream, data []byte, countRead *uint16) error {
 }
 
 // This is the default "StreamWriter" type for every OD entry
-// Write value to original OD location
+// It writes data to the [Stream] object
+// It also updates the number write count, countWritten
 func WriteEntryDefault(stream *Stream, data []byte, countWritten *uint16) error {
-
 	if stream == nil || stream.Data == nil || data == nil || countWritten == nil {
 		return ODR_DEV_INCOMPAT
 	}
@@ -188,12 +188,12 @@ func WriteEntryDefault(stream *Stream, data []byte, countWritten *uint16) error 
 	return err
 }
 
-// Read value from variable from Object Dictionary disabled
+// "StreamReader" when the actual OD entry to be read is disabled
 func ReadEntryDisabled(stream *Stream, data []byte, countRead *uint16) error {
 	return ODR_UNSUPP_ACCESS
 }
 
-// Write value to variable from Object Dictionary disabled
+// "StreamWriter" when the actual OD entry to be written is disabled
 func WriteEntryDisabled(stream *Stream, data []byte, countWritten *uint16) error {
 	return ODR_UNSUPP_ACCESS
 }
