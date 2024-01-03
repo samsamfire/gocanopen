@@ -43,9 +43,9 @@ func (node *RemoteNode) ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32
 		syncProcess := sync.process(node.GetState() == NODE_RUNNING, timeDifferenceUs, timerNextUs)
 
 		switch syncProcess {
-		case CO_SYNC_NONE, CO_SYNC_RX_TX:
+		case syncNone, syncRxOrTx:
 			syncWas = true
-		case CO_SYNC_PASSED_WINDOW:
+		case syncPassedWindow:
 		}
 	}
 	return syncWas

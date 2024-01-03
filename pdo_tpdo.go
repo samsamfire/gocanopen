@@ -126,7 +126,7 @@ func (tpdo *TPDO) process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 		}
 		// Send synchronous cyclic TPDOs
 		if tpdo.syncCounter == 255 {
-			if tpdo.sync.CounterOverflowValue != 0 && tpdo.syncStartValue != 0 {
+			if tpdo.sync.counterOverflow != 0 && tpdo.syncStartValue != 0 {
 				// Sync start value used
 
 				tpdo.syncCounter = 254
@@ -138,7 +138,7 @@ func (tpdo *TPDO) process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 		//after sync with matched syncstartvalue
 		switch tpdo.syncCounter {
 		case 254:
-			if tpdo.sync.Counter == tpdo.syncStartValue {
+			if tpdo.sync.counter == tpdo.syncStartValue {
 				tpdo.syncCounter = tpdo.transmissionType
 				tpdo.Send()
 			}
