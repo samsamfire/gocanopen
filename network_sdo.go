@@ -47,7 +47,7 @@ func (network *Network) ReadUint(nodeId uint8, index any, subindex any) (value u
 	if err != nil {
 		return 0, err
 	}
-	e = checkSize(data, dataType)
+	e = checkSize(len(data), dataType)
 	if e != nil {
 		return 0, e
 	}
@@ -72,7 +72,7 @@ func (network *Network) ReadInt(nodeId uint8, index any, subindex any) (value in
 	if err != nil {
 		return 0, err
 	}
-	e = checkSize(data, dataType)
+	e = checkSize(len(data), dataType)
 	if e != nil {
 		return 0, e
 	}
@@ -97,7 +97,7 @@ func (network *Network) ReadFloat(nodeId uint8, index any, subindex any) (value 
 	if err != nil {
 		return 0, err
 	}
-	e = checkSize(data, dataType)
+	e = checkSize(len(data), dataType)
 	if e != nil {
 		return 0, e
 	}
@@ -120,7 +120,7 @@ func (network *Network) ReadString(nodeId uint8, index any, subindex any) (value
 	if err != nil {
 		return "", err
 	}
-	e = checkSize(data, dataType)
+	e = checkSize(len(data), dataType)
 	if e != nil {
 		return "", e
 	}

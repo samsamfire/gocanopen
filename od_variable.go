@@ -173,31 +173,31 @@ func encode(variable string, datatype uint8, nodeId uint8) ([]byte, error) {
 }
 
 // Helper function for checking consistency between size and datatype
-func checkSize(data []byte, dataType uint8) error {
+func checkSize(length int, dataType uint8) error {
 	switch dataType {
 	case BOOLEAN, UNSIGNED8, INTEGER8:
-		if len(data) < 1 {
+		if length < 1 {
 			return ODR_DATA_SHORT
-		} else if len(data) > 1 {
+		} else if length > 1 {
 			return ODR_DATA_LONG
 		}
 	case UNSIGNED16, INTEGER16:
-		if len(data) < 2 {
+		if length < 2 {
 			return ODR_DATA_SHORT
-		} else if len(data) > 2 {
+		} else if length > 2 {
 			return ODR_DATA_LONG
 		}
 
 	case UNSIGNED32, INTEGER32, REAL32:
-		if len(data) < 4 {
+		if length < 4 {
 			return ODR_DATA_SHORT
-		} else if len(data) > 4 {
+		} else if length > 4 {
 			return ODR_DATA_LONG
 		}
 	case UNSIGNED64, INTEGER64, REAL64:
-		if len(data) < 8 {
+		if length < 8 {
 			return ODR_DATA_SHORT
-		} else if len(data) > 8 {
+		} else if length > 8 {
 			return ODR_DATA_LONG
 		}
 	// All other datatypes, no size check
@@ -211,7 +211,7 @@ func checkSize(data []byte, dataType uint8) error {
 // Decode byte array given the CANopen data type
 // Function will return either string, int64, uint64, or float64
 func decode(data []byte, dataType uint8) (v any, e error) {
-	e = checkSize(data, dataType)
+	e = checkSize(len(data), dataType)
 	if e != nil {
 		return nil, e
 	}
