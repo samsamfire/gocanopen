@@ -161,25 +161,6 @@ func parseEDS(filePathOrData any, nodeId uint8) (*ObjectDictionary, error) {
 	return od, nil
 }
 
-// Print od out
-// func (od *ObjectDictionary) Print() {
-// 	for k, v := range od.entriesByIndexValue {
-// 		fmt.Printf("Entry %x : %v\n", k, v.Name)
-// 		switch object := v.Object.(type) {
-// 		case Array:
-// 			for subindex, variable := range object.Variables {
-// 				fmt.Printf("\t\tSub Entry %x : %v \n", subindex, variable)
-// 			}
-
-// 		case []Record:
-// 			for _, subvalue := range object {
-// 				fmt.Printf("\t\tSub Entry %x : %v \n", subvalue.Subindex, subvalue.Variable.Name)
-// 			}
-// 		}
-
-// 	}
-// }
-
 func NewOD() *ObjectDictionary {
 	return &ObjectDictionary{
 		entriesByIndexValue: make(map[uint16]*Entry),
