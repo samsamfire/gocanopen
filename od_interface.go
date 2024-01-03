@@ -26,7 +26,7 @@ func (od *ObjectDictionary) addEntry(entry *Entry) {
 
 // Add a variable type entry to OD with given variable, existing entry will be
 func (od *ObjectDictionary) addVariable(index uint16, variable *Variable) {
-	od.addEntry(&Entry{Index: index, Name: variable.Name, Object: variable, ObjectType: OBJ_VAR, Extension: nil, subEntriesNameMap: map[string]uint8{}})
+	od.addEntry(&Entry{Index: index, Name: variable.Name, object: variable, ObjectType: OBJ_VAR, extension: nil, subEntriesNameMap: map[string]uint8{}})
 }
 
 // Creates and adds a Variable to OD
@@ -47,7 +47,7 @@ func (od *ObjectDictionary) AddVariableType(
 
 // Adds a record/variable to OD
 func (od *ObjectDictionary) AddVariableList(index uint16, name string, varList *VariableList) {
-	od.addEntry(&Entry{Index: index, Name: name, Object: varList, ObjectType: varList.objectType, Extension: nil, subEntriesNameMap: map[string]uint8{}})
+	od.addEntry(&Entry{Index: index, Name: name, object: varList, ObjectType: varList.objectType, extension: nil, subEntriesNameMap: map[string]uint8{}})
 }
 
 // Add file like object entry to OD

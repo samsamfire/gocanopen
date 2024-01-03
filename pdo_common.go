@@ -25,7 +25,7 @@ const (
 type PDOCommon struct {
 	od             *ObjectDictionary
 	emcy           *EMCY
-	streamers      [MAX_MAPPED_ENTRIES]Streamer
+	streamers      [MAX_MAPPED_ENTRIES]streamer
 	Valid          bool
 	dataLength     uint32
 	nbMapped       uint8
@@ -75,7 +75,7 @@ func (pdo *PDOCommon) configureMap(mapParam uint32, mapIndex uint32, isRPDO bool
 	}
 	// Get entry in OD
 	entry := pdo.od.Index(index)
-	streamerCopy, ret := NewStreamer(entry, subIndex, false)
+	streamerCopy, ret := newStreamer(entry, subIndex, false)
 	if ret != nil {
 		log.Warnf("[%v] mapping failed [x%x|x%x] : %v", pdo.Type(), index, subIndex, ret)
 		return ret
@@ -103,8 +103,8 @@ func (pdo *PDOCommon) configureMap(mapParam uint32, mapIndex uint32, isRPDO bool
 	if isRPDO {
 		return nil
 	}
-	if uint32(subIndex) < (uint32(OD_FLAGS_PDO_SIZE)*8) && entry.Extension != nil {
-		pdo.flagPDOByte[mapIndex] = &entry.Extension.flagsPDO[subIndex>>3]
+	if uint32(subIndex) < (uint32(OD_FLAGS_PDO_SIZE)*8) && entry.extension != nil {
+		pdo.flagPDOByte[mapIndex] = &entry.extension.flagsPDO[subIndex>>3]
 		pdo.flagPDOBitmask[mapIndex] = 1 << (subIndex & 0x07)
 	} else {
 		pdo.flagPDOByte[mapIndex] = nil

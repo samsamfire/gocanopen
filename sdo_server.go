@@ -10,7 +10,7 @@ import (
 type SDOServer struct {
 	*busManager
 	od                         *ObjectDictionary
-	streamer                   *Streamer
+	streamer                   *streamer
 	nodeId                     uint8
 	txBuffer                   Frame
 	cobIdClientToServer        uint32
@@ -328,7 +328,7 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				var err error
 				server.index = response.GetIndex()
 				server.subindex = response.GetSubindex()
-				server.streamer, err = NewStreamer(server.od.Index(server.index), server.subindex, false)
+				server.streamer, err = newStreamer(server.od.Index(server.index), server.subindex, false)
 				if err != nil {
 					abortCode = err.(ODR).GetSDOAbordCode()
 					server.state = SDO_STATE_ABORT
@@ -985,7 +985,7 @@ func NewSDOServer(
 		return nil, ErrIllegalArgument
 	}
 	server.od = od
-	server.streamer = &Streamer{}
+	server.streamer = &streamer{}
 	server.buffer = make([]byte, 1000)
 	server.bufReadOffset = 0
 	server.bufWriteOffset = 0

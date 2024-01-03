@@ -29,7 +29,7 @@ const (
 type SDOClient struct {
 	*busManager
 	od                         *ObjectDictionary
-	streamer                   *Streamer
+	streamer                   *streamer
 	nodeId                     uint8
 	txBuffer                   Frame
 	cobIdClientToServer        uint32
@@ -431,7 +431,7 @@ func (client *SDOClient) downloadLocal(bufferPartial bool, timerNextUs *uint32) 
 
 	if client.streamer.write == nil {
 		log.Debugf("[CLIENT][TX][x%x] LOCAL TRANSFER WRITE | x%x:x%x", client.nodeId, client.index, client.subindex)
-		streamer, err := NewStreamer(client.od.Index(client.index), client.subindex, false)
+		streamer, err := newStreamer(client.od.Index(client.index), client.subindex, false)
 		if streamer != nil {
 			client.streamer = streamer
 		}
@@ -643,7 +643,7 @@ func (client *SDOClient) uploadLocal() (ret uint8, err error) {
 
 	if client.streamer.read == nil {
 		log.Debugf("[CLIENT][RX][x%x] LOCAL TRANSFER READ | x%x:x%x", client.nodeId, client.index, client.subindex)
-		streamer, err := NewStreamer(client.od.Index(client.index), client.subindex, false)
+		streamer, err := newStreamer(client.od.Index(client.index), client.subindex, false)
 		if streamer != nil {
 			client.streamer = streamer
 		}
@@ -1114,7 +1114,7 @@ func NewSDOClient(
 	client.nodeId = nodeId
 	client.timeoutTimeUs = 1000 * timeoutMs
 	client.timeoutTimeBlockTransferUs = client.timeoutTimeUs
-	client.streamer = &Streamer{}
+	client.streamer = &streamer{}
 	client.fifo = NewFifo(1000) // At least 127*7
 
 	var nodeIdServer uint8
