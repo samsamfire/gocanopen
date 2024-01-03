@@ -32,4 +32,7 @@ func TestHBConfigurator(t *testing.T) {
 	assert.EqualValues(t, 8, max)
 	time.Sleep(1 * time.Second)
 	assert.GreaterOrEqual(t, len(receivedErrorCodes), 1)
+	monitoredNodes, err := config.HB.ReadMonitoredNodes()
+	assert.Nil(t, err)
+	assert.Len(t, monitoredNodes, 8)
 }
