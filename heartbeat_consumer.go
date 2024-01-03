@@ -215,7 +215,7 @@ func (config *HBConfigurator) ReadMonitoredNodes() ([][]uint16, error) {
 	}
 	monitored := make([][]uint16, 0)
 	for i := uint8(1); i <= nbMonitored; i++ {
-		periodAndId, err := config.sdoClient.ReadUint32(config.nodeId, 0x1016, 0)
+		periodAndId, err := config.sdoClient.ReadUint32(config.nodeId, 0x1016, i)
 		if err != nil {
 			return monitored, err
 		}
