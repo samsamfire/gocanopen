@@ -57,7 +57,7 @@ func TestSDOWriteBlock(t *testing.T) {
 	network := createNetwork()
 	defer network.Disconnect()
 	data := []byte("some random string some random string some random string some random string some random stringsome random string some random string")
-	node := network.Nodes[NODE_ID_TEST]
+	node := network.nodes[NODE_ID_TEST]
 	node.GetOD().AddFile(0x3333, "File entry", "./here.txt", os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
 	err := network.sdoClient.WriteRaw(NODE_ID_TEST, 0x3333, 0, data, false)
 	assert.Nil(t, err)

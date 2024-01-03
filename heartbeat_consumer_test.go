@@ -17,8 +17,8 @@ func emCallback(ident uint16, errorCode uint16, errorRegister byte, errorBit byt
 
 func TestHBConfigurator(t *testing.T) {
 	network := createNetwork()
-	node := network.Nodes[NODE_ID_TEST].(*LocalNode)
-	node.EM.SetCallback(emCallback)
+	node := network.nodes[NODE_ID_TEST].(*LocalNode)
+	node.EMCY.SetCallback(emCallback)
 	defer network.Disconnect()
 	config := network.Configurator(NODE_ID_TEST)
 	config.HB.WriteMonitoredNode(1, 0x25, 100)

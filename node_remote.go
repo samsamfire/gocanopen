@@ -6,11 +6,18 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Remote nodes are a bit different than normal nodes : they are a local representation of a remote node
-// They are useful for master control without having to configure an EDS file
-// A remote node has the same id as the remote node that it controls
-// A remote node, not being a "real node" is only accessible locally
-
+// A RemoteNode is a bit different from a [LocalNode].
+// It is a local representation of a remote node on the CAN bus
+// and does not have the same standard CiA objects.
+// Its goal is to simplify master control by providing some general
+// features :
+//   - SDOClient for reading / writing to remote node with given EDS
+//   - RPDO for updating a local OD with the TPDOs from the remote node
+//   - SYNC consumer
+//
+// A RemoteNode has the same id as the remote node that it controls
+// however, being a direct local representation it may only be accessed
+// locally.
 type RemoteNode struct {
 	*BaseNode
 	remoteOd  *ObjectDictionary // Remote node od, this does not change
@@ -56,7 +63,7 @@ func (node *RemoteNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32,
 }
 
 // Create a remote node
-func NewRemoteNode(
+func newRemoteNode(
 	bm *busManager,
 	remoteOd *ObjectDictionary,
 	remoteNodeId uint8,
