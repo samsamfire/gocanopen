@@ -133,18 +133,21 @@ func (network *Network) ReadString(nodeId uint8, index any, subindex any) (value
 	}
 }
 
-// Read object dictionary using object 1021 (EDS storage)
-// Optional callback can be provided to perform unzip, untar etc if a specific storage format is used
-func (network *Network) ReadEDS(nodeId uint8,
-	formatHandlerCallback func(formatType uint8, reader io.Reader) (*ObjectDictionary, error),
-) (*ObjectDictionary, error) {
+// EDSFormatHandler takes a formatType and a reader
+// to handle an EDS file stored as a proprietary format (zip, etc)
+type EDSFormatHandler func(formatType uint8, reader io.Reader) (*ObjectDictionary, error)
+
+// Read object dictionary using object 1021 (EDS storage) of a remote node
+// Optional callback can be provided to perform manufacturer specific parsing
+// in case a custom foramt is used
+func (network *Network) ReadEDS(nodeId uint8, edsFormatHandler EDSFormatHandler) (*ObjectDictionary, error) {
 	rawEds, err := network.sdoClient.ReadAll(nodeId, 0x1021, 0)
 	if err != nil {
 		return nil, err
 	}
 	edsFormat := []byte{0}
 	_, err = network.sdoClient.ReadRaw(nodeId, 0x1022, 0, edsFormat)
-	switch formatHandlerCallback {
+	switch edsFormatHandler {
 	case nil:
 		// No callback & format is not specified or
 		// Storage format is 0
@@ -160,7 +163,7 @@ func (network *Network) ReadEDS(nodeId uint8,
 		}
 	default:
 		odReader := bytes.NewBuffer(rawEds)
-		od, err := formatHandlerCallback(edsFormat[0], odReader)
+		od, err := edsFormatHandler(edsFormat[0], odReader)
 		if err != nil {
 			return nil, err
 		}

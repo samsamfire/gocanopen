@@ -2,23 +2,25 @@
 package canopen
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 )
 
+// A Network is the main object of this package
+// It should be created before doint anything else
+// It acts as scheduler for locally created CANopen nodes
+// But can also be used for controlling remote CANopen nodes
 type Network struct {
 	*busManager
-	Nodes     map[uint8]Node
+	nodes     map[uint8]Node
 	wgProcess sync.WaitGroup
-	sdoClient *SDOClient // Network master has an sdo client to read/write nodes on network
-	// An sdo client does not have to be linked to a specific node
-	odMap map[uint8]*ObjectDictionaryInformation
+	// Network has an its own SDOClient
+	sdoClient *SDOClient
+	odMap     map[uint8]*ObjectDictionaryInformation
 }
 
 type ObjectDictionaryInformation struct {
@@ -27,17 +29,19 @@ type ObjectDictionaryInformation struct {
 	edsPath string
 }
 
+// Create a new Network using the given CAN bus
 func NewNetwork(bus Bus) Network {
 	return Network{
-		Nodes:      map[uint8]Node{},
+		nodes:      map[uint8]Node{},
 		busManager: NewBusManager(bus),
 		odMap:      map[uint8]*ObjectDictionaryInformation{},
 	}
 }
 
-// Connects to network and initialize master functionnality
-// Custom CAN backend is possible using "Bus" interface
-// Otherwise it expects an interface name, channel and bitrate
+// Connects to CAN bus, this should be called before anything else.
+// Custom CAN backend is possible using a custom "Bus" interface.
+// Otherwise it expects an interface name, channel and bitrate.
+// Currently only socketcan and virtualcan are supported.
 func (network *Network) Connect(args ...any) error {
 	if len(args) < 3 && network.bus == nil {
 		return errors.New("either provide custom backend, or provide interface, channel and bitrate")
@@ -80,16 +84,17 @@ func (network *Network) Connect(args ...any) error {
 	return err
 }
 
-// Disconnects from CAN bus and stops cleanly everything
+// Disconnects from the CAN bus and stops processing
+// of CANopen stack
 func (network *Network) Disconnect() {
-	for _, node := range network.Nodes {
+	for _, node := range network.nodes {
 		node.SetExit(true)
 	}
 	network.wgProcess.Wait()
 	network.bus.Disconnect()
-
 }
 
+// Launch goroutine that handles CANopen stack processing of a node
 func (network *Network) launchNodeProcess(node Node) {
 	log.Infof("[NETWORK][x%x] adding node to nodes being processed %T", node.GetID(), node)
 	network.wgProcess.Add(1)
@@ -164,9 +169,9 @@ func (network *Network) GetOD(nodeId uint8) (*ObjectDictionary, error) {
 		return network.odMap[nodeId].od, nil
 	}
 	// Look in local nodes
-	_, odLoaded = network.Nodes[nodeId]
+	_, odLoaded = network.nodes[nodeId]
 	if odLoaded {
-		return network.Nodes[nodeId].GetOD(), nil
+		return network.nodes[nodeId].GetOD(), nil
 	}
 	return nil, ODR_OD_MISSING
 }
@@ -188,8 +193,11 @@ func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
 	return network.Send(frame)
 }
 
-// Create a local CANopen compliant node with a given OD
-// Can be either a string : path to OD or OD object
+// Create a [LocalNode] a CiA 301 compliant node with a given OD
+// od can be either a string : path to OD or an OD object.
+// Processing is started immediately after creating the node.
+// By default, node automatically goes to operational state if no errors are detected.
+// First heartbeat, if enabled is started after 500ms
 func (network *Network) CreateNode(nodeId uint8, od any) (*LocalNode, error) {
 	var odNode *ObjectDictionary
 	var err error
@@ -205,7 +213,7 @@ func (network *Network) CreateNode(nodeId uint8, od any) (*LocalNode, error) {
 		return nil, fmt.Errorf("expecting string or ObjectDictionary got : %T", od)
 	}
 	// Create and initialize a "local" CANopen node
-	node, err := NewLocalNode(
+	node, err := newLocalNode(
 		network.busManager,
 		odNode,
 		nil, // Use definition from OD
@@ -222,18 +230,16 @@ func (network *Network) CreateNode(nodeId uint8, od any) (*LocalNode, error) {
 		return nil, err
 	}
 	// Add to network, launch routine
-	network.Nodes[nodeId] = node
+	network.nodes[nodeId] = node
 	network.launchNodeProcess(node)
 	return node, nil
 }
 
-// Add a remote node with a given OD
-// Can be either a string : path to OD or OD object
-// This function will load and parse Object dictionnary (OD) into memory
-// If already present, OD will be overwritten
+// Add a [RemoteNode] with a given OD for master control
+// od can be either a string : path to OD or OD object
 // User can then access the node via OD naming
 // A same OD can be used for multiple nodes
-func (network *Network) AddNode(nodeId uint8, od any, useLocal bool) (*RemoteNode, error) {
+func (network *Network) AddRemoteNode(nodeId uint8, od any, useLocal bool) (*RemoteNode, error) {
 	var odNode *ObjectDictionary
 	var err error
 	if nodeId < 1 || nodeId > 127 {
@@ -249,54 +255,20 @@ func (network *Network) AddNode(nodeId uint8, od any, useLocal bool) (*RemoteNod
 	case ObjectDictionary:
 		odNode = &odType
 		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: odNode, edsPath: ""}
+	case *ObjectDictionary:
+		odNode = odType
+		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: odNode, edsPath: ""}
 	default:
 		return nil, fmt.Errorf("expecting string or ObjectDictionary got : %T", od)
 	}
 
-	node, err := NewRemoteNode(network.busManager, odNode, nodeId, useLocal)
+	node, err := newRemoteNode(network.busManager, odNode, nodeId, useLocal)
 	if err != nil {
 		return nil, err
 	}
-	network.Nodes[nodeId] = node
+	network.nodes[nodeId] = node
 	network.launchNodeProcess(node)
 	return node, nil
-}
-
-// Same as AddNode, except od is downloaded from remote node
-func (network *Network) AddNodeFromSDO(
-	nodeId uint8,
-	formatHandlerCallback func(formatType uint8, reader io.Reader) (*ObjectDictionary, error),
-) error {
-	rawEds, err := network.sdoClient.ReadAll(nodeId, 0x1021, 0)
-	if err != nil {
-		return err
-	}
-	edsFormat := []byte{0}
-	_, err = network.sdoClient.ReadRaw(nodeId, 0x1022, 0, edsFormat)
-	switch formatHandlerCallback {
-	case nil:
-		// No callback & format is not specified or
-		// Storage format is 0
-		// Use default ASCII format
-		if err != nil || (err == nil && edsFormat[0] == 0) {
-			od, err := ParseEDSFromRaw(rawEds, nodeId)
-			if err != nil {
-				return err
-			}
-			network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: od, edsPath: ""}
-			return nil
-		} else {
-			return fmt.Errorf("supply a handler for the format : %v", edsFormat[0])
-		}
-	default:
-		odReader := bytes.NewBuffer(rawEds)
-		od, err := formatHandlerCallback(edsFormat[0], odReader)
-		if err != nil {
-			return nil
-		}
-		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: od, edsPath: ""}
-		return nil
-	}
 }
 
 // Create a node configurator

@@ -7,6 +7,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// A LocalNode is a CiA 301 compliant CANopen node
+// It supports all the standard CANopen objects.
+// These objects will be loaded depending on the given EDS file.
+// For configuration of the different CANopen objects see [NodeConfigurator].
 type LocalNode struct {
 	*BaseNode
 	NodeIdUnconfigured bool
@@ -17,7 +21,7 @@ type LocalNode struct {
 	TPDOs              []*TPDO
 	RPDOs              []*RPDO
 	SYNC               *SYNC
-	EM                 *EMCY
+	EMCY               *EMCY
 	TIME               *TIME
 }
 
@@ -69,7 +73,7 @@ func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, 
 	NMTisPreOrOperational := (NMTState == NMT_PRE_OPERATIONAL) || (NMTState == NMT_OPERATIONAL)
 
 	node.busManager.process()
-	node.EM.process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
+	node.EMCY.process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
 	reset = node.NMT.process(&NMTState, timeDifferenceUs, timerNextUs)
 	// Update NMTisPreOrOperational
 	NMTisPreOrOperational = (NMTState == NMT_PRE_OPERATIONAL) || (NMTState == NMT_OPERATIONAL)
@@ -103,7 +107,7 @@ func (node *LocalNode) initPDO() error {
 		pdoOffset := i % 4
 		nodeIdOffset := i / 4
 		preDefinedIdent = 0x200 + pdoOffset*0x100 + uint16(node.id) + nodeIdOffset
-		rpdo, err := NewRPDO(node.busManager, node.GetOD(), node.EM, node.SYNC, entry14xx, entry16xx, preDefinedIdent)
+		rpdo, err := NewRPDO(node.busManager, node.GetOD(), node.EMCY, node.SYNC, entry14xx, entry16xx, preDefinedIdent)
 		if err != nil {
 			log.Warnf("[NODE][RPDO] no more RPDO after RPDO %v", i-1)
 			break
@@ -119,7 +123,7 @@ func (node *LocalNode) initPDO() error {
 		pdoOffset := i % 4
 		nodeIdOffset := i / 4
 		preDefinedIdent = 0x180 + pdoOffset*0x100 + uint16(node.id) + nodeIdOffset
-		tpdo, err := NewTPDO(node.busManager, node.GetOD(), node.EM, node.SYNC, entry18xx, entry1Axx, preDefinedIdent)
+		tpdo, err := NewTPDO(node.busManager, node.GetOD(), node.EMCY, node.SYNC, entry18xx, entry1Axx, preDefinedIdent)
 		if err != nil {
 			log.Warnf("[NODE][TPDO] no more TPDO after TPDO %v", i-1)
 			break
@@ -133,7 +137,7 @@ func (node *LocalNode) initPDO() error {
 }
 
 // Create a new local node
-func NewLocalNode(
+func newLocalNode(
 	bm *busManager,
 	od *ObjectDictionary,
 	nmt *NMT,
@@ -174,11 +178,11 @@ func NewLocalNode(
 			log.Errorf("[NODE][EMERGENCY producer] error when initializing emergency producer %v", err)
 			return nil, ErrOdParameters
 		}
-		node.EM = emergency
+		node.EMCY = emergency
 	} else {
-		node.EM = emergency
+		node.EMCY = emergency
 	}
-	emergency = node.EM
+	emergency = node.EMCY
 
 	// NMT object can either be supplied or created with automatically with an OD entry
 	if nmt == nil {

@@ -29,6 +29,8 @@ func createNetwork() *Network {
 func TestAddNodeLoadODFromSDO(t *testing.T) {
 	network := createNetwork()
 	defer network.Disconnect()
-	err := network.AddNodeFromSDO(NODE_ID_TEST, nil)
+	od, err := network.ReadEDS(NODE_ID_TEST, nil)
+	assert.Nil(t, err)
+	_, err = network.AddRemoteNode(NODE_ID_TEST, od, true)
 	assert.Nil(t, err)
 }
