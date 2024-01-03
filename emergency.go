@@ -335,7 +335,7 @@ func (emergency *EMCY) process(nmtIsPreOrOperational bool, timeDifferenceUs uint
 		canErrStatusChanged := canErrStatus ^ emergency.canErrorOld
 		emergency.canErrorOld = canErrStatus
 		if (canErrStatusChanged & (canErrorTxWarning | canErrorRxWarning)) != 0 {
-			emergency.Error(
+			emergency.error(
 				(canErrStatus&(canErrorTxWarning|canErrorRxWarning)) != 0,
 				emCanBusWarning,
 				emNoError,
@@ -343,7 +343,7 @@ func (emergency *EMCY) process(nmtIsPreOrOperational bool, timeDifferenceUs uint
 			)
 		}
 		if (canErrStatusChanged & canErrorTxPassive) != 0 {
-			emergency.Error(
+			emergency.error(
 				(canErrStatus&canErrorTxPassive) != 0,
 				emCanTXBusPassive,
 				emErrCanPassive,
@@ -352,7 +352,7 @@ func (emergency *EMCY) process(nmtIsPreOrOperational bool, timeDifferenceUs uint
 		}
 
 		if (canErrStatusChanged & canErrorTxBusOff) != 0 {
-			emergency.Error(
+			emergency.error(
 				(canErrStatus&canErrorTxBusOff) != 0,
 				emCanTXBusOff,
 				emErrBusOffRecovered,
@@ -360,7 +360,7 @@ func (emergency *EMCY) process(nmtIsPreOrOperational bool, timeDifferenceUs uint
 		}
 
 		if (canErrStatusChanged & canErrorTxOverflow) != 0 {
-			emergency.Error(
+			emergency.error(
 				(canErrStatus&canErrorTxOverflow) != 0,
 				emCanTXOverflow,
 				emErrCanOverrun,
@@ -368,7 +368,7 @@ func (emergency *EMCY) process(nmtIsPreOrOperational bool, timeDifferenceUs uint
 		}
 
 		if (canErrStatusChanged & canErrorPdoLate) != 0 {
-			emergency.Error(
+			emergency.error(
 				(canErrStatus&canErrorPdoLate) != 0,
 				emTPDOOutsideWindow,
 				emErrCommunication,
@@ -376,7 +376,7 @@ func (emergency *EMCY) process(nmtIsPreOrOperational bool, timeDifferenceUs uint
 		}
 
 		if (canErrStatusChanged & canErrorRxPassive) != 0 {
-			emergency.Error(
+			emergency.error(
 				(canErrStatus&canErrorRxPassive) != 0,
 				emCanRXBusPassive,
 				emErrCanPassive,
@@ -384,7 +384,7 @@ func (emergency *EMCY) process(nmtIsPreOrOperational bool, timeDifferenceUs uint
 		}
 
 		if (canErrStatusChanged & canErrorRxOverflow) != 0 {
-			emergency.Error(
+			emergency.error(
 				(canErrStatus&canErrorRxOverflow) != 0,
 				emCanRXBOverflow,
 				emErrCanOverrun,
@@ -450,7 +450,7 @@ func (emergency *EMCY) process(nmtIsPreOrOperational bool, timeDifferenceUs uint
 
 // Set or reset an error condition
 // Function adds a new error to the history & error will be processed by Process function
-func (emergency *EMCY) Error(setError bool, errorBit byte, errorCode uint16, infoCode uint32) error {
+func (emergency *EMCY) error(setError bool, errorBit byte, errorCode uint16, infoCode uint32) error {
 	if emergency == nil {
 		return nil
 	}
@@ -507,16 +507,16 @@ func (emergency *EMCY) ErrorReport(errorBit byte, errorCode uint16, infoCode uin
 		errorBit,
 		infoCode,
 	)
-	return emergency.Error(true, errorBit, errorCode, infoCode)
+	return emergency.error(true, errorBit, errorCode, infoCode)
 }
 
 func (emergency *EMCY) ErrorReset(errorBit byte, infoCode uint32) error {
-	log.Warnf("[EMERGENCY][TX][RESET] reset emergency %v (x%x) | infoCode %v",
+	log.Infof("[EMERGENCY][TX][RESET] reset emergency %v (x%x) | infoCode %v",
 		getErrorStatusDescription(errorBit),
 		errorBit,
 		infoCode,
 	)
-	return emergency.Error(false, errorBit, emErrNoError, infoCode)
+	return emergency.error(false, errorBit, emErrNoError, infoCode)
 }
 
 func (emergency *EMCY) IsError(errorBit byte) bool {

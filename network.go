@@ -237,6 +237,9 @@ func (network *Network) CreateLocalNode(nodeId uint8, od any) (*LocalNode, error
 		return nil, err
 	}
 	// Add to network, launch routine
+	if _, ok := network.nodes[nodeId]; ok {
+		return nil, ErrIdConflict
+	}
 	network.nodes[nodeId] = node
 	network.launchNodeProcess(node)
 	return node, nil
@@ -267,6 +270,9 @@ func (network *Network) AddRemoteNode(nodeId uint8, od any, useLocal bool) (*Rem
 	case *ObjectDictionary:
 		odNode = odType
 		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: odNode, edsPath: ""}
+	case nil:
+		odNode = nil
+
 	default:
 		return nil, fmt.Errorf("expecting string or ObjectDictionary got : %T", od)
 	}
