@@ -6,14 +6,15 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Object dictionary contains all node data
+// ObjectDictionary is used for storing all entries of a CANopen node
+// according to CiA 301. This is the internal representation of an EDS file
 type ObjectDictionary struct {
 	filePath            string
 	entriesByIndexValue map[uint16]*Entry
 	entriesByIndexName  map[string]*Entry
 }
 
-// Add an entry to OD, existing entry will be replaced
+// Add an entry to OD, any existing entry will be replaced
 func (od *ObjectDictionary) addEntry(entry *Entry) {
 	_, entryIndexValueExists := od.entriesByIndexValue[entry.Index]
 	if entryIndexValueExists {
@@ -26,10 +27,20 @@ func (od *ObjectDictionary) addEntry(entry *Entry) {
 
 // Add a variable type entry to OD with given variable, existing entry will be
 func (od *ObjectDictionary) addVariable(index uint16, variable *Variable) {
-	od.addEntry(&Entry{Index: index, Name: variable.Name, object: variable, ObjectType: OBJ_VAR, extension: nil, subEntriesNameMap: map[string]uint8{}})
+	od.addEntry(&Entry{
+		Index:             index,
+		Name:              variable.Name,
+		object:            variable,
+		ObjectType:        OBJ_VAR,
+		extension:         nil,
+		subEntriesNameMap: map[string]uint8{}},
+	)
 }
 
-// Creates and adds a Variable to OD
+// AddVariableType adds an entry of type VAR to OD
+// the value should be given as a string with hex representation
+// e.g. 0x22 or 0x55555
+// If the variable already exists, it will be overwritten
 func (od *ObjectDictionary) AddVariableType(
 	index uint16,
 	name string,
@@ -45,12 +56,21 @@ func (od *ObjectDictionary) AddVariableType(
 	return variable, nil
 }
 
-// Adds a record/variable to OD
+// AddVariableList adds an entry of type ARRAY or RECORD depending on [VariableList]
 func (od *ObjectDictionary) AddVariableList(index uint16, name string, varList *VariableList) {
-	od.addEntry(&Entry{Index: index, Name: name, object: varList, ObjectType: varList.objectType, extension: nil, subEntriesNameMap: map[string]uint8{}})
+	od.addEntry(&Entry{
+		Index:             index,
+		Name:              name,
+		object:            varList,
+		ObjectType:        varList.objectType,
+		extension:         nil,
+		subEntriesNameMap: map[string]uint8{}},
+	)
 }
 
-// Add file like object entry to OD
+// AddFile adds a file like object, of type DOMAIN to OD
+// readMode and writeMode should be given to determine what type of access to the file is allowed
+// e.g. os.O_RDONLY if only reading is allowed
 func (od *ObjectDictionary) AddFile(index uint16, indexName string, filePath string, readMode int, writeMode int) error {
 	log.Infof("[OD] adding file object entry : %v at x%x", filePath, index)
 	fileObject := &FileObject{FilePath: filePath, ReadMode: readMode, WriteMode: writeMode}
@@ -88,7 +108,10 @@ func (od *ObjectDictionary) addPDO(pdoNb uint16, isRPDO bool) error {
 	return nil
 }
 
-// Add an RPDO entry to OD with defaults
+// AddRPDO adds an RPDO entry to the OD.
+// This means that an RPDO Communication & Mapping parameter
+// entries are created with the given rpdoNb.
+// This however does not create the corresponding CANopen objects
 func (od *ObjectDictionary) AddRPDO(rpdoNb uint16) error {
 	if rpdoNb < 1 || rpdoNb > 512 {
 		return ODR_DEV_INCOMPAT
@@ -96,7 +119,10 @@ func (od *ObjectDictionary) AddRPDO(rpdoNb uint16) error {
 	return od.addPDO(rpdoNb, true)
 }
 
-// Add a TPDO entry to OD with defaults
+// AddTPDO adds a TPDO entry to the OD.
+// This means that a TPDO Communication & Mapping parameter
+// entries are created with the given tpdoNb.
+// This however does not create the corresponding CANopen objects
 func (od *ObjectDictionary) AddTPDO(tpdoNb uint16) error {
 	if tpdoNb < 1 || tpdoNb > 512 {
 		return ODR_DEV_INCOMPAT
@@ -104,8 +130,9 @@ func (od *ObjectDictionary) AddTPDO(tpdoNb uint16) error {
 	return od.addPDO(tpdoNb, false)
 }
 
-// Add a SYNC object with defaults
-// This will add SYNC with 0x1005,0x1006,0x1007 & 0x1019
+// AddSYNC adds a SYNC entry to the OD.
+// This adds objects 0x1005, 0x1006, 0x1007 & 0x1019 to the OD.
+// By default, SYNC is added with producer disabled and can id of 0x80
 func (od *ObjectDictionary) AddSYNC() {
 	od.AddVariableType(0x1005, "COB-ID SYNC message", UNSIGNED32, ATTRIBUTE_SDO_RW, "0x80000080") // Disabled with standard cob-id
 	od.AddVariableType(0x1006, "Communication cycle period", UNSIGNED32, ATTRIBUTE_SDO_RW, "0x0")
@@ -114,61 +141,74 @@ func (od *ObjectDictionary) AddSYNC() {
 	log.Infof("[OD] Added new SYNC object to OD")
 }
 
-// Get an entry corresponding to a given index
-// Index can either be a string, int or uint16
-// This method does not return an error for chaining
+// Index returns an OD entry at the specified index.
+// index can either be a string, int or uint16.
+// This method does not return an error (for chaining with Subindex()) but instead returns
+// nil if no corresponding [Entry] is found.
 func (od *ObjectDictionary) Index(index any) *Entry {
-	var entry *Entry
 	switch ind := index.(type) {
 	case string:
-		entry = od.entriesByIndexName[ind]
+		return od.entriesByIndexName[ind]
 	case int:
-		entry = od.entriesByIndexValue[uint16(ind)]
+		return od.entriesByIndexValue[uint16(ind)]
 	case uint:
-		entry = od.entriesByIndexValue[uint16(ind)]
+		return od.entriesByIndexValue[uint16(ind)]
 	case uint16:
-		entry = od.entriesByIndexValue[ind]
+		return od.entriesByIndexValue[ind]
 	default:
 		return nil
 	}
-	return entry
 }
 
-type FileInfo struct {
-	FileName         string
-	FileVersion      string
-	FileRevision     string
-	LastEDS          string
-	EDSVersion       string
-	Description      string
-	CreationTime     string
-	CreationDate     string
-	CreatedBy        string
-	ModificationTime string
-	ModificationDate string
-	ModifiedBy       string
-}
+// type FileInfo struct {
+// 	FileName         string
+// 	FileVersion      string
+// 	FileRevision     string
+// 	LastEDS          string
+// 	EDSVersion       string
+// 	Description      string
+// 	CreationTime     string
+// 	CreationDate     string
+// 	CreatedBy        string
+// 	ModificationTime string
+// 	ModificationDate string
+// 	ModifiedBy       string
+// }
 
-// OD object used to store a "VAR" or "DOMAIN" object type
+// Variable is the main data representation for a value stored inside of OD
+// It is used to store a "VAR" or "DOMAIN" object type as well as
+// any sub entry of a "RECORD" or "ARRAY" object type
 type Variable struct {
-	data            []byte
-	Name            string
-	DataType        byte
-	Attribute       uint8 // Attribute contains the access type and pdo mapping info
-	ParameterValue  string
-	defaultValue    []byte
+	valueDefault []byte
+	value        []byte
+	// Name of this variable
+	Name string
+	// The CiA 301 data type of this variable
+	DataType byte
+	// Attribute contains the access type as well as the mapping
+	// information. e.g. ATTRIBUTE_SDO_RW | ATTRIBUTE_RPDO
+	Attribute uint8
+	// StorageLocation has information on which medium is the data
+	// stored. Currently this is unused, everything is stored in RAM
 	StorageLocation string
-	LowLimit        int
-	HighLimit       int
-	SubIndex        uint8
+	// The minimum value for this variable
+	LowLimit int
+	// The maximum value for this variable
+	HighLimit int
+	// The subindex for this variable if part of an ARRAY or RECORD
+	SubIndex uint8
 }
 
-// OD object used to store a "RECORD" or "ARRAY" object type
+// VariableList is the data representation for
+// storing a "RECORD" or "ARRAY" object type
 type VariableList struct {
 	objectType uint8 // either "RECORD" or "ARRAY"
 	Variables  []Variable
 }
 
+// GetSubObject returns the [Variable] corresponding to
+// a given subindex if not found, it errors with
+// ODR_SUB_NOT_EXIST
 func (rec *VariableList) GetSubObject(subindex uint8) (*Variable, error) {
 	if rec.objectType == OBJ_ARR {
 		subEntriesCount := len(rec.Variables)
@@ -185,6 +225,11 @@ func (rec *VariableList) GetSubObject(subindex uint8) (*Variable, error) {
 	return nil, ODR_SUB_NOT_EXIST
 }
 
+// AddSubObject adds a [Variable] to the VariableList
+// If the VariableList is an ARRAY then the subindex should be
+// identical to the actual placement inside of the array.
+// Otherwise it can be any valid subindex value, and the VariableList
+// will grow accordingly
 func (rec *VariableList) AddSubObject(
 	subindex uint8,
 	name string,

@@ -13,12 +13,12 @@ import (
 
 // Return number of bytes
 func (variable *Variable) DataLength() uint32 {
-	return uint32(len(variable.data))
+	return uint32(len(variable.value))
 }
 
 // Return default value as byte slice
 func (variable *Variable) DefaultValue() []byte {
-	return variable.defaultValue
+	return variable.valueDefault
 }
 
 // Create variable from section entry
@@ -86,12 +86,12 @@ func NewVariableFromSection(
 		} else {
 			nodeId = 0
 		}
-		variable.defaultValue, err = encode(defaultValueStr, variable.DataType, nodeId)
+		variable.valueDefault, err = encode(defaultValueStr, variable.DataType, nodeId)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse DefaultValue for %x : %x, because %v", index, subindex, err)
 		}
-		variable.data = make([]byte, len(variable.defaultValue))
-		copy(variable.data, variable.defaultValue)
+		variable.value = make([]byte, len(variable.valueDefault))
+		copy(variable.value, variable.valueDefault)
 	}
 
 	return variable, nil
@@ -114,8 +114,8 @@ func NewVariable(
 	variable := &Variable{
 		SubIndex:     subindex,
 		Name:         name,
-		data:         encoded,
-		defaultValue: encodedCopy,
+		value:        encoded,
+		valueDefault: encodedCopy,
 		Attribute:    attribute,
 		DataType:     datatype,
 	}
