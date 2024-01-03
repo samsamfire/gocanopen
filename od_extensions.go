@@ -364,26 +364,26 @@ func writeEntry1280(stream *Stream, data []byte, countWritten *uint16) error {
 	case 1:
 		cobId := binary.LittleEndian.Uint32(data)
 		canId := uint16(cobId & 0x7FF)
-		canIdCurrent := uint16(client.CobIdClientToServer & 0x7FF)
+		canIdCurrent := uint16(client.cobIdClientToServer & 0x7FF)
 		valid := (cobId & 0x80000000) == 0
 		if (cobId&0x3FFFF800) != 0 ||
-			(valid && client.Valid && canId != canIdCurrent) ||
+			(valid && client.valid && canId != canIdCurrent) ||
 			(valid && isIDRestricted(canId)) {
 			return ODR_INVALID_VALUE
 		}
-		client.setupServer(cobId, client.CobIdServerToClient, client.NodeIdServer)
+		client.setupServer(cobId, client.cobIdServerToClient, client.nodeIdServer)
 	// cob id server to client
 	case 2:
 		cobId := binary.LittleEndian.Uint32(data)
 		canId := uint16(cobId & 0x7FF)
-		canIdCurrent := uint16(client.CobIdServerToClient & 0x7FF)
+		canIdCurrent := uint16(client.cobIdServerToClient & 0x7FF)
 		valid := (cobId & 0x80000000) == 0
 		if (cobId&0x3FFFF800) != 0 ||
-			(valid && client.Valid && canId != canIdCurrent) ||
+			(valid && client.valid && canId != canIdCurrent) ||
 			(valid && isIDRestricted(canId)) {
 			return ODR_INVALID_VALUE
 		}
-		client.setupServer(cobId, client.CobIdClientToServer, client.NodeIdServer)
+		client.setupServer(cobId, client.cobIdClientToServer, client.nodeIdServer)
 	// node id of server
 	case 3:
 		if len(data) != 1 {
@@ -393,7 +393,7 @@ func writeEntry1280(stream *Stream, data []byte, countWritten *uint16) error {
 		if nodeId > 127 {
 			return ODR_INVALID_VALUE
 		}
-		client.NodeIdServer = nodeId
+		client.nodeIdServer = nodeId
 
 	default:
 		return ODR_SUB_NOT_EXIST
