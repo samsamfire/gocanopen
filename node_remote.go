@@ -62,6 +62,12 @@ func (node *RemoteNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32,
 	return RESET_NOT
 }
 
+func (node *RemoteNode) MainCallback() {
+	if node.mainCallback != nil {
+		node.mainCallback(node)
+	}
+}
+
 // Create a remote node
 func newRemoteNode(
 	bm *busManager,
@@ -72,14 +78,12 @@ func newRemoteNode(
 	if bm == nil || remoteOd == nil {
 		return nil, errors.New("need at least busManager and od parameters")
 	}
-	var err error
-	node := &RemoteNode{BaseNode: newBaseNode(bm)}
-	node.od = remoteOd // Empty at the begining
+	base, err := newBaseNode(bm, remoteOd, remoteNodeId)
+	if err != nil {
+		return nil, err
+	}
+	node := &RemoteNode{BaseNode: base}
 	node.remoteOd = remoteOd
-	node.id = remoteNodeId
-	node.exitBackground = make(chan bool)
-	node.exit = make(chan bool)
-	node.state = NODE_INIT
 
 	// Create a new SDO client for the remote node & for local access
 	client, err := NewSDOClient(bm, remoteOd, 0, DEFAULT_SDO_CLIENT_TIMEOUT_MS, nil)

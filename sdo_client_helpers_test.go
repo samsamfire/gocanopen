@@ -26,7 +26,7 @@ func TestSDOReadExpedited(t *testing.T) {
 func TestSDOReadWriteLocal(t *testing.T) {
 	network := createNetwork()
 	defer network.Disconnect()
-	localNode, err := network.CreateNode(0x55, "testdata/base.eds")
+	localNode, err := network.CreateLocalNode(0x55, "testdata/base.eds")
 	assert.Nil(t, err)
 	client := localNode.SDOclients[0]
 	_, err = client.ReadUint32(0x55, 0x2007, 0x0)

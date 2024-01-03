@@ -106,7 +106,7 @@ func (network *Network) launchNodeProcess(node Node) {
 		startBackground := time.Now()
 		backgroundPeriod := time.Duration(10 * time.Millisecond)
 		startMain := time.Now()
-		mainPeriod := time.Duration(1 * time.Millisecond)
+		mainPeriod := time.Duration(10 * time.Millisecond)
 		for {
 			switch node.GetState() {
 			case NODE_INIT:
@@ -137,7 +137,7 @@ func (network *Network) launchNodeProcess(node Node) {
 				startMain = time.Now()
 				timeDifferenceUs := uint32(elapsed.Microseconds())
 				state := node.ProcessMain(false, timeDifferenceUs, nil)
-				// <-- Add application code HERE
+				node.MainCallback()
 				time.Sleep(mainPeriod)
 				if state == RESET_APP || state == RESET_COMM {
 					node.SetState(NODE_RESETING)
@@ -177,8 +177,12 @@ func (network *Network) GetOD(nodeId uint8) (*ObjectDictionary, error) {
 	return nil, ODR_OD_MISSING
 }
 
-// Send NMT commands to remote nodes
-// Id 0 is used as a broadcast command i.e. affects all nodes
+// Command can be used to send an NMT command to a specific nodeId
+// nodeId = 0 is used as a broadcast command i.e. affects all nodes
+// on the network
+//
+//	network.Command(0,NMT_RESET_NODE) // resets all nodes
+//	network.Command(12,NMT_RESET_NODE) // resets nodeId 12
 func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
 	if nodeId > 127 || (nmtCommand != NMT_ENTER_OPERATIONAL &&
 		nmtCommand != NMT_ENTER_PRE_OPERATIONAL &&
@@ -199,7 +203,7 @@ func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
 // Processing is started immediately after creating the node.
 // By default, node automatically goes to operational state if no errors are detected.
 // First heartbeat, if enabled is started after 500ms
-func (network *Network) CreateNode(nodeId uint8, od any) (*LocalNode, error) {
+func (network *Network) CreateLocalNode(nodeId uint8, od any) (*LocalNode, error) {
 	var odNode *ObjectDictionary
 	var err error
 	switch odType := od.(type) {
@@ -210,6 +214,8 @@ func (network *Network) CreateNode(nodeId uint8, od any) (*LocalNode, error) {
 		}
 	case ObjectDictionary:
 		odNode = &odType
+	case *ObjectDictionary:
+		odNode = odType
 	default:
 		return nil, fmt.Errorf("expecting string or ObjectDictionary got : %T", od)
 	}
@@ -238,8 +244,10 @@ func (network *Network) CreateNode(nodeId uint8, od any) (*LocalNode, error) {
 
 // Add a [RemoteNode] with a given OD for master control
 // od can be either a string : path to OD or OD object
-// User can then access the node via OD naming
-// A same OD can be used for multiple nodes
+// useLocal is used to define whether the supplied OD should be used
+// or the remote node should be read to create PDO mapping
+// If remote nodes PDO mapping is static and known, use useLocal = true
+// otherwise, if PDO mapping is dynamic, use useLocal = false
 func (network *Network) AddRemoteNode(nodeId uint8, od any, useLocal bool) (*RemoteNode, error) {
 	var odNode *ObjectDictionary
 	var err error
@@ -276,6 +284,7 @@ func (network *Network) AddRemoteNode(nodeId uint8, od any, useLocal bool) (*Rem
 }
 
 // RemoveNode gracefully exits any running go routine for this node
+// It also removes any object associated with the node, including OD
 func (network *Network) RemoveNode(nodeId uint8) {
 	node, ok := network.nodes[nodeId]
 	if !ok {
@@ -286,8 +295,8 @@ func (network *Network) RemoveNode(nodeId uint8) {
 	delete(network.nodes, nodeId)
 }
 
-// Create a node configurator
-// This uses the network sdoclient
+// Configurator creates a [NodeConfigurator] object for a given id
+// using the networks internal sdo client
 func (network *Network) Configurator(nodeId uint8) NodeConfigurator {
 	return NewNodeConfigurator(nodeId, network.sdoClient)
 }

@@ -26,7 +26,7 @@ func TestHBConfigurator(t *testing.T) {
 	config.HB.WriteMonitoredNode(2, 0x25, 100)
 	err := config.HB.WriteMonitoredNode(3, 0x25, 100)
 	assert.Equal(t, err, SDO_ABORT_PRAM_INCOMPAT)
-	network.CreateNode(0x25, "testdata/base.eds")
+	network.CreateLocalNode(0x25, "testdata/base.eds")
 	max, _ := config.HB.ReadMaxMonitorable()
 	// Test that we receive at least one emergency
 	assert.EqualValues(t, 8, max)
