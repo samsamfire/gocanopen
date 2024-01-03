@@ -51,7 +51,7 @@ func (socketcan *SocketcanBus) Handle(frame can.Frame) {
 	socketcan.rxCallback.Handle(Frame{ID: frame.ID, DLC: frame.Length, Flags: frame.Flags, Data: frame.Data})
 }
 
-func NewSocketcanBus(name string) (*SocketcanBus, error) {
+func NewSocketCanBus(name string) (*SocketcanBus, error) {
 	bus, err := can.NewBusForInterfaceWithName(name)
 	return &SocketcanBus{bus: bus}, err
 }

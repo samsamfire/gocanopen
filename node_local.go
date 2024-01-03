@@ -89,6 +89,12 @@ func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, 
 
 }
 
+func (node *LocalNode) MainCallback() {
+	if node.mainCallback != nil {
+		node.mainCallback(node)
+	}
+}
+
 // Initialize all PDOs
 func (node *LocalNode) initPDO() error {
 	if node.id < 1 || node.id > 127 || node.NodeIdUnconfigured {
@@ -155,8 +161,11 @@ func newLocalNode(
 	if bm == nil || od == nil {
 		return nil, errors.New("need at least busManager and od parameters")
 	}
-	var err error
-	node := &LocalNode{BaseNode: newBaseNode(bm)}
+	base, err := newBaseNode(bm, od, nodeId)
+	if err != nil {
+		return nil, err
+	}
+	node := &LocalNode{BaseNode: base}
 	node.NodeIdUnconfigured = false
 	node.od = od
 	node.exitBackground = make(chan bool)

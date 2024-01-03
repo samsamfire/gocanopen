@@ -116,7 +116,7 @@ func createBusInternal(canInterface string, channel string, bitrate int) (Bus, e
 	var err error
 	switch canInterface {
 	case "socketcan", "":
-		bus, err = NewSocketcanBus(channel)
+		bus, err = NewSocketCanBus(channel)
 	case "virtualcan":
 		bus = NewVirtualCanBus(channel)
 	default:

@@ -19,7 +19,7 @@ func createNetworkEmpty() *Network {
 
 func createNetwork() *Network {
 	network := createNetworkEmpty()
-	_, err := network.CreateNode(NODE_ID_TEST, "testdata/base.eds")
+	_, err := network.CreateLocalNode(NODE_ID_TEST, "testdata/base.eds")
 	if err != nil {
 		panic(err)
 	}
