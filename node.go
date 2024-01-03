@@ -23,9 +23,13 @@ type BaseNode struct {
 	MainCallback   func(args ...any)
 	state          uint8
 	id             uint8
-	wgBackground   sync.WaitGroup
+	wgBackground   *sync.WaitGroup
 	exitBackground chan bool
 	exit           chan bool
+}
+
+func newBaseNode(busManager *busManager) *BaseNode {
+	return &BaseNode{busManager: busManager, wgBackground: &sync.WaitGroup{}}
 }
 
 func (node *BaseNode) GetOD() *ObjectDictionary {
@@ -60,7 +64,7 @@ func (node *BaseNode) SetExit(exit bool) {
 }
 
 func (node *BaseNode) wg() *sync.WaitGroup {
-	return &node.wgBackground
+	return node.wgBackground
 }
 
 type Node interface {

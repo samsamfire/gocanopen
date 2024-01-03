@@ -156,7 +156,7 @@ func newLocalNode(
 		return nil, errors.New("need at least busManager and od parameters")
 	}
 	var err error
-	node := &LocalNode{BaseNode: &BaseNode{busManager: bm}}
+	node := &LocalNode{BaseNode: newBaseNode(bm)}
 	node.NodeIdUnconfigured = false
 	node.od = od
 	node.exitBackground = make(chan bool)

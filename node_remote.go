@@ -73,7 +73,7 @@ func newRemoteNode(
 		return nil, errors.New("need at least busManager and od parameters")
 	}
 	var err error
-	node := &RemoteNode{BaseNode: &BaseNode{busManager: bm}}
+	node := &RemoteNode{BaseNode: newBaseNode(bm)}
 	node.od = remoteOd // Empty at the begining
 	node.remoteOd = remoteOd
 	node.id = remoteNodeId
