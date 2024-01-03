@@ -89,7 +89,7 @@ func newStreamer(entry *Entry, subIndex uint8, origin bool) (*streamer, error) {
 			return streamer, nil
 		}
 		streamer.stream.Attribute = object.Attribute
-		streamer.stream.Data = object.data
+		streamer.stream.Data = object.value
 		streamer.stream.DataLength = object.DataLength()
 
 	case *VariableList:
@@ -98,7 +98,7 @@ func newStreamer(entry *Entry, subIndex uint8, origin bool) (*streamer, error) {
 			return nil, err
 		}
 		streamer.stream.Attribute = variable.Attribute
-		streamer.stream.Data = variable.data
+		streamer.stream.Data = variable.value
 		streamer.stream.DataLength = variable.DataLength()
 
 	default:

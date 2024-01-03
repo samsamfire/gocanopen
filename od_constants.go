@@ -79,16 +79,17 @@ func (result ODR) GetSDOAbordCode() SDOAbortCode {
 // Object dictionary object attribute
 const (
 	ATTRIBUTE_SDO_R  uint8 = 0x01 // SDO server may read from the variable
-	ATTRIBUTE_SDO_W  uint8 = 0x02 //SDO server may write to the variable
+	ATTRIBUTE_SDO_W  uint8 = 0x02 // SDO server may write to the variable
 	ATTRIBUTE_SDO_RW uint8 = 0x03 // SDO server may read from or write to the variable
-	ATTRIBUTE_TPDO   uint8 = 0x04 //Variable is mappable into TPDO (can be read)
-	ATTRIBUTE_RPDO   uint8 = 0x08 //Variable is mappable into RPDO (can be written)
-	ATTRIBUTE_TRPDO  uint8 = 0x0C //Variable is mappable into TPDO or RPDO
-	ATTRIBUTE_TSRDO  uint8 = 0x10 //Variable is mappable into transmitting SRDO
-	ATTRIBUTE_RSRDO  uint8 = 0x20 //Variable is mappable into receiving SRDO
-	ATTRIBUTE_TRSRDO uint8 = 0x30 //Variable is mappable into tx or rx SRDO
-	ATTRIBUTE_MB     uint8 = 0x40 //Variable is multi-byte ((u)int16_t to (u)int64_t)
-	ATTRIBUTE_STR    uint8 = 0x80 //Shorter value, than specified variable size, may be
-	//written to the variable. SDO write will fill remaining memory with zeroes.
-	//Attribute is used for VISIBLE_STRING and UNICODE_STRING.
+	ATTRIBUTE_TPDO   uint8 = 0x04 // Variable is mappable into TPDO (can be read)
+	ATTRIBUTE_RPDO   uint8 = 0x08 // Variable is mappable into RPDO (can be written)
+	ATTRIBUTE_TRPDO  uint8 = 0x0C // Variable is mappable into TPDO or RPDO
+	ATTRIBUTE_TSRDO  uint8 = 0x10 // Variable is mappable into transmitting SRDO
+	ATTRIBUTE_RSRDO  uint8 = 0x20 // Variable is mappable into receiving SRDO
+	ATTRIBUTE_TRSRDO uint8 = 0x30 // Variable is mappable into tx or rx SRDO
+	ATTRIBUTE_MB     uint8 = 0x40 // Variable is multi-byte ((u)int16_t to (u)int64_t)
+	// Shorter value, than specified variable size, may be
+	// written to the variable. SDO write will fill remaining memory with zeroes.
+	// Attribute is used for VISIBLE_STRING and UNICODE_STRING.
+	ATTRIBUTE_STR uint8 = 0x80
 )
