@@ -113,7 +113,7 @@ func (rpdo *RPDO) process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 		if rpdo.receiveError != rpdoRxShort {
 			errorCode = emErrPdoLengthExc
 		}
-		pdo.emcy.Error(setError, emRPDOWrongLength, uint16(errorCode), pdo.dataLength)
+		pdo.emcy.error(setError, emRPDOWrongLength, uint16(errorCode), pdo.dataLength)
 		if setError {
 			rpdo.receiveError = rpdoRxAckError
 		} else {

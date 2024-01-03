@@ -75,14 +75,18 @@ func newRemoteNode(
 	remoteNodeId uint8,
 	useLocal bool,
 ) (*RemoteNode, error) {
-	if bm == nil || remoteOd == nil {
-		return nil, errors.New("need at least busManager and od parameters")
+	if bm == nil {
+		return nil, errors.New("need at least busManager")
+	}
+	if remoteOd == nil {
+		remoteOd = NewOD()
 	}
 	base, err := newBaseNode(bm, remoteOd, remoteNodeId)
 	if err != nil {
 		return nil, err
 	}
 	node := &RemoteNode{BaseNode: base}
+	node.baseSdoClient.nodeId = 0 // Change the SDO client node id to 0 as not a real node
 	node.remoteOd = remoteOd
 
 	// Create a new SDO client for the remote node & for local access

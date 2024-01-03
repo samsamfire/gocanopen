@@ -47,7 +47,7 @@ func newBaseNode(
 		exit:           make(chan bool),
 		state:          NODE_INIT,
 	}
-	sdoClient, err := NewSDOClient(bm, od, 0, DEFAULT_SDO_CLIENT_TIMEOUT_MS, nil)
+	sdoClient, err := NewSDOClient(bm, od, nodeId, DEFAULT_SDO_CLIENT_TIMEOUT_MS, nil)
 	if err != nil {
 		return nil, err
 	}
