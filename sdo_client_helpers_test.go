@@ -36,6 +36,13 @@ func TestSDOReadWriteLocal(t *testing.T) {
 	val, err := client.ReadUint32(0x55, 0x2007, 0x0)
 	assert.Nil(t, err)
 	assert.Equal(t, uint32(5656), val)
+	_, err = client.ReadUint64(0x55, 0x201B, 0x0)
+	assert.Nil(t, err)
+	err = client.WriteRaw(0x55, 0x201B, 0x0, uint64(8989), false)
+	assert.Nil(t, err)
+	val2, err := client.ReadUint64(0x55, 0x201B, 0x0)
+	assert.Nil(t, err)
+	assert.EqualValues(t, 8989, val2)
 }
 
 func TestSDOReadBlock(t *testing.T) {
