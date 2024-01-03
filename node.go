@@ -1,5 +1,7 @@
 package canopen
 
+import "sync"
+
 const (
 	NMT_SERVICE_ID       uint16 = 0
 	EMERGENCY_SERVICE_ID uint16 = 0x80
@@ -21,6 +23,7 @@ type BaseNode struct {
 	MainCallback   func(args ...any)
 	state          uint8
 	id             uint8
+	wgBackground   sync.WaitGroup
 	exitBackground chan bool
 	exit           chan bool
 }
@@ -56,6 +59,10 @@ func (node *BaseNode) SetExit(exit bool) {
 	node.exit <- exit
 }
 
+func (node *BaseNode) wg() *sync.WaitGroup {
+	return &node.wgBackground
+}
+
 type Node interface {
 	ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32)
 	ProcessRPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32)
@@ -69,6 +76,7 @@ type Node interface {
 	SetExitBackground(exit bool) // Exit background processing
 	GetExit() chan bool
 	SetExit(exit bool) // Exit node processing
+	wg() *sync.WaitGroup
 }
 
 type NodeConfigurator struct {
