@@ -1,20 +1,21 @@
 # Introduction
 
-This package was written because I needed the ability to create local CANopen nodes
-on embedded linux systems for simulation and to do various maintenance related tasks
-on nodes already present on the bus : hearbeat monitoring, updates via block transfer, etc.
-Because this had to be run on an embedded system, I also had some constraints on the efficiency,
-and lastly.
-Golang was a great option because modern tooling and efficient.
-This package has been inspired by two existing projects : [CANopenNode](https://github.com/CANopenNode/CANopenNode)
-and [canopen](https://github.com/christiansandberg/canopen) to combine the best of both worlds.
-This documentation does not aim to be a tutorial of how CANopen works, a lot of information is freely available online.
+This package was written because I wanted an easy to use and efficient CANopen stack CiA 301
+capable of running on embedded devices. golang is a great option thanks to its modern tooling.
+This project has been inspired by two other existing projects:
+- [CANopenNode](https://github.com/CANopenNode/CANopenNode) a C implementation slave side.
+- [canopen](https://github.com/christiansandberg/canopen) a python implementation mostly for master control.
+
+This project takes the best of both worlds and tries to implement the slave & the master side in a simple yet
+efficient API.
+
+This documentation does not aim to be a tutorial on how CANopen works, a lot of information is freely available online.
 
 ## Network
 
 The **Network** object is used for managing the CANopen stack. It holds CANopen **Nodes** which can be of two types :
 Either a **LocalNode**, which represents a real CANopen, CiA 301 compliant node or a **RemoteNode** which is the 
-local representation of a remote CANopen node on the CAN bus.
+local representation of a remote CANopen node on the CAN bus used for master control.
 
 ### Usage
 
