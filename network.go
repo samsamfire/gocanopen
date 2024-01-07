@@ -294,3 +294,34 @@ func (network *Network) AddNodeFromSDO(
 		return nil
 	}
 }
+
+type ManufacturerInformation struct {
+	DeviceName      string
+	HardwareVersion string
+	SoftwareVersion string
+}
+
+// Read manufacturer information
+// Entries x1008,x1009,x100A
+func (network *Network) ReadManufacturerInformation(id uint8) (info ManufacturerInformation, err error) {
+	buffer := make([]byte, 100)
+	manufacturerInfo := ManufacturerInformation{}
+	n, err := network.ReadRaw(id, 0x1008, 0x0, buffer)
+	if err != nil {
+		return manufacturerInfo, err
+	}
+	manufacturerInfo.DeviceName = string(buffer[:n])
+	buffer = make([]byte, 100)
+	n, err = network.ReadRaw(id, 0x1009, 0x0, buffer)
+	if err != nil {
+		return manufacturerInfo, err
+	}
+	manufacturerInfo.HardwareVersion = string(buffer[:n])
+	buffer = make([]byte, 100)
+	n, err = network.ReadRaw(id, 0x100A, 0x0, buffer)
+	if err != nil {
+		return manufacturerInfo, err
+	}
+	manufacturerInfo.SoftwareVersion = string(buffer[:n])
+	return manufacturerInfo, nil
+}
