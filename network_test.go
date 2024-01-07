@@ -28,3 +28,15 @@ func TestAddNodeLoadODFromSDO(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestReadManufacturerInfo(t *testing.T) {
+	network := createNetwork()
+	defer network.Disconnect()
+	info, err := network.ReadManufacturerInformation(NODE_ID_TEST)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.DeviceName != "DUT" || info.HardwareVersion != "v400" || info.SoftwareVersion != "v1.1.2r" {
+		t.Fatal(info)
+	}
+}
