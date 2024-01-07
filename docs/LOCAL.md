@@ -35,4 +35,21 @@ node.SetMainCallback(NodeMainCallback)
 
 ```
 
-Note that there are several ways of accessing data in the object dictionnary
+Note that there are several ways of accessing data in the object dictionnary. Some standard functions
+are provided for direct memory access to the OD. However, all nodes come with a local sdo client for 
+reading the internal OD. Here are some examples:
+
+```golang
+od := node.GetOD()
+od.Index("UNSIGNED32 value").Uint32(0) // Get od value as a uint32, if length is incorrect, it will error
+
+localNode := node.(*canopen.LocalNode) // Get actual type : *canopen.LocalNode
+localNode.ReadUint("UNSIGNED32","") // Returns it as uint64
+localNode.ReadUint("UNSIGNED8","") // Returns it as uint64 also
+deviceName,_ := localNode.ReadString(0x1008, 0x0) // This corresponds to device name
+
+```
+
+See **BaseNode** go doc for more information on the available methods.
+
+
