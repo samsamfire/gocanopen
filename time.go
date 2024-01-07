@@ -93,8 +93,7 @@ func NewTIME(busManager *BusManager, entry1012 *Entry, producerIntervalMs uint32
 	}
 	time := &TIME{}
 	// Read param from OD
-	cobIdTimestamp := uint32(0)
-	err := entry1012.Uint32(0, &cobIdTimestamp)
+	cobIdTimestamp, err := entry1012.Uint32(0)
 	if err != nil {
 		log.Errorf("[TIME][%x|%x] reading cob id timestamp failed : %v", entry1012.Index, 0x0, err)
 		return nil, ErrOdParameters

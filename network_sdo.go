@@ -1,7 +1,10 @@
 package canopen
 
 import (
+	"bytes"
 	"encoding/binary"
+	"fmt"
+	"io"
 	"math"
 )
 
@@ -13,14 +16,15 @@ func (network *Network) readBytes(nodeId uint8, index any, subindex any) ([]byte
 	}
 	// Find corresponding Variable inside OD
 	// This will be used to determine information on the expected value
-	odVar, e := od.Index(index).SubIndex(subindex)
-	if e != nil {
-		return nil, 0, e
+	entry := od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
+	if err != nil {
+		return nil, 0, err
 	}
 	data := make([]byte, odVar.DataLength())
-	nbRead, e := network.sdoClient.ReadRaw(nodeId, odVar.Index, odVar.SubIndex, data)
-	if e != nil {
-		return nil, 0, e
+	nbRead, err := network.sdoClient.ReadRaw(nodeId, entry.Index, odVar.SubIndex, data)
+	if err != nil {
+		return nil, 0, err
 	}
 	return data[:nbRead], odVar.DataType, nil
 }
@@ -129,6 +133,41 @@ func (network *Network) ReadString(nodeId uint8, index any, subindex any) (value
 	}
 }
 
+// Read object dictionary using object 1021 (EDS storage)
+// Optional callback can be provided to perform unzip, untar etc if a specific storage format is used
+func (network *Network) ReadEDS(nodeId uint8,
+	formatHandlerCallback func(formatType uint8, reader io.Reader) (*ObjectDictionary, error),
+) (*ObjectDictionary, error) {
+	rawEds, err := network.sdoClient.ReadAll(nodeId, 0x1021, 0)
+	if err != nil {
+		return nil, err
+	}
+	edsFormat := []byte{0}
+	_, err = network.sdoClient.ReadRaw(nodeId, 0x1022, 0, edsFormat)
+	switch formatHandlerCallback {
+	case nil:
+		// No callback & format is not specified or
+		// Storage format is 0
+		// Use default ASCII format
+		if err != nil || (err == nil && edsFormat[0] == 0) {
+			od, err := ParseEDSFromRaw(rawEds, nodeId)
+			if err != nil {
+				return nil, err
+			}
+			return od, nil
+		} else {
+			return nil, fmt.Errorf("supply a handler for the format : %v", edsFormat[0])
+		}
+	default:
+		odReader := bytes.NewBuffer(rawEds)
+		od, err := formatHandlerCallback(edsFormat[0], odReader)
+		if err != nil {
+			return nil, err
+		}
+		return od, nil
+	}
+}
+
 // Read an entry from a remote node
 // this method does not require corresponding OD to be loaded
 // value will be read as a raw byte slice
@@ -148,49 +187,15 @@ func (network *Network) Write(nodeId uint8, index any, subindex any, value any) 
 	}
 	// Find corresponding Variable inside OD
 	// This will be used to determine information on the expected value
-	odVar, e := od.Index(index).SubIndex(subindex)
-	if e != nil {
-		return e
+	entry := od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
+	if err != nil {
+		return err
 	}
-	// TODO : maybe check data type with the current OD ?
-	var encoded []byte
-	switch val := value.(type) {
-	case uint8:
-		encoded = []byte{val}
-	case int8:
-		encoded = []byte{byte(val)}
-	case uint16:
-		encoded = make([]byte, 2)
-		binary.LittleEndian.PutUint16(encoded, val)
-	case int16:
-		encoded = make([]byte, 2)
-		binary.LittleEndian.PutUint16(encoded, uint16(val))
-	case uint32:
-		encoded = make([]byte, 4)
-		binary.LittleEndian.PutUint32(encoded, val)
-	case int32:
-		encoded = make([]byte, 4)
-		binary.LittleEndian.PutUint32(encoded, uint32(val))
-	case uint64:
-		encoded = make([]byte, 8)
-		binary.LittleEndian.PutUint64(encoded, val)
-	case int64:
-		encoded = make([]byte, 8)
-		binary.LittleEndian.PutUint64(encoded, uint64(val))
-	case string:
-		encoded = []byte(val)
-	case float32:
-		encoded = make([]byte, 4)
-		binary.LittleEndian.PutUint32(encoded, math.Float32bits(val))
-	case float64:
-		encoded = make([]byte, 8)
-		binary.LittleEndian.PutUint64(encoded, math.Float64bits(val))
-	default:
-		return ODR_TYPE_MISMATCH
-	}
-	e = network.sdoClient.WriteRaw(nodeId, odVar.Index, odVar.SubIndex, encoded, false)
-	if e != nil {
-		return e
+
+	err = network.sdoClient.WriteRaw(nodeId, entry.Index, odVar.SubIndex, value, false)
+	if err != nil {
+		return err
 	}
 	return nil
 }

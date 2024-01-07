@@ -237,13 +237,12 @@ func NewNMT(
 	nmt.emergency = emergency
 	nmt.hearbeatProducerTimer = uint32(firstHbTimeMs * 1000)
 
-	var HBprodTime_ms uint16
-	err := entry1017.Uint16(0, &HBprodTime_ms)
+	hbProdTimeMs, err := entry1017.Uint16(0)
 	if err != nil {
 		log.Errorf("[NMT][%x|%x] reading producer heartbeat failed : %v", 0x1017, 0x0, err)
 		return nil, ErrOdParameters
 	}
-	nmt.hearbeatProducerTimeUs = uint32(HBprodTime_ms) * 1000
+	nmt.hearbeatProducerTimeUs = uint32(hbProdTimeMs) * 1000
 	// Extension needs to be initialized
 	entry1017.AddExtension(nmt, ReadEntryDefault, WriteEntry1017)
 

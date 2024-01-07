@@ -1,10 +1,10 @@
 package main
 
 import (
-	"canopen"
 	"flag"
 	"os"
 
+	canopen "github.com/samsamfire/gocanopen"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -37,15 +37,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	node.OD.AddFile(0x3003, "File", "example2.bin", os.O_RDONLY|os.O_CREATE, os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
+	err = node.GetOD().AddFile(0x3003, "File", "example2.bin", os.O_RDONLY|os.O_CREATE, os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
 	if err != nil {
 		panic(err)
-	}
-	if err != nil {
-		panic(err)
-	}
-	e := network.Process()
-	if e != nil {
-		panic(e)
 	}
 }

@@ -12,7 +12,8 @@ import (
 )
 
 type Network struct {
-	Nodes      map[uint8]*Node
+	Nodes      map[uint8]Node
+	wgProcess  sync.WaitGroup
 	busManager *BusManager
 	sdoClient  *SDOClient // Network master has an sdo client to read/write nodes on network
 	// An sdo client does not have to be linked to a specific node
@@ -26,7 +27,11 @@ type ObjectDictionaryInformation struct {
 }
 
 func NewNetwork(bus Bus) Network {
-	return Network{Nodes: map[uint8]*Node{}, busManager: NewBusManager(bus), odMap: map[uint8]*ObjectDictionaryInformation{}}
+	return Network{
+		Nodes:      map[uint8]Node{},
+		busManager: NewBusManager(bus),
+		odMap:      map[uint8]*ObjectDictionaryInformation{},
+	}
 }
 
 // Connects to network and initialize master functionnality
@@ -77,84 +82,79 @@ func (network *Network) Connect(args ...any) error {
 
 // Disconnects from CAN bus and stops cleanly everything
 func (network *Network) Disconnect() {
-	log.Infof("[NETWORK] disconnecting from network")
 	for _, node := range network.Nodes {
-		node.exit <- true
+		node.SetExit(true)
 	}
+	network.wgProcess.Wait()
 	network.busManager.Bus.Disconnect()
 
 }
 
-// Process CANopen stack, this is blocking
-func (network *Network) Process() error {
-	var wg sync.WaitGroup
-	for id := range network.Nodes {
-		wg.Add(1)
-		log.Infof("[NETWORK][x%x] adding node to nodes being processed", id)
-		go func(node *Node) {
-			defer wg.Done()
-			var nodeWg sync.WaitGroup
-			// These are timer values and can be adjusted
-			startBackground := time.Now()
-			backgroundPeriod := time.Duration(10 * time.Millisecond)
-			startMain := time.Now()
-			mainPeriod := time.Duration(1 * time.Millisecond)
-			for {
-				switch node.State {
-				case NODE_INIT:
-					log.Infof("[NETWORK][x%x] starting node background process", node.id)
-					nodeWg.Add(1)
-					go func() {
-						defer nodeWg.Done()
-						for {
-							select {
-							case <-node.reset:
-								log.Infof("[NETWORK][x%x] exited node background process", node.id)
-								return
-							default:
-								elapsed := time.Since(startBackground)
-								startBackground = time.Now()
-								timeDifferenceUs := uint32(elapsed.Microseconds())
-								syncWas := node.processSync(timeDifferenceUs, nil)
-								node.processTPDO(syncWas, timeDifferenceUs, nil)
-								node.processRPDO(syncWas, timeDifferenceUs, nil)
-								time.Sleep(backgroundPeriod)
-							}
-						}
-					}()
-					node.State = NODE_RUNNING
-
-				case NODE_RUNNING:
-					elapsed := time.Since(startMain)
-					startMain = time.Now()
-					timeDifferenceUs := uint32(elapsed.Microseconds())
-					state := node.processMain(false, timeDifferenceUs, nil)
-					// <-- Add application code HERE
-					time.Sleep(mainPeriod)
-					if state == RESET_APP || state == RESET_COMM {
-						node.State = NODE_RESETING
-					} else {
+func (network *Network) launchNodeProcess(node Node) {
+	log.Infof("[NETWORK][x%x] adding node to nodes being processed %T", node.GetID(), node)
+	network.wgProcess.Add(1)
+	go func(node Node) {
+		defer network.wgProcess.Done()
+		var wgBackground sync.WaitGroup
+		// These are timer values and can be adjusted
+		startBackground := time.Now()
+		backgroundPeriod := time.Duration(10 * time.Millisecond)
+		startMain := time.Now()
+		mainPeriod := time.Duration(1 * time.Millisecond)
+		for {
+			switch node.GetState() {
+			case NODE_INIT:
+				log.Infof("[NETWORK][x%x] starting node background process", node.GetID())
+				wgBackground.Add(1)
+				go func() {
+					defer wgBackground.Done()
+					for {
 						select {
-						case <-node.exit:
-							log.Infof("[NETWORK][x%x] request to stop local node", node.id)
-							node.State = NODE_EXIT
+						case <-node.GetExitBackground():
+							log.Infof("[NETWORK][x%x] exited node background process", node.GetID())
+							return
 						default:
+							elapsed := time.Since(startBackground)
+							startBackground = time.Now()
+							timeDifferenceUs := uint32(elapsed.Microseconds())
+							syncWas := node.ProcessSync(timeDifferenceUs, nil)
+							node.ProcessTPDO(syncWas, timeDifferenceUs, nil)
+							node.ProcessRPDO(syncWas, timeDifferenceUs, nil)
+							time.Sleep(backgroundPeriod)
 						}
 					}
-				case NODE_RESETING:
-					node.reset <- true
-					node.State = NODE_INIT
+				}()
+				node.SetState(NODE_RUNNING)
 
-				case NODE_EXIT:
-					node.reset <- true
-					nodeWg.Wait()
+			case NODE_RUNNING:
+				elapsed := time.Since(startMain)
+				startMain = time.Now()
+				timeDifferenceUs := uint32(elapsed.Microseconds())
+				state := node.ProcessMain(false, timeDifferenceUs, nil)
+				// <-- Add application code HERE
+				time.Sleep(mainPeriod)
+				if state == RESET_APP || state == RESET_COMM {
+					node.SetState(NODE_RESETING)
+				}
+				select {
+				case <-node.GetExit():
+					log.Infof("[NETWORK][x%x] received exit request", node.GetID())
+					node.SetState(NODE_EXIT)
+				default:
 
 				}
+			case NODE_RESETING:
+				node.SetExitBackground(true)
+				node.SetState(NODE_INIT)
+
+			case NODE_EXIT:
+				node.SetExitBackground(true)
+				wgBackground.Wait()
+				log.Infof("[NETWORK][x%x] complete exit", node.GetID())
+				return
 			}
-		}(network.Nodes[id])
-	}
-	wg.Wait()
-	return nil
+		}
+	}(node)
 }
 
 // Get OD for a specific node id
@@ -166,7 +166,7 @@ func (network *Network) GetOD(nodeId uint8) (*ObjectDictionary, error) {
 	// Look in local nodes
 	_, odLoaded = network.Nodes[nodeId]
 	if odLoaded {
-		return network.Nodes[nodeId].OD, nil
+		return network.Nodes[nodeId].GetOD(), nil
 	}
 	return nil, ODR_OD_MISSING
 }
@@ -188,10 +188,9 @@ func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
 	return network.busManager.Send(frame)
 }
 
-// Create a local node with a given OD
-// Can be either a string : path to OD
-// Or it can be an OD object
-func (network *Network) CreateNode(nodeId uint8, od any) (*Node, error) {
+// Create a local CANopen compliant node with a given OD
+// Can be either a string : path to OD or OD object
+func (network *Network) CreateNode(nodeId uint8, od any) (*LocalNode, error) {
 	var odNode *ObjectDictionary
 	var err error
 	switch odType := od.(type) {
@@ -206,7 +205,7 @@ func (network *Network) CreateNode(nodeId uint8, od any) (*Node, error) {
 		return nil, fmt.Errorf("expecting string or ObjectDictionary got : %T", od)
 	}
 	// Create and initialize a "local" CANopen node
-	node, err := NewNode(
+	node, err := NewLocalNode(
 		network.busManager,
 		odNode,
 		nil, // Use definition from OD
@@ -222,43 +221,48 @@ func (network *Network) CreateNode(nodeId uint8, od any) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Return created node and add it to network
+	// Add to network, launch routine
 	network.Nodes[nodeId] = node
+	network.launchNodeProcess(node)
 	return node, nil
 }
 
 // Add a remote node with a given OD
-// OD can be a path, ObjectDictionary or nil
+// Can be either a string : path to OD or OD object
 // This function will load and parse Object dictionnary (OD) into memory
 // If already present, OD will be overwritten
 // User can then access the node via OD naming
 // A same OD can be used for multiple nodes
-func (network *Network) AddNode(nodeId uint8, od any) error {
+func (network *Network) AddNode(nodeId uint8, od any, useLocal bool) (*RemoteNode, error) {
 	var odNode *ObjectDictionary
 	var err error
 	if nodeId < 1 || nodeId > 127 {
-		return fmt.Errorf("nodeId should be between 1 and 127, value given : %v", nodeId)
+		return nil, fmt.Errorf("nodeId should be between 1 and 127, value given : %v", nodeId)
 	}
 	switch odType := od.(type) {
 	case string:
 		odNode, err = ParseEDSFromFile(odType, nodeId)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: odNode, edsPath: odType}
 	case ObjectDictionary:
 		odNode = &odType
 		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: odNode, edsPath: ""}
 	default:
-		return fmt.Errorf("expecting string or ObjectDictionary got : %T", od)
+		return nil, fmt.Errorf("expecting string or ObjectDictionary got : %T", od)
 	}
 
-	return nil
-
+	node, err := NewRemoteNode(network.busManager, odNode, nodeId, useLocal)
+	if err != nil {
+		return nil, err
+	}
+	network.Nodes[nodeId] = node
+	network.launchNodeProcess(node)
+	return node, nil
 }
 
 // Same as AddNode, except od is downloaded from remote node
-// Optional callback can be provided to perform unzip, untar etc if a specific storage format is used
 func (network *Network) AddNodeFromSDO(
 	nodeId uint8,
 	formatHandlerCallback func(formatType uint8, reader io.Reader) (*ObjectDictionary, error),
@@ -295,33 +299,8 @@ func (network *Network) AddNodeFromSDO(
 	}
 }
 
-type ManufacturerInformation struct {
-	DeviceName      string
-	HardwareVersion string
-	SoftwareVersion string
-}
-
-// Read manufacturer information
-// Entries x1008,x1009,x100A
-func (network *Network) ReadManufacturerInformation(id uint8) (info ManufacturerInformation, err error) {
-	buffer := make([]byte, 100)
-	manufacturerInfo := ManufacturerInformation{}
-	n, err := network.ReadRaw(id, 0x1008, 0x0, buffer)
-	if err != nil {
-		return manufacturerInfo, err
-	}
-	manufacturerInfo.DeviceName = string(buffer[:n])
-	buffer = make([]byte, 100)
-	n, err = network.ReadRaw(id, 0x1009, 0x0, buffer)
-	if err != nil {
-		return manufacturerInfo, err
-	}
-	manufacturerInfo.HardwareVersion = string(buffer[:n])
-	buffer = make([]byte, 100)
-	n, err = network.ReadRaw(id, 0x100A, 0x0, buffer)
-	if err != nil {
-		return manufacturerInfo, err
-	}
-	manufacturerInfo.SoftwareVersion = string(buffer[:n])
-	return manufacturerInfo, nil
+// Create a node configurator
+// This uses the network sdoclient
+func (network *Network) Configurator(nodeId uint8) NodeConfigurator {
+	return NewNodeConfigurator(nodeId, network.sdoClient)
 }

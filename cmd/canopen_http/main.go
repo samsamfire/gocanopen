@@ -1,10 +1,10 @@
 package main
 
 import (
-	"canopen"
 	"flag"
 	"fmt"
 
+	canopen "github.com/samsamfire/gocanopen"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -29,7 +29,6 @@ func main() {
 	if e != nil {
 		panic(e)
 	}
-	go func() { network.Process() }()
 	gateway := canopen.NewGateway(1, 1, 100, &network)
 	gateway.ListenAndServe(fmt.Sprintf(":%d", DEFAULT_HTTP_PORT))
 

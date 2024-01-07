@@ -16,7 +16,7 @@ const SDO_SERVER_TIMEOUT = 1000
 
 const (
 	SDO_STATE_IDLE                      SDOState = 0x00
-	SDO_STATE_ABORT                     SDOState = 0x0
+	SDO_STATE_ABORT                     SDOState = 0x01
 	SDO_STATE_DOWNLOAD_LOCAL_TRANSFER   SDOState = 0x10
 	SDO_STATE_DOWNLOAD_INITIATE_REQ     SDOState = 0x11
 	SDO_STATE_DOWNLOAD_INITIATE_RSP     SDOState = 0x12
