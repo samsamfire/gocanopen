@@ -57,7 +57,7 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 	object := entry.Object
 	// attribute, dataOrig and dataLength, depends on object type
 	switch object := object.(type) {
-	case Variable:
+	case *Variable:
 		if subIndex > 0 {
 			return nil, ODR_SUB_NOT_EXIST
 		}
@@ -75,30 +75,14 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 		streamer.stream.Data = object.data
 		streamer.stream.DataLength = object.DataLength()
 
-	case Array:
-		subEntriesCount := len(object.Variables)
-		if subIndex >= uint8(subEntriesCount) {
-			return nil, ODR_SUB_NOT_EXIST
+	case *VariableList:
+		variable, err := object.GetSubObject(subIndex)
+		if err != nil {
+			return nil, err
 		}
-		streamer.stream.Attribute = object.Variables[subIndex].Attribute
-		streamer.stream.Data = object.Variables[subIndex].data
-		streamer.stream.DataLength = object.Variables[subIndex].DataLength()
-
-	case []Record:
-		records := object
-		var record *Record
-		for i := range records {
-			if records[i].Subindex == subIndex {
-				record = &records[i]
-				break
-			}
-		}
-		if record == nil {
-			return nil, ODR_SUB_NOT_EXIST
-		}
-		streamer.stream.Attribute = record.Variable.Attribute
-		streamer.stream.Data = record.Variable.data
-		streamer.stream.DataLength = record.Variable.DataLength()
+		streamer.stream.Attribute = variable.Attribute
+		streamer.stream.Data = variable.data
+		streamer.stream.DataLength = variable.DataLength()
 
 	default:
 		log.Errorf("[OD][x%x] error, unknown type : %+v", entry.Index, object)

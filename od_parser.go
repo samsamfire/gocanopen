@@ -5,10 +5,25 @@ import (
 	"regexp"
 	"strconv"
 
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
 )
 
+// CANopen supported object types
+const (
+	OBJ_DOMAIN byte = 2
+	OBJ_VAR    byte = 7
+	OBJ_ARR    byte = 8
+	OBJ_RECORD byte = 9
+)
+
+var OBJ_NAME_MAP = map[byte]string{
+	OBJ_DOMAIN: "DOMAIN  ",
+	OBJ_VAR:    "VARIABLE",
+	OBJ_ARR:    "ARRAY   ",
+	OBJ_RECORD: "RECORD  ",
+}
+
+// CANopen supported datatypes
 const (
 	BOOLEAN        uint8 = 0x01
 	INTEGER8       uint8 = 0x02
@@ -27,6 +42,8 @@ const (
 	UNSIGNED64     uint8 = 0x1B
 )
 
+// Actual object type used in OD
+// Specifically, OBJ_DOMAIN is considered as an ODT_VAR
 const (
 	ODT_VAR       byte = 0x01
 	ODT_ARR       byte = 0x02
@@ -34,20 +51,7 @@ const (
 	ODT_TYPE_MASK byte = 0x0F
 )
 
-const (
-	OBJ_DOMAIN byte = 2
-	OBJ_VAR    byte = 7
-	OBJ_ARR    byte = 8
-	OBJ_RECORD byte = 9
-)
-
-var OBJ_NAME_MAP = map[byte]string{
-	OBJ_DOMAIN: "DOMAIN  ",
-	OBJ_VAR:    "VARIABLE",
-	OBJ_ARR:    "ARRAY   ",
-	OBJ_RECORD: "RECORD  ",
-}
-
+// Create an OD from a given file path on system
 func ParseEDSFromFile(filePath string, nodeId uint8) (*ObjectDictionary, error) {
 	od, err := parseEDS(filePath, nodeId)
 	if err != nil {
@@ -57,13 +61,12 @@ func ParseEDSFromFile(filePath string, nodeId uint8) (*ObjectDictionary, error) 
 	return od, nil
 }
 
+// Create an OD from raw bytes
 func ParseEDSFromRaw(edsBytes []byte, nodeId uint8) (*ObjectDictionary, error) {
 	return parseEDS(edsBytes, nodeId)
 }
 
-// Parse an EDS and file and return an ObjectDictionary
 func parseEDS(filePathOrData any, nodeId uint8) (*ObjectDictionary, error) {
-
 	od := NewOD()
 	// Open the EDS file
 	edsFile, err := ini.Load(filePathOrData)
@@ -74,7 +77,7 @@ func parseEDS(filePathOrData any, nodeId uint8) (*ObjectDictionary, error) {
 	// Get all the sections in the file
 	sections := edsFile.Sections()
 
-	// Get the index sections
+	// Get index & subindex matching
 	matchIdxRegExp := regexp.MustCompile(`^[0-9A-Fa-f]{4}$`)
 	matchSubidxRegExp := regexp.MustCompile(`^([0-9A-Fa-f]{4})sub([0-9A-Fa-f]+)$`)
 
@@ -102,27 +105,26 @@ func parseEDS(filePathOrData any, nodeId uint8) (*ObjectDictionary, error) {
 			//objectType determines what type of entry we should add to dictionary : Variable, Array or Record
 			switch objectType {
 			case OBJ_VAR, OBJ_DOMAIN:
-				variable, err := NewVariable(section, name, nodeId, index, 0)
+				variable, err := NewVariableFromSection(section, name, nodeId, index, 0)
 				if err != nil {
 					return nil, err
 				}
-				od.AddVariable(index, name, *variable)
+				od.addVariable(index, variable)
 			case OBJ_ARR:
-				// Get number of elements inside array
+				// Array objects do not allow holes in subindex numbers
+				// So pre-init slice up to subnumber
 				subNumber, err := strconv.ParseUint(section.Key("SubNumber").Value(), 0, 8)
 				if err != nil {
 					return nil, err
 				}
-				array := Array{Variables: make([]Variable, subNumber)}
-				od.AddArray(index, name, array)
+				od.AddVariableList(index, name, NewArray(uint8(subNumber)))
 			case OBJ_RECORD:
-				od.AddRecord(index, name, make([]Record, 0))
+				// Record objects allow holes in mapping
+				// Sub-objects will be added with "append"
+				od.AddVariableList(index, name, NewRecord())
 			default:
 				return nil, fmt.Errorf("[OD] unknown object type whilst parsing EDS %T", objType)
 			}
-
-			log.Debugf("[OD] adding %v | %v at %x", OBJ_NAME_MAP[objectType], name, index)
-
 		}
 
 		// Match subindexes, add the subindex values to Record or Array objects
@@ -160,20 +162,27 @@ func parseEDS(filePathOrData any, nodeId uint8) (*ObjectDictionary, error) {
 }
 
 // Print od out
-func (od *ObjectDictionary) Print() {
-	for k, v := range od.entriesByIndexValue {
-		fmt.Printf("Entry %x : %v\n", k, v.Name)
-		switch object := v.Object.(type) {
-		case Array:
-			for subindex, variable := range object.Variables {
-				fmt.Printf("\t\tSub Entry %x : %v \n", subindex, variable)
-			}
+// func (od *ObjectDictionary) Print() {
+// 	for k, v := range od.entriesByIndexValue {
+// 		fmt.Printf("Entry %x : %v\n", k, v.Name)
+// 		switch object := v.Object.(type) {
+// 		case Array:
+// 			for subindex, variable := range object.Variables {
+// 				fmt.Printf("\t\tSub Entry %x : %v \n", subindex, variable)
+// 			}
 
-		case []Record:
-			for _, subvalue := range object {
-				fmt.Printf("\t\tSub Entry %x : %v \n", subvalue.Subindex, subvalue.Variable.Name)
-			}
-		}
+// 		case []Record:
+// 			for _, subvalue := range object {
+// 				fmt.Printf("\t\tSub Entry %x : %v \n", subvalue.Subindex, subvalue.Variable.Name)
+// 			}
+// 		}
 
+// 	}
+// }
+
+func NewOD() *ObjectDictionary {
+	return &ObjectDictionary{
+		entriesByIndexValue: make(map[uint16]*Entry),
+		entriesByIndexName:  make(map[string]*Entry),
 	}
 }
