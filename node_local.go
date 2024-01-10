@@ -68,13 +68,12 @@ func (node *LocalNode) ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32)
 // Does not process SYNC and PDOs
 func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
 	// Process all objects
-	reset := RESET_NOT
 	NMTState := node.NMT.GetInternalState()
 	NMTisPreOrOperational := (NMTState == NMT_PRE_OPERATIONAL) || (NMTState == NMT_OPERATIONAL)
 
 	node.busManager.process()
 	node.EMCY.process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
-	reset = node.NMT.process(&NMTState, timeDifferenceUs, timerNextUs)
+	reset := node.NMT.process(&NMTState, timeDifferenceUs, timerNextUs)
 	// Update NMTisPreOrOperational
 	NMTisPreOrOperational = (NMTState == NMT_PRE_OPERATIONAL) || (NMTState == NMT_OPERATIONAL)
 
