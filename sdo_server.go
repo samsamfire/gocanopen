@@ -234,7 +234,7 @@ func (server *SDOServer) writeObjectDictionary(crcOperation uint, crcClient crc1
 func (server *SDOServer) readObjectDictionary(countMinimum uint32, calculateCRC bool) error {
 	buffered := server.bufWriteOffset - server.bufReadOffset
 	if !server.finished && buffered < countMinimum {
-		// Move buffered bytes to begining
+		// Move buffered bytes to beginning
 		copy(server.buffer, server.buffer[server.bufReadOffset:server.bufReadOffset+buffered])
 		server.bufReadOffset = 0
 		server.bufWriteOffset = buffered
