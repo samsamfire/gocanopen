@@ -3,6 +3,7 @@ package canopen
 import (
 	"reflect"
 	"runtime"
+	"strings"
 )
 
 func isIDRestricted(canId uint16) bool {
@@ -14,6 +15,9 @@ func isIDRestricted(canId uint16) bool {
 		canId >= 0x701
 }
 
+// Returns last part of function name
 func getFunctionName(i interface{}) string {
-	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+	fullName := runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+	fullNameSplitted := strings.Split(fullName, ".")
+	return fullNameSplitted[len(fullNameSplitted)-1]
 }

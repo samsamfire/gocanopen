@@ -1,7 +1,7 @@
 package canopen
 
-// Circular Fifo object used in some modules like SDO client
-type Fifo struct {
+// Circular fifo object used in some modules like SDO client
+type fifo struct {
 	buffer     []byte
 	writePos   int
 	readPos    int
@@ -10,8 +10,8 @@ type Fifo struct {
 	aux        int
 }
 
-func NewFifo(size uint16) *Fifo {
-	fifo := &Fifo{
+func NewFifo(size uint16) *fifo {
+	f := &fifo{
 		buffer:     make([]byte, size),
 		writePos:   0,
 		readPos:    0,
@@ -19,33 +19,33 @@ func NewFifo(size uint16) *Fifo {
 		started:    false,
 		aux:        0,
 	}
-	return fifo
+	return f
 }
 
-func (fifo *Fifo) Reset() {
-	fifo.readPos = 0
-	fifo.writePos = 0
-	fifo.started = false
+func (f *fifo) Reset() {
+	f.readPos = 0
+	f.writePos = 0
+	f.started = false
 }
 
-func (fifo *Fifo) GetSpace() int {
-	sizeLeft := fifo.readPos - fifo.writePos - 1
+func (f *fifo) GetSpace() int {
+	sizeLeft := f.readPos - f.writePos - 1
 	if sizeLeft < 0 {
-		sizeLeft += len(fifo.buffer)
+		sizeLeft += len(f.buffer)
 	}
 	return sizeLeft
 }
 
-func (fifo *Fifo) GetOccupied() int {
-	sizeOccupied := fifo.writePos - fifo.readPos
+func (f *fifo) GetOccupied() int {
+	sizeOccupied := f.writePos - f.readPos
 	if sizeOccupied < 0 {
-		sizeOccupied += len(fifo.buffer)
+		sizeOccupied += len(f.buffer)
 	}
 	return sizeOccupied
 }
 
 // Write data to fifo
-func (fifo *Fifo) Write(buffer []byte, crc *CRC16) int {
+func (f *fifo) Write(buffer []byte, crc *crc16) int {
 
 	if buffer == nil {
 		return 0
@@ -53,20 +53,20 @@ func (fifo *Fifo) Write(buffer []byte, crc *CRC16) int {
 	writeCounter := 0
 
 	for _, element := range buffer {
-		writePosNext := fifo.writePos + 1
-		if writePosNext == fifo.readPos || (writePosNext == len(fifo.buffer) && fifo.readPos == 0) {
+		writePosNext := f.writePos + 1
+		if writePosNext == f.readPos || (writePosNext == len(f.buffer) && f.readPos == 0) {
 			break
 		}
-		fifo.buffer[fifo.writePos] = element
+		f.buffer[f.writePos] = element
 		writeCounter += 1
 		if crc != nil {
 			crc.ccittSingle(element)
 		}
-		if writePosNext == len(fifo.buffer) {
-			fifo.writePos = 0
+		if writePosNext == len(f.buffer) {
+			f.writePos = 0
 
 		} else {
-			fifo.writePos += 1
+			f.writePos += 1
 		}
 
 	}
@@ -75,7 +75,7 @@ func (fifo *Fifo) Write(buffer []byte, crc *CRC16) int {
 }
 
 // Read data from fifo and return number of bytes read
-func (fifo *Fifo) Read(buffer []byte, eof *bool) int {
+func (f *fifo) Read(buffer []byte, eof *bool) int {
 	var readCounter int = 0
 	if buffer == nil {
 		return 0
@@ -83,78 +83,78 @@ func (fifo *Fifo) Read(buffer []byte, eof *bool) int {
 	if eof != nil {
 		*eof = false
 	}
-	if fifo.readPos == fifo.writePos || buffer == nil {
+	if f.readPos == f.writePos || buffer == nil {
 		return 0
 	}
 	for index := range buffer {
-		if fifo.readPos == fifo.writePos {
+		if f.readPos == f.writePos {
 			break
 		}
-		buffer[index] = fifo.buffer[fifo.readPos]
+		buffer[index] = f.buffer[f.readPos]
 
 		readCounter++
-		fifo.readPos++
+		f.readPos++
 
-		if fifo.readPos == len(fifo.buffer) {
-			fifo.readPos = 0
+		if f.readPos == len(f.buffer) {
+			f.readPos = 0
 		}
 	}
 	return readCounter
 }
 
 // Alternate begin
-func (fifo *Fifo) AltBegin(offset int) int {
+func (f *fifo) AltBegin(offset int) int {
 	var i int
-	fifo.altReadPos = fifo.readPos
+	f.altReadPos = f.readPos
 	for i = offset; i > 0; i-- {
-		if fifo.altReadPos == fifo.writePos {
+		if f.altReadPos == f.writePos {
 			break
 		}
-		fifo.altReadPos++
-		if fifo.altReadPos == len(fifo.buffer) {
-			fifo.altReadPos = 0
+		f.altReadPos++
+		if f.altReadPos == len(f.buffer) {
+			f.altReadPos = 0
 		}
 	}
 	return offset - i
 }
 
-func (fifo *Fifo) AltFinish(crc *CRC16) {
+func (f *fifo) AltFinish(crc *crc16) {
 
 	if crc == nil {
-		fifo.readPos = fifo.altReadPos
+		f.readPos = f.altReadPos
 		return
 	}
-	for fifo.readPos != fifo.altReadPos {
-		crc.ccittSingle(fifo.buffer[fifo.readPos])
-		fifo.readPos++
-		if fifo.readPos == len(fifo.buffer) {
-			fifo.readPos = 0
+	for f.readPos != f.altReadPos {
+		crc.ccittSingle(f.buffer[f.readPos])
+		f.readPos++
+		if f.readPos == len(f.buffer) {
+			f.readPos = 0
 		}
 	}
 }
 
-func (fifo *Fifo) AltRead(buffer []byte) int {
+func (f *fifo) AltRead(buffer []byte) int {
 
 	readCounter := int(0)
 	for index := range buffer {
-		if fifo.altReadPos == fifo.writePos {
+		if f.altReadPos == f.writePos {
 			break
 		}
-		buffer[index] = fifo.buffer[fifo.altReadPos]
+		buffer[index] = f.buffer[f.altReadPos]
 		readCounter++
-		fifo.altReadPos++
+		f.altReadPos++
 
-		if fifo.altReadPos == len(fifo.buffer) {
-			fifo.altReadPos = 0
+		if f.altReadPos == len(f.buffer) {
+			f.altReadPos = 0
 		}
 	}
 	return readCounter
 }
 
-func (fifo *Fifo) AltGetOccupied() int {
-	sizeOccupied := fifo.writePos - fifo.altReadPos
+func (f *fifo) AltGetOccupied() int {
+	sizeOccupied := f.writePos - f.altReadPos
 	if sizeOccupied < 0 {
-		sizeOccupied += len(fifo.buffer)
+		sizeOccupied += len(f.buffer)
 	}
 	return sizeOccupied
 }

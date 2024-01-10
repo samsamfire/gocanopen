@@ -7,6 +7,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// A LocalNode is a CiA 301 compliant CANopen node
+// It supports all the standard CANopen objects.
+// These objects will be loaded depending on the given EDS file.
+// For configuration of the different CANopen objects see [NodeConfigurator].
 type LocalNode struct {
 	*BaseNode
 	NodeIdUnconfigured bool
@@ -17,7 +21,7 @@ type LocalNode struct {
 	TPDOs              []*TPDO
 	RPDOs              []*RPDO
 	SYNC               *SYNC
-	EM                 *EM
+	EMCY               *EMCY
 	TIME               *TIME
 }
 
@@ -51,10 +55,9 @@ func (node *LocalNode) ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32)
 		syncProcess := sync.process(nmtIsPreOrOperational, timeDifferenceUs, timerNextUs)
 
 		switch syncProcess {
-		case CO_SYNC_RX_TX:
+		case syncRxOrTx:
 			syncWas = true
-		case CO_SYNC_PASSED_WINDOW:
-			node.busManager.ClearSyncPDOs()
+		case syncPassedWindow:
 		default:
 		}
 	}
@@ -65,13 +68,12 @@ func (node *LocalNode) ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32)
 // Does not process SYNC and PDOs
 func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
 	// Process all objects
-	reset := RESET_NOT
 	NMTState := node.NMT.GetInternalState()
 	NMTisPreOrOperational := (NMTState == NMT_PRE_OPERATIONAL) || (NMTState == NMT_OPERATIONAL)
 
 	node.busManager.process()
-	node.EM.process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
-	reset = node.NMT.process(&NMTState, timeDifferenceUs, timerNextUs)
+	node.EMCY.process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
+	reset := node.NMT.process(&NMTState, timeDifferenceUs, timerNextUs)
 	// Update NMTisPreOrOperational
 	NMTisPreOrOperational = (NMTState == NMT_PRE_OPERATIONAL) || (NMTState == NMT_OPERATIONAL)
 
@@ -84,6 +86,12 @@ func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, 
 
 	return reset
 
+}
+
+func (node *LocalNode) MainCallback() {
+	if node.mainCallback != nil {
+		node.mainCallback(node)
+	}
 }
 
 // Initialize all PDOs
@@ -104,7 +112,7 @@ func (node *LocalNode) initPDO() error {
 		pdoOffset := i % 4
 		nodeIdOffset := i / 4
 		preDefinedIdent = 0x200 + pdoOffset*0x100 + uint16(node.id) + nodeIdOffset
-		rpdo, err := NewRPDO(node.busManager, node.GetOD(), node.EM, node.SYNC, entry14xx, entry16xx, preDefinedIdent)
+		rpdo, err := NewRPDO(node.busManager, node.GetOD(), node.EMCY, node.SYNC, entry14xx, entry16xx, preDefinedIdent)
 		if err != nil {
 			log.Warnf("[NODE][RPDO] no more RPDO after RPDO %v", i-1)
 			break
@@ -120,7 +128,7 @@ func (node *LocalNode) initPDO() error {
 		pdoOffset := i % 4
 		nodeIdOffset := i / 4
 		preDefinedIdent = 0x180 + pdoOffset*0x100 + uint16(node.id) + nodeIdOffset
-		tpdo, err := NewTPDO(node.busManager, node.GetOD(), node.EM, node.SYNC, entry18xx, entry1Axx, preDefinedIdent)
+		tpdo, err := NewTPDO(node.busManager, node.GetOD(), node.EMCY, node.SYNC, entry18xx, entry1Axx, preDefinedIdent)
 		if err != nil {
 			log.Warnf("[NODE][TPDO] no more TPDO after TPDO %v", i-1)
 			break
@@ -134,11 +142,11 @@ func (node *LocalNode) initPDO() error {
 }
 
 // Create a new local node
-func NewLocalNode(
-	busManager *BusManager,
+func newLocalNode(
+	bm *busManager,
 	od *ObjectDictionary,
 	nmt *NMT,
-	emergency *EM,
+	emergency *EMCY,
 	nodeId uint8,
 	nmtControl uint16,
 	firstHbTimeMs uint16,
@@ -149,12 +157,14 @@ func NewLocalNode(
 
 ) (*LocalNode, error) {
 
-	if busManager == nil || od == nil {
+	if bm == nil || od == nil {
 		return nil, errors.New("need at least busManager and od parameters")
 	}
-	var err error
-	node := &LocalNode{BaseNode: &BaseNode{}}
-	node.busManager = busManager
+	base, err := newBaseNode(bm, od, nodeId)
+	if err != nil {
+		return nil, err
+	}
+	node := &LocalNode{BaseNode: base}
 	node.NodeIdUnconfigured = false
 	node.od = od
 	node.exitBackground = make(chan bool)
@@ -164,7 +174,7 @@ func NewLocalNode(
 
 	if emergency == nil {
 		emergency, err := NewEM(
-			busManager,
+			bm,
 			nodeId,
 			od.Index(0x1001),
 			od.Index(0x1014),
@@ -176,16 +186,16 @@ func NewLocalNode(
 			log.Errorf("[NODE][EMERGENCY producer] error when initializing emergency producer %v", err)
 			return nil, ErrOdParameters
 		}
-		node.EM = emergency
+		node.EMCY = emergency
 	} else {
-		node.EM = emergency
+		node.EMCY = emergency
 	}
-	emergency = node.EM
+	emergency = node.EMCY
 
 	// NMT object can either be supplied or created with automatically with an OD entry
 	if nmt == nil {
 		nmt, err := NewNMT(
-			busManager,
+			bm,
 			emergency,
 			nodeId,
 			nmtControl,
@@ -208,7 +218,7 @@ func NewLocalNode(
 	}
 
 	// Initialize HB consumer
-	hbCons, err := NewHBConsumer(busManager, emergency, od.Index(0x1016))
+	hbCons, err := NewHBConsumer(bm, emergency, od.Index(0x1016))
 	if err != nil {
 		log.Errorf("[NODE][HB Consumer] error when initializing HB consummers %v", err)
 		return nil, err
@@ -224,7 +234,7 @@ func NewLocalNode(
 	if entry1200 == nil {
 		log.Warnf("[NODE][SDO SERVER] no sdo servers initialized for node x%x", nodeId)
 	} else {
-		server, err := NewSDOServer(busManager, od, nodeId, sdoServerTimeoutMs, entry1200)
+		server, err := NewSDOServer(bm, od, nodeId, sdoServerTimeoutMs, entry1200)
 		if err != nil {
 			log.Errorf("[NODE][SDO SERVER] error when initializing SDO server object %v", err)
 			return nil, err
@@ -243,7 +253,7 @@ func NewLocalNode(
 		log.Info("[NODE][SDO CLIENT] no SDO clients initialized for node")
 	} else {
 
-		client, err := NewSDOClient(busManager, od, nodeId, sdoClientTimeoutMs, entry1280)
+		client, err := NewSDOClient(bm, od, nodeId, sdoClientTimeoutMs, entry1280)
 		if err != nil {
 			log.Errorf("[NODE][SDO CLIENT] error when initializing SDO client object %v", err)
 		} else {
@@ -254,7 +264,7 @@ func NewLocalNode(
 	}
 
 	//Initialize TIME
-	time, err := NewTIME(busManager, od.Index(0x1012), 1000) // hardcoded for now
+	time, err := NewTIME(bm, od.Index(0x1012), 1000) // hardcoded for now
 	if err != nil {
 		log.Errorf("[NODE][TIME] error when initializing TIME object %v", err)
 	} else {
@@ -263,7 +273,7 @@ func NewLocalNode(
 
 	//Initialize SYNC
 	sync, err := NewSYNC(
-		busManager,
+		bm,
 		emergency,
 		od.Index(0x1005),
 		od.Index(0x1006),

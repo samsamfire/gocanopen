@@ -1,23 +1,28 @@
+// This package is a pure golang implementation of the CANopen protocol
 package canopen
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 )
 
+var ErrIdConflict = errors.New("id already exists on network, this will create conflicts")
+
+// A Network is the main object of this package
+// It should be created before doint anything else
+// It acts as scheduler for locally created CANopen nodes
+// But can also be used for controlling remote CANopen nodes
 type Network struct {
-	Nodes      map[uint8]Node
-	wgProcess  sync.WaitGroup
-	busManager *BusManager
-	sdoClient  *SDOClient // Network master has an sdo client to read/write nodes on network
-	// An sdo client does not have to be linked to a specific node
-	odMap map[uint8]*ObjectDictionaryInformation
+	*busManager
+	nodes     map[uint8]Node
+	wgProcess sync.WaitGroup
+	// Network has an its own SDOClient
+	sdoClient *SDOClient
+	odMap     map[uint8]*ObjectDictionaryInformation
 }
 
 type ObjectDictionaryInformation struct {
@@ -26,25 +31,26 @@ type ObjectDictionaryInformation struct {
 	edsPath string
 }
 
+// Create a new Network using the given CAN bus
 func NewNetwork(bus Bus) Network {
 	return Network{
-		Nodes:      map[uint8]Node{},
+		nodes:      map[uint8]Node{},
 		busManager: NewBusManager(bus),
 		odMap:      map[uint8]*ObjectDictionaryInformation{},
 	}
 }
 
-// Connects to network and initialize master functionnality
-// Custom CAN backend is possible using "Bus" interface
-// Otherwise it expects an interface name, channel and bitrate
+// Connects to CAN bus, this should be called before anything else.
+// Custom CAN backend is possible using a custom "Bus" interface.
+// Otherwise it expects an interface name, channel and bitrate.
+// Currently only socketcan and virtualcan are supported.
 func (network *Network) Connect(args ...any) error {
-	if len(args) < 3 && network.busManager.Bus == nil {
+	if len(args) < 3 && network.bus == nil {
 		return errors.New("either provide custom backend, or provide interface, channel and bitrate")
 	}
 	var bus Bus
 	var err error
-	busManager := network.busManager
-	if busManager.Bus == nil {
+	if network.bus == nil {
 		canInterface, ok := args[0].(string)
 		if !ok {
 			return fmt.Errorf("expecting string for interface got : %v", args[0])
@@ -61,41 +67,41 @@ func (network *Network) Connect(args ...any) error {
 		if err != nil {
 			return err
 		}
-		busManager.Bus = bus
+		network.bus = bus
 	} else {
-		bus = busManager.Bus
+		bus = network.bus
 	}
 	// Connect to CAN bus and subscribe to CAN message reception
 	err = bus.Connect(args)
 	if err != nil {
 		return err
 	}
-	err = bus.Subscribe(busManager)
+	err = bus.Subscribe(network.busManager)
 	if err != nil {
 		return err
 	}
 	// Add SDO client to network by default
-	client, err := NewSDOClient(busManager, nil, 0, DEFAULT_SDO_CLIENT_TIMEOUT_MS, nil)
+	client, err := NewSDOClient(network.busManager, nil, 0, DEFAULT_SDO_CLIENT_TIMEOUT_MS, nil)
 	network.sdoClient = client
 	return err
 }
 
-// Disconnects from CAN bus and stops cleanly everything
+// Disconnects from the CAN bus and stops processing
+// of CANopen stack
 func (network *Network) Disconnect() {
-	for _, node := range network.Nodes {
+	for _, node := range network.nodes {
 		node.SetExit(true)
 	}
 	network.wgProcess.Wait()
-	network.busManager.Bus.Disconnect()
-
+	network.bus.Disconnect()
 }
 
+// Launch goroutine that handles CANopen stack processing of a node
 func (network *Network) launchNodeProcess(node Node) {
 	log.Infof("[NETWORK][x%x] adding node to nodes being processed %T", node.GetID(), node)
 	network.wgProcess.Add(1)
 	go func(node Node) {
 		defer network.wgProcess.Done()
-		var wgBackground sync.WaitGroup
 		// These are timer values and can be adjusted
 		startBackground := time.Now()
 		backgroundPeriod := time.Duration(10 * time.Millisecond)
@@ -105,9 +111,9 @@ func (network *Network) launchNodeProcess(node Node) {
 			switch node.GetState() {
 			case NODE_INIT:
 				log.Infof("[NETWORK][x%x] starting node background process", node.GetID())
-				wgBackground.Add(1)
+				node.wg().Add(1)
 				go func() {
-					defer wgBackground.Done()
+					defer node.wg().Done()
 					for {
 						select {
 						case <-node.GetExitBackground():
@@ -131,7 +137,7 @@ func (network *Network) launchNodeProcess(node Node) {
 				startMain = time.Now()
 				timeDifferenceUs := uint32(elapsed.Microseconds())
 				state := node.ProcessMain(false, timeDifferenceUs, nil)
-				// <-- Add application code HERE
+				node.MainCallback()
 				time.Sleep(mainPeriod)
 				if state == RESET_APP || state == RESET_COMM {
 					node.SetState(NODE_RESETING)
@@ -149,7 +155,7 @@ func (network *Network) launchNodeProcess(node Node) {
 
 			case NODE_EXIT:
 				node.SetExitBackground(true)
-				wgBackground.Wait()
+				node.wg().Wait()
 				log.Infof("[NETWORK][x%x] complete exit", node.GetID())
 				return
 			}
@@ -164,15 +170,19 @@ func (network *Network) GetOD(nodeId uint8) (*ObjectDictionary, error) {
 		return network.odMap[nodeId].od, nil
 	}
 	// Look in local nodes
-	_, odLoaded = network.Nodes[nodeId]
+	_, odLoaded = network.nodes[nodeId]
 	if odLoaded {
-		return network.Nodes[nodeId].GetOD(), nil
+		return network.nodes[nodeId].GetOD(), nil
 	}
 	return nil, ODR_OD_MISSING
 }
 
-// Send NMT commands to remote nodes
-// Id 0 is used as a broadcast command i.e. affects all nodes
+// Command can be used to send an NMT command to a specific nodeId
+// nodeId = 0 is used as a broadcast command i.e. affects all nodes
+// on the network
+//
+//	network.Command(0,NMT_RESET_NODE) // resets all nodes
+//	network.Command(12,NMT_RESET_NODE) // resets nodeId 12
 func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
 	if nodeId > 127 || (nmtCommand != NMT_ENTER_OPERATIONAL &&
 		nmtCommand != NMT_ENTER_PRE_OPERATIONAL &&
@@ -184,13 +194,16 @@ func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
 	frame := NewFrame(uint32(NMT_SERVICE_ID), 0, 2)
 	frame.Data[0] = uint8(nmtCommand)
 	frame.Data[1] = nodeId
-	log.Debugf("[NMT] sending nmt command : %v to node(s) %v (x%x)", NMT_COMMAND_MAP[nmtCommand], nodeId, nodeId)
-	return network.busManager.Send(frame)
+	log.Debugf("[NMT] sending nmt command : %v to node(s) %v (x%x)", nmtCommandDescription[nmtCommand], nodeId, nodeId)
+	return network.Send(frame)
 }
 
-// Create a local CANopen compliant node with a given OD
-// Can be either a string : path to OD or OD object
-func (network *Network) CreateNode(nodeId uint8, od any) (*LocalNode, error) {
+// Create a [LocalNode] a CiA 301 compliant node with a given OD
+// od can be either a string : path to OD or an OD object.
+// Processing is started immediately after creating the node.
+// By default, node automatically goes to operational state if no errors are detected.
+// First heartbeat, if enabled is started after 500ms
+func (network *Network) CreateLocalNode(nodeId uint8, od any) (*LocalNode, error) {
 	var odNode *ObjectDictionary
 	var err error
 	switch odType := od.(type) {
@@ -201,17 +214,19 @@ func (network *Network) CreateNode(nodeId uint8, od any) (*LocalNode, error) {
 		}
 	case ObjectDictionary:
 		odNode = &odType
+	case *ObjectDictionary:
+		odNode = odType
 	default:
 		return nil, fmt.Errorf("expecting string or ObjectDictionary got : %T", od)
 	}
 	// Create and initialize a "local" CANopen node
-	node, err := NewLocalNode(
+	node, err := newLocalNode(
 		network.busManager,
 		odNode,
 		nil, // Use definition from OD
 		nil, // Use definition from OD
 		nodeId,
-		NMT_STARTUP_TO_OPERATIONAL,
+		nmtStartupToOperational,
 		500,
 		SDO_CLIENT_TIMEOUT, // Not changeable currently
 		SDO_SERVER_TIMEOUT, // Not changeable currently
@@ -222,18 +237,21 @@ func (network *Network) CreateNode(nodeId uint8, od any) (*LocalNode, error) {
 		return nil, err
 	}
 	// Add to network, launch routine
-	network.Nodes[nodeId] = node
+	if _, ok := network.nodes[nodeId]; ok {
+		return nil, ErrIdConflict
+	}
+	network.nodes[nodeId] = node
 	network.launchNodeProcess(node)
 	return node, nil
 }
 
-// Add a remote node with a given OD
-// Can be either a string : path to OD or OD object
-// This function will load and parse Object dictionnary (OD) into memory
-// If already present, OD will be overwritten
-// User can then access the node via OD naming
-// A same OD can be used for multiple nodes
-func (network *Network) AddNode(nodeId uint8, od any, useLocal bool) (*RemoteNode, error) {
+// Add a [RemoteNode] with a given OD for master control
+// od can be either a string : path to OD or OD object
+// useLocal is used to define whether the supplied OD should be used
+// or the remote node should be read to create PDO mapping
+// If remote nodes PDO mapping is static and known, use useLocal = true
+// otherwise, if PDO mapping is dynamic, use useLocal = false
+func (network *Network) AddRemoteNode(nodeId uint8, od any, useLocal bool) (*RemoteNode, error) {
 	var odNode *ObjectDictionary
 	var err error
 	if nodeId < 1 || nodeId > 127 {
@@ -249,58 +267,42 @@ func (network *Network) AddNode(nodeId uint8, od any, useLocal bool) (*RemoteNod
 	case ObjectDictionary:
 		odNode = &odType
 		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: odNode, edsPath: ""}
+	case *ObjectDictionary:
+		odNode = odType
+		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: odNode, edsPath: ""}
+	case nil:
+		odNode = nil
+
 	default:
 		return nil, fmt.Errorf("expecting string or ObjectDictionary got : %T", od)
 	}
 
-	node, err := NewRemoteNode(network.busManager, odNode, nodeId, useLocal)
+	node, err := newRemoteNode(network.busManager, odNode, nodeId, useLocal)
 	if err != nil {
 		return nil, err
 	}
-	network.Nodes[nodeId] = node
+	if _, ok := network.nodes[nodeId]; ok {
+		return nil, ErrIdConflict
+	}
+	network.nodes[nodeId] = node
 	network.launchNodeProcess(node)
 	return node, nil
 }
 
-// Same as AddNode, except od is downloaded from remote node
-func (network *Network) AddNodeFromSDO(
-	nodeId uint8,
-	formatHandlerCallback func(formatType uint8, reader io.Reader) (*ObjectDictionary, error),
-) error {
-	rawEds, err := network.sdoClient.ReadAll(nodeId, 0x1021, 0)
-	if err != nil {
-		return err
+// RemoveNode gracefully exits any running go routine for this node
+// It also removes any object associated with the node, including OD
+func (network *Network) RemoveNode(nodeId uint8) {
+	node, ok := network.nodes[nodeId]
+	if !ok {
+		return
 	}
-	edsFormat := []byte{0}
-	_, err = network.sdoClient.ReadRaw(nodeId, 0x1022, 0, edsFormat)
-	switch formatHandlerCallback {
-	case nil:
-		// No callback & format is not specified or
-		// Storage format is 0
-		// Use default ASCII format
-		if err != nil || (err == nil && edsFormat[0] == 0) {
-			od, err := ParseEDSFromRaw(rawEds, nodeId)
-			if err != nil {
-				return err
-			}
-			network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: od, edsPath: ""}
-			return nil
-		} else {
-			return fmt.Errorf("supply a handler for the format : %v", edsFormat[0])
-		}
-	default:
-		odReader := bytes.NewBuffer(rawEds)
-		od, err := formatHandlerCallback(edsFormat[0], odReader)
-		if err != nil {
-			return nil
-		}
-		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: od, edsPath: ""}
-		return nil
-	}
+	node.SetExit(true)
+	node.wg().Wait()
+	delete(network.nodes, nodeId)
 }
 
-// Create a node configurator
-// This uses the network sdoclient
+// Configurator creates a [NodeConfigurator] object for a given id
+// using the networks internal sdo client
 func (network *Network) Configurator(nodeId uint8) NodeConfigurator {
 	return NewNodeConfigurator(nodeId, network.sdoClient)
 }

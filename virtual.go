@@ -112,7 +112,7 @@ func (client *VirtualCanBus) Subscribe(framehandler FrameListener) error {
 	if client.isRunning {
 		return nil
 	}
-	// Start go routine that receives incoming trafic and passes it to frameHandler
+	// Start go routine that receives incoming traffic and passes it to frameHandler
 	client.wg.Add(1)
 	client.isRunning = true
 	client.errSubscriber = false
@@ -151,7 +151,7 @@ func (client *VirtualCanBus) Recv() (*Frame, error) {
 	return frame, err
 }
 
-// Handle incoming trafic
+// Handle incoming traffic
 func (client *VirtualCanBus) handleReception() {
 	defer func() {
 		client.isRunning = false

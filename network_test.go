@@ -19,7 +19,7 @@ func createNetworkEmpty() *Network {
 
 func createNetwork() *Network {
 	network := createNetworkEmpty()
-	_, err := network.CreateNode(NODE_ID_TEST, "testdata/base.eds")
+	_, err := network.CreateLocalNode(NODE_ID_TEST, "testdata/base.eds")
 	if err != nil {
 		panic(err)
 	}
@@ -29,6 +29,14 @@ func createNetwork() *Network {
 func TestAddNodeLoadODFromSDO(t *testing.T) {
 	network := createNetwork()
 	defer network.Disconnect()
-	err := network.AddNodeFromSDO(NODE_ID_TEST, nil)
+	od, err := network.ReadEDS(NODE_ID_TEST, nil)
 	assert.Nil(t, err)
+	_, err = network.AddRemoteNode(0x55, od, true)
+	assert.Nil(t, err)
+}
+
+func TestRemoveNode(t *testing.T) {
+	network := createNetwork()
+	defer network.Disconnect()
+	network.RemoveNode(NODE_ID_TEST)
 }
