@@ -150,7 +150,7 @@ func parseEDS(filePathOrData any, nodeId uint8) (*ObjectDictionary, error) {
 				return nil, fmt.Errorf("[OD] index with id %d not found", index)
 			}
 			// Add new subindex entry member
-			err = entry.AddMember(section, name, nodeId, subIndex)
+			err = entry.addSectionMember(section, name, nodeId, subIndex)
 			if err != nil {
 				return nil, err
 			}
@@ -160,25 +160,6 @@ func parseEDS(filePathOrData any, nodeId uint8) (*ObjectDictionary, error) {
 
 	return od, nil
 }
-
-// Print od out
-// func (od *ObjectDictionary) Print() {
-// 	for k, v := range od.entriesByIndexValue {
-// 		fmt.Printf("Entry %x : %v\n", k, v.Name)
-// 		switch object := v.Object.(type) {
-// 		case Array:
-// 			for subindex, variable := range object.Variables {
-// 				fmt.Printf("\t\tSub Entry %x : %v \n", subindex, variable)
-// 			}
-
-// 		case []Record:
-// 			for _, subvalue := range object {
-// 				fmt.Printf("\t\tSub Entry %x : %v \n", subvalue.Subindex, subvalue.Variable.Name)
-// 			}
-// 		}
-
-// 	}
-// }
 
 func NewOD() *ObjectDictionary {
 	return &ObjectDictionary{

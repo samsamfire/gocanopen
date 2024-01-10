@@ -26,7 +26,7 @@ func TestSDOReadExpedited(t *testing.T) {
 func TestSDOReadWriteLocal(t *testing.T) {
 	network := createNetwork()
 	defer network.Disconnect()
-	localNode, err := network.CreateNode(0x55, "testdata/base.eds")
+	localNode, err := network.CreateLocalNode(0x55, "testdata/base.eds")
 	assert.Nil(t, err)
 	client := localNode.SDOclients[0]
 	_, err = client.ReadUint32(0x55, 0x2007, 0x0)
@@ -36,6 +36,13 @@ func TestSDOReadWriteLocal(t *testing.T) {
 	val, err := client.ReadUint32(0x55, 0x2007, 0x0)
 	assert.Nil(t, err)
 	assert.Equal(t, uint32(5656), val)
+	_, err = client.ReadUint64(0x55, 0x201B, 0x0)
+	assert.Nil(t, err)
+	err = client.WriteRaw(0x55, 0x201B, 0x0, uint64(8989), false)
+	assert.Nil(t, err)
+	val2, err := client.ReadUint64(0x55, 0x201B, 0x0)
+	assert.Nil(t, err)
+	assert.EqualValues(t, 8989, val2)
 }
 
 func TestSDOReadBlock(t *testing.T) {
@@ -50,7 +57,7 @@ func TestSDOWriteBlock(t *testing.T) {
 	network := createNetwork()
 	defer network.Disconnect()
 	data := []byte("some random string some random string some random string some random string some random stringsome random string some random string")
-	node := network.Nodes[NODE_ID_TEST]
+	node := network.nodes[NODE_ID_TEST]
 	node.GetOD().AddFile(0x3333, "File entry", "./here.txt", os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
 	err := network.sdoClient.WriteRaw(NODE_ID_TEST, 0x3333, 0, data, false)
 	assert.Nil(t, err)

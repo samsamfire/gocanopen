@@ -33,7 +33,7 @@ func main() {
 
 	// Load node EDS, this will be used to generate all the CANopen objects
 	// Basic template can be found in the current directory
-	node, err := network.CreateNode(uint8(DEFAULT_NODE_ID), *eds_path)
+	node, err := network.CreateLocalNode(uint8(DEFAULT_NODE_ID), *eds_path)
 	if err != nil {
 		panic(err)
 	}

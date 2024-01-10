@@ -6,11 +6,18 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Remote nodes are a bit different than normal nodes : they are a local representation of a remote node
-// They are useful for master control without having to configure an EDS file
-// A remote node has the same id as the remote node that it controls
-// A remote node, not being a "real node" is only accessible locally
-
+// A RemoteNode is a bit different from a [LocalNode].
+// It is a local representation of a remote node on the CAN bus
+// and does not have the same standard CiA objects.
+// Its goal is to simplify master control by providing some general
+// features :
+//   - SDOClient for reading / writing to remote node with given EDS
+//   - RPDO for updating a local OD with the TPDOs from the remote node
+//   - SYNC consumer
+//
+// A RemoteNode has the same id as the remote node that it controls
+// however, being a direct local representation it may only be accessed
+// locally.
 type RemoteNode struct {
 	*BaseNode
 	remoteOd  *ObjectDictionary // Remote node od, this does not change
@@ -43,10 +50,9 @@ func (node *RemoteNode) ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32
 		syncProcess := sync.process(node.GetState() == NODE_RUNNING, timeDifferenceUs, timerNextUs)
 
 		switch syncProcess {
-		case CO_SYNC_NONE, CO_SYNC_RX_TX:
+		case syncNone, syncRxOrTx:
 			syncWas = true
-		case CO_SYNC_PASSED_WINDOW:
-			node.busManager.ClearSyncPDOs()
+		case syncPassedWindow:
 		}
 	}
 	return syncWas
@@ -56,28 +62,35 @@ func (node *RemoteNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32,
 	return RESET_NOT
 }
 
+func (node *RemoteNode) MainCallback() {
+	if node.mainCallback != nil {
+		node.mainCallback(node)
+	}
+}
+
 // Create a remote node
-func NewRemoteNode(
-	busManager *BusManager,
+func newRemoteNode(
+	bm *busManager,
 	remoteOd *ObjectDictionary,
 	remoteNodeId uint8,
 	useLocal bool,
 ) (*RemoteNode, error) {
-	if busManager == nil || remoteOd == nil {
-		return nil, errors.New("need at least busManager and od parameters")
+	if bm == nil {
+		return nil, errors.New("need at least busManager")
 	}
-	var err error
-	node := &RemoteNode{BaseNode: &BaseNode{}}
-	node.busManager = busManager
-	node.od = remoteOd // Empty at the begining
+	if remoteOd == nil {
+		remoteOd = NewOD()
+	}
+	base, err := newBaseNode(bm, remoteOd, remoteNodeId)
+	if err != nil {
+		return nil, err
+	}
+	node := &RemoteNode{BaseNode: base}
+	node.baseSdoClient.nodeId = 0 // Change the SDO client node id to 0 as not a real node
 	node.remoteOd = remoteOd
-	node.id = remoteNodeId
-	node.exitBackground = make(chan bool)
-	node.exit = make(chan bool)
-	node.state = NODE_INIT
 
 	// Create a new SDO client for the remote node & for local access
-	client, err := NewSDOClient(busManager, remoteOd, 0, DEFAULT_SDO_CLIENT_TIMEOUT_MS, nil)
+	client, err := NewSDOClient(bm, remoteOd, 0, DEFAULT_SDO_CLIENT_TIMEOUT_MS, nil)
 	if err != nil {
 		log.Errorf("[NODE][SDO CLIENT] error when initializing SDO client object %v", err)
 		return nil, err
@@ -87,7 +100,7 @@ func NewRemoteNode(
 	node.od.AddSYNC()
 	//Initialize SYNC
 	sync, err := NewSYNC(
-		busManager,
+		bm,
 		nil,
 		node.od.Index(0x1005),
 		node.od.Index(0x1006),

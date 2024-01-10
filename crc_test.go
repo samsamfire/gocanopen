@@ -7,7 +7,7 @@ import (
 )
 
 func TestCcittSingle(t *testing.T) {
-	crc := CRC16(0)
+	crc := crc16(0)
 	crc.ccittSingle(10)
 	assert.EqualValues(t, 0xA14A, crc)
 }
