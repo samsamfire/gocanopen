@@ -308,7 +308,7 @@ func updateStateFromRequest(stateReq uint8, state *SDOState, upload *bool) error
 	return nil
 }
 
-func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs uint32, timerNextUs *uint32) (err error) {
+func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs uint32, timerNextUs *uint32) (state uint8, err error) {
 	ret := SDO_WAITING_RESPONSE
 	var abortCode error
 	if server.valid && server.state == SDO_STATE_IDLE && !server.rxNew {
@@ -947,14 +947,13 @@ func (server *SDOServer) process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.Abort(sdoAbort)
 			}
 			server.state = SDO_STATE_IDLE
-			err = abortCode
 		case SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_REQ:
 			ret = SDO_BLOCK_DOWNLOAD_IN_PROGRESS
 		case SDO_STATE_UPLOAD_BLK_SUBBLOCK_SREQ:
 			ret = SDO_BLOCK_UPLOAD_IN_PROGRESS
 		}
 	}
-	return
+	return ret, abortCode
 }
 
 // Create & send abort on bus
