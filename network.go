@@ -106,7 +106,7 @@ func (network *Network) launchNodeProcess(node Node) {
 		startBackground := time.Now()
 		backgroundPeriod := time.Duration(10 * time.Millisecond)
 		startMain := time.Now()
-		mainPeriod := time.Duration(10 * time.Millisecond)
+		mainPeriod := time.Duration(1 * time.Millisecond)
 		for {
 			switch node.GetState() {
 			case NODE_INIT:
