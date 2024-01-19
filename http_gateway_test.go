@@ -17,16 +17,8 @@ func init() {
 }
 
 func createGateway() *HTTPGatewayServer {
-	network := NewNetwork(nil)
-	e := network.Connect("virtualcan", "localhost:18888", 500000)
-	if e != nil {
-		panic(e)
-	}
-	_, e = network.AddRemoteNode(NODE_ID_TEST, "testdata/base.eds", true)
-	if e != nil {
-		panic(e)
-	}
-	gateway := NewGateway(1, 1, 100, &network)
+	network := createNetwork()
+	gateway := NewGateway(1, 1, 100, network)
 	return gateway
 }
 
