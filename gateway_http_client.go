@@ -22,9 +22,9 @@ func NewHTTPGatewayClient(baseURL string, apiVersion string, networkId int) *HTT
 }
 
 type HTTPGatewayResponse struct {
-	Sequence string `json:"sequence,omitempty"`
+	Sequence int    `json:"sequence,omitempty"`
 	Data     string `json:"data,omitempty"`
-	Length   string `json:"length,omitempty"`
+	Length   int    `json:"length,omitempty"`
 	Response string `json:"response,omitempty"`
 }
 
@@ -61,14 +61,9 @@ func (client *HTTPGatewayClient) get(uri string) (resp *HTTPGatewayResponse, err
 		log.Warnf("[HTTP][CLIENT][SEQ:%v] command resulted in error from server : %v", jsonRsp.Sequence, err)
 		return
 	}
-	sequenceNb, err := strconv.Atoi(jsonRsp.Sequence)
-	if err != nil {
-		log.Warnf("[HTTP][CLIENT] failed to get sequence number : %v", jsonRsp.Sequence)
-		return
-	}
 	// Check if sequence number is correct
-	if client.CurrentSequenceNb != sequenceNb {
-		log.Warnf("[HTTP][CLIENT][SEQ:%v] sequence number does not match expected value (%v)", sequenceNb, client.CurrentSequenceNb)
+	if client.CurrentSequenceNb != jsonRsp.Sequence {
+		log.Warnf("[HTTP][CLIENT][SEQ:%v] sequence number does not match expected value (%v)", jsonRsp.Sequence, client.CurrentSequenceNb)
 	}
 	return jsonRsp, nil
 }
@@ -81,3 +76,12 @@ func (client *HTTPGatewayClient) Read(nodeId uint8, index uint16, subIndex uint8
 	}
 	return resp.Data, 0, nil
 }
+
+// Write via SDO
+// func (client *HTTPGatewayClient) Write(nodeId uint8, index uint16, subIndex uint8, data string) error {
+// 	resp, err := client.get(fmt.Sprintf("/%d/w/%d/%d", nodeId, index, subIndex))
+// 	if err != nil {
+// 		return
+// 	}
+// 	return resp.Data, 0, nil
+// }
