@@ -176,6 +176,10 @@ func (client *VirtualCanBus) handleReception() {
 	}
 }
 
+func (client *VirtualCanBus) SetReceiveOwn(receiveOwn bool) {
+	client.receiveOwn = receiveOwn
+}
+
 func NewVirtualCanBus(channel string) *VirtualCanBus {
 	return &VirtualCanBus{channel: channel, stopChan: make(chan bool), isRunning: false}
 }
