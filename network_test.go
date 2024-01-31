@@ -6,6 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const NODE_ID_TEST uint8 = 0x30
+
 func createNetworkEmpty() *Network {
 	bus := NewVirtualCanBus("localhost:18888")
 	bus.receiveOwn = true

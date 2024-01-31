@@ -1,4 +1,4 @@
-package canopen
+package http
 
 import (
 	"encoding/json"
@@ -61,7 +61,7 @@ func parseNodeOrNetworkParam(param string) (int, error) {
 
 // Create a new sanitized api request object from raw http request
 // This function also checks that values are within bounds etc.
-func NewGatewayRequestFromRaw(r *http.Request) (*HTTPGatewayRequest, error) {
+func NewGatewayRequestFromRaw(r *http.Request) (*GatewayRequest, error) {
 	// Global expression match
 	match := regURI.FindStringSubmatch(r.URL.Path)
 	if len(match) != 6 {
@@ -98,7 +98,7 @@ func NewGatewayRequestFromRaw(r *http.Request) (*HTTPGatewayRequest, error) {
 		log.Warnf("[HTTP][SERVER] failed to unmarshal request body : %v", err)
 		return nil, ErrGwSyntaxError
 	}
-	request := &HTTPGatewayRequest{
+	request := &GatewayRequest{
 		nodeId:     nodeInt,
 		networkId:  netInt,
 		command:    match[5], // Contains rest of URL after node
@@ -109,7 +109,7 @@ func NewGatewayRequestFromRaw(r *http.Request) (*HTTPGatewayRequest, error) {
 }
 
 func NewResponseError(sequence int, error error) []byte {
-	gwErr, ok := error.(*HTTPGatewayError)
+	gwErr, ok := error.(*GatewayError)
 	if !ok {
 		gwErr = ErrGwRequestNotProcessed // Apparently no "internal error"
 	}
