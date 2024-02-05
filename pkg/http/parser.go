@@ -107,17 +107,3 @@ func NewGatewayRequestFromRaw(r *http.Request) (*GatewayRequest, error) {
 	}
 	return request, nil
 }
-
-func NewResponseError(sequence int, error error) []byte {
-	gwErr, ok := error.(*GatewayError)
-	if !ok {
-		gwErr = ErrGwRequestNotProcessed // Apparently no "internal error"
-	}
-	jData, _ := json.Marshal(map[string]string{"sequence": strconv.Itoa(sequence), "response": gwErr.Error()})
-	return jData
-}
-
-func NewResponseSuccess(sequence int) []byte {
-	jData, _ := json.Marshal(map[string]string{"sequence": strconv.Itoa(sequence), "response": "OK"})
-	return jData
-}

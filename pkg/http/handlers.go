@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -124,17 +125,18 @@ func (gw *GatewayServer) handlerSDORead(w doneWriter, req *GatewayRequest, comma
 		w.Write(NewResponseError(int(req.sequence), err))
 		return nil
 	}
-	sdoResp := SDOReadResponse{
-		Sequence: strconv.Itoa(int(req.sequence)),
-		Response: "OK",
-		Data:     "0x" + hex.EncodeToString(gw.Buffer()[:n]),
-		Length:   n,
+	buf := gw.Buffer()[:n]
+	slices.Reverse(buf)
+	resp := SDOReadResponse{
+		GatewayResponseBase: NewResponseBase(int(req.sequence), "OK"),
+		Data:                "0x" + hex.EncodeToString(buf),
+		Length:              n,
 	}
-	sdoResRaw, err := json.Marshal(sdoResp)
+	respRaw, err := json.Marshal(resp)
 	if err != nil {
 		return ErrGwRequestNotProcessed
 	}
-	w.Write(sdoResRaw)
+	w.Write(respRaw)
 	return nil
 }
 
@@ -180,7 +182,7 @@ func (gw *GatewayServer) handlerSDOWrite(w doneWriter, req *GatewayRequest, comm
 // Update SDO client timeout
 func (gw *GatewayServer) handleSDOTimeout(w doneWriter, req *GatewayRequest) error {
 
-	var sdoTimeout SDOTimeoutRequest
+	var sdoTimeout SDOSetTimeoutRequest
 	err := json.Unmarshal(req.parameters, &sdoTimeout)
 	if err != nil {
 		return ErrGwSyntaxError
@@ -190,4 +192,53 @@ func (gw *GatewayServer) handleSDOTimeout(w doneWriter, req *GatewayRequest) err
 		return ErrGwSyntaxError
 	}
 	return gw.SetSDOTimeout(uint32(sdoTimeoutInt))
+}
+
+func (gw *GatewayServer) handleGetVersion(w doneWriter, req *GatewayRequest) error {
+	version, err := gw.GetVersion()
+	if err != nil {
+		return ErrGwRequestNotProcessed
+	}
+	resp := VersionInfo{
+		GatewayResponseBase: NewResponseBase(int(req.sequence), "OK"),
+		GatewayVersion:      &version,
+	}
+	respRaw, err := json.Marshal(resp)
+	if err != nil {
+		return ErrGwRequestNotProcessed
+	}
+	w.Write(respRaw)
+	return nil
+}
+
+func (gw *GatewayServer) handleSetDefaultNetwork(w doneWriter, req *GatewayRequest) error {
+	var defaultNetwork SetDefaultNetOrNode
+	err := json.Unmarshal(req.parameters, &defaultNetwork)
+	if err != nil {
+		return ErrGwSyntaxError
+	}
+	networkId, err := strconv.ParseUint(defaultNetwork.Value, 0, 64)
+	if err != nil || networkId > 0xFFFF || networkId == 0 {
+		return ErrGwSyntaxError
+	}
+	gw.SetDefaultNetworkId(uint16(networkId))
+	respRaw := NewResponseSuccess(int(req.sequence))
+	w.Write(respRaw)
+	return nil
+}
+
+func (gw *GatewayServer) handleSetDefaultNode(w doneWriter, req *GatewayRequest) error {
+	var defaultNode SetDefaultNetOrNode
+	err := json.Unmarshal(req.parameters, &defaultNode)
+	if err != nil {
+		return ErrGwSyntaxError
+	}
+	nodeId, err := strconv.ParseUint(defaultNode.Value, 0, 64)
+	if err != nil || nodeId > 0xFF || nodeId == 0 {
+		return ErrGwSyntaxError
+	}
+	gw.SetDefaultNodeId(uint8(nodeId))
+	respRaw := NewResponseSuccess(int(req.sequence))
+	w.Write(respRaw)
+	return nil
 }

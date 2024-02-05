@@ -1,18 +1,19 @@
 package http
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
-	"strings"
 
+	canopen "github.com/samsamfire/gocanopen"
 	log "github.com/sirupsen/logrus"
 )
 
 type GatewayClient struct {
-	client            *http.Client
+	http.Client
 	baseURL           string
 	apiVersion        string
 	currentSequenceNb int
@@ -21,78 +22,88 @@ type GatewayClient struct {
 
 func NewGatewayClient(baseURL string, apiVersion string, networkId int) *GatewayClient {
 	return &GatewayClient{
-		client:     &http.Client{},
+		Client:     http.Client{},
 		baseURL:    baseURL,
 		networkId:  networkId,
 		apiVersion: apiVersion,
 	}
 }
 
-// Extract error if any inside of reponse
-func (resp *GatewayResponse) GetError() error {
-	// Check if any gateway errors
-	if !strings.HasPrefix(resp.Response, "ERROR:") {
-		return nil
-	}
-	responseSplitted := strings.Split(resp.Response, ":")
-	if len(responseSplitted) != 2 {
-		return fmt.Errorf("error decoding error field ('ERROR:' : %v)", resp.Response)
-	}
-	var errorCode uint64
-	errorCode, err := strconv.ParseUint(responseSplitted[1], 0, 64)
-	if err != nil {
-		return fmt.Errorf("error decoding error field ('ERROR:' : %v)", err)
-	}
-	return NewGatewayError(int(errorCode))
-}
-
 // HTTP request to CiA endpoint
-// Does high level error checking : http related errors, json decode errors
-// or wrong sequence number
-func (client *GatewayClient) do(method string, uri string, body io.Reader) (resp *GatewayResponse, err error) {
+// Does error checking : http related errors, json decode errors
+// or actual gateway errors
+func (client *GatewayClient) Do(method string, uri string, body io.Reader, response GatewayResponse) error {
 	client.currentSequenceNb += 1
 	baseUri := client.baseURL + "/cia309-5" + fmt.Sprintf("/%s/%d/%d", client.apiVersion, client.currentSequenceNb, client.networkId)
 	req, err := http.NewRequest(method, baseUri+uri, body)
 	if err != nil {
 		log.Errorf("[HTTP][CLIENT] http error : %v", err)
-		return nil, err
+		return err
 	}
 	// HTTP request
-	httpResp, err := client.client.Do(req)
+	httpResp, err := client.Client.Do(req)
 	if err != nil {
 		log.Errorf("[HTTP][CLIENT] http error : %v", err)
-		return nil, err
+		return err
 	}
 	// Decode JSON "generic" response
-	jsonRsp := new(GatewayResponse)
-	err = json.NewDecoder(httpResp.Body).Decode(jsonRsp)
+	err = json.NewDecoder(httpResp.Body).Decode(response)
 	if err != nil {
 		log.Errorf("[HTTP][CLIENT] error decoding json response : %v", err)
-		return nil, err
+		return err
 	}
-	// Check if sequence number is correct
-	sequence, err := strconv.Atoi(jsonRsp.Sequence)
+	// Check for gateway errors
+	err = response.GetError()
+	if err != nil {
+		return err
+	}
+	// Check for sequence nb mismatch
+	sequence := response.GetSequenceNb()
 	if client.currentSequenceNb != sequence || err != nil {
-		log.Errorf("[HTTP][CLIENT][SEQ:%v] sequence number does not match expected value (%v)", jsonRsp.Sequence, client.currentSequenceNb)
-		return nil, fmt.Errorf("error in sequence number")
+		log.Errorf("[HTTP][CLIENT][SEQ:%v] sequence number does not match expected value (%v)", sequence, client.currentSequenceNb)
+		return fmt.Errorf("error in sequence number")
 	}
-	return jsonRsp, nil
+	return nil
 }
 
-// Read via SDO
-func (client *GatewayClient) Read(nodeId uint8, index uint16, subIndex uint8) (data string, length int, err error) {
-	resp, err := client.do(http.MethodGet, fmt.Sprintf("/%d/r/%d/%d", nodeId, index, subIndex), nil)
+// ReadRaw via SDO
+func (client *GatewayClient) ReadRaw(nodeId uint8, index uint16, subIndex uint8) (data string, length int, err error) {
+	resp := new(SDOReadResponse)
+	err = client.Do(http.MethodGet, fmt.Sprintf("/%d/r/%d/%d", nodeId, index, subIndex), nil, resp)
 	if err != nil {
 		return
 	}
-	return resp.Data, 0, nil
+	return resp.Data, resp.Length, nil
 }
 
-// Write via SDO
-// func (client *HTTPGatewayClient) Write(nodeId uint8, index uint16, subIndex uint8, data string) error {
-// 	resp, err := client.get(fmt.Sprintf("/%d/w/%d/%d", nodeId, index, subIndex))
-// 	if err != nil {
-// 		return
-// 	}
-// 	return resp.Data, 0, nil
-// }
+// WriteRaw via SDO
+func (client *GatewayClient) WriteRaw(nodeId uint8, index uint16, subIndex uint8, value string, datatype string) error {
+	req := new(SDOWriteRequest)
+	resp := new(GatewayResponseBase)
+	req.Value = value
+	req.Datatype = datatype
+	encodedReq, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+	return client.Do(http.MethodPut, fmt.Sprintf("/%d/w/%d/%d", nodeId, index, subIndex), bytes.NewBuffer(encodedReq), resp)
+}
+
+// Update SDO client timeout
+func (client *GatewayClient) SetSDOTimeout(timeoutMs uint16) error {
+	req := new(SDOSetTimeoutRequest)
+	req.Value = "0x" + strconv.FormatInt(int64(timeoutMs), 16)
+	encodedReq, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+	resp := new(GatewayResponseBase)
+	return client.Do(http.MethodPut, "/all/set/sdo-timeout", bytes.NewBuffer(encodedReq), resp)
+}
+
+// Read gateway version
+func (client *GatewayClient) GetVersion() (*canopen.GatewayVersion, error) {
+	versionInfo := new(VersionInfo)
+	err := client.Do(http.MethodGet, "/none/info/version", nil, versionInfo)
+	return versionInfo.GatewayVersion, err
+}

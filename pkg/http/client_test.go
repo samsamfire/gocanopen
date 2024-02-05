@@ -7,10 +7,10 @@ import (
 )
 
 func TestGetError(t *testing.T) {
-	req := GatewayResponse{Sequence: "1", Data: "", Length: "", Response: "ERROR:100"}
+	req := GatewayResponseBase{Sequence: "1", Response: "ERROR:100"}
 	err := req.GetError()
 	assert.Equal(t, NewGatewayError(100), err)
-	req = GatewayResponse{Sequence: "1", Data: "", Length: "", Response: "OK"}
+	req = GatewayResponseBase{Sequence: "1", Response: "OK"}
 	err = req.GetError()
 	assert.Equal(t, nil, err)
 }
