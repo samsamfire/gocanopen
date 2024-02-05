@@ -67,7 +67,9 @@ func NewGatewayServer(network *canopen.Network, defaultNetworkId uint16, default
 	gw.addRoute("disable/heartbeat", handlerNotSupported)
 
 	// CiA 309-5 | 4.6
-	//gw.addRoute("info/version")
+	gw.addRoute("set/network", gw.handleSetDefaultNetwork)
+	gw.addRoute("set/node", gw.handleSetDefaultNode)
+	gw.addRoute("info/version", gw.handleGetVersion)
 
 	return gw
 }

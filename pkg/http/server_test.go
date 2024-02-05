@@ -55,10 +55,11 @@ func createClient() (*GatewayClient, func()) {
 func TestInvalidURIs(t *testing.T) {
 	client, close := createClient()
 	defer close()
-	_, err := client.do(http.MethodGet, "/", nil)
+	resp := new(GatewayResponseBase)
+	err := client.Do(http.MethodGet, "/", nil, resp)
 	assert.EqualValues(t, ErrGwSyntaxError, err)
-	_, err = client.do(http.MethodGet, "/10/start//", nil)
-	assert.EqualValues(t, ErrGwSyntaxError, err)
+	err = client.Do(http.MethodGet, "/10/strt//", nil, resp)
+	assert.EqualValues(t, ErrGwRequestNotSupported, err)
 }
 
 func TestNMTCommand(t *testing.T) {
@@ -74,32 +75,62 @@ func TestNMTCommand(t *testing.T) {
 		"reset/communication",
 	}
 	for _, command := range commands {
-		resp, err := client.do(http.MethodPut, fmt.Sprintf("/10/%s", command), nil)
+		resp := new(GatewayResponseBase)
+		err := client.Do(http.MethodPut, fmt.Sprintf("/10/%s", command), nil, resp)
 		assert.Nil(t, err)
 		assert.NotNil(t, resp)
 	}
 	for _, command := range commands {
-		resp, err := client.do(http.MethodPut, fmt.Sprintf("/all/%s", command), nil)
+		resp := new(GatewayResponseBase)
+		err := client.Do(http.MethodPut, fmt.Sprintf("/all/%s", command), nil, resp)
 		assert.Nil(t, err)
 		assert.NotNil(t, resp)
 	}
 	for _, command := range commands {
-		resp, err := client.do(http.MethodPut, fmt.Sprintf("/none/%s", command), nil)
+		resp := new(GatewayResponseBase)
+		err := client.Do(http.MethodPut, fmt.Sprintf("/none/%s", command), nil, resp)
 		assert.Nil(t, err)
 		assert.NotNil(t, resp)
 	}
 	for _, command := range commands {
-		resp, err := client.do(http.MethodPut, fmt.Sprintf("/default/%s", command), nil)
+		resp := new(GatewayResponseBase)
+		err := client.Do(http.MethodPut, fmt.Sprintf("/default/%s", command), nil, resp)
 		assert.Nil(t, err)
 		assert.NotNil(t, resp)
 	}
 }
 
-func TestSDOAccessCommands(t *testing.T) {
+func TestRead(t *testing.T) {
 	client, close := createClient()
 	defer close()
 	for i := uint16(0x2001); i <= 0x2009; i++ {
-		_, _, err := client.Read(NODE_ID_TEST, i, 0)
+		_, _, err := client.ReadRaw(NODE_ID_TEST, i, 0)
 		assert.Nil(t, err)
 	}
+}
+
+func TestWriteRead(t *testing.T) {
+	client, close := createClient()
+	defer close()
+	err := client.WriteRaw(NODE_ID_TEST, 0x2002, 0, "0x10", "i8")
+	assert.Nil(t, err)
+	err = client.WriteRaw(NODE_ID_TEST, 0x2003, 0, "0x5432", "i16")
+	assert.Nil(t, err)
+	data, _, _ := client.ReadRaw(NODE_ID_TEST, 0x2003, 0)
+	assert.Equal(t, "0x5432", data)
+}
+
+func TestSDOTimeout(t *testing.T) {
+	client, close := createClient()
+	defer close()
+	err := client.SetSDOTimeout(1222)
+	assert.Nil(t, err)
+}
+
+func TestGetVersion(t *testing.T) {
+	client, close := createClient()
+	defer close()
+	version, err := client.GetVersion()
+	assert.Nil(t, err)
+	assert.Equal(t, "02.01", version.ProtocolVersion)
 }

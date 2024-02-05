@@ -1,13 +1,69 @@
 package http
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
 
-// HTTP response from the server
-type GatewayResponse struct {
-	Sequence string `json:"sequence,omitempty"`
-	Data     string `json:"data,omitempty"`
-	Length   string `json:"length,omitempty"`
-	Response string `json:"response,omitempty"`
+	canopen "github.com/samsamfire/gocanopen"
+)
+
+type GatewayResponse interface {
+	GetError() error
+	GetSequenceNb() int
+}
+
+// HTTP response base
+type GatewayResponseBase struct {
+	// Sequence number corresponding to a request
+	Sequence string `json:"sequence"`
+	// Response, can be "OK", "NEXT", or "ERROR:x"
+	Response string `json:"response"`
+}
+
+func NewResponseBase(sequence int, response string) *GatewayResponseBase {
+	return &GatewayResponseBase{
+		Sequence: strconv.Itoa(sequence),
+		Response: response,
+	}
+}
+
+func NewResponseError(sequence int, error error) []byte {
+	gwErr, ok := error.(*GatewayError)
+	if !ok {
+		gwErr = ErrGwRequestNotProcessed // Apparently no "internal error"
+	}
+	jData, _ := json.Marshal(map[string]string{"sequence": strconv.Itoa(sequence), "response": gwErr.Error()})
+	return jData
+}
+
+func NewResponseSuccess(sequence int) []byte {
+	jData, _ := json.Marshal(map[string]string{"sequence": strconv.Itoa(sequence), "response": "OK"})
+	return jData
+}
+
+// Extract error if any inside of reponse
+func (resp *GatewayResponseBase) GetError() error {
+	// Check if any gateway errors
+	if !strings.HasPrefix(resp.Response, "ERROR:") {
+		return nil
+	}
+	responseSplitted := strings.Split(resp.Response, ":")
+	if len(responseSplitted) != 2 {
+		return fmt.Errorf("error decoding error field ('ERROR:' : %v)", resp.Response)
+	}
+	var errorCode uint64
+	errorCode, err := strconv.ParseUint(responseSplitted[1], 0, 64)
+	if err != nil {
+		return fmt.Errorf("error decoding error field ('ERROR:' : %v)", err)
+	}
+	return NewGatewayError(int(errorCode))
+}
+
+func (resp *GatewayResponseBase) GetSequenceNb() int {
+	sequence, _ := strconv.Atoi(resp.Sequence)
+	return sequence
 }
 
 // HTTP request to the server
@@ -18,8 +74,7 @@ type GatewayRequest struct {
 	sequence   uint32 // sequence number
 	parameters json.RawMessage
 }
-
-type SDOTimeoutRequest struct {
+type SDOSetTimeoutRequest struct {
 	Value string `json:"value"`
 }
 
@@ -29,8 +84,16 @@ type SDOWriteRequest struct {
 }
 
 type SDOReadResponse struct {
-	Sequence string `json:"sequence"`
-	Response string `json:"response"`
-	Data     string `json:"data"`
-	Length   int    `json:"length,omitempty"`
+	*GatewayResponseBase
+	Data   string `json:"data"`
+	Length int    `json:"length,omitempty"`
+}
+
+type VersionInfo struct {
+	*GatewayResponseBase
+	*canopen.GatewayVersion
+}
+
+type SetDefaultNetOrNode struct {
+	Value string `json:"value"`
 }
