@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	canopen "github.com/samsamfire/gocanopen"
+	http "github.com/samsamfire/gocanopen/pkg/http"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -29,7 +30,7 @@ func main() {
 	if e != nil {
 		panic(e)
 	}
-	gateway := canopen.NewGateway(1, 1, 100, &network)
+	gateway := http.NewGatewayServer(&network, 1, 1, 1000)
 	gateway.ListenAndServe(fmt.Sprintf(":%d", DEFAULT_HTTP_PORT))
 
 }
