@@ -2,7 +2,7 @@ package canopen
 
 import log "github.com/sirupsen/logrus"
 
-// BaseGateway implements all the basic gateway features defined by CiA 309
+// BaseGateway implements the basic gateway features defined by CiA 309
 // CiA 309 currently defines 4 types:
 // CiA 309-2 : Modbus TCP
 // CiA 309-3 : ASCII
