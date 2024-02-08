@@ -22,7 +22,7 @@ type PDOConfiguration struct {
 	Mappings         []PDOMapping
 }
 
-type PDOConfigurator struct {
+type pdoConfigurator struct {
 	nodeId      uint8      // Node id being controlled
 	sdoClient   *SDOClient // Standard sdo client
 	indexOffset uint16     // 0 for RPDO, 0x200 for TPDO
@@ -31,35 +31,35 @@ type PDOConfigurator struct {
 
 // PDO configurator is used for configurating node PDOs
 // It has helper functions for accessing the common PDO mandatory objects
-func NewRPDOConfigurator(nodeId uint8, sdoClient *SDOClient) *PDOConfigurator {
-	return &PDOConfigurator{nodeId: nodeId, sdoClient: sdoClient, indexOffset: 0, isRPDO: true}
+func newRPDOConfigurator(nodeId uint8, sdoClient *SDOClient) pdoConfigurator {
+	return pdoConfigurator{nodeId: nodeId, sdoClient: sdoClient, indexOffset: 0, isRPDO: true}
 }
 
-func NewTPDOConfigurator(nodeId uint8, sdoClient *SDOClient) *PDOConfigurator {
-	return &PDOConfigurator{nodeId: nodeId, sdoClient: sdoClient, indexOffset: 0x400, isRPDO: false}
+func newTPDOConfigurator(nodeId uint8, sdoClient *SDOClient) pdoConfigurator {
+	return pdoConfigurator{nodeId: nodeId, sdoClient: sdoClient, indexOffset: 0x400, isRPDO: false}
 }
 
-func (conf *PDOConfigurator) getType() string {
+func (conf *pdoConfigurator) getType() string {
 	if conf.isRPDO {
 		return "RPDO"
 	}
 	return "TPDO"
 }
 
-func (conf *PDOConfigurator) getMappingIndex(pdoNb uint16) uint16 {
+func (conf *pdoConfigurator) getMappingIndex(pdoNb uint16) uint16 {
 	return conf.indexOffset + BASE_RPDO_MAPPING_INDEX + pdoNb - 1
 }
 
-func (conf *PDOConfigurator) getCommunicationIndex(pdoNb uint16) uint16 {
+func (conf *pdoConfigurator) getCommunicationIndex(pdoNb uint16) uint16 {
 	return conf.indexOffset + BASE_RPDO_COMMUNICATION_INDEX + pdoNb - 1
 }
 
-func (config *PDOConfigurator) ReadCobId(pdoNb uint16) (uint32, error) {
+func (config *pdoConfigurator) ReadCobId(pdoNb uint16) (uint32, error) {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
 	return config.sdoClient.ReadUint32(config.nodeId, pdoCommIndex, 1)
 }
 
-func (config *PDOConfigurator) ReadEnabled(pdoNb uint16) (bool, error) {
+func (config *pdoConfigurator) ReadEnabled(pdoNb uint16) (bool, error) {
 	cobId, err := config.ReadCobId(pdoNb)
 	if err != nil {
 		return false, err
@@ -67,27 +67,27 @@ func (config *PDOConfigurator) ReadEnabled(pdoNb uint16) (bool, error) {
 	return (cobId>>31)&0b1 == 0, nil
 }
 
-func (config *PDOConfigurator) ReadTransmissionType(pdoNb uint16) (uint8, error) {
+func (config *pdoConfigurator) ReadTransmissionType(pdoNb uint16) (uint8, error) {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
 	return config.sdoClient.ReadUint8(config.nodeId, pdoCommIndex, 2)
 }
 
-func (config *PDOConfigurator) ReadInhibitTime(pdoNb uint16) (uint16, error) {
+func (config *pdoConfigurator) ReadInhibitTime(pdoNb uint16) (uint16, error) {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
 	return config.sdoClient.ReadUint16(config.nodeId, pdoCommIndex, 3)
 }
 
-func (config *PDOConfigurator) ReadEventTimer(pdoNb uint16) (uint16, error) {
+func (config *pdoConfigurator) ReadEventTimer(pdoNb uint16) (uint16, error) {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
 	return config.sdoClient.ReadUint16(config.nodeId, pdoCommIndex, 5)
 }
 
-func (config *PDOConfigurator) ReadNbMappings(pdoNb uint16) (uint8, error) {
+func (config *pdoConfigurator) ReadNbMappings(pdoNb uint16) (uint8, error) {
 	pdoMappingIndex := config.getMappingIndex(pdoNb)
 	return config.sdoClient.ReadUint8(config.nodeId, pdoMappingIndex, 0)
 }
 
-func (config *PDOConfigurator) ReadMappings(pdoNb uint16) ([]PDOMapping, error) {
+func (config *pdoConfigurator) ReadMappings(pdoNb uint16) ([]PDOMapping, error) {
 	pdoMappingIndex := config.getMappingIndex(pdoNb)
 	mappings := make([]PDOMapping, 0)
 	nbMappings, err := config.ReadNbMappings(pdoNb)
@@ -109,7 +109,7 @@ func (config *PDOConfigurator) ReadMappings(pdoNb uint16) ([]PDOMapping, error) 
 }
 
 // Reads complete PDO configuration
-func (config *PDOConfigurator) ReadConfiguration(pdoNb uint16) (PDOConfiguration, error) {
+func (config *pdoConfigurator) ReadConfiguration(pdoNb uint16) (PDOConfiguration, error) {
 	conf := PDOConfiguration{}
 	var err error
 	cobId, err := config.ReadCobId(pdoNb)
@@ -131,7 +131,7 @@ func (config *PDOConfigurator) ReadConfiguration(pdoNb uint16) (PDOConfiguration
 }
 
 // Disable PDO
-func (config *PDOConfigurator) Disable(pdoNb uint16) error {
+func (config *pdoConfigurator) Disable(pdoNb uint16) error {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
 	cobId, err := config.ReadCobId(pdoNb)
 	if err != nil {
@@ -142,7 +142,7 @@ func (config *PDOConfigurator) Disable(pdoNb uint16) error {
 }
 
 // Enable PDO
-func (config *PDOConfigurator) Enable(pdoNb uint16) error {
+func (config *pdoConfigurator) Enable(pdoNb uint16) error {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
 	cobId, err := config.ReadCobId(pdoNb)
 	if err != nil {
@@ -153,7 +153,7 @@ func (config *PDOConfigurator) Enable(pdoNb uint16) error {
 	return config.sdoClient.WriteRaw(config.nodeId, pdoCommIndex, 1, cobId, false)
 }
 
-func (config *PDOConfigurator) WriteCanId(pdoNb uint16, canId uint16) error {
+func (config *pdoConfigurator) WriteCanId(pdoNb uint16, canId uint16) error {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
 	cobId, err := config.ReadCobId(pdoNb)
 	if err != nil {
@@ -164,24 +164,24 @@ func (config *PDOConfigurator) WriteCanId(pdoNb uint16, canId uint16) error {
 	return config.sdoClient.WriteRaw(config.nodeId, pdoCommIndex, 1, cobId, false)
 }
 
-func (config *PDOConfigurator) WriteTransmissionType(pdoNb uint16, transType uint8) error {
+func (config *pdoConfigurator) WriteTransmissionType(pdoNb uint16, transType uint8) error {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
 	return config.sdoClient.WriteRaw(config.nodeId, pdoCommIndex, 2, transType, false)
 }
 
-func (config *PDOConfigurator) WriteInhibitTime(pdoNb uint16, inhibitTime uint16) error {
+func (config *pdoConfigurator) WriteInhibitTime(pdoNb uint16, inhibitTime uint16) error {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
 	return config.sdoClient.WriteRaw(config.nodeId, pdoCommIndex, 3, inhibitTime, false)
 }
 
-func (config *PDOConfigurator) WriteEventTimer(pdoNb uint16, eventTimer uint16) error {
+func (config *pdoConfigurator) WriteEventTimer(pdoNb uint16, eventTimer uint16) error {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
 	return config.sdoClient.WriteRaw(config.nodeId, pdoCommIndex, 5, eventTimer, false)
 }
 
 // Clear all the PDO mappings
 // Technically clearing the actual map entries is not necessary but I find it cleaner
-func (config *PDOConfigurator) ClearMappings(pdoNb uint16) error {
+func (config *pdoConfigurator) ClearMappings(pdoNb uint16) error {
 	pdoMappingIndex := config.getMappingIndex(pdoNb)
 	// First clear nb of mapped entries
 	err := config.sdoClient.WriteRaw(config.nodeId, pdoMappingIndex, 0, uint8(0), false)
@@ -201,7 +201,7 @@ func (config *PDOConfigurator) ClearMappings(pdoNb uint16) error {
 // Write new PDO mapping
 // Takes a list of objects to map and will fill them up in the given order
 // This will first clear the current mapping
-func (config *PDOConfigurator) WriteMappings(pdoNb uint16, mappings []PDOMapping) error {
+func (config *pdoConfigurator) WriteMappings(pdoNb uint16, mappings []PDOMapping) error {
 	pdoMappingIndex := config.getMappingIndex(pdoNb)
 	err := config.ClearMappings(pdoNb)
 	if err != nil {
@@ -220,7 +220,7 @@ func (config *PDOConfigurator) WriteMappings(pdoNb uint16, mappings []PDOMapping
 }
 
 // Update hole configuration
-func (config *PDOConfigurator) WriteConfiguration(pdoNb uint16, conf PDOConfiguration) error {
+func (config *pdoConfigurator) WriteConfiguration(pdoNb uint16, conf PDOConfiguration) error {
 	log.Debugf("[CONFIGURATOR][%s%v] updating configuration : %+v", config.getType(), pdoNb, conf)
 	err := config.WriteCanId(pdoNb, conf.CanId)
 	if err != nil {

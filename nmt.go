@@ -264,21 +264,21 @@ func NewNMT(
 	return nmt, nil
 }
 
-type NMTConfigurator struct {
+type nmtConfigurator struct {
 	nodeId    uint8
 	sdoClient *SDOClient
 }
 
-func NewNMTConfigurator(nodeId uint8, sdoClient *SDOClient) *NMTConfigurator {
-	return &NMTConfigurator{nodeId: nodeId, sdoClient: sdoClient}
+func newNMTConfigurator(nodeId uint8, sdoClient *SDOClient) nmtConfigurator {
+	return nmtConfigurator{nodeId: nodeId, sdoClient: sdoClient}
 }
 
 // Read a nodes heartbeat period and returns it in milliseconds
-func (config *NMTConfigurator) ReadHeartbeatPeriod() (uint16, error) {
+func (config *nmtConfigurator) ReadHeartbeatPeriod() (uint16, error) {
 	return config.sdoClient.ReadUint16(config.nodeId, 0x1017, 0)
 }
 
 // Update a nodes heartbeat period in milliseconds
-func (config *NMTConfigurator) WriteHeartbeatPeriod(periodMs uint16) error {
+func (config *nmtConfigurator) WriteHeartbeatPeriod(periodMs uint16) error {
 	return config.sdoClient.WriteRaw(config.nodeId, 0x1017, 0, periodMs, false)
 }

@@ -121,17 +121,17 @@ func newRemoteNode(
 func (node *RemoteNode) InitPDOs(useLocal bool) error {
 	// Iterate over all the possible entries : there can be a maximum of 512 maps
 	// Break loops when an entry doesn't exist (don't allow holes in mapping)
-	var pdoConfigurators []*PDOConfigurator
+	var pdoConfigurators []pdoConfigurator
 
-	localRPDOConfigurator := NewRPDOConfigurator(0, node.sdoClient)
-	localTPDOConfigurator := NewTPDOConfigurator(0, node.sdoClient)
+	localRPDOConfigurator := newRPDOConfigurator(0, node.sdoClient)
+	localTPDOConfigurator := newTPDOConfigurator(0, node.sdoClient)
 
 	if useLocal {
-		pdoConfigurators = []*PDOConfigurator{localRPDOConfigurator, localTPDOConfigurator}
+		pdoConfigurators = []pdoConfigurator{localRPDOConfigurator, localTPDOConfigurator}
 	} else {
-		pdoConfigurators = []*PDOConfigurator{
-			NewRPDOConfigurator(node.id, node.sdoClient),
-			NewTPDOConfigurator(node.id, node.sdoClient),
+		pdoConfigurators = []pdoConfigurator{
+			newRPDOConfigurator(node.id, node.sdoClient),
+			newTPDOConfigurator(node.id, node.sdoClient),
 		}
 	}
 

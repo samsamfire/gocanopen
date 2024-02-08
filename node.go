@@ -269,27 +269,27 @@ type Node interface {
 	wg() *sync.WaitGroup
 }
 
-// NodeConfigurator provides helper functions for configuring
-// a CANopen node using SDO and the definitions provided by
-// CiA 301.
-// These configurations being standard, they do not require any
-// EDS file.
+// NodeConfigurator provides helper methods for
+// updating CANopen reserved configuration objects
+// i.e. objects between 0x1000 and 0x2000.
+// No EDS files need to be loaded for configuring these parameters
 type NodeConfigurator struct {
-	RPDO PDOConfigurator
-	TPDO PDOConfigurator
-	SYNC SYNCConfigurator
-	HB   HBConfigurator
-	NMT  NMTConfigurator
-	// Others to come
+	RPDO pdoConfigurator
+	TPDO pdoConfigurator
+	SYNC syncConfigurator
+	HB   hbConfigurator
+	NMT  nmtConfigurator
+	TIME timeConfigurator
 }
 
-// Create a new [NodeConfigurator] given a specific ID and an SDOClient
+// Create a new [NodeConfigurator] for given ID and SDOClient
 func NewNodeConfigurator(nodeId uint8, client *SDOClient) NodeConfigurator {
 	configurator := NodeConfigurator{}
-	configurator.RPDO = *NewRPDOConfigurator(nodeId, client)
-	configurator.TPDO = *NewTPDOConfigurator(nodeId, client)
-	configurator.SYNC = *NewSYNCConfigurator(nodeId, client)
-	configurator.HB = *NewHBConfigurator(nodeId, client)
-	configurator.NMT = *NewNMTConfigurator(nodeId, client)
+	configurator.RPDO = newRPDOConfigurator(nodeId, client)
+	configurator.TPDO = newTPDOConfigurator(nodeId, client)
+	configurator.SYNC = newSYNCConfigurator(nodeId, client)
+	configurator.HB = newHBConfigurator(nodeId, client)
+	configurator.NMT = newNMTConfigurator(nodeId, client)
+	configurator.TIME = newTIMEConfigurator(nodeId, client)
 	return configurator
 }

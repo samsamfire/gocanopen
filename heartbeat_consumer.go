@@ -200,15 +200,19 @@ func NewHBConsumer(bm *busManager, em *EMCY, entry1016 *Entry) (*HBConsumer, err
 
 }
 
-type HBConfigurator struct {
+type hbConfigurator struct {
 	nodeId    uint8
 	sdoClient *SDOClient
+}
+
+func newHBConfigurator(nodeId uint8, sdoClient *SDOClient) hbConfigurator {
+	return hbConfigurator{nodeId: nodeId, sdoClient: sdoClient}
 }
 
 // Read current monitored nodes
 // Returns a list of all the entries composed as the id of the monitored node
 // And the expected period in ms
-func (config *HBConfigurator) ReadMonitoredNodes() ([][]uint16, error) {
+func (config *hbConfigurator) ReadMonitoredNodes() ([][]uint16, error) {
 	nbMonitored, err := config.ReadMaxMonitorable()
 	if err != nil {
 		return nil, err
@@ -227,7 +231,7 @@ func (config *HBConfigurator) ReadMonitoredNodes() ([][]uint16, error) {
 }
 
 // Read max available entries for monitoring
-func (config *HBConfigurator) ReadMaxMonitorable() (uint8, error) {
+func (config *hbConfigurator) ReadMaxMonitorable() (uint8, error) {
 	nbMonitored, err := config.sdoClient.ReadUint8(config.nodeId, 0x1016, 0x0)
 	if err != nil {
 		return 0, err
@@ -237,11 +241,7 @@ func (config *HBConfigurator) ReadMaxMonitorable() (uint8, error) {
 
 // Add or update a node to monitor with the expected heartbeat period
 // Index needs to be between 1 & the max nodes that can be monitored
-func (config *HBConfigurator) WriteMonitoredNode(index uint8, nodeId uint8, periodMs uint16) error {
+func (config *hbConfigurator) WriteMonitoredNode(index uint8, nodeId uint8, periodMs uint16) error {
 	periodAndId := uint32(nodeId)<<16 + uint32(periodMs&0xFFFF)
 	return config.sdoClient.WriteRaw(config.nodeId, 0x1016, index, periodAndId, false)
-}
-
-func NewHBConfigurator(nodeId uint8, sdoClient *SDOClient) *HBConfigurator {
-	return &HBConfigurator{nodeId: nodeId, sdoClient: sdoClient}
 }
