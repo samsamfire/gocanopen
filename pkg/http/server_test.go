@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	canopen "github.com/samsamfire/gocanopen"
+	"github.com/samsamfire/gocanopen/pkg/can"
+	"github.com/samsamfire/gocanopen/pkg/can/virtual"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
@@ -18,7 +20,8 @@ func init() {
 }
 
 func createNetworkEmpty() *canopen.Network {
-	bus := canopen.NewVirtualCanBus("localhost:18888")
+	canBus, _ := can.NewBus("virtual", "localhost:18888", 0)
+	bus := canBus.(*virtual.VirtualCanBus)
 	bus.SetReceiveOwn(true)
 	network := canopen.NewNetwork(bus)
 	e := network.Connect()

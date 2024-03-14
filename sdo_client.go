@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 
+	can "github.com/samsamfire/gocanopen/pkg/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -31,7 +32,7 @@ type SDOClient struct {
 	od                         *ObjectDictionary
 	streamer                   *streamer
 	nodeId                     uint8
-	txBuffer                   Frame
+	txBuffer                   can.Frame
 	cobIdClientToServer        uint32
 	cobIdServerToClient        uint32
 	nodeIdServer               uint8
@@ -58,7 +59,7 @@ type SDOClient struct {
 	blockCRC                   crc16
 }
 
-func (client *SDOClient) Handle(frame Frame) {
+func (client *SDOClient) Handle(frame can.Frame) {
 
 	if client.state != SDO_STATE_IDLE && frame.DLC == 8 && (!client.rxNew || frame.Data[0] == 0x80) {
 		if frame.Data[0] == 0x80 || (client.state != SDO_STATE_UPLOAD_BLK_SUBBLOCK_SREQ && client.state != SDO_STATE_UPLOAD_BLK_SUBBLOCK_CRSP) {
@@ -138,7 +139,7 @@ func (client *SDOClient) setupServer(cobIdClientToServer uint32, cobIdServerToCl
 	if err != nil {
 		return err
 	}
-	client.txBuffer = NewFrame(uint32(CanIdC2S), 0, 8)
+	client.txBuffer = can.NewFrame(uint32(CanIdC2S), 0, 8)
 	return nil
 }
 

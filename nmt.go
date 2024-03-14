@@ -1,6 +1,7 @@
 package canopen
 
 import (
+	can "github.com/samsamfire/gocanopen/pkg/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -69,12 +70,12 @@ type NMT struct {
 	control                uint16
 	hearbeatProducerTimeUs uint32
 	hearbeatProducerTimer  uint32
-	nmtTxBuff              Frame
-	hbTxBuff               Frame
+	nmtTxBuff              can.Frame
+	hbTxBuff               can.Frame
 	callback               func(nmtState uint8)
 }
 
-func (nmt *NMT) Handle(frame Frame) {
+func (nmt *NMT) Handle(frame can.Frame) {
 	dlc := frame.DLC
 	data := frame.Data
 	if dlc != 2 {
@@ -259,8 +260,8 @@ func NewNMT(
 	if err != nil {
 		return nil, err
 	}
-	nmt.nmtTxBuff = NewFrame(uint32(canIdNmtTx), 0, 2)
-	nmt.hbTxBuff = NewFrame(uint32(canIdHbTx), 0, 1)
+	nmt.nmtTxBuff = can.NewFrame(uint32(canIdNmtTx), 0, 2)
+	nmt.hbTxBuff = can.NewFrame(uint32(canIdHbTx), 0, 1)
 	return nmt, nil
 }
 

@@ -3,6 +3,7 @@ package canopen
 import (
 	"encoding/binary"
 
+	can "github.com/samsamfire/gocanopen/pkg/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -256,7 +257,7 @@ type EMCY struct {
 	errorStatusBits [CO_CONFIG_EM_ERR_STATUS_BITS_COUNT / 8]byte
 	errorRegister   *byte
 	canErrorOld     uint16
-	txBuffer        Frame
+	txBuffer        can.Frame
 	fifo            []emfifo
 	fifoWrPtr       byte
 	fifoPpPtr       byte
@@ -310,7 +311,7 @@ func writeEntryStatusBits(stream *Stream, data []byte, countWritten *uint16) err
 	return nil
 }
 
-func (emergency *EMCY) Handle(frame Frame) {
+func (emergency *EMCY) Handle(frame can.Frame) {
 	// Ignore sync messages and only accept 8 bytes size
 	if emergency == nil || emergency.rxCallback == nil ||
 		frame.ID == 0x80 ||
@@ -334,58 +335,58 @@ func (emergency *EMCY) process(nmtIsPreOrOperational bool, timeDifferenceUs uint
 	if canErrStatus != emergency.canErrorOld {
 		canErrStatusChanged := canErrStatus ^ emergency.canErrorOld
 		emergency.canErrorOld = canErrStatus
-		if (canErrStatusChanged & (canErrorTxWarning | canErrorRxWarning)) != 0 {
+		if (canErrStatusChanged & (can.CanErrorTxWarning | can.CanErrorRxWarning)) != 0 {
 			emergency.error(
-				(canErrStatus&(canErrorTxWarning|canErrorRxWarning)) != 0,
+				(canErrStatus&(can.CanErrorTxWarning|can.CanErrorRxWarning)) != 0,
 				emCanBusWarning,
 				emNoError,
 				0,
 			)
 		}
-		if (canErrStatusChanged & canErrorTxPassive) != 0 {
+		if (canErrStatusChanged & can.CanErrorTxPassive) != 0 {
 			emergency.error(
-				(canErrStatus&canErrorTxPassive) != 0,
+				(canErrStatus&can.CanErrorTxPassive) != 0,
 				emCanTXBusPassive,
 				emErrCanPassive,
 				0,
 			)
 		}
 
-		if (canErrStatusChanged & canErrorTxBusOff) != 0 {
+		if (canErrStatusChanged & can.CanErrorTxBusOff) != 0 {
 			emergency.error(
-				(canErrStatus&canErrorTxBusOff) != 0,
+				(canErrStatus&can.CanErrorTxBusOff) != 0,
 				emCanTXBusOff,
 				emErrBusOffRecovered,
 				0)
 		}
 
-		if (canErrStatusChanged & canErrorTxOverflow) != 0 {
+		if (canErrStatusChanged & can.CanErrorTxOverflow) != 0 {
 			emergency.error(
-				(canErrStatus&canErrorTxOverflow) != 0,
+				(canErrStatus&can.CanErrorTxOverflow) != 0,
 				emCanTXOverflow,
 				emErrCanOverrun,
 				0)
 		}
 
-		if (canErrStatusChanged & canErrorPdoLate) != 0 {
+		if (canErrStatusChanged & can.CanErrorPdoLate) != 0 {
 			emergency.error(
-				(canErrStatus&canErrorPdoLate) != 0,
+				(canErrStatus&can.CanErrorPdoLate) != 0,
 				emTPDOOutsideWindow,
 				emErrCommunication,
 				0)
 		}
 
-		if (canErrStatusChanged & canErrorRxPassive) != 0 {
+		if (canErrStatusChanged & can.CanErrorRxPassive) != 0 {
 			emergency.error(
-				(canErrStatus&canErrorRxPassive) != 0,
+				(canErrStatus&can.CanErrorRxPassive) != 0,
 				emCanRXBusPassive,
 				emErrCanPassive,
 				0)
 		}
 
-		if (canErrStatusChanged & canErrorRxOverflow) != 0 {
+		if (canErrStatusChanged & can.CanErrorRxOverflow) != 0 {
 			emergency.error(
-				(canErrStatus&canErrorRxOverflow) != 0,
+				(canErrStatus&can.CanErrorRxOverflow) != 0,
 				emCanRXBOverflow,
 				emErrCanOverrun,
 				0)
@@ -583,7 +584,7 @@ func NewEM(
 		producerCanId += uint32(nodeId)
 	}
 	emergency.nodeId = nodeId
-	emergency.txBuffer = NewFrame(producerCanId, 0, 8)
+	emergency.txBuffer = can.NewFrame(producerCanId, 0, 8)
 	emergency.inhibitTimeUs = 0
 	emergency.inhibitTimer = 0
 	inhibitTime100us, ret := entry1015.Uint16(0)

@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"time"
 
+	can "github.com/samsamfire/gocanopen/pkg/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -21,7 +22,7 @@ type TIME struct {
 	cobId              uint32
 }
 
-func (t *TIME) Handle(frame Frame) {
+func (t *TIME) Handle(frame can.Frame) {
 	if len(frame.Data) != 6 {
 		return
 	}
@@ -57,7 +58,7 @@ func (t *TIME) process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) bool
 	if nmtIsPreOrOperational && t.isProducer && t.producerIntervalMs > 0 {
 		if t.producerTimerMs >= t.producerIntervalMs {
 			t.producerTimerMs -= t.producerIntervalMs
-			frame := NewFrame(t.cobId, 0, 6)
+			frame := can.NewFrame(t.cobId, 0, 6)
 			binary.LittleEndian.PutUint32(frame.Data[0:4], t.ms)
 			binary.LittleEndian.PutUint16(frame.Data[4:6], t.days)
 			t.Send(frame)

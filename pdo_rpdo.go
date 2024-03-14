@@ -1,6 +1,9 @@
 package canopen
 
-import log "github.com/sirupsen/logrus"
+import (
+	can "github.com/samsamfire/gocanopen/pkg/can"
+	log "github.com/sirupsen/logrus"
+)
 
 const (
 	rpdoRxAckNoError = 0  // No error
@@ -23,7 +26,7 @@ type RPDO struct {
 	timeoutTimer  uint32
 }
 
-func (rpdo *RPDO) Handle(frame Frame) {
+func (rpdo *RPDO) Handle(frame can.Frame) {
 	pdo := &rpdo.pdo
 	err := rpdo.receiveError
 
