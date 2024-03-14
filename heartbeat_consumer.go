@@ -1,6 +1,7 @@
 package canopen
 
 import (
+	can "github.com/samsamfire/gocanopen/pkg/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -35,7 +36,7 @@ type HBConsumer struct {
 }
 
 // Handle hearbeat reception specific to a node
-func (nodeConsumer *hbConsumerNode) Handle(frame Frame) {
+func (nodeConsumer *hbConsumerNode) Handle(frame can.Frame) {
 	if frame.DLC != 1 {
 		return
 	}

@@ -3,6 +3,7 @@ package canopen
 import (
 	"encoding/binary"
 
+	can "github.com/samsamfire/gocanopen/pkg/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -21,7 +22,7 @@ type SYNC struct {
 	rawSynchronousWindowLength  []byte
 	isProducer                  bool
 	cobId                       uint32
-	txBuffer                    Frame
+	txBuffer                    can.Frame
 }
 
 const (
@@ -30,7 +31,7 @@ const (
 	syncPassedWindow uint8 = 2 // Time has just passed SYNC window in last cycle (0x1007)
 )
 
-func (sync *SYNC) Handle(frame Frame) {
+func (sync *SYNC) Handle(frame can.Frame) {
 	syncReceived := false
 	if sync.counterOverflow == 0 {
 		if frame.DLC == 0 {
@@ -214,7 +215,7 @@ func NewSYNC(
 	if syncCounterOverflow != 0 {
 		frameSize = 1
 	}
-	sync.txBuffer = NewFrame(sync.cobId, 0, frameSize)
+	sync.txBuffer = can.NewFrame(sync.cobId, 0, frameSize)
 	log.Infof("[SYNC] Initialisation finished")
 	return sync, nil
 }

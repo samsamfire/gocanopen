@@ -3,14 +3,17 @@ package canopen
 import (
 	"testing"
 
+	"github.com/samsamfire/gocanopen/pkg/can"
+	"github.com/samsamfire/gocanopen/pkg/can/virtual"
 	"github.com/stretchr/testify/assert"
 )
 
 const NODE_ID_TEST uint8 = 0x30
 
 func createNetworkEmpty() *Network {
-	bus := NewVirtualCanBus("localhost:18888")
-	bus.receiveOwn = true
+	canBus, _ := can.NewBus("virtual", "localhost:18888", 0)
+	bus := canBus.(*virtual.VirtualCanBus)
+	bus.SetReceiveOwn(true)
 	network := NewNetwork(bus)
 	e := network.Connect()
 	if e != nil {

@@ -1,12 +1,15 @@
 package canopen
 
-import log "github.com/sirupsen/logrus"
+import (
+	can "github.com/samsamfire/gocanopen/pkg/can"
+	log "github.com/sirupsen/logrus"
+)
 
 type TPDO struct {
 	*busManager
 	sync             *SYNC
 	pdo              PDOCommon
-	txBuffer         Frame
+	txBuffer         can.Frame
 	transmissionType uint8
 	sendRequest      bool
 	syncStartValue   uint8
@@ -60,7 +63,7 @@ func (tpdo *TPDO) configureCOBID(entry18xx *Entry, predefinedIdent uint16, erron
 	if canId != 0 && canId == (predefinedIdent&0xFF80) {
 		canId = predefinedIdent
 	}
-	tpdo.txBuffer = NewFrame(uint32(canId), 0, uint8(pdo.dataLength))
+	tpdo.txBuffer = can.NewFrame(uint32(canId), 0, uint8(pdo.dataLength))
 	pdo.Valid = valid
 	return canId, nil
 

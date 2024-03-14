@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	can "github.com/samsamfire/gocanopen/pkg/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -32,7 +33,7 @@ type ObjectDictionaryInformation struct {
 }
 
 // Create a new Network using the given CAN bus
-func NewNetwork(bus Bus) Network {
+func NewNetwork(bus can.Bus) Network {
 	return Network{
 		nodes:      map[uint8]Node{},
 		busManager: NewBusManager(bus),
@@ -48,7 +49,7 @@ func (network *Network) Connect(args ...any) error {
 	if len(args) < 3 && network.bus == nil {
 		return errors.New("either provide custom backend, or provide interface, channel and bitrate")
 	}
-	var bus Bus
+	var bus can.Bus
 	var err error
 	if network.bus == nil {
 		canInterface, ok := args[0].(string)
@@ -63,7 +64,7 @@ func (network *Network) Connect(args ...any) error {
 		if !ok {
 			return fmt.Errorf("expecting int for bitrate got : %v", args[2])
 		}
-		bus, err = createBusInternal(canInterface, channel, bitrate)
+		bus, err = can.NewBus(canInterface, channel, bitrate)
 		if err != nil {
 			return err
 		}
@@ -191,7 +192,7 @@ func (network *Network) Command(nodeId uint8, nmtCommand NMTCommand) error {
 		nmtCommand != NMT_RESET_NODE) {
 		return ErrIllegalArgument
 	}
-	frame := NewFrame(uint32(NMT_SERVICE_ID), 0, 2)
+	frame := can.NewFrame(uint32(NMT_SERVICE_ID), 0, 2)
 	frame.Data[0] = uint8(nmtCommand)
 	frame.Data[1] = nodeId
 	log.Debugf("[NMT] sending nmt command : %v to node(s) %v (x%x)", nmtCommandDescription[nmtCommand], nodeId, nodeId)

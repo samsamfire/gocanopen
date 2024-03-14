@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	can "github.com/samsamfire/gocanopen/pkg/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -12,7 +13,7 @@ type SDOServer struct {
 	od                         *ObjectDictionary
 	streamer                   *streamer
 	nodeId                     uint8
-	txBuffer                   Frame
+	txBuffer                   can.Frame
 	cobIdClientToServer        uint32
 	cobIdServerToClient        uint32
 	valid                      bool
@@ -41,7 +42,7 @@ type SDOServer struct {
 }
 
 // Handle received messages
-func (server *SDOServer) Handle(frame Frame) {
+func (server *SDOServer) Handle(frame can.Frame) {
 	if frame.DLC != 8 {
 		return
 	}
@@ -152,7 +153,7 @@ func (server *SDOServer) initRxTx(cobIdClientToServer uint32, cobIdServerToClien
 		server.valid = false
 		return ret
 	}
-	server.txBuffer = NewFrame(uint32(CanIdS2C), 0, 8)
+	server.txBuffer = can.NewFrame(uint32(CanIdS2C), 0, 8)
 	return ret
 }
 

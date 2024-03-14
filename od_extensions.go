@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 
+	can "github.com/samsamfire/gocanopen/pkg/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -91,7 +92,7 @@ func writeEntry1005(stream *Stream, data []byte, countWritten *uint16) error {
 			frameSize = 1
 		}
 		log.Debugf("[OD][EXTENSION][SYNC] updated COB-ID SYNC to x%x (prev x%x)", canId, sync.cobId)
-		sync.txBuffer = NewFrame(uint32(canId), 0, frameSize)
+		sync.txBuffer = can.NewFrame(uint32(canId), 0, frameSize)
 		sync.cobId = uint32(canId)
 	}
 	// Reset in case sync is producer
@@ -204,7 +205,7 @@ func writeEntry1014(stream *Stream, data []byte, countWritten *uint16) error {
 	}
 
 	if newEnabled {
-		em.txBuffer = NewFrame(newCanId, 0, 8)
+		em.txBuffer = can.NewFrame(newCanId, 0, 8)
 	}
 	return WriteEntryDefault(stream, data, countWritten)
 
@@ -286,7 +287,7 @@ func writeEntry1019(stream *Stream, data []byte, countWritten *uint16) error {
 	if syncCounterOverflow != 0 {
 		nbBytes = 1
 	}
-	sync.txBuffer = NewFrame(sync.cobId, 0, nbBytes)
+	sync.txBuffer = can.NewFrame(sync.cobId, 0, nbBytes)
 	sync.counterOverflow = syncCounterOverflow
 	log.Debugf("[OD][EXTENSION][SYNC] updated synchronous counter overflow to %v", syncCounterOverflow)
 	return WriteEntryDefault(stream, data, countWritten)
@@ -606,7 +607,7 @@ func writeEntry18xx(stream *Stream, data []byte, countWritten *uint16) error {
 			if !valid {
 				canId = 0
 			}
-			tpdo.txBuffer = NewFrame(canId, 0, uint8(pdo.dataLength))
+			tpdo.txBuffer = can.NewFrame(canId, 0, uint8(pdo.dataLength))
 			pdo.Valid = valid
 			pdo.configuredId = uint16(canId)
 		}
