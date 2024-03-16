@@ -2,7 +2,7 @@
 package main
 
 import (
-	canopen "github.com/samsamfire/gocanopen"
+	"github.com/samsamfire/gocanopen/pkg/network"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -14,7 +14,7 @@ var EDS_PATH = "../../testdata/base.eds"
 func main() {
 	log.SetLevel(log.DebugLevel)
 
-	network := canopen.NewNetwork(nil)
+	network := network.NewNetwork(nil)
 	err := network.Connect("socketcan", DEFAULT_CAN_INTERFACE, DEFAULT_CAN_BITRATE)
 	if err != nil {
 		panic(err)

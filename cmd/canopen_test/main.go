@@ -6,7 +6,7 @@ import (
 	"flag"
 	"os"
 
-	canopen "github.com/samsamfire/gocanopen"
+	"github.com/samsamfire/gocanopen/pkg/network"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -25,7 +25,7 @@ func main() {
 	eds_path := flag.String("p", "", "eds file path")
 	flag.Parse()
 
-	network := canopen.NewNetwork(nil)
+	network := network.NewNetwork(nil)
 	err := network.Connect("virtualcan", "127.0.0.1:18889", 500000)
 	if err != nil {
 		panic(err)

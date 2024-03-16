@@ -1,0 +1,308 @@
+package node
+
+import (
+	"errors"
+
+	canopen "github.com/samsamfire/gocanopen"
+	"github.com/samsamfire/gocanopen/pkg/emergency"
+	"github.com/samsamfire/gocanopen/pkg/heartbeat"
+	"github.com/samsamfire/gocanopen/pkg/nmt"
+	"github.com/samsamfire/gocanopen/pkg/od"
+	"github.com/samsamfire/gocanopen/pkg/pdo"
+	"github.com/samsamfire/gocanopen/pkg/sdo"
+	"github.com/samsamfire/gocanopen/pkg/sync"
+	"github.com/samsamfire/gocanopen/pkg/time"
+	log "github.com/sirupsen/logrus"
+)
+
+// A LocalNode is a CiA 301 compliant CANopen node
+// It supports all the standard CANopen objects.
+// These objects will be loaded depending on the given EDS file.
+// For configuration of the different CANopen objects see [NodeConfigurator].
+type LocalNode struct {
+	*BaseNode
+	NodeIdUnconfigured bool
+	NMT                *nmt.NMT
+	HBConsumer         *heartbeat.HBConsumer
+	SDOclients         []*sdo.SDOClient
+	SDOServers         []*sdo.SDOServer
+	TPDOs              []*pdo.TPDO
+	RPDOs              []*pdo.RPDO
+	SYNC               *sync.SYNC
+	EMCY               *emergency.EMCY
+	TIME               *time.TIME
+}
+
+func (node *LocalNode) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
+	if node.NodeIdUnconfigured {
+		return
+	}
+	nmtIsOperational := node.NMT.GetInternalState() == nmt.NMT_OPERATIONAL
+	for _, tpdo := range node.TPDOs {
+		tpdo.Process(timeDifferenceUs, timerNextUs, nmtIsOperational, syncWas)
+	}
+}
+
+func (node *LocalNode) ProcessRPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
+	if node.NodeIdUnconfigured {
+		return
+	}
+	nmtIsOperational := node.NMT.GetInternalState() == nmt.NMT_OPERATIONAL
+	for _, rpdo := range node.RPDOs {
+		rpdo.Process(timeDifferenceUs, timerNextUs, nmtIsOperational, syncWas)
+	}
+}
+
+func (node *LocalNode) ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32) bool {
+	syncWas := false
+	s := node.SYNC
+	if !node.NodeIdUnconfigured && s != nil {
+
+		nmtState := node.NMT.GetInternalState()
+		nmtIsPreOrOperational := nmtState == nmt.NMT_PRE_OPERATIONAL || nmtState == nmt.NMT_OPERATIONAL
+		syncProcess := s.Process(nmtIsPreOrOperational, timeDifferenceUs, timerNextUs)
+
+		switch syncProcess {
+		case sync.EventRxOrTx:
+			syncWas = true
+		case sync.EventPassedWindow:
+		default:
+		}
+	}
+	return syncWas
+}
+
+// Process canopen objects that are not RT
+// Does not process SYNC and PDOs
+func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
+	// Process all objects
+	NMTState := node.NMT.GetInternalState()
+	NMTisPreOrOperational := (NMTState == nmt.NMT_PRE_OPERATIONAL) || (NMTState == nmt.NMT_OPERATIONAL)
+
+	node.BusManager.Process()
+	node.EMCY.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
+	reset := node.NMT.Process(&NMTState, timeDifferenceUs, timerNextUs)
+	// Update NMTisPreOrOperational
+	NMTisPreOrOperational = (NMTState == nmt.NMT_PRE_OPERATIONAL) || (NMTState == nmt.NMT_OPERATIONAL)
+
+	// Process SDO servers
+	for _, server := range node.SDOServers {
+		server.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
+	}
+	node.HBConsumer.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
+	node.TIME.Process(NMTisPreOrOperational, timeDifferenceUs)
+
+	return reset
+
+}
+
+func (node *LocalNode) MainCallback() {
+	if node.mainCallback != nil {
+		node.mainCallback(node)
+	}
+}
+
+// Initialize all PDOs
+func (node *LocalNode) initPDO() error {
+	if node.id < 1 || node.id > 127 || node.NodeIdUnconfigured {
+		if node.NodeIdUnconfigured {
+			return canopen.ErrNodeIdUnconfiguredLSS
+		} else {
+			return canopen.ErrIllegalArgument
+		}
+	}
+	// Iterate over all the possible entries : there can be a maximum of 512 maps
+	// Break loops when an entry doesn't exist (don't allow holes in mapping)
+	for i := uint16(0); i < 512; i++ {
+		entry14xx := node.GetOD().Index(0x1400 + i)
+		entry16xx := node.GetOD().Index(0x1600 + i)
+		preDefinedIdent := uint16(0)
+		pdoOffset := i % 4
+		nodeIdOffset := i / 4
+		preDefinedIdent = 0x200 + pdoOffset*0x100 + uint16(node.id) + nodeIdOffset
+		rpdo, err := pdo.NewRPDO(node.BusManager, node.GetOD(), node.EMCY, node.SYNC, entry14xx, entry16xx, preDefinedIdent)
+		if err != nil {
+			log.Warnf("[NODE][RPDO] no more RPDO after RPDO %v", i-1)
+			break
+		} else {
+			node.RPDOs = append(node.RPDOs, rpdo)
+		}
+	}
+	// Do the same for TPDOS
+	for i := uint16(0); i < 512; i++ {
+		entry18xx := node.GetOD().Index(0x1800 + i)
+		entry1Axx := node.GetOD().Index(0x1A00 + i)
+		preDefinedIdent := uint16(0)
+		pdoOffset := i % 4
+		nodeIdOffset := i / 4
+		preDefinedIdent = 0x180 + pdoOffset*0x100 + uint16(node.id) + nodeIdOffset
+		tpdo, err := pdo.NewTPDO(node.BusManager, node.GetOD(), node.EMCY, node.SYNC, entry18xx, entry1Axx, preDefinedIdent)
+		if err != nil {
+			log.Warnf("[NODE][TPDO] no more TPDO after TPDO %v", i-1)
+			break
+		} else {
+			node.TPDOs = append(node.TPDOs, tpdo)
+		}
+
+	}
+
+	return nil
+}
+
+// Create a new local node
+func NewLocalNode(
+	bm *canopen.BusManager,
+	odict *od.ObjectDictionary,
+	nm *nmt.NMT,
+	emcy *emergency.EMCY,
+	nodeId uint8,
+	nmtControl uint16,
+	firstHbTimeMs uint16,
+	sdoServerTimeoutMs uint32,
+	sdoClientTimeoutMs uint32,
+	blockTransferEnabled bool,
+	statusBits *od.Entry,
+
+) (*LocalNode, error) {
+
+	if bm == nil || odict == nil {
+		return nil, errors.New("need at least busManager and od parameters")
+	}
+	base, err := newBaseNode(bm, odict, nodeId)
+	if err != nil {
+		return nil, err
+	}
+	node := &LocalNode{BaseNode: base}
+	node.NodeIdUnconfigured = false
+	node.od = odict
+	node.exitBackground = make(chan bool)
+	node.exit = make(chan bool)
+	node.id = nodeId
+	node.state = NODE_INIT
+
+	if emcy == nil {
+		emergency, err := emergency.NewEM(
+			bm,
+			nodeId,
+			odict.Index(0x1001),
+			odict.Index(0x1014),
+			odict.Index(0x1015),
+			odict.Index(0x1003),
+			nil,
+		)
+		if err != nil {
+			log.Errorf("[NODE][EMERGENCY producer] error when initializing emergency producer %v", err)
+			return nil, canopen.ErrOdParameters
+		}
+		node.EMCY = emergency
+	} else {
+		node.EMCY = emcy
+	}
+	emcy = node.EMCY
+
+	// NMT object can either be supplied or created with automatically with an OD entry
+	if nm == nil {
+		nmt, err := nmt.NewNMT(
+			bm,
+			emcy,
+			nodeId,
+			nmtControl,
+			firstHbTimeMs,
+			NMT_SERVICE_ID,
+			NMT_SERVICE_ID,
+			HEARTBEAT_SERVICE_ID+uint16(nodeId),
+			odict.Index(0x1017),
+		)
+		if err != nil {
+			log.Errorf("[NODE][NMT] error when initializing NMT object %v", err)
+			return nil, err
+		} else {
+			node.NMT = nmt
+			log.Infof("[NODE][NMT] initialized from OD for node x%x", nodeId)
+		}
+	} else {
+		node.NMT = nm
+		log.Infof("[NODE][NMT] initialized for node x%x", nodeId)
+	}
+
+	// Initialize HB consumer
+	hbCons, err := heartbeat.NewHBConsumer(bm, emcy, odict.Index(0x1016))
+	if err != nil {
+		log.Errorf("[NODE][HB Consumer] error when initializing HB consummers %v", err)
+		return nil, err
+	} else {
+		node.HBConsumer = hbCons
+	}
+	log.Infof("[NODE][HB Consumer] initialized for node x%x", nodeId)
+
+	// Initialize SDO server
+	// For now only one server
+	entry1200 := odict.Index(0x1200)
+	sdoServers := make([]*sdo.SDOServer, 0)
+	if entry1200 == nil {
+		log.Warnf("[NODE][SDO SERVER] no sdo servers initialized for node x%x", nodeId)
+	} else {
+		server, err := sdo.NewSDOServer(bm, odict, nodeId, sdoServerTimeoutMs, entry1200)
+		if err != nil {
+			log.Errorf("[NODE][SDO SERVER] error when initializing SDO server object %v", err)
+			return nil, err
+		} else {
+			sdoServers = append(sdoServers, server)
+			node.SDOServers = sdoServers
+			log.Infof("[NODE][SDO SERVER] initialized for node x%x", nodeId)
+		}
+	}
+
+	// Initialize SDO clients if any
+	// For now only one client
+	entry1280 := odict.Index(0x1280)
+	sdoClients := make([]*sdo.SDOClient, 0)
+	if entry1280 == nil {
+		log.Info("[NODE][SDO CLIENT] no SDO clients initialized for node")
+	} else {
+
+		client, err := sdo.NewSDOClient(bm, odict, nodeId, sdoClientTimeoutMs, entry1280)
+		if err != nil {
+			log.Errorf("[NODE][SDO CLIENT] error when initializing SDO client object %v", err)
+		} else {
+			sdoClients = append(node.SDOclients, client)
+			log.Infof("[NODE][SDO CLIENT] initialized for node x%x", nodeId)
+		}
+		node.SDOclients = sdoClients
+	}
+
+	//Initialize TIME
+	time, err := time.NewTIME(bm, odict.Index(0x1012), 1000) // hardcoded for now
+	if err != nil {
+		log.Errorf("[NODE][TIME] error when initializing TIME object %v", err)
+	} else {
+		node.TIME = time
+	}
+
+	//Initialize SYNC
+	sync, err := sync.NewSYNC(
+		bm,
+		emcy,
+		odict.Index(0x1005),
+		odict.Index(0x1006),
+		odict.Index(0x1007),
+		odict.Index(0x1019),
+	)
+	if err != nil {
+		log.Errorf("[NODE][SYNC] error when initialising SYNC object %v", err)
+	} else {
+		node.SYNC = sync
+	}
+
+	//Add EDS storage if supported
+	edsEntry := odict.Index(0x1021)
+	if edsEntry != nil {
+		log.Info("[NODE][EDS] EDS is downloadable via object 0x1021")
+		odict.AddReader(edsEntry.Index, edsEntry.Name, odict.Reader)
+	}
+	err = node.initPDO()
+	if err != nil {
+		return nil, err
+	}
+	return node, nil
+}
