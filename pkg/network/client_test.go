@@ -1,6 +1,7 @@
 package network
 
 import (
+	"os"
 	"testing"
 
 	"github.com/samsamfire/gocanopen/pkg/od"
@@ -47,12 +48,15 @@ func TestSDOReadBlock(t *testing.T) {
 
 }
 
-// func TestSDOWriteBlock(t *testing.T) {
-// 	network := CreateNetworkTest()
-// 	defer network.Disconnect()
-// 	data := []byte("some random string some random string some random string some random string some random string some random string some random string")
-// 	node := network.nodes[NODE_ID_TEST]
-// 	node.GetOD().AddFile(0x3333, "File entry", "./here.txt", os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
-// 	err := network.WriteRaw(NODE_ID_TEST, 0x3333, 0, data, false)
-// 	assert.Nil(t, err)
-// }
+func TestSDOWriteBlock(t *testing.T) {
+	network := CreateNetworkTest()
+	defer network.Disconnect()
+	data := []byte("some random string some random string some random string some random string some random string some random string some random string")
+	node := network.nodes[NODE_ID_TEST]
+	file, err := os.CreateTemp("", "filename")
+	assert.Nil(t, err)
+	err = node.GetOD().AddFile(0x3333, "File entry", file.Name(), os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
+	assert.Nil(t, err)
+	err = network.WriteRaw(NODE_ID_TEST, 0x3333, 0, data, false)
+	assert.Nil(t, err)
+}

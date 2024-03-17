@@ -27,8 +27,8 @@ const (
 
 type BaseNode struct {
 	*canopen.BusManager
+	*sdo.SDOClient
 	od             *od.ObjectDictionary
-	baseSdoClient  *sdo.SDOClient
 	mainCallback   func(node Node)
 	state          uint8
 	id             uint8
@@ -55,7 +55,7 @@ func newBaseNode(
 	if err != nil {
 		return nil, err
 	}
-	base.baseSdoClient = sdoClient
+	base.SDOClient = sdoClient
 	return base, nil
 }
 
@@ -109,7 +109,7 @@ func (node *BaseNode) readBytes(index any, subindex any) ([]byte, uint8, error) 
 		return nil, 0, err
 	}
 	data := make([]byte, odVar.DataLength())
-	nbRead, err := node.baseSdoClient.ReadRaw(node.id, entry.Index, odVar.SubIndex, data)
+	nbRead, err := node.ReadRaw(entry.Index, odVar.SubIndex, data)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -225,7 +225,7 @@ func (node *BaseNode) ReadString(index any, subindex any) (value string, e error
 // value will be read as a raw byte slice
 // does not support block transfer
 func (node *BaseNode) ReadRaw(index uint16, subIndex uint8, data []byte) (int, error) {
-	return node.baseSdoClient.ReadRaw(node.id, index, subIndex, data)
+	return node.SDOClient.ReadRaw(node.id, index, subIndex, data)
 }
 
 // Write an entry to a remote node
@@ -241,7 +241,7 @@ func (node *BaseNode) Write(index any, subindex any, value any) error {
 		return err
 	}
 
-	err = node.baseSdoClient.WriteRaw(node.id, entry.Index, odVar.SubIndex, value, false)
+	err = node.SDOClient.WriteRaw(node.id, entry.Index, odVar.SubIndex, value, false)
 	if err != nil {
 		return err
 	}
@@ -253,7 +253,7 @@ func (node *BaseNode) Write(index any, subindex any, value any) error {
 // value will be written as a raw byte slice
 // does not support block transfer
 func (node *BaseNode) WriteRaw(index uint16, subIndex uint8, data []byte) error {
-	return node.baseSdoClient.WriteRaw(node.id, index, subIndex, data, false)
+	return node.SDOClient.WriteRaw(node.id, index, subIndex, data, false)
 }
 
 type Node interface {

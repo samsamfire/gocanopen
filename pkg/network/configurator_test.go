@@ -6,6 +6,7 @@ import (
 
 	"github.com/samsamfire/gocanopen/pkg/config"
 	"github.com/samsamfire/gocanopen/pkg/node"
+	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/sdo"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -150,7 +151,7 @@ func TestHBConfigurator(t *testing.T) {
 	config.WriteMonitoredNode(2, 0x25, 100)
 	err := config.WriteMonitoredNode(3, 0x25, 100)
 	assert.Equal(t, err, sdo.SDO_ABORT_PRAM_INCOMPAT)
-	network.CreateLocalNode(0x25, "testdata/base.eds")
+	network.CreateLocalNode(0x25, od.Default())
 	max, _ := config.ReadMaxMonitorable()
 	// Test that we receive at least one emergency
 	assert.EqualValues(t, 8, max)

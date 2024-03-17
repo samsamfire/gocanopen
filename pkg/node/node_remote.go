@@ -27,11 +27,11 @@ import (
 // locally.
 type RemoteNode struct {
 	*BaseNode
-	remoteOd  *od.ObjectDictionary // Remote node od, this does not change
-	sdoClient *sdo.SDOClient       // A unique sdoClient shared between localCtrl & remoteCtrl
-	rpdos     []*pdo.RPDO          // Local RPDOs (corresponds to remote TPDOs)
-	tpdos     []*pdo.TPDO          // Local TPDOs (corresponds to remote RPDOs)
-	sync      *sync.SYNC           // Sync consumer (for synchronous PDOs)
+	remoteOd *od.ObjectDictionary // Remote node od, this does not change
+	client   *sdo.SDOClient       // A unique sdoClient shared between localCtrl & remoteCtrl
+	rpdos    []*pdo.RPDO          // Local RPDOs (corresponds to remote TPDOs)
+	tpdos    []*pdo.TPDO          // Local TPDOs (corresponds to remote RPDOs)
+	sync     *sync.SYNC           // Sync consumer (for synchronous PDOs)
 }
 
 func (node *RemoteNode) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
@@ -93,7 +93,7 @@ func NewRemoteNode(
 		return nil, err
 	}
 	node := &RemoteNode{BaseNode: base}
-	node.baseSdoClient.SetNoId() // Change the SDO client node id to 0 as not a real node
+	node.SDOClient.SetNoId() // Change the SDO client node id to 0 as not a real node
 	node.remoteOd = remoteOd
 
 	// Create a new SDO client for the remote node & for local access
@@ -102,7 +102,7 @@ func NewRemoteNode(
 		log.Errorf("[NODE][SDO CLIENT] error when initializing SDO client object %v", err)
 		return nil, err
 	}
-	node.sdoClient = client
+	node.client = client
 	// Create a new SYNC object
 	node.od.AddSYNC()
 	//Initialize SYNC
@@ -130,15 +130,15 @@ func (node *RemoteNode) InitPDOs(useLocal bool) error {
 	// Break loops when an entry doesn't exist (don't allow holes in mapping)
 	var pdoConfigurators []config.PDOConfig
 
-	localRPDOConfigurator := config.NewRPDOConfigurator(0, node.sdoClient)
-	localTPDOConfigurator := config.NewTPDOConfigurator(0, node.sdoClient)
+	localRPDOConfigurator := config.NewRPDOConfigurator(0, node.client)
+	localTPDOConfigurator := config.NewTPDOConfigurator(0, node.client)
 
 	if useLocal {
 		pdoConfigurators = []config.PDOConfig{localRPDOConfigurator, localTPDOConfigurator}
 	} else {
 		pdoConfigurators = []config.PDOConfig{
-			config.NewRPDOConfigurator(node.id, node.sdoClient),
-			config.NewTPDOConfigurator(node.id, node.sdoClient),
+			config.NewRPDOConfigurator(node.id, node.client),
+			config.NewTPDOConfigurator(node.id, node.client),
 		}
 	}
 
