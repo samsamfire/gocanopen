@@ -229,7 +229,13 @@ func (config *PDOConfig) WriteConfiguration(pdoNb uint16, conf PDOConfiguration)
 	if err != nil {
 		return err
 	}
-	config.WriteEventTimer(pdoNb, conf.EventTimer)
-	config.WriteInhibitTime(pdoNb, conf.InhibitTime)
+	err = config.WriteEventTimer(pdoNb, conf.EventTimer)
+	if err != nil {
+		return err
+	}
+	err = config.WriteInhibitTime(pdoNb, conf.InhibitTime)
+	if err != nil {
+		return err
+	}
 	return config.WriteMappings(pdoNb, conf.Mappings)
 }

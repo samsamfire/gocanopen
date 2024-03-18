@@ -105,7 +105,10 @@ func ReadEntryReader(stream *Stream, data []byte, countRead *uint16) error {
 	}
 	// If first read, go back to initial point
 	if stream.DataOffset == 0 {
-		reader.Seek(0, io.SeekStart)
+		_, err := reader.Seek(0, io.SeekStart)
+		if err != nil {
+			return ODR_DEV_INCOMPAT
+		}
 	}
 	// Read len(data) bytes
 	countReadInt, err := io.ReadFull(reader, data)

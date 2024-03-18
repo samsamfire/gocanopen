@@ -19,7 +19,12 @@ type SocketcanBus struct {
 
 // "Connect" implementation of Bus interface
 func (socketcan *SocketcanBus) Connect(...any) error {
-	go socketcan.bus.ConnectAndPublish()
+	go func() {
+		err := socketcan.bus.ConnectAndPublish()
+		if err != nil {
+			return
+		}
+	}()
 	return nil
 }
 
