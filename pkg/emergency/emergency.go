@@ -226,11 +226,12 @@ var errorStatusMap = map[uint8]string{
 
 func getErrorStatusDescription(errorStatus uint8) string {
 	description, ok := errorStatusMap[errorStatus]
-	if ok {
+	switch {
+	case ok:
 		return description
-	} else if errorStatus >= EmManufacturerStart && errorStatus <= EmManufacturerEnd {
+	case errorStatus >= EmManufacturerStart && errorStatus <= EmManufacturerEnd:
 		return "Manufacturer error"
-	} else {
+	default:
 		return "Invalid or not implemented error status"
 	}
 }
