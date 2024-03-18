@@ -78,7 +78,8 @@ func (client *SDOClient) Handle(frame can.Frame) {
 			client.timeoutTimer = 0
 			client.timeoutTimerBlock = 0
 			// Checks on the Sequence number
-			if seqno <= client.blockSize && seqno == (client.blockSequenceNb+1) {
+			switch {
+			case seqno <= client.blockSize && seqno == (client.blockSequenceNb+1):
 				client.blockSequenceNb = seqno
 				// Is it last segment
 				if (frame.Data[0] & 0x80) != 0 {
@@ -93,19 +94,16 @@ func (client *SDOClient) Handle(frame can.Frame) {
 						state = SDO_STATE_UPLOAD_BLK_SUBBLOCK_CRSP
 					}
 				}
-			} else if seqno != client.blockSequenceNb && client.blockSequenceNb != 0 {
+			case seqno != client.blockSequenceNb && client.blockSequenceNb != 0:
 				state = SDO_STATE_UPLOAD_BLK_SUBBLOCK_CRSP
 				log.Warnf("Wrong sequence number in rx sub-block. seqno %x, previous %x", seqno, client.blockSequenceNb)
-			} else {
+			default:
 				log.Warnf("Wrong sequence number in rx ignored. seqno %x, expected %x", seqno, client.blockSequenceNb+1)
 			}
-
 			if state != SDO_STATE_UPLOAD_BLK_SUBBLOCK_SREQ {
 				client.rxNew = false
 				client.state = state
-
 			}
-
 		}
 	}
 
@@ -162,12 +160,13 @@ func (client *SDOClient) downloadSetup(index uint16, subindex uint8, sizeIndicat
 	client.timeoutTimer = 0
 	client.fifo.Reset()
 
-	if client.od != nil && client.nodeIdServer == client.nodeId {
+	switch {
+	case client.od != nil && client.nodeIdServer == client.nodeId:
 		client.streamer.SetWriter(nil)
 		client.state = SDO_STATE_DOWNLOAD_LOCAL_TRANSFER
-	} else if blockEnabled && (sizeIndicated == 0 || sizeIndicated > CO_CONFIG_SDO_CLI_PST) {
+	case blockEnabled && (sizeIndicated == 0 || sizeIndicated > CO_CONFIG_SDO_CLI_PST):
 		client.state = SDO_STATE_DOWNLOAD_BLK_INITIATE_REQ
-	} else {
+	default:
 		client.state = SDO_STATE_DOWNLOAD_INITIATE_REQ
 	}
 	client.rxNew = false
