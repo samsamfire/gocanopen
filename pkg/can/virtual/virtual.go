@@ -29,10 +29,10 @@ func serializeFrame(frame can.Frame) ([]byte, error) {
 		return nil, err
 	}
 	dataBytes := buffer.Bytes()
-	headerBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(headerBytes, uint32(len(dataBytes)))
-	finalBytes := append(headerBytes, dataBytes...)
-	return finalBytes, nil
+	frameBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(frameBytes, uint32(len(dataBytes)))
+	frameBytes = append(frameBytes, dataBytes...)
+	return frameBytes, nil
 }
 
 // Helper function for deserializing a CAN frame from expected binary format

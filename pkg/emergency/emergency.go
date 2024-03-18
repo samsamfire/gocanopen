@@ -523,7 +523,7 @@ func NewEM(
 	}
 	emergency := &EMCY{BusManager: bm}
 	// TODO handle error register ptr
-	//emergency.errorRegister
+	// emergency.errorRegister
 	fifoSize := entry1003.SubCount()
 	emergency.fifo = make([]emfifo, fifoSize)
 

@@ -59,7 +59,7 @@ func NewVariableFromSection(
 	}
 	variable.DataType = byte(dataType)
 
-	//Determine variable attribute
+	// Determine variable attribute
 	variable.Attribute = CalculateAttribute(accessType.String(), pdoMapping, variable.DataType)
 
 	// All the parameters aftewards are optional elements that can be used in EDS

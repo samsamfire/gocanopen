@@ -531,7 +531,7 @@ func (client *SDOClient) downloadSegment(bufferPartial bool) error {
 		return SDO_ABORT_DATA_LONG
 	}
 
-	//Command specifier
+	// Command specifier
 	client.txBuffer.Data[0] = uint8(uint32(client.toggle) | ((7 - count) << 1))
 	if client.fifo.GetOccupied() == 0 && !bufferPartial {
 		if client.sizeIndicated > 0 && client.sizeTransferred < client.sizeIndicated {
@@ -587,10 +587,8 @@ func (client *SDOClient) downloadBlock(bufferPartial bool, timerNext *uint32) er
 		client.state = SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_RSP
 	} else if client.blockSequenceNb >= client.blockSize {
 		client.state = SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_RSP
-	} else {
-		if timerNext != nil {
-			*timerNext = 0
-		}
+	} else if timerNext != nil {
+		*timerNext = 0
 	}
 	client.timeoutTimer = 0
 	client.Send(client.txBuffer)
@@ -777,7 +775,7 @@ func (client *SDOClient) upload(
 					break
 				}
 				if (response.raw[0] & 0x02) != 0 {
-					//Expedited
+					// Expedited
 					var count uint32 = 4
 					// Size indicated ?
 					if (response.raw[0] & 0x01) != 0 {
@@ -820,14 +818,14 @@ func (client *SDOClient) upload(
 					break
 				}
 
-				//Check size uploaded
+				// Check size uploaded
 				if client.sizeIndicated > 0 && client.sizeTransferred > client.sizeIndicated {
 					abortCode = SDO_ABORT_DATA_LONG
 					client.state = SDO_STATE_ABORT
 					break
 				}
 
-				//No more segments ?
+				// No more segments ?
 				if (response.raw[0] & 0x01) != 0 {
 					// Check size uploaded
 					if client.sizeIndicated > 0 && client.sizeTransferred < client.sizeIndicated {
@@ -866,10 +864,10 @@ func (client *SDOClient) upload(
 						response.raw,
 					)
 
-					//Switch to normal transfer
+					// Switch to normal transfer
 				} else if (response.raw[0] & 0xF0) == 0x40 {
 					if (response.raw[0] & 0x02) != 0 {
-						//Expedited
+						// Expedited
 						count := 4
 						if (response.raw[0] & 0x01) != 0 {
 							count -= (int(response.raw[0]>>2) & 0x03)
@@ -895,8 +893,8 @@ func (client *SDOClient) upload(
 				break
 
 			case SDO_STATE_UPLOAD_BLK_END_SREQ:
-				//Get number of data bytes in last segment, that do not
-				//contain data. Then copy remaining data into fifo
+				// Get number of data bytes in last segment, that do not
+				// contain data. Then copy remaining data into fifo
 				noData := (response.raw[0] >> 2) & 0x07
 				client.fifo.Write(client.blockDataUploadLast[:7-noData], &client.blockCRC)
 				client.sizeTransferred += uint32(7 - noData)

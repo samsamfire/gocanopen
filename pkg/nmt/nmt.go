@@ -98,7 +98,7 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 	resetCommand := RESET_NOT
 	nmtInit := nmtStateCopy == NMT_INITIALIZING
 	if nmt.hearbeatProducerTimer > timeDifferenceUs {
-		nmt.hearbeatProducerTimer = nmt.hearbeatProducerTimer - timeDifferenceUs
+		nmt.hearbeatProducerTimer -= timeDifferenceUs
 	} else {
 		nmt.hearbeatProducerTimer = 0
 	}

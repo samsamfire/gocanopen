@@ -47,7 +47,7 @@ func ReadEntryFileObject(stream *Stream, data []byte, countRead *uint16) error {
 		fileObject.File.Close()
 		return nil
 	default:
-		//unexpected error
+		// unexpected error
 		log.Errorf("[OD][EXTENSION][FILE] error reading file %v", err)
 		fileObject.File.Close()
 		return ODR_DEV_INCOMPAT
@@ -123,7 +123,6 @@ func ReadEntryReader(stream *Stream, data []byte, countRead *uint16) error {
 		log.Infof("[OD][EXTENSION][FILE] finished reading")
 		return nil
 	default:
-		//unexpected error
 		log.Errorf("[OD][EXTENSION][FILE] error reading file %v", err)
 		return ODR_DEV_INCOMPAT
 
