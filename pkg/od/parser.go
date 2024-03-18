@@ -99,7 +99,8 @@ func Parse(file any, nodeId uint8) (*ObjectDictionary, error) {
 	var buf bytes.Buffer
 
 	// Write data from edsFile to the buffer
-	edsFile.WriteTo(&buf)
+	// Don't care if fails
+	_, _ = edsFile.WriteTo(&buf)
 	reader := bytes.NewReader(buf.Bytes())
 	od.Reader = reader
 

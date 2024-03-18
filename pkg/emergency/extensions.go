@@ -8,8 +8,6 @@ import (
 	"github.com/samsamfire/gocanopen/pkg/od"
 )
 
-const EMERGENCY_SERVICE_ID uint16 = 0x80
-
 func readEntryStatusBits(stream *od.Stream, data []byte, countRead *uint16) error {
 	if stream == nil || stream.Subindex != 0 || data == nil || countRead == nil {
 		return od.ODR_DEV_INCOMPAT
@@ -114,8 +112,8 @@ func readEntry1014(stream *od.Stream, data []byte, countRead *uint16) error {
 		return od.ODR_DEV_INCOMPAT
 	}
 	var canId uint16
-	if em.producerIdent == EMERGENCY_SERVICE_ID {
-		canId = EMERGENCY_SERVICE_ID + uint16(em.nodeId)
+	if em.producerIdent == SERVICE_ID {
+		canId = SERVICE_ID + uint16(em.nodeId)
 	} else {
 		canId = em.producerIdent
 	}
@@ -144,8 +142,8 @@ func writeEntry1014(stream *od.Stream, data []byte, countWritten *uint16) error 
 	cobId := binary.LittleEndian.Uint32(data)
 	newCanId := cobId & 0x7FF
 	var currentCanId uint16
-	if em.producerIdent == EMERGENCY_SERVICE_ID {
-		currentCanId = EMERGENCY_SERVICE_ID + uint16(em.nodeId)
+	if em.producerIdent == SERVICE_ID {
+		currentCanId = SERVICE_ID + uint16(em.nodeId)
 	} else {
 		currentCanId = em.producerIdent
 	}
@@ -155,8 +153,8 @@ func writeEntry1014(stream *od.Stream, data []byte, countWritten *uint16) error 
 		return od.ODR_INVALID_VALUE
 	}
 	em.producerEnabled = newEnabled
-	if newCanId == uint32(EMERGENCY_SERVICE_ID+uint16(em.nodeId)) {
-		em.producerIdent = EMERGENCY_SERVICE_ID
+	if newCanId == uint32(SERVICE_ID+uint16(em.nodeId)) {
+		em.producerIdent = SERVICE_ID
 	} else {
 		em.producerIdent = uint16(newCanId)
 	}

@@ -1,6 +1,7 @@
 package od
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -74,4 +75,10 @@ func TestAddRPDO(t *testing.T) {
 	od := NewOD()
 	err := od.AddRPDO(1)
 	assert.Nil(t, err)
+}
+
+func TestAddReader(t *testing.T) {
+	od := NewOD()
+	buffer := bytes.NewReader(make([]byte, 10))
+	od.AddReader(0x1, "hello", buffer)
 }

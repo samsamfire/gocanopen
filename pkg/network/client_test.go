@@ -55,7 +55,7 @@ func TestSDOWriteBlock(t *testing.T) {
 	node := network.nodes[NODE_ID_TEST]
 	file, err := os.CreateTemp("", "filename")
 	assert.Nil(t, err)
-	err = node.GetOD().AddFile(0x3333, "File entry", file.Name(), os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
+	node.GetOD().AddFile(0x3333, "File entry", file.Name(), os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
 	assert.Nil(t, err)
 	err = network.WriteRaw(NODE_ID_TEST, 0x3333, 0, data, false)
 	assert.Nil(t, err)

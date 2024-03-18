@@ -72,22 +72,20 @@ func (od *ObjectDictionary) AddVariableList(index uint16, name string, varList *
 // AddFile adds a file like object, of type DOMAIN to OD
 // readMode and writeMode should be given to determine what type of access to the file is allowed
 // e.g. os.O_RDONLY if only reading is allowed
-func (od *ObjectDictionary) AddFile(index uint16, indexName string, filePath string, readMode int, writeMode int) error {
+func (od *ObjectDictionary) AddFile(index uint16, indexName string, filePath string, readMode int, writeMode int) {
 	log.Infof("[OD] adding file object entry : %v at x%x", filePath, index)
 	fileObject := &FileObject{FilePath: filePath, ReadMode: readMode, WriteMode: writeMode}
-	od.AddVariableType(index, indexName, DOMAIN, ATTRIBUTE_SDO_RW, "") // Cannot error
+	_, _ = od.AddVariableType(index, indexName, DOMAIN, ATTRIBUTE_SDO_RW, "") // Cannot error
 	entry := od.Index(index)
 	entry.AddExtension(fileObject, ReadEntryFileObject, WriteEntryFileObject)
-	return nil
 }
 
 // AddReader adds an io.Reader object, of type DOMAIN to OD
-func (od *ObjectDictionary) AddReader(index uint16, indexName string, reader io.Reader) error {
+func (od *ObjectDictionary) AddReader(index uint16, indexName string, reader io.Reader) {
 	log.Infof("[OD] adding a reader entry : %v at x%x", indexName, index)
-	od.AddVariableType(index, indexName, DOMAIN, ATTRIBUTE_SDO_R, "")
+	_, _ = od.AddVariableType(index, indexName, DOMAIN, ATTRIBUTE_SDO_R, "") // Cannot error
 	entry := od.Index(index)
 	entry.AddExtension(reader, ReadEntryReader, WriteEntryDisabled)
-	return nil
 }
 
 func (od *ObjectDictionary) addPDO(pdoNb uint16, isRPDO bool) error {

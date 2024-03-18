@@ -208,9 +208,9 @@ func NewLocalNode(
 			nodeId,
 			nmtControl,
 			firstHbTimeMs,
-			NMT_SERVICE_ID,
-			NMT_SERVICE_ID,
-			HEARTBEAT_SERVICE_ID+uint16(nodeId),
+			nmt.SERVICE_ID,
+			nmt.SERVICE_ID,
+			heartbeat.SERVICE_ID+uint16(nodeId),
 			odict.Index(0x1017),
 		)
 		if err != nil {

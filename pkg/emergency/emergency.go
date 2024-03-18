@@ -10,6 +10,7 @@ import (
 )
 
 const CO_CONFIG_EM_ERR_STATUS_BITS_COUNT = 80
+const SERVICE_ID = 0x80
 
 // Error register values
 const (
@@ -412,10 +413,8 @@ func (emergency *EMCY) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint
 
 // Set or reset an Error condition
 // Function adds a new Error to the history & Error will be processed by Process function
-func (emergency *EMCY) Error(setError bool, errorBit byte, errorCode uint16, infoCode uint32) error {
-	if emergency == nil {
-		return nil
-	}
+func (emergency *EMCY) Error(setError bool, errorBit byte, errorCode uint16, infoCode uint32) {
+
 	index := errorBit >> 3
 	bitMask := 1 << (errorBit & 0x7)
 
@@ -432,11 +431,11 @@ func (emergency *EMCY) Error(setError bool, errorBit byte, errorCode uint16, inf
 	// If error is already set or not don't do anything
 	if setError {
 		if errorStatusBitMasked != 0 {
-			return nil
+			return
 		}
 	} else {
 		if errorStatusBitMasked == 0 {
-			return nil
+			return
 		}
 		errorCode = ErrNoError
 	}
@@ -458,10 +457,9 @@ func (emergency *EMCY) Error(setError bool, errorBit byte, errorCode uint16, inf
 			}
 		}
 	}
-	return nil
 }
 
-func (emergency *EMCY) ErrorReport(errorBit byte, errorCode uint16, infoCode uint32) error {
+func (emergency *EMCY) ErrorReport(errorBit byte, errorCode uint16, infoCode uint32) {
 	log.Warnf("[EMERGENCY][TX][ERROR] %v (x%x) | %v (x%x) | infoCode %v",
 		getErrorCodeDescription(int(errorCode)),
 		errorCode,
@@ -469,16 +467,16 @@ func (emergency *EMCY) ErrorReport(errorBit byte, errorCode uint16, infoCode uin
 		errorBit,
 		infoCode,
 	)
-	return emergency.Error(true, errorBit, errorCode, infoCode)
+	emergency.Error(true, errorBit, errorCode, infoCode)
 }
 
-func (emergency *EMCY) ErrorReset(errorBit byte, infoCode uint32) error {
+func (emergency *EMCY) ErrorReset(errorBit byte, infoCode uint32) {
 	log.Infof("[EMERGENCY][TX][RESET] reset emergency %v (x%x) | infoCode %v",
 		getErrorStatusDescription(errorBit),
 		errorBit,
 		infoCode,
 	)
-	return emergency.Error(false, errorBit, ErrNoError, infoCode)
+	emergency.Error(false, errorBit, ErrNoError, infoCode)
 }
 
 func (emergency *EMCY) IsError(errorBit byte) bool {
@@ -541,7 +539,7 @@ func NewEM(
 	emergency.producerEnabled = (cobIdEmergency&0x80000000) == 0 && producerCanId != 0
 	entry1014.AddExtension(emergency, readEntry1014, writeEntry1014)
 	emergency.producerIdent = uint16(producerCanId)
-	if producerCanId == uint32(EMERGENCY_SERVICE_ID) {
+	if producerCanId == uint32(SERVICE_ID) {
 		producerCanId += uint32(nodeId)
 	}
 	emergency.nodeId = nodeId
@@ -558,7 +556,7 @@ func NewEM(
 		entryStatusBits.AddExtension(emergency, readEntryStatusBits, writeEntryStatusBits)
 	}
 
-	err := emergency.Subscribe(uint32(EMERGENCY_SERVICE_ID), 0x780, false, emergency)
+	err := emergency.Subscribe(uint32(SERVICE_ID), 0x780, false, emergency)
 	if err != nil {
 		return nil, err
 	}

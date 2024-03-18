@@ -11,14 +11,6 @@ import (
 )
 
 const (
-	NMT_SERVICE_ID       uint16 = 0
-	EMERGENCY_SERVICE_ID uint16 = 0x80
-	HEARTBEAT_SERVICE_ID uint16 = 0x700
-	SDO_SERVER_ID        uint16 = 0x580
-	SDO_CLIENT_ID        uint16 = 0x600
-)
-
-const (
 	NODE_INIT     uint8 = 0
 	NODE_RUNNING  uint8 = 1
 	NODE_RESETING uint8 = 2

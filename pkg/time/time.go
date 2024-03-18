@@ -33,7 +33,7 @@ func (t *TIME) Handle(frame can.Frame) {
 
 }
 
-func (t *TIME) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) bool {
+func (t *TIME) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) (bool, error) {
 	timestampReceived := false
 	if nmtIsPreOrOperational && t.IsConsumer {
 		if t.rxNew {
@@ -57,21 +57,21 @@ func (t *TIME) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) bool
 			t.days += 1
 		}
 	}
+	var err error
 	if nmtIsPreOrOperational && t.IsProducer && t.producerIntervalMs > 0 {
 		if t.producerTimerMs >= t.producerIntervalMs {
 			t.producerTimerMs -= t.producerIntervalMs
 			frame := can.NewFrame(t.cobId, 0, 6)
 			binary.LittleEndian.PutUint32(frame.Data[0:4], t.ms)
 			binary.LittleEndian.PutUint16(frame.Data[4:6], t.days)
-			t.Send(frame)
+			err = t.Send(frame)
 		} else {
 			t.producerTimerMs += ms
 		}
 	} else {
 		t.producerTimerMs = t.producerIntervalMs
 	}
-
-	return timestampReceived
+	return timestampReceived, err
 }
 
 // Sets the internal time

@@ -73,7 +73,7 @@ func (tpdo *TPDO) configureCOBID(entry18xx *od.Entry, predefinedIdent uint16, er
 
 }
 
-func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOperational bool, syncWas bool) {
+func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOperational bool, syncWas bool) error {
 
 	pdo := &tpdo.pdo
 	if !pdo.Valid || !nmtIsOperational {
@@ -81,7 +81,7 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 		tpdo.inhibitTimer = 0
 		tpdo.eventTimer = 0
 		tpdo.syncCounter = 255
-		return
+		return nil
 	}
 
 	if tpdo.transmissionType == TRANSMISSION_TYPE_SYNC_ACYCLIC || tpdo.transmissionType >= TRANSMISSION_TYPE_SYNC_EVENT_LO {
@@ -128,8 +128,7 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 		// Send synchronous acyclic tpdo
 		if tpdo.transmissionType == TRANSMISSION_TYPE_SYNC_ACYCLIC &&
 			tpdo.sendRequest {
-			tpdo.Send()
-			return
+			return tpdo.Send()
 		}
 		// Send synchronous cyclic TPDOs
 		if tpdo.syncCounter == 255 {
@@ -146,18 +145,18 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 		case 254:
 			if tpdo.sync.Counter() == tpdo.syncStartValue {
 				tpdo.syncCounter = tpdo.transmissionType
-				tpdo.Send()
+				return tpdo.Send()
 			}
 		case 1:
 			tpdo.syncCounter = tpdo.transmissionType
-			tpdo.Send()
+			return tpdo.Send()
 
 		default:
 			tpdo.syncCounter--
 		}
 
 	}
-
+	return nil
 }
 
 // Send TPDO object
