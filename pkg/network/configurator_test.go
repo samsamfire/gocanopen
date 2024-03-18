@@ -147,7 +147,7 @@ func TestHBConfigurator(t *testing.T) {
 	node.EMCY.SetCallback(emCallback)
 	config := network.Configurator(NODE_ID_TEST).HB
 	config.WriteMonitoredNode(1, 0x25, 100)
-	//Test duplicate entry
+	// Test duplicate entry
 	config.WriteMonitoredNode(2, 0x25, 100)
 	err := config.WriteMonitoredNode(3, 0x25, 100)
 	assert.Equal(t, err, sdo.SDO_ABORT_PRAM_INCOMPAT)

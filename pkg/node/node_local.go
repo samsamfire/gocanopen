@@ -265,13 +265,13 @@ func NewLocalNode(
 		if err != nil {
 			log.Errorf("[NODE][SDO CLIENT] error when initializing SDO client object %v", err)
 		} else {
-			sdoClients = append(node.SDOclients, client)
+			sdoClients = append(sdoClients, client)
 			log.Infof("[NODE][SDO CLIENT] initialized for node x%x", nodeId)
 		}
 		node.SDOclients = sdoClients
 	}
 
-	//Initialize TIME
+	// Initialize TIME
 	time, err := time.NewTIME(bm, odict.Index(0x1012), 1000) // hardcoded for now
 	if err != nil {
 		log.Errorf("[NODE][TIME] error when initializing TIME object %v", err)
@@ -279,7 +279,7 @@ func NewLocalNode(
 		node.TIME = time
 	}
 
-	//Initialize SYNC
+	// Initialize SYNC
 	sync, err := sync.NewSYNC(
 		bm,
 		emcy,
@@ -294,7 +294,7 @@ func NewLocalNode(
 		node.SYNC = sync
 	}
 
-	//Add EDS storage if supported
+	// Add EDS storage if supported
 	edsEntry := odict.Index(0x1021)
 	if edsEntry != nil {
 		log.Info("[NODE][EDS] EDS is downloadable via object 0x1021")

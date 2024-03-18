@@ -105,7 +105,7 @@ func NewRemoteNode(
 	node.client = client
 	// Create a new SYNC object
 	node.od.AddSYNC()
-	//Initialize SYNC
+	// Initialize SYNC
 	sync, err := sync.NewSYNC(
 		bm,
 		nil,

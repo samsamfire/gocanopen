@@ -54,7 +54,6 @@ func TestReadSDO1280(t *testing.T) {
 
 // Test reader writer disabled
 func TestReadWriteDisabled(t *testing.T) {
-	//var streamer ObjectStreamer
 	od := Default()
 	entry := od.Index(0x2001)
 	assert.NotNil(t, entry)

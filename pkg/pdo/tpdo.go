@@ -87,7 +87,7 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 	if tpdo.transmissionType == TRANSMISSION_TYPE_SYNC_ACYCLIC || tpdo.transmissionType >= TRANSMISSION_TYPE_SYNC_EVENT_LO {
 		if tpdo.eventTimeUs != 0 {
 			if tpdo.eventTimer > timeDifferenceUs {
-				tpdo.eventTimer = tpdo.eventTimer - timeDifferenceUs
+				tpdo.eventTimer -= timeDifferenceUs
 			} else {
 				tpdo.eventTimer = 0
 			}
@@ -113,7 +113,7 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 	// Send PDO by application request or event timer
 	if tpdo.transmissionType >= TRANSMISSION_TYPE_SYNC_EVENT_LO {
 		if tpdo.inhibitTimer > timeDifferenceUs {
-			tpdo.inhibitTimer = tpdo.inhibitTimer - timeDifferenceUs
+			tpdo.inhibitTimer -= timeDifferenceUs
 		} else {
 			tpdo.inhibitTimer = 0
 		}
@@ -140,7 +140,7 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 			}
 		}
 		// If sync start value is used , start first TPDO
-		//after sync with matched syncstartvalue
+		// after sync with matched syncstartvalue
 		switch tpdo.syncCounter {
 		case 254:
 			if tpdo.sync.Counter() == tpdo.syncStartValue {

@@ -164,7 +164,7 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 	if rpdo.timeoutTimeUs <= 0 {
 		return
 	}
-	//Check timeouts
+	// Check timeouts
 	if rpdoReceived {
 		if rpdo.timeoutTimer > rpdo.timeoutTimeUs {
 			pdo.emcy.ErrorReset(emergency.EmRPDOTimeOut, rpdo.timeoutTimer)

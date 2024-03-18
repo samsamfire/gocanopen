@@ -231,7 +231,7 @@ func writeEntry18xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 		tpdo.eventTimer = 0
 
 	case 3:
-		//Inhibit time
+		// Inhibit time
 		if pdo.Valid {
 			return od.ODR_INVALID_VALUE
 		}

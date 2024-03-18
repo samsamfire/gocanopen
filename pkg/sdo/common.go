@@ -209,7 +209,7 @@ func (response *SDOResponse) isResponseValid(state SDOState) bool {
 			return true
 		}
 	case SDO_STATE_UPLOAD_BLK_SUBBLOCK_SREQ:
-		//TODO but not checked in normal upload function
+		// TODO but not checked in normal upload function
 		return true
 
 	case SDO_STATE_UPLOAD_BLK_END_SREQ:

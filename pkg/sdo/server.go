@@ -114,7 +114,7 @@ func (server *SDOServer) Handle(frame can.Frame) {
 			}
 		}
 	} else if server.state == SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_RSP {
-		//Ignore other server messages if response requested
+		// Ignore other server messages if response requested
 	} else {
 		// Copy data and set new flag
 		server.response.raw = frame.Data
@@ -201,12 +201,10 @@ func (server *SDOServer) writeObjectDictionary(crcOperation uint, crcClient crc.
 			}
 		}
 
-	} else {
+	} else if server.sizeIndicated > 0 && server.sizeTransferred > server.sizeIndicated {
 		// Still check if not bigger than max size
-		if server.sizeIndicated > 0 && server.sizeTransferred > server.sizeIndicated {
-			server.state = SDO_STATE_ABORT
-			return SDO_ABORT_DATA_LONG
-		}
+		server.state = SDO_STATE_ABORT
+		return SDO_ABORT_DATA_LONG
 	}
 
 	// Calculate CRC
@@ -383,7 +381,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 			case SDO_STATE_DOWNLOAD_INITIATE_REQ:
 				if (response.raw[0] & 0x02) != 0 {
 					log.Debugf("[SERVER][RX] DOWNLOAD EXPEDITED | x%x:x%x %v", server.index, server.subindex, response.raw)
-					//Expedited 4 bytes of data max
+					// Expedited 4 bytes of data max
 					varSizeInOd := server.streamer.DataLength()
 					dataSizeToWrite := 4
 					if (response.raw[0] & 0x01) != 0 {
@@ -391,7 +389,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					} else if varSizeInOd > 0 && varSizeInOd < 4 {
 						dataSizeToWrite = int(varSizeInOd)
 					}
-					//Create temporary buffer
+					// Create temporary buffer
 					buf := make([]byte, 6)
 					copy(buf, response.raw[4:4+dataSizeToWrite])
 					if server.streamer.CheckHasAttribute(od.ATTRIBUTE_STR) &&
@@ -542,8 +540,8 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					server.state = SDO_STATE_ABORT
 					break
 				}
-				//Get number of data bytes in last segment, that do not
-				//contain data. Then reduce buffer
+				// Get number of data bytes in last segment, that do not
+				// contain data. Then reduce buffer
 				noData := (response.raw[0] >> 2) & 0x07
 				if server.bufWriteOffset <= uint32(noData) {
 					server.errorExtraInfo = fmt.Errorf("internal buffer and end of block download are inconsitent")

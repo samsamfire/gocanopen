@@ -3,7 +3,6 @@ package od
 import (
 	"bytes"
 	"embed"
-	_ "embed"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -127,12 +126,12 @@ func Parse(file any, nodeId uint8) (*ObjectDictionary, error) {
 			objType, err := strconv.ParseUint(section.Key("ObjectType").Value(), 0, 8)
 			objectType := uint8(objType)
 
-			//If no object type, default to 7 (CiA spec)
+			// If no object type, default to 7 (CiA spec)
 			if err != nil {
 				objectType = 7
 			}
 
-			//objectType determines what type of entry we should add to dictionary : Variable, Array or Record
+			// objectType determines what type of entry we should add to dictionary : Variable, Array or Record
 			switch objectType {
 			case OBJ_VAR, OBJ_DOMAIN:
 				variable, err := NewVariableFromSection(section, name, nodeId, index, 0)
@@ -160,7 +159,7 @@ func Parse(file any, nodeId uint8) (*ObjectDictionary, error) {
 		// Match subindexes, add the subindex values to Record or Array objects
 		if matchSubidxRegExp.MatchString(sectionName) {
 
-			//Index part are the first 4 letters (A subindex entry looks like 5000Sub1)
+			// Index part are the first 4 letters (A subindex entry looks like 5000Sub1)
 			idx, err := strconv.ParseUint(sectionName[0:4], 16, 16)
 			if err != nil {
 				return nil, err
