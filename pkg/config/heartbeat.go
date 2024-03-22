@@ -3,12 +3,12 @@ package config
 import "github.com/samsamfire/gocanopen/pkg/sdo"
 
 type HBConfig struct {
-	nodeId    uint8
-	sdoClient *sdo.SDOClient
+	*sdo.SDOClient
+	nodeId uint8
 }
 
 func NewHBConfigurator(nodeId uint8, sdoClient *sdo.SDOClient) HBConfig {
-	return HBConfig{nodeId: nodeId, sdoClient: sdoClient}
+	return HBConfig{nodeId: nodeId, SDOClient: sdoClient}
 }
 
 // Read current monitored nodes
@@ -21,7 +21,7 @@ func (config *HBConfig) ReadMonitoredNodes() ([][]uint16, error) {
 	}
 	monitored := make([][]uint16, 0)
 	for i := uint8(1); i <= nbMonitored; i++ {
-		periodAndId, err := config.sdoClient.ReadUint32(config.nodeId, 0x1016, i)
+		periodAndId, err := config.ReadUint32(config.nodeId, 0x1016, i)
 		if err != nil {
 			return monitored, err
 		}
@@ -34,7 +34,7 @@ func (config *HBConfig) ReadMonitoredNodes() ([][]uint16, error) {
 
 // Read max available entries for monitoring
 func (config *HBConfig) ReadMaxMonitorable() (uint8, error) {
-	nbMonitored, err := config.sdoClient.ReadUint8(config.nodeId, 0x1016, 0x0)
+	nbMonitored, err := config.ReadUint8(config.nodeId, 0x1016, 0x0)
 	if err != nil {
 		return 0, err
 	}
@@ -45,5 +45,15 @@ func (config *HBConfig) ReadMaxMonitorable() (uint8, error) {
 // Index needs to be between 1 & the max nodes that can be monitored
 func (config *HBConfig) WriteMonitoredNode(index uint8, nodeId uint8, periodMs uint16) error {
 	periodAndId := uint32(nodeId)<<16 + uint32(periodMs&0xFFFF)
-	return config.sdoClient.WriteRaw(config.nodeId, 0x1016, index, periodAndId, false)
+	return config.WriteRaw(config.nodeId, 0x1016, index, periodAndId, false)
+}
+
+// Read a nodes heartbeat period and returns it in milliseconds
+func (config *HBConfig) ReadHeartbeatPeriod() (uint16, error) {
+	return config.ReadUint16(config.nodeId, 0x1017, 0)
+}
+
+// Update a nodes heartbeat period in milliseconds
+func (config *HBConfig) WriteHeartbeatPeriod(periodMs uint16) error {
+	return config.WriteRaw(config.nodeId, 0x1017, 0, periodMs, false)
 }

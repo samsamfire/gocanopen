@@ -12,17 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNmtConfigurator(t *testing.T) {
-	network := CreateNetworkTest()
-	defer network.Disconnect()
-	config := network.Configurator(NODE_ID_TEST).NMT
-	val, _ := config.ReadHeartbeatPeriod()
-	assert.EqualValues(t, 1000, val)
-	config.WriteHeartbeatPeriod(900)
-	val, _ = config.ReadHeartbeatPeriod()
-	assert.EqualValues(t, val, 900)
-}
-
 func TestSyncConfigurator(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
@@ -59,7 +48,7 @@ func TestSyncConfigurator(t *testing.T) {
 	assert.EqualValues(t, 110, windowPdos)
 }
 
-var TEST_MAPPING = []config.PDOMapping{
+var TEST_MAPPING = []config.PDOMappingParameter{
 	{Index: 0x2001, Subindex: 0x0, LengthBits: 8},
 	{Index: 0x2002, Subindex: 0x0, LengthBits: 8},
 	{Index: 0x2003, Subindex: 0x0, LengthBits: 16},
@@ -98,7 +87,7 @@ func TestPDOConfiguratorCommon(t *testing.T) {
 		assert.Nil(t, err)
 		cobId, _ := conf.ReadCobId(pdoNb)
 		assert.EqualValues(t, 0x211, cobId&0x7FF)
-		config := config.PDOConfiguration{
+		config := config.PDOConfigurationParameter{
 			CanId:            0x255,
 			TransmissionType: 22,
 			EventTimer:       1400,
@@ -160,6 +149,12 @@ func TestHBConfigurator(t *testing.T) {
 	monitoredNodes, err := config.ReadMonitoredNodes()
 	assert.Nil(t, err)
 	assert.Len(t, monitoredNodes, 8)
+	// Test hearbeat update / read
+	val, _ := config.ReadHeartbeatPeriod()
+	assert.EqualValues(t, 1000, val)
+	config.WriteHeartbeatPeriod(900)
+	val, _ = config.ReadHeartbeatPeriod()
+	assert.EqualValues(t, val, 900)
 }
 
 func TestTimeConfigurator(t *testing.T) {
