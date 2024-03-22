@@ -3,16 +3,16 @@ package config
 import "github.com/samsamfire/gocanopen/pkg/sdo"
 
 type TIMEConfig struct {
-	nodeId    uint8
-	sdoClient *sdo.SDOClient
+	*sdo.SDOClient
+	nodeId uint8
 }
 
 func NewTIMEConfigurator(nodeId uint8, sdoClient *sdo.SDOClient) TIMEConfig {
-	return TIMEConfig{nodeId: nodeId, sdoClient: sdoClient}
+	return TIMEConfig{nodeId: nodeId, SDOClient: sdoClient}
 }
 
 func (config *TIMEConfig) ReadCobId() (cobId uint32, err error) {
-	return config.sdoClient.ReadUint32(config.nodeId, 0x1012, 0)
+	return config.ReadUint32(config.nodeId, 0x1012, 0)
 }
 
 func (config *TIMEConfig) ProducerEnable() error {
@@ -21,7 +21,7 @@ func (config *TIMEConfig) ProducerEnable() error {
 		return err
 	}
 	cobId |= (1 << 30)
-	return config.sdoClient.WriteRaw(config.nodeId, 0x1012, 0x0, cobId, false)
+	return config.WriteRaw(config.nodeId, 0x1012, 0x0, cobId, false)
 }
 
 func (config *TIMEConfig) ProducerDisable() error {
@@ -31,7 +31,7 @@ func (config *TIMEConfig) ProducerDisable() error {
 	}
 	mask := ^(uint32(1) << 30)
 	cobId &= mask
-	return config.sdoClient.WriteRaw(config.nodeId, 0x1012, 0x0, cobId, false)
+	return config.WriteRaw(config.nodeId, 0x1012, 0x0, cobId, false)
 }
 
 func (config *TIMEConfig) ConsumerEnable() error {
@@ -40,7 +40,7 @@ func (config *TIMEConfig) ConsumerEnable() error {
 		return err
 	}
 	cobId |= (1 << 31)
-	return config.sdoClient.WriteRaw(config.nodeId, 0x1012, 0x0, cobId, false)
+	return config.WriteRaw(config.nodeId, 0x1012, 0x0, cobId, false)
 }
 
 func (config *TIMEConfig) ConsumerDisable() error {
@@ -50,5 +50,5 @@ func (config *TIMEConfig) ConsumerDisable() error {
 	}
 	mask := ^(uint32(1) << 31)
 	cobId &= mask
-	return config.sdoClient.WriteRaw(config.nodeId, 0x1012, 0x0, cobId, false)
+	return config.WriteRaw(config.nodeId, 0x1012, 0x0, cobId, false)
 }
