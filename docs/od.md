@@ -6,33 +6,44 @@ This subindex must be between 0 and 0xFF.
 All of this information is stored inside of an EDS file as defined by CiA.
 This library can parse a standard EDS file and create the corresponding CANopen objects (SDO, NMT, etc...).
 
-## Usage
+## Basic Usage
 
 To create an **ObjectDictionary** directly :
 
-```golang
+```go
 import "github.com/samsamfire/gocanopen/pkg/od"
 
 odict := od.Parse("../testdata/base.eds", 0x20) // parse EDS for node id 0x20
 ```
 The node id is required but is only useful when the EDS uses the special variable $NODE_ID.
 Usually, the ObjectDictionary is created when adding / creating a node on the network.
-Accessing OD entries directly is possible :
+Accessing OD entries and subentries directly is possible either by name or by value.
 
-```golang
+```go
 odict := od.Parse("../testdata/base.eds", 0x20)
-odict := od.Index(0x201B) // returns the associated OD Entry object
-odict := od.Index("UNSIGNED64 value") // accessing with the actual name is also possible
-odict := od.Index(0x201B).SubIndex(0) // returns the associated Variable object (for VAR types, subindex is always 0)
+odict.Index(0x201B) // get entry index by value
+odict.Index("UNSIGNED64 value") // accessing with the actual name is also possible
+odict.Index(0x201B).SubIndex(0) // returns the associated Variable object (for VAR types, subindex is always 0)
+odict.Index(0x1018).SubIndex(1) // access sub-object of array
 ```
 
-It is also possible to create new dictionary entries dynamically. Currently only a few objects can be created dynamically:
+It is also possible to create new dictionary entries dynamically :
 
-```golang
+```go
+odict.AddVariableType(index, indexName, od.DOMAIN, od.ATTRIBUTE_SDO_RW, "") // add a DOMAIN entry, and returns it
+odict.AddVariableType(0x2500, "a number", od.UNSIGNED32, od.ATTRIBUTE_SDO_RW, "0x1000") // add an UNSIGNED32 entry, readable and writable
+record := od.NewRecord()
+record.AddSubObject(0, "sub0", od.UNSIGNED8, od.ATTRIBUTE_SDO_RW, "0x11")
+odict.AddVariableList(0x3030, "record", record) // add a RECORD entry
+```
+
+Some more complex objects can be created dynamically, currently only a few are supported :
+
+```go
 odict := od.Parse("../testdata/base.eds", 0x20)
-odict := od.AddRPDO(1) // adds an rpdo object to EDS. i.e. new communication param at 0x1400 and mapping param at 0x1600
-odict := od.AddTPDO(1) // adds a tpdo object to EDS. i.e. new communication param at 0x1800 and mapping param at 0x1A00
-odict := od.AddSYNC() // adds sync object as well as extensions (1005,1006,1007,1019)
+odict.AddRPDO(1) // adds an rpdo object to EDS. i.e. new communication param at 0x1400 and mapping param at 0x1600
+odict.AddTPDO(1) // adds a tpdo object to EDS. i.e. new communication param at 0x1800 and mapping param at 0x1A00
+odict.AddSYNC() // adds sync object as well as extensions (1005,1006,1007,1019)
 ```
 Note that currently adding these objects will not update the underlying EDS file on the system, meaning that
 downloading EDS through object 0x1021 for example will still return the original EDS file.
@@ -40,11 +51,11 @@ downloading EDS through object 0x1021 for example will still return the original
 A default CANopen EDS is embedded inside of this package. It can be useful for testing purposes, and can be used
 like so :
 
-```golang
+```go
 odict := od.Default() // this creates a default object dictionary with pre-configured values
 ```
 
-## Standard objects
+## Special entries
 
 CiA 301 defines a certain number of CANopen communication specific objects inside the object dictionary. 
 These objects are inside of the **Communication Profile Area** and range between 0x1000 - 0x1FFF. 
@@ -76,11 +87,33 @@ The following table lists the available objects, and the ones that are currently
 | 1021  | Store EDS                     | yes         |
 | 1022  | Storage Format                | yes         |
 
+These entries are different than regular OD entries as they use special extensions
+that can perform various operations on the running CANopen node.
+You can define your own CANopen extensions for this, you need to create two functions :
+
+- An **od.StreamReader** that will be called on entry read access
+- An **od.StreamWriter** that will be called on entry write access
+
+The default implementations, i.e. for regular reading and writing are **od.ReadEntryDefault** and
+**od.WriteEntryDefault**.
+
+```go
+odict := od.Parse("../testdata/base.eds", 0x20)
+entry := odict.AddVariableType(index, indexName, od.DOMAIN, od.ATTRIBUTE_SDO_RW, "")
+entry.AddExtension(someObject,od.ReadEntryDefault,od.WriteEntryDefault)
+```
+
+Some pre-made extensions are available :
+```go
+odict := od.Parse("../testdata/base.eds", 0x20)
+// this will create a file on disk that will be accessible by SDO block transfer
+entry := odict.AddFile(0x3333, "File entry", "./path_to_file.txt", os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
+```
 
 Some helper methods are also available for reading or configuring these objects. The
 following are non-exhaustive examples :
 
-```golang
+```go
 config := net.Configurator(0x20) // create a NodeConfigurator object for node 0x20
 config.HB.WriteHeartbeatPeriod(500) // update heartbeat period of node 0x20 to 500ms
 config.SYNC.ProducerDisable() // disable sync transmission (if this node is the one sending the SYNC)

@@ -67,21 +67,6 @@ const (
 	ODT_TYPE_MASK byte = 0x0F
 )
 
-// // Create an OD from a given file path on system
-// func ParseEDSFromFile(filePath string, nodeId uint8) (*ObjectDictionary, error) {
-// 	od, err := Parse(filePath, nodeId)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	od.FilePath = filePath
-// 	return od, nil
-// }
-
-// // Create an OD from raw bytes
-// func ParseEDSFromRaw(edsBytes []byte, nodeId uint8) (*ObjectDictionary, error) {
-// 	return Parse(edsBytes, nodeId)
-// }
-
 // Parse an EDS file
 // file can be either a path or an *os.File
 // Other file types could be supported in the future
