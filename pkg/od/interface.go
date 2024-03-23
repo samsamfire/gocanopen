@@ -27,15 +27,16 @@ func (od *ObjectDictionary) addEntry(entry *Entry) {
 }
 
 // Add a variable type entry to OD with given variable, existing entry will be
-func (od *ObjectDictionary) addVariable(index uint16, variable *Variable) {
-	od.addEntry(&Entry{
+func (od *ObjectDictionary) addVariable(index uint16, variable *Variable) *Entry {
+	entry := &Entry{
 		Index:             index,
 		Name:              variable.Name,
 		object:            variable,
 		ObjectType:        OBJ_VAR,
 		extension:         nil,
-		subEntriesNameMap: map[string]uint8{}},
-	)
+		subEntriesNameMap: map[string]uint8{}}
+	od.addEntry(entry)
+	return entry
 }
 
 // AddVariableType adds an entry of type VAR to OD
@@ -48,25 +49,27 @@ func (od *ObjectDictionary) AddVariableType(
 	datatype uint8,
 	attribute uint8,
 	value string,
-) (*Variable, error) {
+) (*Entry, error) {
 	variable, err := NewVariable(0, name, datatype, attribute, value)
 	if err != nil {
 		return nil, err
 	}
-	od.addVariable(index, variable)
-	return variable, nil
+	entry := od.addVariable(index, variable)
+	return entry, nil
 }
 
 // AddVariableList adds an entry of type ARRAY or RECORD depending on [VariableList]
-func (od *ObjectDictionary) AddVariableList(index uint16, name string, varList *VariableList) {
-	od.addEntry(&Entry{
+func (od *ObjectDictionary) AddVariableList(index uint16, name string, varList *VariableList) *Entry {
+	entry := &Entry{
 		Index:             index,
 		Name:              name,
 		object:            varList,
 		ObjectType:        varList.objectType,
 		extension:         nil,
-		subEntriesNameMap: map[string]uint8{}},
-	)
+		subEntriesNameMap: map[string]uint8{}}
+
+	od.addEntry(entry)
+	return entry
 }
 
 // AddFile adds a file like object, of type DOMAIN to OD
@@ -75,16 +78,14 @@ func (od *ObjectDictionary) AddVariableList(index uint16, name string, varList *
 func (od *ObjectDictionary) AddFile(index uint16, indexName string, filePath string, readMode int, writeMode int) {
 	log.Infof("[OD] adding file object entry : %v at x%x", filePath, index)
 	fileObject := &FileObject{FilePath: filePath, ReadMode: readMode, WriteMode: writeMode}
-	_, _ = od.AddVariableType(index, indexName, DOMAIN, ATTRIBUTE_SDO_RW, "") // Cannot error
-	entry := od.Index(index)
+	entry, _ := od.AddVariableType(index, indexName, DOMAIN, ATTRIBUTE_SDO_RW, "") // Cannot error
 	entry.AddExtension(fileObject, ReadEntryFileObject, WriteEntryFileObject)
 }
 
 // AddReader adds an io.Reader object, of type DOMAIN to OD
 func (od *ObjectDictionary) AddReader(index uint16, indexName string, reader io.Reader) {
 	log.Infof("[OD] adding a reader entry : %v at x%x", indexName, index)
-	_, _ = od.AddVariableType(index, indexName, DOMAIN, ATTRIBUTE_SDO_R, "") // Cannot error
-	entry := od.Index(index)
+	entry, _ := od.AddVariableType(index, indexName, DOMAIN, ATTRIBUTE_SDO_R, "") // Cannot error
 	entry.AddExtension(reader, ReadEntryReader, WriteEntryDisabled)
 }
 
