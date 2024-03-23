@@ -2,6 +2,7 @@ package sync
 
 import (
 	"encoding/binary"
+	s "sync"
 
 	canopen "github.com/samsamfire/gocanopen"
 	can "github.com/samsamfire/gocanopen/pkg/can"
@@ -12,6 +13,7 @@ import (
 
 type SYNC struct {
 	*canopen.BusManager
+	mu                          s.Mutex
 	emcy                        *emergency.EMCY
 	rxNew                       bool
 	receiveError                uint8
@@ -35,6 +37,9 @@ const (
 )
 
 func (sync *SYNC) Handle(frame can.Frame) {
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
+
 	syncReceived := false
 	if sync.counterOverflow == 0 {
 		if frame.DLC == 0 {
@@ -57,7 +62,7 @@ func (sync *SYNC) Handle(frame can.Frame) {
 
 }
 
-func (sync *SYNC) Send() {
+func (sync *SYNC) send() {
 	sync.counter += 1
 	if sync.counter > sync.counterOverflow {
 		sync.counter = 1
@@ -65,22 +70,34 @@ func (sync *SYNC) Send() {
 	sync.timer = 0
 	sync.rxToggle = !sync.rxToggle
 	sync.txBuffer.Data[0] = sync.counter
-	_ = sync.BusManager.Send(sync.txBuffer)
+	_ = sync.Send(sync.txBuffer)
 }
 
 func (sync *SYNC) Counter() uint8 {
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
+
 	return sync.counter
 }
 
 func (sync *SYNC) RxToggle() bool {
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
+
 	return sync.rxToggle
 }
 
 func (sync *SYNC) CounterOverflow() uint8 {
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
+
 	return sync.counterOverflow
 }
 
 func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
+
 	status := EventNone
 	if !nmtIsPreOrOperational {
 		sync.rxNew = false
@@ -103,7 +120,9 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 		if sync.isProducer {
 			if sync.timer >= communicationCyclePeriod {
 				status = EventRxOrTx
-				sync.Send()
+				sync.mu.Unlock()
+				sync.send()
+				sync.mu.Lock()
 			}
 			if timerNextUs != nil {
 				diff := communicationCyclePeriod - sync.timer

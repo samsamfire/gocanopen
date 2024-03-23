@@ -19,6 +19,8 @@ func writeEntry1005(stream *od.Stream, data []byte, countWritten *uint16) error 
 	if !ok {
 		return od.ODR_DEV_INCOMPAT
 	}
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
 	cobIdSync := binary.LittleEndian.Uint32(data)
 	canId := uint16(cobIdSync & 0x7FF)
 	isProducer := (cobIdSync & 0x40000000) != 0
@@ -80,6 +82,8 @@ func writeEntry1019(stream *od.Stream, data []byte, countWritten *uint16) error 
 	if !ok {
 		return od.ODR_DEV_INCOMPAT
 	}
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
 	syncCounterOverflow := data[0]
 	if syncCounterOverflow == 1 || syncCounterOverflow > 240 {
 		return od.ODR_INVALID_VALUE
