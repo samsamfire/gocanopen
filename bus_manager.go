@@ -76,8 +76,8 @@ func (bm *BusManager) Subscribe(ident uint32, mask uint32, rtr bool, callback ca
 		return nil
 	}
 	// Iterate over all callbacks and verify that we are not adding the same one twice
-	for _, callback := range bm.frameListeners[ident] {
-		if callback == callback {
+	for _, cb := range bm.frameListeners[ident] {
+		if cb == callback {
 			log.Warnf("[CAN] callback for frame id %x already added", ident)
 			return nil
 		}
