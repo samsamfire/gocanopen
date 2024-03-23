@@ -15,7 +15,7 @@ type SYNC struct {
 	emcy                        *emergency.EMCY
 	rxNew                       bool
 	receiveError                uint8
-	RxToggle                    bool
+	rxToggle                    bool
 	timeoutError                uint8
 	counterOverflow             uint8
 	counter                     uint8
@@ -51,7 +51,7 @@ func (sync *SYNC) Handle(frame can.Frame) {
 		}
 	}
 	if syncReceived {
-		sync.RxToggle = !sync.RxToggle
+		sync.rxToggle = !sync.rxToggle
 		sync.rxNew = true
 	}
 
@@ -63,13 +63,17 @@ func (sync *SYNC) Send() {
 		sync.counter = 1
 	}
 	sync.timer = 0
-	sync.RxToggle = !sync.RxToggle
+	sync.rxToggle = !sync.rxToggle
 	sync.txBuffer.Data[0] = sync.counter
-	sync.BusManager.Send(sync.txBuffer)
+	_ = sync.BusManager.Send(sync.txBuffer)
 }
 
 func (sync *SYNC) Counter() uint8 {
 	return sync.counter
+}
+
+func (sync *SYNC) RxToggle() bool {
+	return sync.rxToggle
 }
 
 func (sync *SYNC) CounterOverflow() uint8 {
@@ -147,7 +151,6 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 		}
 		sync.timeoutError = 1
 	}
-
 	return status
 }
 
