@@ -2,6 +2,7 @@ package time
 
 import (
 	"encoding/binary"
+	"sync"
 	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
@@ -15,6 +16,7 @@ var timestampOrigin = time.Date(1984, time.January, 1, 0, 0, 0, 0, time.Local)
 
 type TIME struct {
 	*canopen.BusManager
+	mu                 sync.Mutex
 	rawTimestamp       [6]byte
 	ms                 uint32 // Milliseconds after midnight
 	days               uint16 // Days since 1st january 1984
@@ -28,6 +30,8 @@ type TIME struct {
 }
 
 func (t *TIME) Handle(frame can.Frame) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	if frame.DLC != 6 {
 		return
 	}
@@ -36,6 +40,8 @@ func (t *TIME) Handle(frame can.Frame) {
 }
 
 func (t *TIME) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) (bool, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	timestampReceived := false
 	if nmtIsPreOrOperational && t.isConsumer {
 		if t.rxNew {
@@ -78,6 +84,8 @@ func (t *TIME) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) (boo
 
 // Sets the internal time
 func (t *TIME) SetInternalTime(internalTime time.Time) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	// Get the total number of days since 1st of jan 1984
 	days := uint16(internalTime.Sub(timestampOrigin).Hours() / 24)
 	// Get number of milliseconds after midnight
@@ -92,12 +100,16 @@ func (t *TIME) SetInternalTime(internalTime time.Time) {
 
 // Update the producer interval time in milliseconds
 func (t *TIME) SetProducerIntervalMs(producerIntervalMs uint32) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.producerIntervalMs = producerIntervalMs
 	t.producerTimerMs = producerIntervalMs
 }
 
 // Get the internal time
 func (t *TIME) InternalTime() time.Time {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	internalTime := timestampOrigin.AddDate(0, 0, int(t.days))
 	return internalTime.Add(time.Duration(t.ms)*time.Millisecond + time.Duration(t.residualUs)*time.Microsecond)
 }

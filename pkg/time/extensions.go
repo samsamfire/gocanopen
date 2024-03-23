@@ -21,6 +21,8 @@ func writeEntry1012(stream *od.Stream, data []byte, countWritten *uint16) error 
 	if (cobIdTimestamp&0x3FFFF800) != 0 || canopen.IsIDRestricted(canId) {
 		return od.ODR_INVALID_VALUE
 	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	t.isProducer = (cobIdTimestamp & 0x40000000) != 0
 	t.isConsumer = (cobIdTimestamp & 0x80000000) != 0
 	if t.isConsumer {
