@@ -12,7 +12,6 @@ import (
 // [SYNC] update cob id & if should be producer
 func writeEntry1005(stream *od.Stream, data []byte, countWritten *uint16) error {
 	log.Debugf("[OD][EXTENSION][SYNC] updating COB-ID SYNC")
-	// Expect a uint32 and subindex 0 and no nill pointers
 	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
 		return od.ODR_DEV_INCOMPAT
 	}
