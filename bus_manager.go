@@ -1,6 +1,8 @@
 package canopen
 
 import (
+	"sync"
+
 	can "github.com/samsamfire/gocanopen/pkg/can"
 	log "github.com/sirupsen/logrus"
 )
@@ -8,6 +10,7 @@ import (
 // Bus manager is a wrapper around the CAN bus interface
 // Used by the CANopen stack to control errors, callbacks for specific IDs, etc.
 type BusManager struct {
+	mu             sync.Mutex
 	bus            can.Bus // Bus interface that can be adapted
 	frameListeners map[uint32][]can.FrameListener
 	canError       uint16
@@ -16,6 +19,8 @@ type BusManager struct {
 // Implements the FrameListener interface
 // This handles all received CAN frames from Bus
 func (bm *BusManager) Handle(frame can.Frame) {
+	bm.mu.Lock()
+	defer bm.mu.Unlock()
 	listeners, ok := bm.frameListeners[frame.ID]
 	if !ok {
 		return
@@ -27,10 +32,14 @@ func (bm *BusManager) Handle(frame can.Frame) {
 
 // Set bus
 func (bm *BusManager) SetBus(bus can.Bus) {
+	bm.mu.Lock()
+	defer bm.mu.Unlock()
 	bm.bus = bus
 }
 
 func (bm *BusManager) Bus() can.Bus {
+	bm.mu.Lock()
+	defer bm.mu.Unlock()
 	return bm.bus
 }
 
@@ -46,6 +55,8 @@ func (bm *BusManager) Send(frame can.Frame) error {
 
 // This should be called cyclically to update errors
 func (bm *BusManager) Process() error {
+	bm.mu.Lock()
+	defer bm.mu.Unlock()
 	// TODO get bus state error
 	bm.canError = 0
 	return nil
@@ -53,6 +64,8 @@ func (bm *BusManager) Process() error {
 
 // Subscribe to a specific CAN ID
 func (bm *BusManager) Subscribe(ident uint32, mask uint32, rtr bool, callback can.FrameListener) error {
+	bm.mu.Lock()
+	defer bm.mu.Unlock()
 	ident = ident & can.CanSffMask
 	if rtr {
 		ident |= can.CanRtrFlag
@@ -65,7 +78,7 @@ func (bm *BusManager) Subscribe(ident uint32, mask uint32, rtr bool, callback ca
 	// Iterate over all callbacks and verify that we are not adding the same one twice
 	for _, callback := range bm.frameListeners[ident] {
 		if callback == callback {
-			log.Warnf("[CAN] callback %v for frame id %x already added", callback, ident)
+			log.Warnf("[CAN] callback for frame id %x already added", ident)
 			return nil
 		}
 	}
@@ -75,6 +88,8 @@ func (bm *BusManager) Subscribe(ident uint32, mask uint32, rtr bool, callback ca
 
 // Get CAN error
 func (bm *BusManager) Error() uint16 {
+	bm.mu.Lock()
+	defer bm.mu.Unlock()
 	return bm.canError
 }
 

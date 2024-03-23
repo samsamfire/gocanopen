@@ -3,6 +3,7 @@ package sdo
 import (
 	"encoding/binary"
 	"fmt"
+	"sync"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/internal/crc"
@@ -13,6 +14,7 @@ import (
 
 type SDOServer struct {
 	*canopen.BusManager
+	mu                         sync.Mutex
 	od                         *od.ObjectDictionary
 	streamer                   *od.Streamer
 	nodeId                     uint8
@@ -46,6 +48,8 @@ type SDOServer struct {
 
 // Handle received messages
 func (server *SDOServer) Handle(frame can.Frame) {
+	server.mu.Lock()
+	defer server.mu.Unlock()
 	if frame.DLC != 8 {
 		return
 	}
@@ -311,6 +315,8 @@ func updateStateFromRequest(stateReq uint8, state *SDOState, upload *bool) error
 }
 
 func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs uint32, timerNextUs *uint32) (state uint8, err error) {
+	server.mu.Lock()
+	defer server.mu.Unlock()
 	ret := SDO_WAITING_RESPONSE
 	var abortCode error
 	if server.valid && server.state == SDO_STATE_IDLE && !server.rxNew {
@@ -960,6 +966,8 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 
 // Create & send abort on bus
 func (server *SDOServer) Abort(abortCode SDOAbortCode) {
+	server.mu.Lock()
+	defer server.mu.Unlock()
 	code := uint32(abortCode)
 	server.txBuffer.Data[0] = 0x80
 	server.txBuffer.Data[1] = uint8(server.index)
