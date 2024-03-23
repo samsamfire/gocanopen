@@ -22,13 +22,12 @@ func writeEntry1012(stream *od.Stream, data []byte, countWritten *uint16) error 
 		return od.ODR_INVALID_VALUE
 	}
 	t.isProducer = (cobIdTimestamp & 0x40000000) != 0
-	// If wasn't already consumer, subscribe
-	if (cobIdTimestamp&0x80000000) != 0 && !t.isConsumer {
+	t.isConsumer = (cobIdTimestamp & 0x80000000) != 0
+	if t.isConsumer {
 		err := t.Subscribe(t.cobId, 0x7FF, false, t)
 		if err != nil {
 			return od.ODR_DEV_INCOMPAT
 		}
-		t.isConsumer = true
 	}
 	return od.WriteEntryDefault(stream, data, countWritten)
 }
