@@ -12,7 +12,7 @@ func writeEntry1012(stream *od.Stream, data []byte, countWritten *uint16) error 
 	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
 		return od.ODR_DEV_INCOMPAT
 	}
-	time, ok := stream.Object.(*TIME)
+	t, ok := stream.Object.(*TIME)
 	if !ok {
 		return od.ODR_DEV_INCOMPAT
 	}
@@ -21,8 +21,14 @@ func writeEntry1012(stream *od.Stream, data []byte, countWritten *uint16) error 
 	if (cobIdTimestamp&0x3FFFF800) != 0 || canopen.IsIDRestricted(canId) {
 		return od.ODR_INVALID_VALUE
 	}
-	time.isConsumer = (cobIdTimestamp & 0x80000000) != 0
-	time.isProducer = (cobIdTimestamp & 0x40000000) != 0
-
+	t.isProducer = (cobIdTimestamp & 0x40000000) != 0
+	// If wasn't already consumer, subscribe
+	if (cobIdTimestamp&0x80000000) != 0 && !t.isConsumer {
+		err := t.Subscribe(t.cobId, 0x7FF, false, t)
+		if err != nil {
+			return od.ODR_DEV_INCOMPAT
+		}
+		t.isConsumer = true
+	}
 	return od.WriteEntryDefault(stream, data, countWritten)
 }
