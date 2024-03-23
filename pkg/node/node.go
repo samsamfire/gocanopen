@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	canopen "github.com/samsamfire/gocanopen"
+	"github.com/samsamfire/gocanopen/pkg/config"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/sdo"
 )
@@ -88,6 +89,10 @@ func (node *BaseNode) Wg() *sync.WaitGroup {
 
 func (node *BaseNode) SetMainCallback(mainCallback func(node Node)) {
 	node.mainCallback = mainCallback
+}
+
+func (node *BaseNode) Configurator() *config.NodeConfigurator {
+	return config.NewNodeConfigurator(node.id, node.SDOClient)
 }
 
 // Helper function for reading a remote node entry as bytes

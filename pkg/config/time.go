@@ -7,8 +7,8 @@ type TIMEConfig struct {
 	nodeId uint8
 }
 
-func NewTIMEConfigurator(nodeId uint8, sdoClient *sdo.SDOClient) TIMEConfig {
-	return TIMEConfig{nodeId: nodeId, SDOClient: sdoClient}
+func NewTIMEConfigurator(nodeId uint8, sdoClient *sdo.SDOClient) *TIMEConfig {
+	return &TIMEConfig{nodeId: nodeId, SDOClient: sdoClient}
 }
 
 func (config *TIMEConfig) ReadCobId() (cobId uint32, err error) {

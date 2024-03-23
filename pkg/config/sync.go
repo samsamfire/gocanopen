@@ -7,8 +7,8 @@ type SYNCConfig struct {
 	nodeId uint8
 }
 
-func NewSYNCConfigurator(nodeId uint8, sdoClient *sdo.SDOClient) SYNCConfig {
-	return SYNCConfig{nodeId: nodeId, SDOClient: sdoClient}
+func NewSYNCConfigurator(nodeId uint8, sdoClient *sdo.SDOClient) *SYNCConfig {
+	return &SYNCConfig{nodeId: nodeId, SDOClient: sdoClient}
 }
 
 func (config *SYNCConfig) ReadCobId() (cobId uint32, err error) {

@@ -128,15 +128,15 @@ func NewRemoteNode(
 func (node *RemoteNode) InitPDOs(useLocal bool) error {
 	// Iterate over all the possible entries : there can be a maximum of 512 maps
 	// Break loops when an entry doesn't exist (don't allow holes in mapping)
-	var pdoConfigurators []config.PDOConfig
+	var pdoConfigurators []*config.PDOConfig
 
 	localRPDOConfigurator := config.NewRPDOConfigurator(0, node.client)
 	localTPDOConfigurator := config.NewTPDOConfigurator(0, node.client)
 
 	if useLocal {
-		pdoConfigurators = []config.PDOConfig{localRPDOConfigurator, localTPDOConfigurator}
+		pdoConfigurators = []*config.PDOConfig{localRPDOConfigurator, localTPDOConfigurator}
 	} else {
-		pdoConfigurators = []config.PDOConfig{
+		pdoConfigurators = []*config.PDOConfig{
 			config.NewRPDOConfigurator(node.id, node.client),
 			config.NewTPDOConfigurator(node.id, node.client),
 		}
@@ -144,10 +144,10 @@ func (node *RemoteNode) InitPDOs(useLocal bool) error {
 
 	// Read TPDO & RPDO configurations
 	// RPDO becomes TPDO & vice versa
-	allPdoConfigurations := make([][]config.PDOConfiguration, 0)
+	allPdoConfigurations := make([][]config.PDOConfigurationParameter, 0)
 
 	for _, configurator := range pdoConfigurators {
-		pdoConfigurations := make([]config.PDOConfiguration, 0)
+		pdoConfigurations := make([]config.PDOConfigurationParameter, 0)
 		for pdoNb := uint16(1); pdoNb <= 512; pdoNb++ {
 			conf, err := configurator.ReadConfiguration(pdoNb)
 			if err != nil && err == sdo.SDO_ABORT_NOT_EXIST {
