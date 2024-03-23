@@ -10,6 +10,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// time origin is 1st of jan 1984
+var timestampOrigin = time.Date(1984, time.January, 1, 0, 0, 0, 0, time.Local)
+
 type TIME struct {
 	*canopen.BusManager
 	rawTimestamp       [6]byte
@@ -76,17 +79,16 @@ func (t *TIME) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) (boo
 
 // Sets the internal time
 func (t *TIME) SetInternalTime() {
-	timeBegin := time.Date(1984, time.January, 1, 0, 0, 0, 0, time.Local)
-	duration := time.Since(timeBegin)
+	now := time.Now()
 	// Get the total number of days since 1st of jan 1984
-	days := uint16(duration.Hours() / 24)
+	days := uint16(time.Since(timestampOrigin).Hours() / 24)
 	// Get number of milliseconds after midnight
-	midnight := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Local)
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
 	ms := time.Since(midnight).Milliseconds()
 	t.residualUs = 0
 	t.ms = uint32(ms)
 	t.days = days
-	log.Infof("[TIME] setting the date to %v", time.Now())
+	log.Infof("[TIME] setting the date to %v", now)
 	log.Infof("[TIME] days since 01/01/1984 : %v | ms since 00:00 : %v", days, ms)
 }
 
@@ -96,19 +98,17 @@ func NewTIME(bm *canopen.BusManager, entry1012 *od.Entry, producerIntervalMs uin
 	}
 	t := &TIME{BusManager: bm}
 	// Read param from OD
-	cobIdTimestamp, err := entry1012.Uint32(0)
+	cobId, err := entry1012.Uint32(0)
 	if err != nil {
 		log.Errorf("[TIME][%x|%x] reading cob id timestamp failed : %v", entry1012.Index, 0x0, err)
 		return nil, canopen.ErrOdParameters
 	}
 	entry1012.AddExtension(t, od.ReadEntryDefault, writeEntry1012)
-	cobId := cobIdTimestamp & 0x7FF
-	t.IsConsumer = (cobIdTimestamp & 0x80000000) != 0
-	t.IsProducer = (cobIdTimestamp & 0x40000000) != 0
-	t.rxNew = false
-	t.cobId = cobId
+	t.IsConsumer = (cobId & 0x80000000) != 0
+	t.IsProducer = (cobId & 0x40000000) != 0
+	t.cobId = cobId & 0x7FF
 	if t.IsConsumer {
-		err := bm.Subscribe(cobId, 0x7FF, false, t)
+		err := bm.Subscribe(t.cobId, 0x7FF, false, t)
 		if err != nil {
 			return nil, canopen.ErrIllegalArgument
 		}
