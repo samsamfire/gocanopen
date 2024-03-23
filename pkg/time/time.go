@@ -28,7 +28,7 @@ type TIME struct {
 }
 
 func (t *TIME) Handle(frame can.Frame) {
-	if len(frame.Data) != 6 {
+	if frame.DLC != 6 {
 		return
 	}
 	copy(t.rawTimestamp[:], frame.Data[:])
@@ -79,10 +79,10 @@ func (t *TIME) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) (boo
 // Sets the internal time
 func (t *TIME) SetInternalTime(internalTime time.Time) {
 	// Get the total number of days since 1st of jan 1984
-	days := uint16(time.Since(timestampOrigin).Hours() / 24)
+	days := uint16(internalTime.Sub(timestampOrigin).Hours() / 24)
 	// Get number of milliseconds after midnight
 	midnight := time.Date(internalTime.Year(), internalTime.Month(), internalTime.Day(), 0, 0, 0, 0, time.Local)
-	ms := time.Since(midnight).Milliseconds()
+	ms := internalTime.Sub(midnight).Milliseconds()
 	t.residualUs = 0
 	t.ms = uint32(ms)
 	t.days = days
@@ -90,10 +90,24 @@ func (t *TIME) SetInternalTime(internalTime time.Time) {
 	log.Infof("[TIME] days since 01/01/1984 : %v | ms since 00:00 : %v", days, ms)
 }
 
+// Update the producer interval time in milliseconds
+func (t *TIME) SetProducerIntervalMs(producerIntervalMs uint32) {
+	t.producerIntervalMs = producerIntervalMs
+	t.producerTimerMs = producerIntervalMs
+}
+
+// Get the internal time
+func (t *TIME) InternalTime() time.Time {
+	internalTime := timestampOrigin.AddDate(0, 0, int(t.days))
+	return internalTime.Add(time.Duration(t.ms)*time.Millisecond + time.Duration(t.residualUs)*time.Microsecond)
+}
+
+// Check if time producer
 func (t *TIME) Producer() bool {
 	return t.isProducer
 }
 
+// Check if time consumer
 func (t *TIME) Consumer() bool {
 	return t.isConsumer
 }
