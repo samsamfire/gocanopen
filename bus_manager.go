@@ -39,7 +39,7 @@ func (bm *BusManager) Bus() can.Bus {
 func (bm *BusManager) Send(frame can.Frame) error {
 	err := bm.bus.Send(frame)
 	if err != nil {
-		log.Warnf("[CAN ERROR] %v", err)
+		log.Warnf("[CAN] %v", err)
 	}
 	return err
 }
@@ -62,7 +62,13 @@ func (bm *BusManager) Subscribe(ident uint32, mask uint32, rtr bool, callback ca
 		bm.frameListeners[ident] = []can.FrameListener{callback}
 		return nil
 	}
-	// TODO add error if callback exists already
+	// Iterate over all callbacks and verify that we are not adding the same one twice
+	for _, callback := range bm.frameListeners[ident] {
+		if callback == callback {
+			log.Warnf("[CAN] callback %v for frame id %x already added", callback, ident)
+			return nil
+		}
+	}
 	bm.frameListeners[ident] = append(bm.frameListeners[ident], callback)
 	return nil
 }
