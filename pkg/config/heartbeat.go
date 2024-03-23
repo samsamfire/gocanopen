@@ -7,8 +7,8 @@ type HBConfig struct {
 	nodeId uint8
 }
 
-func NewHBConfigurator(nodeId uint8, sdoClient *sdo.SDOClient) HBConfig {
-	return HBConfig{nodeId: nodeId, SDOClient: sdoClient}
+func NewHBConfigurator(nodeId uint8, sdoClient *sdo.SDOClient) *HBConfig {
+	return &HBConfig{nodeId: nodeId, SDOClient: sdoClient}
 }
 
 // Read current monitored nodes

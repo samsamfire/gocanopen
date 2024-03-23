@@ -310,6 +310,6 @@ func (network *Network) RemoveNode(nodeId uint8) {
 
 // Configurator creates a [NodeConfigurator] object for a given id
 // using the networks internal sdo client
-func (network *Network) Configurator(nodeId uint8) config.NodeConfigurator {
+func (network *Network) Configurator(nodeId uint8) *config.NodeConfigurator {
 	return config.NewNodeConfigurator(nodeId, network.SDOClient)
 }

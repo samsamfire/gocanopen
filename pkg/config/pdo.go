@@ -30,12 +30,12 @@ type PDOConfig struct {
 
 // PDO configurator is used for configurating node PDOs
 // It has helper functions for accessing the common PDO mandatory objects
-func NewRPDOConfigurator(nodeId uint8, sdoClient *sdo.SDOClient) PDOConfig {
-	return PDOConfig{nodeId: nodeId, SDOClient: sdoClient, indexOffset: 0, isRPDO: true}
+func NewRPDOConfigurator(nodeId uint8, sdoClient *sdo.SDOClient) *PDOConfig {
+	return &PDOConfig{nodeId: nodeId, SDOClient: sdoClient, indexOffset: 0, isRPDO: true}
 }
 
-func NewTPDOConfigurator(nodeId uint8, sdoClient *sdo.SDOClient) PDOConfig {
-	return PDOConfig{nodeId: nodeId, SDOClient: sdoClient, indexOffset: 0x400, isRPDO: false}
+func NewTPDOConfigurator(nodeId uint8, sdoClient *sdo.SDOClient) *PDOConfig {
+	return &PDOConfig{nodeId: nodeId, SDOClient: sdoClient, indexOffset: 0x400, isRPDO: false}
 }
 
 func (conf *PDOConfig) getType() string {

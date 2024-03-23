@@ -60,7 +60,7 @@ func TestPDOConfiguratorCommon(t *testing.T) {
 	pdoNb := uint16(1)
 	network := CreateNetworkTest()
 	defer network.Disconnect()
-	confs := []config.PDOConfig{
+	confs := []*config.PDOConfig{
 		network.Configurator(NODE_ID_TEST).RPDO,
 		network.Configurator(NODE_ID_TEST).TPDO,
 	}
