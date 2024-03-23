@@ -161,19 +161,25 @@ func TestTimeConfigurator(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
 	conf := network.Configurator(NODE_ID_TEST).TIME
+	node := network.nodes[NODE_ID_TEST].(*node.LocalNode)
 	err := conf.ProducerEnable()
 	assert.Nil(t, err)
-	node := network.nodes[NODE_ID_TEST].(*node.LocalNode)
 	assert.Equal(t, true, node.TIME.Producer())
 	err = conf.ProducerDisable()
 	assert.Nil(t, err)
 	assert.Equal(t, false, node.TIME.Producer())
+	err = conf.ProducerEnable()
+	assert.Nil(t, err)
+	assert.Equal(t, true, node.TIME.Producer())
 	err = conf.ConsumerDisable()
 	assert.Nil(t, err)
 	assert.Equal(t, false, node.TIME.Consumer())
 	err = conf.ConsumerEnable()
 	assert.Nil(t, err)
 	assert.Equal(t, true, node.TIME.Consumer())
+	err = conf.ConsumerDisable()
+	assert.Nil(t, err)
+	assert.Equal(t, false, node.TIME.Consumer())
 }
 
 func TestGeneralObjects(t *testing.T) {
