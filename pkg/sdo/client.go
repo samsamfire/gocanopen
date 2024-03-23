@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"math"
+	"sync"
 	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
@@ -35,6 +36,7 @@ const (
 
 type SDOClient struct {
 	*canopen.BusManager
+	mu                         sync.Mutex
 	od                         *od.ObjectDictionary
 	streamer                   *od.Streamer
 	nodeId                     uint8
@@ -66,6 +68,8 @@ type SDOClient struct {
 }
 
 func (client *SDOClient) Handle(frame can.Frame) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
 
 	if client.state != SDO_STATE_IDLE && frame.DLC == 8 && (!client.rxNew || frame.Data[0] == 0x80) {
 		if frame.Data[0] == 0x80 || (client.state != SDO_STATE_UPLOAD_BLK_SUBBLOCK_SREQ && client.state != SDO_STATE_UPLOAD_BLK_SUBBLOCK_CRSP) {
@@ -111,6 +115,8 @@ func (client *SDOClient) Handle(frame can.Frame) {
 
 // Setup the client for communication with an SDO server
 func (client *SDOClient) setupServer(cobIdClientToServer uint32, cobIdServerToClient uint32, nodeIdServer uint8) error {
+	client.mu.Lock()
+	defer client.mu.Unlock()
 	client.state = SDO_STATE_IDLE
 	client.rxNew = false
 	client.nodeIdServer = nodeIdServer
@@ -181,6 +187,8 @@ func (client *SDOClient) downloadMain(
 	timerNextUs *uint32,
 	forceSegmented bool,
 ) (uint8, error) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
 
 	ret := SDO_WAITING_RESPONSE
 	var err error
@@ -730,6 +738,8 @@ func (client *SDOClient) upload(
 	sizeTransferred *uint32,
 	timerNextUs *uint32,
 ) (uint8, error) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
 
 	ret := SDO_WAITING_RESPONSE
 	var err error

@@ -1,6 +1,8 @@
 package nmt
 
 import (
+	"sync"
+
 	canopen "github.com/samsamfire/gocanopen"
 	can "github.com/samsamfire/gocanopen/pkg/can"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
@@ -67,6 +69,7 @@ var CommandDescription = map[NMTCommand]string{
 // NMT object for processing NMT behaviour, slave or master
 type NMT struct {
 	*canopen.BusManager
+	mu                     sync.Mutex
 	emcy                   *emergency.EMCY
 	operatingState         uint8
 	operatingStatePrev     uint8
@@ -81,9 +84,10 @@ type NMT struct {
 }
 
 func (nmt *NMT) Handle(frame can.Frame) {
-	dlc := frame.DLC
+	nmt.mu.Lock()
+	defer nmt.mu.Unlock()
 	data := frame.Data
-	if dlc != 2 {
+	if frame.DLC != 2 {
 		return
 	}
 	command := NMTCommand(data[0])
@@ -94,6 +98,8 @@ func (nmt *NMT) Handle(frame can.Frame) {
 }
 
 func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
+	nmt.mu.Lock()
+	defer nmt.mu.Unlock()
 	nmtStateCopy := nmt.operatingState
 	resetCommand := RESET_NOT
 	nmtInit := nmtStateCopy == NMT_INITIALIZING
@@ -199,6 +205,8 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 
 // Get a NMT state
 func (nmt *NMT) GetInternalState() uint8 {
+	nmt.mu.Lock()
+	defer nmt.mu.Unlock()
 	if nmt == nil {
 		return NMT_INITIALIZING
 	} else {
@@ -208,11 +216,15 @@ func (nmt *NMT) GetInternalState() uint8 {
 
 // Send NMT command to self, don't send on network
 func (nmt *NMT) SendInternalCommand(command uint8) {
+	nmt.mu.Lock()
+	defer nmt.mu.Unlock()
 	nmt.internalCommand = NMTCommand(command)
 }
 
 // Send an NMT command to the network
 func (nmt *NMT) SendCommand(command NMTCommand, nodeId uint8) error {
+	nmt.mu.Lock()
+	defer nmt.mu.Unlock()
 	// Also apply to node if concerned
 	if nodeId == 0 || nodeId == nmt.nodeId {
 		nmt.internalCommand = NMTCommand(command)
