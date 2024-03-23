@@ -102,6 +102,8 @@ func (od *ObjectDictionary) addPDO(pdoNb uint16, isRPDO bool) error {
 	pdoComm.AddSubObject(0, "Highest sub-index supported", UNSIGNED8, ATTRIBUTE_SDO_R, "0x5")
 	pdoComm.AddSubObject(1, fmt.Sprintf("COB-ID used by %s", pdoType), UNSIGNED32, ATTRIBUTE_SDO_RW, "0x0")
 	pdoComm.AddSubObject(2, "Transmission type", UNSIGNED8, ATTRIBUTE_SDO_RW, "0x0")
+	pdoComm.AddSubObject(3, "Inhibit time", UNSIGNED16, ATTRIBUTE_SDO_RW, "0x0")
+	pdoComm.AddSubObject(4, "Reserved", UNSIGNED16, ATTRIBUTE_SDO_RW, "0x0")
 	pdoComm.AddSubObject(5, "Event timer", UNSIGNED16, ATTRIBUTE_SDO_RW, "0x0")
 
 	od.AddVariableList(BASE_RPDO_COMMUNICATION_INDEX+indexOffset, fmt.Sprintf("%s communication parameter", pdoType), pdoComm)

@@ -93,7 +93,7 @@ func NewRemoteNode(
 		return nil, err
 	}
 	node := &RemoteNode{BaseNode: base}
-	node.SDOClient.SetNoId() // Change the SDO client node id to 0 as not a real node
+	node.SetNoId() // Change the SDO client node id to 0 as not a real node
 	node.remoteOd = remoteOd
 
 	// Create a new SDO client for the remote node & for local access
@@ -119,8 +119,7 @@ func NewRemoteNode(
 		return nil, err
 	}
 	node.sync = sync
-	err = node.InitPDOs(useLocal)
-	return node, err
+	return node, node.InitPDOs(useLocal)
 }
 
 // Initialize PDOs according to either local OD mapping or remote OD mapping
