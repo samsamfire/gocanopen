@@ -950,9 +950,13 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 		case SDO_STATE_ABORT:
 			if sdoAbort, ok := abortCode.(SDOAbortCode); !ok {
 				log.Errorf("[SERVER][TX] Abort internal error : unknown abort code : %v", abortCode)
+				server.mu.Unlock()
 				server.Abort(SDO_ABORT_GENERAL)
+				server.mu.Lock()
 			} else {
+				server.mu.Unlock()
 				server.Abort(sdoAbort)
+				server.mu.Lock()
 			}
 			server.state = SDO_STATE_IDLE
 		case SDO_STATE_DOWNLOAD_BLK_SUBBLOCK_REQ:
