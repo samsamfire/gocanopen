@@ -1,12 +1,18 @@
 package od
 
-import log "github.com/sirupsen/logrus"
+import (
+	"sync"
+
+	log "github.com/sirupsen/logrus"
+)
 
 // A Stream object is used for streaming data from / to an OD entry.
 // It is meant to be used inside of a [StreamReader] or [StreamWriter] function
 // and provides low level access for defining custom behaviour when reading
 // or writing to an OD entry.
 type Stream struct {
+	// Mutex used for synchronizing OD access
+	mu *sync.RWMutex
 	// The actual corresponding data stored inside of OD
 	Data []byte
 	// This is used to keep track of how much has been written or read.
@@ -140,12 +146,14 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 			streamer.stream.Object = nil
 			streamer.stream.DataOffset = 0
 			streamer.stream.Subindex = subIndex
+			streamer.stream.mu = &object.mu
 			log.Warnf("[OD][x%x] no extension has been specified for this domain object", entry.Index)
 			return streamer, nil
 		}
 		streamer.stream.Attribute = object.Attribute
 		streamer.stream.Data = object.value
 		streamer.stream.DataLength = object.DataLength()
+		streamer.stream.mu = &object.mu
 
 	case *VariableList:
 		variable, err := object.GetSubObject(subIndex)
@@ -155,6 +163,7 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 		streamer.stream.Attribute = variable.Attribute
 		streamer.stream.Data = variable.value
 		streamer.stream.DataLength = variable.DataLength()
+		streamer.stream.mu = &variable.mu
 
 	default:
 		log.Errorf("[OD][x%x] error, unknown type : %+v", entry.Index, object)
@@ -193,6 +202,14 @@ func ReadEntryDefault(stream *Stream, data []byte, countRead *uint16) error {
 	if stream == nil || stream.Data == nil || data == nil || countRead == nil {
 		return ODR_DEV_INCOMPAT
 	}
+	// Check if variable is accessible (i.e.) no write is currently being performed
+	if stream.mu == nil {
+		return ODR_DEV_INCOMPAT
+	}
+	// Reading will hang if entry is already being written to. This is problematic
+	// For SDO block transfers.
+	stream.mu.RLock()
+	defer stream.mu.RUnlock()
 
 	dataLenToCopy := int(stream.DataLength)
 	count := len(data)
@@ -227,6 +244,10 @@ func WriteEntryDefault(stream *Stream, data []byte, countWritten *uint16) error 
 	if stream == nil || stream.Data == nil || data == nil || countWritten == nil {
 		return ODR_DEV_INCOMPAT
 	}
+	// Writing will hang if entry is already being read. This is problematic
+	// For SDO block transfers.
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
 
 	dataLenToCopy := int(stream.DataLength)
 	count := len(data)

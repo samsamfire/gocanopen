@@ -87,10 +87,10 @@ func (entry *Entry) addSectionMember(section *ini.Section, name string, nodeId u
 	}
 	switch entry.ObjectType {
 	case OBJ_ARR:
-		record.Variables[subIndex] = *variable
+		record.Variables[subIndex] = variable
 		entry.subEntriesNameMap[name] = subIndex
 	case OBJ_RECORD:
-		record.Variables = append(record.Variables, *variable)
+		record.Variables = append(record.Variables, variable)
 		entry.subEntriesNameMap[name] = subIndex
 	default:
 		return fmt.Errorf("add member not supported for ObjectType : %v", entry.ObjectType)

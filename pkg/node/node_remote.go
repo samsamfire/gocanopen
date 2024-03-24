@@ -36,6 +36,8 @@ type RemoteNode struct {
 
 func (node *RemoteNode) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
 	if node.GetState() == NODE_RUNNING {
+		node.mu.Lock()
+		defer node.mu.Unlock()
 		for _, tpdo := range node.tpdos {
 			tpdo.Process(timeDifferenceUs, timerNextUs, true, syncWas)
 		}
@@ -44,6 +46,8 @@ func (node *RemoteNode) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timer
 
 func (node *RemoteNode) ProcessRPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
 	if node.GetState() == NODE_RUNNING {
+		node.mu.Lock()
+		defer node.mu.Unlock()
 		for _, rpdo := range node.rpdos {
 			rpdo.Process(timeDifferenceUs, timerNextUs, true, syncWas)
 		}
@@ -125,6 +129,8 @@ func NewRemoteNode(
 // Initialize PDOs according to either local OD mapping or remote OD mapping
 // A TPDO corresponds to an RPDO and vice-versa
 func (node *RemoteNode) InitPDOs(useLocal bool) error {
+	node.mu.Lock()
+	defer node.mu.Unlock()
 	// Iterate over all the possible entries : there can be a maximum of 512 maps
 	// Break loops when an entry doesn't exist (don't allow holes in mapping)
 	var pdoConfigurators []*config.PDOConfig

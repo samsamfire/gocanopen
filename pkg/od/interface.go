@@ -3,6 +3,7 @@ package od
 import (
 	"fmt"
 	"io"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -103,7 +104,7 @@ func (od *ObjectDictionary) addPDO(pdoNb uint16, isRPDO bool) error {
 	pdoComm.AddSubObject(1, fmt.Sprintf("COB-ID used by %s", pdoType), UNSIGNED32, ATTRIBUTE_SDO_RW, "0x0")
 	pdoComm.AddSubObject(2, "Transmission type", UNSIGNED8, ATTRIBUTE_SDO_RW, "0x0")
 	pdoComm.AddSubObject(3, "Inhibit time", UNSIGNED16, ATTRIBUTE_SDO_RW, "0x0")
-	pdoComm.AddSubObject(4, "Reserved", UNSIGNED16, ATTRIBUTE_SDO_RW, "0x0")
+	pdoComm.AddSubObject(4, "Reserved", UNSIGNED8, ATTRIBUTE_SDO_RW, "0x0")
 	pdoComm.AddSubObject(5, "Event timer", UNSIGNED16, ATTRIBUTE_SDO_RW, "0x0")
 
 	od.AddVariableList(BASE_RPDO_COMMUNICATION_INDEX+indexOffset, fmt.Sprintf("%s communication parameter", pdoType), pdoComm)
@@ -190,6 +191,7 @@ func (od *ObjectDictionary) Index(index any) *Entry {
 // It is used to store a "VAR" or "DOMAIN" object type as well as
 // any sub entry of a "RECORD" or "ARRAY" object type
 type Variable struct {
+	mu           sync.RWMutex
 	valueDefault []byte
 	value        []byte
 	// Name of this variable
@@ -214,7 +216,7 @@ type Variable struct {
 // storing a "RECORD" or "ARRAY" object type
 type VariableList struct {
 	objectType uint8 // either "RECORD" or "ARRAY"
-	Variables  []Variable
+	Variables  []*Variable
 }
 
 // GetSubObject returns the [Variable] corresponding to
@@ -226,11 +228,11 @@ func (rec *VariableList) GetSubObject(subindex uint8) (*Variable, error) {
 		if subindex >= uint8(subEntriesCount) {
 			return nil, ODR_SUB_NOT_EXIST
 		}
-		return &rec.Variables[subindex], nil
+		return rec.Variables[subindex], nil
 	}
 	for i, variable := range rec.Variables {
 		if variable.SubIndex == subindex {
-			return &rec.Variables[i], nil
+			return rec.Variables[i], nil
 		}
 	}
 	return nil, ODR_SUB_NOT_EXIST
@@ -263,21 +265,21 @@ func (rec *VariableList) AddSubObject(
 		if err != nil {
 			return nil, err
 		}
-		rec.Variables[subindex] = *variable
-		return &rec.Variables[subindex], nil
+		rec.Variables[subindex] = variable
+		return rec.Variables[subindex], nil
 	}
 	variable, err := NewVariable(subindex, name, datatype, attribute, value)
 	if err != nil {
 		return nil, err
 	}
-	rec.Variables = append(rec.Variables, *variable)
-	return &rec.Variables[len(rec.Variables)-1], nil
+	rec.Variables = append(rec.Variables, variable)
+	return rec.Variables[len(rec.Variables)-1], nil
 }
 
 func NewRecord() *VariableList {
-	return &VariableList{objectType: OBJ_RECORD, Variables: make([]Variable, 0)}
+	return &VariableList{objectType: OBJ_RECORD, Variables: make([]*Variable, 0)}
 }
 
 func NewArray(length uint8) *VariableList {
-	return &VariableList{objectType: OBJ_ARR, Variables: make([]Variable, length)}
+	return &VariableList{objectType: OBJ_ARR, Variables: make([]*Variable, length)}
 }
