@@ -21,6 +21,7 @@ func writeEntry1005(stream *od.Stream, data []byte, countWritten *uint16) error 
 	}
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
+
 	cobIdSync := binary.LittleEndian.Uint32(data)
 	canId := uint16(cobIdSync & 0x7FF)
 	isProducer := (cobIdSync & 0x40000000) != 0
@@ -58,6 +59,13 @@ func writeEntry1006(stream *od.Stream, data []byte, countWritten *uint16) error 
 	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
 		return od.ODR_DEV_INCOMPAT
 	}
+	sync, ok := stream.Object.(*SYNC)
+	if !ok {
+		return od.ODR_DEV_INCOMPAT
+	}
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
+
 	cyclePeriodUs := binary.LittleEndian.Uint32(data)
 	log.Debugf("[OD][EXTENSION][SYNC] updating communication cycle period to %v us (%v ms)", cyclePeriodUs, cyclePeriodUs/1000)
 	return od.WriteEntryDefault(stream, data, countWritten)
@@ -68,8 +76,15 @@ func writeEntry1007(stream *od.Stream, data []byte, countWritten *uint16) error 
 	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
 		return od.ODR_DEV_INCOMPAT
 	}
+	sync, ok := stream.Object.(*SYNC)
+	if !ok {
+		return od.ODR_DEV_INCOMPAT
+	}
 	windowLengthUs := binary.LittleEndian.Uint32(data)
 	log.Debugf("[OD][EXTENSION][SYNC] updating synchronous window length to %v us (%v ms)", windowLengthUs, windowLengthUs/1000)
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
+
 	return od.WriteEntryDefault(stream, data, countWritten)
 }
 
@@ -84,6 +99,7 @@ func writeEntry1019(stream *od.Stream, data []byte, countWritten *uint16) error 
 	}
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
+
 	syncCounterOverflow := data[0]
 	if syncCounterOverflow == 1 || syncCounterOverflow > 240 {
 		return od.ODR_INVALID_VALUE

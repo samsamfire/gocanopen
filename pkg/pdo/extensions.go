@@ -19,6 +19,9 @@ func writeEntry14xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 	if !ok {
 		return od.ODR_DEV_INCOMPAT
 	}
+	rpdo.mu.Lock()
+	defer rpdo.mu.Unlock()
+
 	pdo := &rpdo.pdo
 	bufCopy := make([]byte, len(data))
 	copy(bufCopy, data)
@@ -97,8 +100,12 @@ func readEntry14xxOr18xx(stream *od.Stream, data []byte, countRead *uint16) erro
 		var pdo *PDOCommon
 		switch v := stream.Object.(type) {
 		case *RPDO:
+			v.mu.Lock()
+			defer v.mu.Unlock()
 			pdo = &v.pdo
 		case *TPDO:
+			v.mu.Lock()
+			defer v.mu.Unlock()
 			pdo = &v.pdo
 		default:
 			return od.ODR_DEV_INCOMPAT
@@ -127,8 +134,12 @@ func writeEntry16xxOr1Axx(stream *od.Stream, data []byte, countWritten *uint16) 
 	var pdo *PDOCommon
 	switch v := stream.Object.(type) {
 	case *RPDO:
+		v.mu.Lock()
+		defer v.mu.Unlock()
 		pdo = &v.pdo
 	case *TPDO:
+		v.mu.Lock()
+		defer v.mu.Unlock()
 		pdo = &v.pdo
 	default:
 		return od.ODR_DEV_INCOMPAT
@@ -182,6 +193,9 @@ func writeEntry18xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 	if !ok {
 		return od.ODR_DEV_INCOMPAT
 	}
+	tpdo.mu.Lock()
+	defer tpdo.mu.Unlock()
+
 	pdo := &tpdo.pdo
 	bufCopy := make([]byte, len(data))
 	copy(bufCopy, data)

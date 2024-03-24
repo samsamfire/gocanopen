@@ -1,6 +1,8 @@
 package pdo
 
 import (
+	s "sync"
+
 	canopen "github.com/samsamfire/gocanopen"
 	can "github.com/samsamfire/gocanopen/pkg/can"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
@@ -11,6 +13,7 @@ import (
 
 type TPDO struct {
 	*canopen.BusManager
+	mu               s.Mutex
 	sync             *sync.SYNC
 	pdo              PDOCommon
 	txBuffer         can.Frame
@@ -74,6 +77,7 @@ func (tpdo *TPDO) configureCOBID(entry18xx *od.Entry, predefinedIdent uint16, er
 }
 
 func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOperational bool, syncWas bool) error {
+	tpdo.mu.Lock()
 
 	pdo := &tpdo.pdo
 	if !pdo.Valid || !nmtIsOperational {
@@ -81,6 +85,7 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 		tpdo.inhibitTimer = 0
 		tpdo.eventTimer = 0
 		tpdo.syncCounter = 255
+		tpdo.mu.Unlock()
 		return nil
 	}
 
@@ -118,7 +123,9 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 			tpdo.inhibitTimer = 0
 		}
 		if tpdo.sendRequest && tpdo.inhibitTimer == 0 {
-			tpdo.Send()
+			tpdo.mu.Unlock()
+			tpdo.send()
+			tpdo.mu.Lock()
 		}
 		if tpdo.sendRequest && timerNextUs != nil && *timerNextUs > tpdo.inhibitTimer {
 			*timerNextUs = tpdo.inhibitTimer
@@ -128,7 +135,8 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 		// Send synchronous acyclic tpdo
 		if tpdo.transmissionType == TRANSMISSION_TYPE_SYNC_ACYCLIC &&
 			tpdo.sendRequest {
-			return tpdo.Send()
+			tpdo.mu.Unlock()
+			return tpdo.send()
 		}
 		// Send synchronous cyclic TPDOs
 		if tpdo.syncCounter == 255 {
@@ -145,22 +153,27 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 		case 254:
 			if tpdo.sync.Counter() == tpdo.syncStartValue {
 				tpdo.syncCounter = tpdo.transmissionType
-				return tpdo.Send()
+				tpdo.mu.Unlock()
+				return tpdo.send()
 			}
 		case 1:
 			tpdo.syncCounter = tpdo.transmissionType
-			return tpdo.Send()
+			tpdo.mu.Unlock()
+			return tpdo.send()
 
 		default:
 			tpdo.syncCounter--
 		}
 
 	}
+	tpdo.mu.Unlock()
 	return nil
 }
 
-// Send TPDO object
-func (tpdo *TPDO) Send() error {
+func (tpdo *TPDO) send() error {
+	tpdo.mu.Lock()
+	defer tpdo.mu.Unlock()
+
 	pdo := &tpdo.pdo
 	eventDriven := tpdo.transmissionType == TRANSMISSION_TYPE_SYNC_ACYCLIC || tpdo.transmissionType >= uint8(TRANSMISSION_TYPE_SYNC_EVENT_LO)
 	dataTPDO := make([]byte, 0)
@@ -193,7 +206,7 @@ func (tpdo *TPDO) Send() error {
 	tpdo.inhibitTimer = tpdo.inhibitTimeUs
 	// Copy data to the buffer & send
 	copy(tpdo.txBuffer.Data[:], dataTPDO)
-	return tpdo.BusManager.Send(tpdo.txBuffer)
+	return tpdo.Send(tpdo.txBuffer)
 }
 
 // Create a new TPDO
