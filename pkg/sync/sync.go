@@ -63,6 +63,8 @@ func (sync *SYNC) Handle(frame can.Frame) {
 }
 
 func (sync *SYNC) send() {
+	sync.mu.Lock()
+
 	sync.counter += 1
 	if sync.counter > sync.counterOverflow {
 		sync.counter = 1
@@ -70,6 +72,9 @@ func (sync *SYNC) send() {
 	sync.timer = 0
 	sync.rxToggle = !sync.rxToggle
 	sync.txBuffer.Data[0] = sync.counter
+	sync.mu.Unlock()
+	// When listening to own messages, this will trigger Handle to be called
+	// So make sure sync is unlocked before sending
 	_ = sync.Send(sync.txBuffer)
 }
 
