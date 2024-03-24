@@ -1,6 +1,8 @@
 package pdo
 
 import (
+	s "sync"
+
 	canopen "github.com/samsamfire/gocanopen"
 	can "github.com/samsamfire/gocanopen/pkg/can"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
@@ -20,6 +22,7 @@ const (
 
 type RPDO struct {
 	*canopen.BusManager
+	mu            s.Mutex
 	pdo           PDOCommon
 	rxNew         [RPDO_BUFFER_COUNT]bool
 	rxData        [RPDO_BUFFER_COUNT][MAX_PDO_LENGTH]byte
@@ -31,13 +34,14 @@ type RPDO struct {
 }
 
 func (rpdo *RPDO) Handle(frame can.Frame) {
+	rpdo.mu.Lock()
+	defer rpdo.mu.Unlock()
+
 	pdo := &rpdo.pdo
 	err := rpdo.receiveError
-
 	if !pdo.Valid {
 		return
 	}
-
 	if frame.DLC >= uint8(pdo.dataLength) {
 		// Indicate if errors in PDO length
 		if frame.DLC == uint8(pdo.dataLength) {
@@ -102,6 +106,9 @@ func (rpdo *RPDO) configureCOBID(entry14xx *od.Entry, predefinedIdent uint32, er
 }
 
 func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOperational bool, syncWas bool) {
+	rpdo.mu.Lock()
+	defer rpdo.mu.Unlock()
+
 	pdo := &rpdo.pdo
 	if !pdo.Valid || !nmtIsOperational || (!syncWas && rpdo.synchronous) {
 		// not valid and op, clear can receive flags & timeouttimer

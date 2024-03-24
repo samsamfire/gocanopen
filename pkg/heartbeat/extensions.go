@@ -13,6 +13,8 @@ func writeEntry1016(stream *od.Stream, data []byte, countWritten *uint16) error 
 	if !ok {
 		return od.ODR_DEV_INCOMPAT
 	}
+	consumer.mu.Lock()
+	defer consumer.mu.Unlock()
 
 	if stream == nil || stream.Subindex < 1 ||
 		int(stream.Subindex) > len(consumer.monitoredNodes) ||

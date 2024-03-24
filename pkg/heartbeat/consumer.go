@@ -1,6 +1,8 @@
 package heartbeat
 
 import (
+	"sync"
+
 	canopen "github.com/samsamfire/gocanopen"
 	can "github.com/samsamfire/gocanopen/pkg/can"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
@@ -18,7 +20,8 @@ const (
 )
 
 // Node specific hearbeat consumer part
-type hbConsumerNode struct {
+type monitoredNode struct {
+	mu           sync.Mutex
 	nodeId       uint8
 	cobId        uint16
 	nmtState     uint8
@@ -32,8 +35,9 @@ type hbConsumerNode struct {
 // Hearbeat consumer object for monitoring node hearbeats
 type HBConsumer struct {
 	*canopen.BusManager
+	mu                        sync.Mutex
 	emcy                      *emergency.EMCY
-	monitoredNodes            []*hbConsumerNode
+	monitoredNodes            []*monitoredNode
 	nbMonitoredNodes          uint8
 	allMonitoredActive        bool
 	allMonitoredOperational   bool
@@ -41,13 +45,15 @@ type HBConsumer struct {
 }
 
 // Handle hearbeat reception specific to a node
-func (nodeConsumer *hbConsumerNode) Handle(frame can.Frame) {
+func (nodeConsumer *monitoredNode) Handle(frame can.Frame) {
+	nodeConsumer.mu.Lock()
+	defer nodeConsumer.mu.Unlock()
+
 	if frame.DLC != 1 {
 		return
 	}
 	nodeConsumer.nmtState = frame.Data[0]
 	nodeConsumer.rxNew = true
-
 }
 
 // Add a consumer node
@@ -63,7 +69,7 @@ func (consumer *HBConsumer) addHearbeatConsumerNode(index uint8, nodeId uint8, c
 			}
 		}
 	}
-	consumerNode := newHbConsumerNode(index, nodeId, consumerTimeMs)
+	consumerNode := newHbConsumerNode(nodeId, consumerTimeMs)
 
 	// Configure RX buffer for hearbeat reception
 	if consumerNode.hbState != HB_UNCONFIGURED {
@@ -76,11 +82,17 @@ func (consumer *HBConsumer) addHearbeatConsumerNode(index uint8, nodeId uint8, c
 
 // process Hearbeat consuming
 func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
+	consumer.mu.Lock()
+	defer consumer.mu.Unlock()
+
 	allMonitoredActiveCurrent := true
 	allMonitoredOperationalCurrent := true
 	if nmtIsPreOrOperational && consumer.nmtIsPreOrOperationalPrev {
 		for i := range consumer.monitoredNodes {
 			monitoredNode := consumer.monitoredNodes[i]
+			monitoredNode.mu.Lock()
+			defer monitoredNode.mu.Unlock()
+
 			timeDifferenceUsCopy := timeDifferenceUs
 			// If unconfigured skip to next iteration
 			if monitoredNode.hbState == HB_UNCONFIGURED {
@@ -132,6 +144,9 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 		// pre or operational state changed, clear vars
 		for i := range consumer.monitoredNodes {
 			monitoredNode := consumer.monitoredNodes[i]
+			monitoredNode.mu.Lock()
+			defer monitoredNode.mu.Unlock()
+
 			monitoredNode.nmtState = nmt.NMT_UNKNOWN
 			monitoredNode.nmtStatePrev = nmt.NMT_UNKNOWN
 			monitoredNode.rxNew = false
@@ -154,9 +169,9 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 }
 
 // Initialize a single node consumer
-func newHbConsumerNode(index uint8, nodeId uint8, consumerTimeMs uint16) *hbConsumerNode {
+func newHbConsumerNode(nodeId uint8, consumerTimeMs uint16) *monitoredNode {
 
-	monitoredNode := &hbConsumerNode{}
+	monitoredNode := &monitoredNode{}
 	monitoredNode.nodeId = nodeId
 	monitoredNode.timeUs = uint32(consumerTimeMs) * 1000
 	monitoredNode.nmtState = nmt.NMT_UNKNOWN
@@ -186,7 +201,7 @@ func NewHBConsumer(bm *canopen.BusManager, em *emergency.EMCY, entry1016 *od.Ent
 	// Get real number of monitored nodes
 	consumer.nbMonitoredNodes = uint8(entry1016.SubCount() - 1)
 	log.Debugf("[HB CONSUMER] %v possible entries for nodes to monitor", consumer.nbMonitoredNodes)
-	consumer.monitoredNodes = make([]*hbConsumerNode, consumer.nbMonitoredNodes)
+	consumer.monitoredNodes = make([]*monitoredNode, consumer.nbMonitoredNodes)
 	for index := 0; index < int(consumer.nbMonitoredNodes); index++ {
 		hbConsValue, err := entry1016.Uint32(uint8(index) + 1)
 		if err != nil {

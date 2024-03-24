@@ -86,6 +86,7 @@ type NMT struct {
 func (nmt *NMT) Handle(frame can.Frame) {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
+
 	data := frame.Data
 	if frame.DLC != 2 {
 		return
@@ -100,6 +101,7 @@ func (nmt *NMT) Handle(frame can.Frame) {
 func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
+
 	nmtStateCopy := nmt.operatingState
 	resetCommand := RESET_NOT
 	nmtInit := nmtStateCopy == NMT_INITIALIZING
@@ -114,7 +116,9 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 	// - startup
 	if nmtInit || (nmt.hearbeatProducerTimeUs != 0 && (nmt.hearbeatProducerTimer == 0 || nmtStateCopy != nmt.operatingStatePrev)) {
 		nmt.hbTxBuff.Data[0] = nmtStateCopy
+		nmt.mu.Unlock()
 		nmt.Send(nmt.hbTxBuff)
+		nmt.mu.Lock()
 		if nmtStateCopy == NMT_INITIALIZING {
 			if nmt.control&StartupToOperational != 0 {
 				nmtStateCopy = NMT_OPERATIONAL
@@ -207,6 +211,7 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 func (nmt *NMT) GetInternalState() uint8 {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
+
 	if nmt == nil {
 		return NMT_INITIALIZING
 	} else {
@@ -218,6 +223,7 @@ func (nmt *NMT) GetInternalState() uint8 {
 func (nmt *NMT) SendInternalCommand(command uint8) {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
+
 	nmt.internalCommand = NMTCommand(command)
 }
 
@@ -225,6 +231,7 @@ func (nmt *NMT) SendInternalCommand(command uint8) {
 func (nmt *NMT) SendCommand(command NMTCommand, nodeId uint8) error {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
+
 	// Also apply to node if concerned
 	if nodeId == 0 || nodeId == nmt.nodeId {
 		nmt.internalCommand = NMTCommand(command)

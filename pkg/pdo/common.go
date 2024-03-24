@@ -1,6 +1,8 @@
 package pdo
 
 import (
+	"sync"
+
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
 	"github.com/samsamfire/gocanopen/pkg/od"
@@ -24,6 +26,7 @@ const (
 
 // Common to TPDO & RPDO
 type PDOCommon struct {
+	mu             sync.Mutex
 	od             *od.ObjectDictionary
 	emcy           *emergency.EMCY
 	streamers      [od.PDO_MAX_MAPPED_ENTRIES]od.Streamer
