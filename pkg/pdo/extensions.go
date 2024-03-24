@@ -22,7 +22,7 @@ func writeEntry14xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
 
-	pdo := &rpdo.pdo
+	pdo := rpdo.pdo
 	bufCopy := make([]byte, len(data))
 	copy(bufCopy, data)
 	switch stream.Subindex {
@@ -102,11 +102,11 @@ func readEntry14xxOr18xx(stream *od.Stream, data []byte, countRead *uint16) erro
 		case *RPDO:
 			v.mu.Lock()
 			defer v.mu.Unlock()
-			pdo = &v.pdo
+			pdo = v.pdo
 		case *TPDO:
 			v.mu.Lock()
 			defer v.mu.Unlock()
-			pdo = &v.pdo
+			pdo = v.pdo
 		default:
 			return od.ODR_DEV_INCOMPAT
 		}
@@ -136,11 +136,11 @@ func writeEntry16xxOr1Axx(stream *od.Stream, data []byte, countWritten *uint16) 
 	case *RPDO:
 		v.mu.Lock()
 		defer v.mu.Unlock()
-		pdo = &v.pdo
+		pdo = v.pdo
 	case *TPDO:
 		v.mu.Lock()
 		defer v.mu.Unlock()
-		pdo = &v.pdo
+		pdo = v.pdo
 	default:
 		return od.ODR_DEV_INCOMPAT
 	}
@@ -196,7 +196,7 @@ func writeEntry18xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 	tpdo.mu.Lock()
 	defer tpdo.mu.Unlock()
 
-	pdo := &tpdo.pdo
+	pdo := tpdo.pdo
 	bufCopy := make([]byte, len(data))
 	copy(bufCopy, data)
 	switch stream.Subindex {

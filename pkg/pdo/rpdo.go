@@ -23,7 +23,7 @@ const (
 type RPDO struct {
 	*canopen.BusManager
 	mu            s.Mutex
-	pdo           PDOCommon
+	pdo           *PDOCommon
 	rxNew         [RPDO_BUFFER_COUNT]bool
 	rxData        [RPDO_BUFFER_COUNT][MAX_PDO_LENGTH]byte
 	receiveError  uint8
@@ -37,7 +37,7 @@ func (rpdo *RPDO) Handle(frame can.Frame) {
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
 
-	pdo := &rpdo.pdo
+	pdo := rpdo.pdo
 	err := rpdo.receiveError
 	if !pdo.Valid {
 		return
@@ -69,7 +69,7 @@ func (rpdo *RPDO) Handle(frame can.Frame) {
 }
 
 func (rpdo *RPDO) configureCOBID(entry14xx *od.Entry, predefinedIdent uint32, erroneousMap uint32) (canId uint32, e error) {
-	pdo := &rpdo.pdo
+	pdo := rpdo.pdo
 	cobId, ret := entry14xx.Uint32(1)
 	if ret != nil {
 		log.Errorf("[RPDO][%x|%x] reading %v failed : %v", entry14xx.Index, 1, entry14xx.Name, ret)
@@ -109,7 +109,7 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
 
-	pdo := &rpdo.pdo
+	pdo := rpdo.pdo
 	if !pdo.Valid || !nmtIsOperational || (!syncWas && rpdo.synchronous) {
 		// not valid and op, clear can receive flags & timeouttimer
 		if !pdo.Valid || !nmtIsOperational {
@@ -208,11 +208,10 @@ func NewRPDO(
 	// Configure mapping parameters
 	erroneousMap := uint32(0)
 	pdo, err := NewPDO(odict, entry16xx, true, em, &erroneousMap)
-	rpdo.pdo = *pdo
 	if err != nil {
 		return nil, err
 	}
-	rpdo.pdo = *pdo
+	rpdo.pdo = pdo
 	// Configure communication params
 	canId, err := rpdo.configureCOBID(entry14xx, uint32(predefinedIdent), erroneousMap)
 	if err != nil {

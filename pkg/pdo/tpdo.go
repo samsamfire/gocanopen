@@ -15,7 +15,7 @@ type TPDO struct {
 	*canopen.BusManager
 	mu               s.Mutex
 	sync             *sync.SYNC
-	pdo              PDOCommon
+	pdo              *PDOCommon
 	txBuffer         can.Frame
 	transmissionType uint8
 	sendRequest      bool
@@ -42,7 +42,7 @@ func (tpdo *TPDO) configureTransmissionType(entry18xx *od.Entry) error {
 }
 
 func (tpdo *TPDO) configureCOBID(entry18xx *od.Entry, predefinedIdent uint16, erroneousMap uint32) (canId uint16, e error) {
-	pdo := &tpdo.pdo
+	pdo := tpdo.pdo
 	cobId, ret := entry18xx.Uint32(1)
 	if ret != nil {
 		log.Errorf("[TPDO][%x|%x] reading %v failed : %v", entry18xx.Index, 1, entry18xx.Name, ret)
@@ -79,7 +79,7 @@ func (tpdo *TPDO) configureCOBID(entry18xx *od.Entry, predefinedIdent uint16, er
 func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOperational bool, syncWas bool) error {
 	tpdo.mu.Lock()
 
-	pdo := &tpdo.pdo
+	pdo := tpdo.pdo
 	if !pdo.Valid || !nmtIsOperational {
 		tpdo.sendRequest = true
 		tpdo.inhibitTimer = 0
@@ -174,7 +174,7 @@ func (tpdo *TPDO) send() error {
 	tpdo.mu.Lock()
 	defer tpdo.mu.Unlock()
 
-	pdo := &tpdo.pdo
+	pdo := tpdo.pdo
 	eventDriven := tpdo.transmissionType == TRANSMISSION_TYPE_SYNC_ACYCLIC || tpdo.transmissionType >= uint8(TRANSMISSION_TYPE_SYNC_EVENT_LO)
 	dataTPDO := make([]byte, 0)
 	for i := 0; i < int(pdo.nbMapped); i++ {
@@ -227,10 +227,10 @@ func NewTPDO(
 	// Configure mapping parameters
 	erroneousMap := uint32(0)
 	pdo, err := NewPDO(odict, entry1Axx, false, em, &erroneousMap)
-	tpdo.pdo = *pdo
 	if err != nil {
 		return nil, err
 	}
+	tpdo.pdo = pdo
 	// Configure transmission type
 	err = tpdo.configureTransmissionType(entry18xx)
 	if err != nil {
