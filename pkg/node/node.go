@@ -21,6 +21,7 @@ const (
 type BaseNode struct {
 	*canopen.BusManager
 	*sdo.SDOClient
+	mu             sync.Mutex
 	od             *od.ObjectDictionary
 	mainCallback   func(node Node)
 	state          uint8
@@ -60,10 +61,14 @@ func (node *BaseNode) GetID() uint8 {
 }
 
 func (node *BaseNode) GetState() uint8 {
+	node.mu.Lock()
+	defer node.mu.Unlock()
 	return node.state
 }
 
 func (node *BaseNode) SetState(newState uint8) {
+	node.mu.Lock()
+	defer node.mu.Unlock()
 	node.state = newState
 }
 

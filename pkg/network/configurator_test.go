@@ -114,7 +114,7 @@ func TestPDOConfiguratorNotCommon(t *testing.T) {
 	rpdoConf := network.Configurator(NODE_ID_TEST).RPDO
 	tpdoConf := network.Configurator(NODE_ID_TEST).TPDO
 	err := rpdoConf.WriteInhibitTime(pdoNb, 2222)
-	assert.Equal(t, sdo.SDO_ABORT_SUB_UNKNOWN, err, err)
+	assert.Nil(t, err)
 	err = tpdoConf.WriteInhibitTime(pdoNb, 2222)
 	assert.Nil(t, err)
 	inhibitTime, err := tpdoConf.ReadInhibitTime(pdoNb)

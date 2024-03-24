@@ -47,12 +47,12 @@ func deserializeFrame(buffer []byte) (*can.Frame, error) {
 }
 
 type VirtualCanBus struct {
+	mu            sync.Mutex
 	channel       string
 	conn          net.Conn
 	receiveOwn    bool
 	framehandler  can.FrameListener
 	stopChan      chan bool
-	mu            sync.Mutex
 	wg            sync.WaitGroup
 	isRunning     bool
 	errSubscriber bool
@@ -166,16 +166,23 @@ func (client *VirtualCanBus) handleReception() {
 		case <-client.stopChan:
 			return
 		default:
+			// Avoid blocking if lock is already taken (in particular for disconnect, subscribe, etc)
+			success := client.mu.TryLock()
+			if !success {
+				break
+			}
 			frame, err := client.Recv()
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				// No message received, this is OK
 			} else if err != nil {
 				log.Errorf("[VIRTUAL DRIVER] listening routine has closed because : %v", err)
 				client.errSubscriber = true
+				client.mu.Unlock()
 				return
 			} else if client.framehandler != nil {
 				client.framehandler.Handle(*frame)
 			}
+			client.mu.Unlock()
 		}
 	}
 }

@@ -707,7 +707,7 @@ PDOMapping=0
 ParameterName=RPDO communication parameter
 ObjectType=0x9
 ;StorageLocation=PERSIST_COMM
-SubNumber=0x4
+SubNumber=0x6
 
 [1400sub0]
 ParameterName=Highest sub-index supported
@@ -736,6 +736,24 @@ AccessType=rw
 DefaultValue=254
 PDOMapping=0
 
+[1400sub3]
+ParameterName=Inhibit time
+ObjectType=0x7
+;StorageLocation=RAM
+DataType=0x0006
+AccessType=rw
+DefaultValue=0
+PDOMapping=0
+
+[1400sub4]
+ParameterName=Reserved
+ObjectType=0x7
+;StorageLocation=RAM
+DataType=0x0005
+AccessType=rw
+DefaultValue=0
+PDOMapping=0
+
 [1400sub5]
 ParameterName=Event timer
 ObjectType=0x7
@@ -749,7 +767,7 @@ PDOMapping=0
 ParameterName=RPDO communication parameter
 ObjectType=0x9
 ;StorageLocation=PERSIST_COMM
-SubNumber=0x4
+SubNumber=0x6
 
 [1401sub0]
 ParameterName=Highest sub-index supported
@@ -778,6 +796,24 @@ AccessType=rw
 DefaultValue=254
 PDOMapping=0
 
+[1401sub3]
+ParameterName=Inhibit time
+ObjectType=0x7
+;StorageLocation=RAM
+DataType=0x0006
+AccessType=rw
+DefaultValue=0
+PDOMapping=0
+
+[1401sub4]
+ParameterName=Reserved
+ObjectType=0x7
+;StorageLocation=RAM
+DataType=0x0005
+AccessType=rw
+DefaultValue=0
+PDOMapping=0
+
 [1401sub5]
 ParameterName=Event timer
 ObjectType=0x7
@@ -791,7 +827,7 @@ PDOMapping=0
 ParameterName=RPDO communication parameter
 ObjectType=0x9
 ;StorageLocation=PERSIST_COMM
-SubNumber=0x4
+SubNumber=0x6
 
 [1402sub0]
 ParameterName=Highest sub-index supported
@@ -820,6 +856,24 @@ AccessType=rw
 DefaultValue=254
 PDOMapping=0
 
+[1402sub3]
+ParameterName=Inhibit time
+ObjectType=0x7
+;StorageLocation=RAM
+DataType=0x0006
+AccessType=rw
+DefaultValue=0
+PDOMapping=0
+
+[1402sub4]
+ParameterName=Reserved
+ObjectType=0x7
+;StorageLocation=RAM
+DataType=0x0005
+AccessType=rw
+DefaultValue=0
+PDOMapping=0
+
 [1402sub5]
 ParameterName=Event timer
 ObjectType=0x7
@@ -833,7 +887,7 @@ PDOMapping=0
 ParameterName=RPDO communication parameter
 ObjectType=0x9
 ;StorageLocation=PERSIST_COMM
-SubNumber=0x4
+SubNumber=0x6
 
 [1403sub0]
 ParameterName=Highest sub-index supported
@@ -860,6 +914,24 @@ ObjectType=0x7
 DataType=0x0005
 AccessType=rw
 DefaultValue=254
+PDOMapping=0
+
+[1403sub3]
+ParameterName=Inhibit time
+ObjectType=0x7
+;StorageLocation=RAM
+DataType=0x0006
+AccessType=rw
+DefaultValue=0
+PDOMapping=0
+
+[1403sub4]
+ParameterName=Reserved
+ObjectType=0x7
+;StorageLocation=RAM
+DataType=0x0005
+AccessType=rw
+DefaultValue=0
 PDOMapping=0
 
 [1403sub5]

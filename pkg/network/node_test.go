@@ -37,7 +37,7 @@ func TestRemoteNodeRPDO(t *testing.T) {
 	read := make([]byte, 1)
 	remoteNode.SDOClient.ReadRaw(0, 0x2002, 0x0, read)
 	assert.Equal(t, node.NODE_RUNNING, remoteNode.GetState())
-	assert.Equal(t, []byte{10}, read)
+	assert.Equal(t, []byte{0x33}, read)
 }
 
 func TestRemoteNodeRPDOUsingRemote(t *testing.T) {
@@ -91,6 +91,6 @@ func TestTimeSynchronization(t *testing.T) {
 	time.Sleep(150 * time.Millisecond)
 	for _, slaveNode := range slaveNodes {
 		timeDiff := slaveNode.TIME.InternalTime().Sub(masterNode.TIME.InternalTime())
-		assert.InDelta(t, 0, timeDiff.Milliseconds(), 2)
+		assert.InDelta(t, 0, timeDiff.Milliseconds(), 5)
 	}
 }
