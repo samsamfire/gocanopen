@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	can "github.com/samsamfire/gocanopen/pkg/can"
+	canopen "github.com/samsamfire/gocanopen"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -46,10 +46,10 @@ func TestSendAndRecv(t *testing.T) {
 
 type FrameReceiver struct {
 	mu     sync.Mutex
-	frames []can.Frame
+	frames []canopen.Frame
 }
 
-func (frameReceiver *FrameReceiver) Handle(frame can.Frame) {
+func (frameReceiver *FrameReceiver) Handle(frame canopen.Frame) {
 	frameReceiver.mu.Lock()
 	defer frameReceiver.mu.Unlock()
 	frameReceiver.frames = append(frameReceiver.frames, frame)
@@ -65,13 +65,13 @@ func TestSendAndSubscribe(t *testing.T) {
 	if err1 != nil || err2 != nil {
 		t.Fatal("failed to connect", err1, err2)
 	}
-	frameReceiver := FrameReceiver{frames: make([]can.Frame, 0)}
+	frameReceiver := FrameReceiver{frames: make([]canopen.Frame, 0)}
 	frameReceiver.mu.Lock()
 	vcan2.Subscribe(&frameReceiver)
 	frameReceiver.mu.Unlock()
 	// Send 100 frames from vcan 1 && read 100 frames from vcan2
 	// Check order and value
-	frame := can.Frame{ID: 0x111, Flags: 0, DLC: 8, Data: [8]byte{0, 1, 2, 3, 4, 5, 6, 7}}
+	frame := canopen.Frame{ID: 0x111, Flags: 0, DLC: 8, Data: [8]byte{0, 1, 2, 3, 4, 5, 6, 7}}
 	for i := 0; i < 10; i++ {
 		frame.Data[0] = uint8(i)
 		vcan1.Send(frame)
@@ -90,9 +90,9 @@ func TestSendAndSubscribe(t *testing.T) {
 func TestReceiveOwn(t *testing.T) {
 	vcan1 := newVcan(VCAN_CHANNEL)
 	defer vcan1.Disconnect()
-	frameReceiver := FrameReceiver{frames: make([]can.Frame, 0)}
+	frameReceiver := FrameReceiver{frames: make([]canopen.Frame, 0)}
 	vcan1.Subscribe(&frameReceiver)
-	frame := can.Frame{ID: 0x111, Flags: 0, DLC: 8, Data: [8]byte{0, 1, 2, 3, 4, 5, 6, 7}}
+	frame := canopen.Frame{ID: 0x111, Flags: 0, DLC: 8, Data: [8]byte{0, 1, 2, 3, 4, 5, 6, 7}}
 	vcan1.Send(frame)
 	// Tiny sleep
 	time.Sleep(time.Millisecond * 10)

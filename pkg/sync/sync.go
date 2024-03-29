@@ -5,7 +5,6 @@ import (
 	s "sync"
 
 	canopen "github.com/samsamfire/gocanopen"
-	can "github.com/samsamfire/gocanopen/pkg/can"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	log "github.com/sirupsen/logrus"
@@ -27,7 +26,7 @@ type SYNC struct {
 	rawSynchronousWindowLength  []byte
 	isProducer                  bool
 	cobId                       uint32
-	txBuffer                    can.Frame
+	txBuffer                    canopen.Frame
 }
 
 const (
@@ -36,7 +35,7 @@ const (
 	EventPassedWindow uint8 = 2 // Time has just passed SYNC window in last cycle (0x1007)
 )
 
-func (sync *SYNC) Handle(frame can.Frame) {
+func (sync *SYNC) Handle(frame canopen.Frame) {
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
 
@@ -251,7 +250,7 @@ func NewSYNC(
 	if syncCounterOverflow != 0 {
 		frameSize = 1
 	}
-	sync.txBuffer = can.NewFrame(sync.cobId, 0, frameSize)
+	sync.txBuffer = canopen.NewFrame(sync.cobId, 0, frameSize)
 	log.Infof("[SYNC] Initialisation finished")
 	return sync, nil
 }

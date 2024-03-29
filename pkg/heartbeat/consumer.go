@@ -4,7 +4,6 @@ import (
 	"sync"
 
 	canopen "github.com/samsamfire/gocanopen"
-	can "github.com/samsamfire/gocanopen/pkg/can"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
 	"github.com/samsamfire/gocanopen/pkg/nmt"
 	"github.com/samsamfire/gocanopen/pkg/od"
@@ -45,7 +44,7 @@ type HBConsumer struct {
 }
 
 // Handle hearbeat reception specific to a node
-func (nodeConsumer *monitoredNode) Handle(frame can.Frame) {
+func (nodeConsumer *monitoredNode) Handle(frame canopen.Frame) {
 	nodeConsumer.mu.Lock()
 	defer nodeConsumer.mu.Unlock()
 

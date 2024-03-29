@@ -2,9 +2,9 @@ package emergency
 
 import (
 	"encoding/binary"
+	"sync"
 
 	canopen "github.com/samsamfire/gocanopen"
-	can "github.com/samsamfire/gocanopen/pkg/can"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	log "github.com/sirupsen/logrus"
 )
@@ -256,12 +256,13 @@ type EMCYRxCallback func(ident uint16, errorCode uint16, errorRegister byte, err
 
 // Emergency object for receiving & transmitting emergencies
 type EMCY struct {
+	mu sync.Mutex
 	*canopen.BusManager
 	nodeId          byte
 	errorStatusBits [CO_CONFIG_EM_ERR_STATUS_BITS_COUNT / 8]byte
 	errorRegister   *byte
 	canErrorOld     uint16
-	txBuffer        can.Frame
+	txBuffer        canopen.Frame
 	fifo            []emfifo
 	fifoWrPtr       byte
 	fifoPpPtr       byte
@@ -274,86 +275,89 @@ type EMCY struct {
 	rxCallback      EMCYRxCallback
 }
 
-func (emergency *EMCY) Handle(frame can.Frame) {
+func (emcy *EMCY) Handle(frame canopen.Frame) {
 	// Ignore sync messages and only accept 8 bytes size
-	if emergency == nil || emergency.rxCallback == nil ||
+	if emcy == nil || emcy.rxCallback == nil ||
 		frame.ID == 0x80 ||
 		len(frame.Data) != 8 {
 		return
 	}
 	errorCode := binary.LittleEndian.Uint16(frame.Data[0:2])
 	infoCode := binary.LittleEndian.Uint32(frame.Data[4:8])
-	emergency.rxCallback(
+	emcy.rxCallback(
 		uint16(frame.ID),
 		errorCode,
 		frame.Data[2],
 		frame.Data[3],
 		infoCode)
-
 }
 
-func (emergency *EMCY) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
+func (emcy *EMCY) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
+	emcy.mu.Lock()
+	defer emcy.mu.Unlock()
 	// Check errors from driver
-	canErrStatus := emergency.BusManager.Error()
-	if canErrStatus != emergency.canErrorOld {
-		canErrStatusChanged := canErrStatus ^ emergency.canErrorOld
-		emergency.canErrorOld = canErrStatus
-		if (canErrStatusChanged & (can.CanErrorTxWarning | can.CanErrorRxWarning)) != 0 {
-			emergency.Error(
-				(canErrStatus&(can.CanErrorTxWarning|can.CanErrorRxWarning)) != 0,
+	canErrStatus := emcy.BusManager.Error()
+	if canErrStatus != emcy.canErrorOld {
+		canErrStatusChanged := canErrStatus ^ emcy.canErrorOld
+		emcy.canErrorOld = canErrStatus
+		emcy.mu.Unlock()
+		if (canErrStatusChanged & (canopen.CanErrorTxWarning | canopen.CanErrorRxWarning)) != 0 {
+			emcy.Error(
+				(canErrStatus&(canopen.CanErrorTxWarning|canopen.CanErrorRxWarning)) != 0,
 				EmCanBusWarning,
 				EmNoError,
 				0,
 			)
 		}
-		if (canErrStatusChanged & can.CanErrorTxPassive) != 0 {
-			emergency.Error(
-				(canErrStatus&can.CanErrorTxPassive) != 0,
+		if (canErrStatusChanged & canopen.CanErrorTxPassive) != 0 {
+			emcy.Error(
+				(canErrStatus&canopen.CanErrorTxPassive) != 0,
 				EmCanTXBusPassive,
 				ErrCanPassive,
 				0,
 			)
 		}
 
-		if (canErrStatusChanged & can.CanErrorTxBusOff) != 0 {
-			emergency.Error(
-				(canErrStatus&can.CanErrorTxBusOff) != 0,
+		if (canErrStatusChanged & canopen.CanErrorTxBusOff) != 0 {
+			emcy.Error(
+				(canErrStatus&canopen.CanErrorTxBusOff) != 0,
 				EmCanTXBusOff,
 				ErrBusOffRecovered,
 				0)
 		}
 
-		if (canErrStatusChanged & can.CanErrorTxOverflow) != 0 {
-			emergency.Error(
-				(canErrStatus&can.CanErrorTxOverflow) != 0,
+		if (canErrStatusChanged & canopen.CanErrorTxOverflow) != 0 {
+			emcy.Error(
+				(canErrStatus&canopen.CanErrorTxOverflow) != 0,
 				EmCanTXOverflow,
 				ErrCanOverrun,
 				0)
 		}
 
-		if (canErrStatusChanged & can.CanErrorPdoLate) != 0 {
-			emergency.Error(
-				(canErrStatus&can.CanErrorPdoLate) != 0,
+		if (canErrStatusChanged & canopen.CanErrorPdoLate) != 0 {
+			emcy.Error(
+				(canErrStatus&canopen.CanErrorPdoLate) != 0,
 				EmTPDOOutsideWindow,
 				ErrCommunication,
 				0)
 		}
 
-		if (canErrStatusChanged & can.CanErrorRxPassive) != 0 {
-			emergency.Error(
-				(canErrStatus&can.CanErrorRxPassive) != 0,
+		if (canErrStatusChanged & canopen.CanErrorRxPassive) != 0 {
+			emcy.Error(
+				(canErrStatus&canopen.CanErrorRxPassive) != 0,
 				EmCanRXBusPassive,
 				ErrCanPassive,
 				0)
 		}
 
-		if (canErrStatusChanged & can.CanErrorRxOverflow) != 0 {
-			emergency.Error(
-				(canErrStatus&can.CanErrorRxOverflow) != 0,
+		if (canErrStatusChanged & canopen.CanErrorRxOverflow) != 0 {
+			emcy.Error(
+				(canErrStatus&canopen.CanErrorRxOverflow) != 0,
 				EmCanRXBOverflow,
 				ErrCanOverrun,
 				0)
 		}
+		emcy.mu.Lock()
 	}
 	errorRegister := ErrRegGeneric |
 		ErrRegCurrent |
@@ -366,44 +370,48 @@ func (emergency *EMCY) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint
 	if !nmtIsPreOrOperational {
 		return
 	}
-	if len(emergency.fifo) >= 2 {
-		fifoPpPtr := emergency.fifoPpPtr
-		if emergency.inhibitTimer < emergency.inhibitTimeUs {
-			emergency.inhibitTimer += timeDifferenceUs
+	if len(emcy.fifo) >= 2 {
+		fifoPpPtr := emcy.fifoPpPtr
+		if emcy.inhibitTimer < emcy.inhibitTimeUs {
+			emcy.inhibitTimer += timeDifferenceUs
 		}
-		if fifoPpPtr != emergency.fifoWrPtr &&
-			emergency.inhibitTimer >= emergency.inhibitTimeUs {
-			emergency.inhibitTimer = 0
+		if fifoPpPtr != emcy.fifoWrPtr &&
+			emcy.inhibitTimer >= emcy.inhibitTimeUs {
+			emcy.inhibitTimer = 0
 
-			emergency.fifo[fifoPpPtr].msg |= uint32(errorRegister) << 16
-			binary.LittleEndian.PutUint32(emergency.txBuffer.Data[:4], emergency.fifo[fifoPpPtr].msg)
-			emergency.Send(emergency.txBuffer)
+			emcy.fifo[fifoPpPtr].msg |= uint32(errorRegister) << 16
+			binary.LittleEndian.PutUint32(emcy.txBuffer.Data[:4], emcy.fifo[fifoPpPtr].msg)
+			emcy.Send(emcy.txBuffer)
 			// Also report own emergency message
-			if emergency.rxCallback != nil {
-				errMsg := uint32(emergency.fifo[fifoPpPtr].msg)
-				emergency.rxCallback(
+			if emcy.rxCallback != nil {
+				errMsg := uint32(emcy.fifo[fifoPpPtr].msg)
+				emcy.rxCallback(
 					0,
 					uint16(errMsg),
 					byte(errorRegister),
 					byte(errMsg>>24),
-					emergency.fifo[fifoPpPtr].info,
+					emcy.fifo[fifoPpPtr].info,
 				)
 			}
 			fifoPpPtr += 1
-			if int(fifoPpPtr) < len(emergency.fifo) {
-				emergency.fifoPpPtr = fifoPpPtr
+			if int(fifoPpPtr) < len(emcy.fifo) {
+				emcy.fifoPpPtr = fifoPpPtr
 			} else {
-				emergency.fifoPpPtr = 0
+				emcy.fifoPpPtr = 0
 			}
-			if emergency.fifoOverflow == 1 {
-				emergency.fifoOverflow = 2
-				emergency.ErrorReport(EmEmergencyBufferFull, ErrGeneric, 0)
-			} else if emergency.fifoOverflow == 2 && fifoPpPtr == emergency.fifoWrPtr {
-				emergency.fifoOverflow = 0
-				emergency.ErrorReset(EmEmergencyBufferFull, 0)
+			if emcy.fifoOverflow == 1 {
+				emcy.fifoOverflow = 2
+				emcy.mu.Unlock()
+				emcy.ErrorReport(EmEmergencyBufferFull, ErrGeneric, 0)
+				emcy.mu.Lock()
+			} else if emcy.fifoOverflow == 2 && fifoPpPtr == emcy.fifoWrPtr {
+				emcy.fifoOverflow = 0
+				emcy.mu.Unlock()
+				emcy.ErrorReset(EmEmergencyBufferFull, 0)
+				emcy.mu.Lock()
 			}
-		} else if timerNextUs != nil && emergency.inhibitTimeUs < emergency.inhibitTimer {
-			diff := emergency.inhibitTimeUs - emergency.inhibitTimer
+		} else if timerNextUs != nil && emcy.inhibitTimeUs < emcy.inhibitTimer {
+			diff := emcy.inhibitTimeUs - emcy.inhibitTimer
 			if *timerNextUs > diff {
 				*timerNextUs = diff
 			}
@@ -414,8 +422,9 @@ func (emergency *EMCY) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint
 
 // Set or reset an Error condition
 // Function adds a new Error to the history & Error will be processed by Process function
-func (emergency *EMCY) Error(setError bool, errorBit byte, errorCode uint16, infoCode uint32) {
-
+func (emcy *EMCY) Error(setError bool, errorBit byte, errorCode uint16, infoCode uint32) {
+	emcy.mu.Lock()
+	defer emcy.mu.Unlock()
 	index := errorBit >> 3
 	bitMask := 1 << (errorBit & 0x7)
 
@@ -426,8 +435,8 @@ func (emergency *EMCY) Error(setError bool, errorBit byte, errorCode uint16, inf
 		errorCode = ErrSoftwareInternal
 		infoCode = uint32(errorBit)
 	}
-	errorStatusBits := &emergency.errorStatusBits[index]
-	errorStatusBitMasked := *errorStatusBits & byte(bitMask)
+	errorStatusBits := emcy.errorStatusBits[index]
+	errorStatusBitMasked := errorStatusBits & byte(bitMask)
 
 	// If error is already set or not don't do anything
 	if setError {
@@ -441,26 +450,26 @@ func (emergency *EMCY) Error(setError bool, errorBit byte, errorCode uint16, inf
 		errorCode = ErrNoError
 	}
 	errMsg := (uint32(errorBit) << 24) | uint32(errorCode)
-	if len(emergency.fifo) >= 2 {
-		fifoWrPtr := emergency.fifoWrPtr
+	if len(emcy.fifo) >= 2 {
+		fifoWrPtr := emcy.fifoWrPtr
 		fifoWrPtrNext := fifoWrPtr + 1
-		if int(fifoWrPtrNext) >= len(emergency.fifo) {
+		if int(fifoWrPtrNext) >= len(emcy.fifo) {
 			fifoWrPtrNext = 0
 		}
-		if fifoWrPtrNext == emergency.fifoPpPtr {
-			emergency.fifoOverflow = 1
+		if fifoWrPtrNext == emcy.fifoPpPtr {
+			emcy.fifoOverflow = 1
 		} else {
-			emergency.fifo[fifoWrPtr].msg = errMsg
-			emergency.fifo[fifoWrPtr].info = infoCode
-			emergency.fifoWrPtr = fifoWrPtrNext
-			if int(emergency.fifoCount) < len(emergency.fifo)-1 {
-				emergency.fifoCount++
+			emcy.fifo[fifoWrPtr].msg = errMsg
+			emcy.fifo[fifoWrPtr].info = infoCode
+			emcy.fifoWrPtr = fifoWrPtrNext
+			if int(emcy.fifoCount) < len(emcy.fifo)-1 {
+				emcy.fifoCount++
 			}
 		}
 	}
 }
 
-func (emergency *EMCY) ErrorReport(errorBit byte, errorCode uint16, infoCode uint32) {
+func (emcy *EMCY) ErrorReport(errorBit byte, errorCode uint16, infoCode uint32) {
 	log.Warnf("[EMERGENCY][TX][ERROR] %v (x%x) | %v (x%x) | infoCode %v",
 		getErrorCodeDescription(int(errorCode)),
 		errorCode,
@@ -468,20 +477,22 @@ func (emergency *EMCY) ErrorReport(errorBit byte, errorCode uint16, infoCode uin
 		errorBit,
 		infoCode,
 	)
-	emergency.Error(true, errorBit, errorCode, infoCode)
+	emcy.Error(true, errorBit, errorCode, infoCode)
 }
 
-func (emergency *EMCY) ErrorReset(errorBit byte, infoCode uint32) {
+func (emcy *EMCY) ErrorReset(errorBit byte, infoCode uint32) {
 	log.Infof("[EMERGENCY][TX][RESET] reset emergency %v (x%x) | infoCode %v",
 		getErrorStatusDescription(errorBit),
 		errorBit,
 		infoCode,
 	)
-	emergency.Error(false, errorBit, ErrNoError, infoCode)
+	emcy.Error(false, errorBit, ErrNoError, infoCode)
 }
 
-func (emergency *EMCY) IsError(errorBit byte) bool {
-	if emergency == nil {
+func (emcy *EMCY) IsError(errorBit byte) bool {
+	emcy.mu.Lock()
+	defer emcy.mu.Unlock()
+	if emcy == nil {
 		return true
 	}
 	byteIndex := errorBit >> 3
@@ -489,22 +500,26 @@ func (emergency *EMCY) IsError(errorBit byte) bool {
 	if byteIndex >= (CO_CONFIG_EM_ERR_STATUS_BITS_COUNT / 8) {
 		return true
 	}
-	return (emergency.errorStatusBits[byteIndex] & bitMask) != 0
+	return (emcy.errorStatusBits[byteIndex] & bitMask) != 0
 }
 
-func (emergency *EMCY) GetErrorRegister() byte {
-	if emergency == nil || emergency.errorRegister == nil {
+func (emcy *EMCY) GetErrorRegister() byte {
+	emcy.mu.Lock()
+	defer emcy.mu.Unlock()
+	if emcy == nil || emcy.errorRegister == nil {
 		return 0
 	}
-	return *emergency.errorRegister
+	return *emcy.errorRegister
 }
 
-func (emergency *EMCY) ProducerEnabled() bool {
-	return emergency.producerEnabled
+func (emcy *EMCY) ProducerEnabled() bool {
+	return emcy.producerEnabled
 }
 
-func (emergency *EMCY) SetCallback(callback EMCYRxCallback) {
-	emergency.rxCallback = callback
+func (emcy *EMCY) SetCallback(callback EMCYRxCallback) {
+	emcy.mu.Lock()
+	defer emcy.mu.Unlock()
+	emcy.rxCallback = callback
 }
 
 func NewEM(
@@ -522,11 +537,11 @@ func NewEM(
 		return nil, canopen.ErrIllegalArgument
 
 	}
-	emergency := &EMCY{BusManager: bm}
+	emcy := &EMCY{BusManager: bm}
 	// TODO handle error register ptr
 	// emergency.errorRegister
 	fifoSize := entry1003.SubCount()
-	emergency.fifo = make([]emfifo, fifoSize)
+	emcy.fifo = make([]emfifo, fifoSize)
 
 	// Get cob id initial & verify
 	cobIdEmergency, ret := entry1014.Uint32(0)
@@ -537,29 +552,29 @@ func NewEM(
 		}
 	}
 	producerCanId := cobIdEmergency & 0x7FF
-	emergency.producerEnabled = (cobIdEmergency&0x80000000) == 0 && producerCanId != 0
-	entry1014.AddExtension(emergency, readEntry1014, writeEntry1014)
-	emergency.producerIdent = uint16(producerCanId)
+	emcy.producerEnabled = (cobIdEmergency&0x80000000) == 0 && producerCanId != 0
+	entry1014.AddExtension(emcy, readEntry1014, writeEntry1014)
+	emcy.producerIdent = uint16(producerCanId)
 	if producerCanId == uint32(SERVICE_ID) {
 		producerCanId += uint32(nodeId)
 	}
-	emergency.nodeId = nodeId
-	emergency.txBuffer = can.NewFrame(producerCanId, 0, 8)
-	emergency.inhibitTimeUs = 0
-	emergency.inhibitTimer = 0
+	emcy.nodeId = nodeId
+	emcy.txBuffer = canopen.NewFrame(producerCanId, 0, 8)
+	emcy.inhibitTimeUs = 0
+	emcy.inhibitTimer = 0
 	inhibitTime100us, ret := entry1015.Uint16(0)
 	if ret == nil {
-		emergency.inhibitTimeUs = uint32(inhibitTime100us) * 100
-		entry1015.AddExtension(emergency, od.ReadEntryDefault, writeEntry1015)
+		emcy.inhibitTimeUs = uint32(inhibitTime100us) * 100
+		entry1015.AddExtension(emcy, od.ReadEntryDefault, writeEntry1015)
 	}
-	entry1003.AddExtension(emergency, readEntry1003, writeEntry1003)
+	entry1003.AddExtension(emcy, readEntry1003, writeEntry1003)
 	if entryStatusBits != nil {
-		entryStatusBits.AddExtension(emergency, readEntryStatusBits, writeEntryStatusBits)
+		entryStatusBits.AddExtension(emcy, readEntryStatusBits, writeEntryStatusBits)
 	}
 
-	err := emergency.Subscribe(uint32(SERVICE_ID), 0x780, false, emergency)
+	err := emcy.Subscribe(uint32(SERVICE_ID), 0x780, false, emcy)
 	if err != nil {
 		return nil, err
 	}
-	return emergency, nil
+	return emcy, nil
 }

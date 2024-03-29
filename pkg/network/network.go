@@ -9,6 +9,7 @@ import (
 
 	canopen "github.com/samsamfire/gocanopen"
 	can "github.com/samsamfire/gocanopen/pkg/can"
+	_ "github.com/samsamfire/gocanopen/pkg/can/all"
 	"github.com/samsamfire/gocanopen/pkg/config"
 	"github.com/samsamfire/gocanopen/pkg/nmt"
 	n "github.com/samsamfire/gocanopen/pkg/node"
@@ -38,8 +39,18 @@ type ObjectDictionaryInformation struct {
 	edsPath string
 }
 
+// Create a new CAN bus with given interface
+// Currently supported : socketcan, virtualcan
+func NewBus(canInterfaceName string, channel string, bitrate int) (canopen.Bus, error) {
+	createInterface, ok := can.CanInterfaces[canInterfaceName]
+	if !ok {
+		return nil, fmt.Errorf("unsupported interface : %v", canInterfaceName)
+	}
+	return createInterface(channel)
+}
+
 // Create a new Network using the given CAN bus
-func NewNetwork(bus can.Bus) Network {
+func NewNetwork(bus canopen.Bus) Network {
 	return Network{
 		nodes:      map[uint8]n.Node{},
 		BusManager: canopen.NewBusManager(bus),
@@ -55,9 +66,9 @@ func (network *Network) Connect(args ...any) error {
 	if len(args) < 3 && network.Bus() == nil {
 		return errors.New("either provide custom backend, or provide interface, channel and bitrate")
 	}
-	var bus can.Bus
+	var bus canopen.Bus
 	var err error
-	if network.BusManager == nil {
+	if network.Bus() == nil {
 		canInterface, ok := args[0].(string)
 		if !ok {
 			return fmt.Errorf("expecting string for interface got : %v", args[0])
@@ -70,7 +81,7 @@ func (network *Network) Connect(args ...any) error {
 		if !ok {
 			return fmt.Errorf("expecting int for bitrate got : %v", args[2])
 		}
-		bus, err = can.NewBus(canInterface, channel, bitrate)
+		bus, err = NewBus(canInterface, channel, bitrate)
 		if err != nil {
 			return err
 		}
@@ -198,7 +209,7 @@ func (network *Network) Command(nodeId uint8, nmtCommand nmt.NMTCommand) error {
 		nmtCommand != nmt.NMT_RESET_NODE) {
 		return canopen.ErrIllegalArgument
 	}
-	frame := can.NewFrame(uint32(nmt.SERVICE_ID), 0, 2)
+	frame := canopen.NewFrame(uint32(nmt.SERVICE_ID), 0, 2)
 	frame.Data[0] = uint8(nmtCommand)
 	frame.Data[1] = nodeId
 	log.Debugf("[NMT] sending nmt command : %v to node(s) %v (x%x)", nmt.CommandDescription[nmtCommand], nodeId, nodeId)

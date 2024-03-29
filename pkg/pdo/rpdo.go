@@ -4,7 +4,6 @@ import (
 	s "sync"
 
 	canopen "github.com/samsamfire/gocanopen"
-	can "github.com/samsamfire/gocanopen/pkg/can"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/sync"
@@ -33,7 +32,7 @@ type RPDO struct {
 	timeoutTimer  uint32
 }
 
-func (rpdo *RPDO) Handle(frame can.Frame) {
+func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
 
@@ -69,6 +68,9 @@ func (rpdo *RPDO) Handle(frame can.Frame) {
 }
 
 func (rpdo *RPDO) configureCOBID(entry14xx *od.Entry, predefinedIdent uint32, erroneousMap uint32) (canId uint32, e error) {
+	rpdo.mu.Lock()
+	defer rpdo.mu.Unlock()
+
 	pdo := rpdo.pdo
 	cobId, ret := entry14xx.Uint32(1)
 	if ret != nil {
@@ -118,7 +120,6 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 			rpdo.timeoutTimer = 0
 		}
 		return
-
 	}
 	// Check errors in length of received messages
 	if rpdo.receiveError > rpdoRxAck {

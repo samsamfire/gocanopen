@@ -4,7 +4,6 @@ import (
 	"sync"
 
 	canopen "github.com/samsamfire/gocanopen"
-	can "github.com/samsamfire/gocanopen/pkg/can"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	log "github.com/sirupsen/logrus"
@@ -78,12 +77,12 @@ type NMT struct {
 	control                uint16
 	hearbeatProducerTimeUs uint32
 	hearbeatProducerTimer  uint32
-	nmtTxBuff              can.Frame
-	hbTxBuff               can.Frame
+	nmtTxBuff              canopen.Frame
+	hbTxBuff               canopen.Frame
 	callback               func(nmtState uint8)
 }
 
-func (nmt *NMT) Handle(frame can.Frame) {
+func (nmt *NMT) Handle(frame canopen.Frame) {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
 
@@ -284,7 +283,7 @@ func NewNMT(
 	if err != nil {
 		return nil, err
 	}
-	nmt.nmtTxBuff = can.NewFrame(uint32(canIdNmtTx), 0, 2)
-	nmt.hbTxBuff = can.NewFrame(uint32(canIdHbTx), 0, 1)
+	nmt.nmtTxBuff = canopen.NewFrame(uint32(canIdNmtTx), 0, 2)
+	nmt.hbTxBuff = canopen.NewFrame(uint32(canIdHbTx), 0, 1)
 	return nmt, nil
 }

@@ -3,7 +3,6 @@ package canopen
 import (
 	"sync"
 
-	can "github.com/samsamfire/gocanopen/pkg/can"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -11,14 +10,14 @@ import (
 // Used by the CANopen stack to control errors, callbacks for specific IDs, etc.
 type BusManager struct {
 	mu             sync.Mutex
-	bus            can.Bus // Bus interface that can be adapted
-	frameListeners map[uint32][]can.FrameListener
+	bus            Bus // Bus interface that can be adapted
+	frameListeners map[uint32][]FrameListener
 	canError       uint16
 }
 
 // Implements the FrameListener interface
 // This handles all received CAN frames from Bus
-func (bm *BusManager) Handle(frame can.Frame) {
+func (bm *BusManager) Handle(frame Frame) {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
 	listeners, ok := bm.frameListeners[frame.ID]
@@ -31,13 +30,13 @@ func (bm *BusManager) Handle(frame can.Frame) {
 }
 
 // Set bus
-func (bm *BusManager) SetBus(bus can.Bus) {
+func (bm *BusManager) SetBus(bus Bus) {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
 	bm.bus = bus
 }
 
-func (bm *BusManager) Bus() can.Bus {
+func (bm *BusManager) Bus() Bus {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
 	return bm.bus
@@ -45,7 +44,7 @@ func (bm *BusManager) Bus() can.Bus {
 
 // Send a CAN message
 // Limited error handling
-func (bm *BusManager) Send(frame can.Frame) error {
+func (bm *BusManager) Send(frame Frame) error {
 	err := bm.bus.Send(frame)
 	if err != nil {
 		log.Warnf("[CAN] %v", err)
@@ -63,16 +62,16 @@ func (bm *BusManager) Process() error {
 }
 
 // Subscribe to a specific CAN ID
-func (bm *BusManager) Subscribe(ident uint32, mask uint32, rtr bool, callback can.FrameListener) error {
+func (bm *BusManager) Subscribe(ident uint32, mask uint32, rtr bool, callback FrameListener) error {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
-	ident = ident & can.CanSffMask
+	ident = ident & CanSffMask
 	if rtr {
-		ident |= can.CanRtrFlag
+		ident |= CanRtrFlag
 	}
 	_, ok := bm.frameListeners[ident]
 	if !ok {
-		bm.frameListeners[ident] = []can.FrameListener{callback}
+		bm.frameListeners[ident] = []FrameListener{callback}
 		return nil
 	}
 	// Iterate over all callbacks and verify that we are not adding the same one twice
@@ -93,10 +92,10 @@ func (bm *BusManager) Error() uint16 {
 	return bm.canError
 }
 
-func NewBusManager(bus can.Bus) *BusManager {
+func NewBusManager(bus Bus) *BusManager {
 	bm := &BusManager{
 		bus:            bus,
-		frameListeners: make(map[uint32][]can.FrameListener),
+		frameListeners: make(map[uint32][]FrameListener),
 		canError:       0,
 	}
 	return bm

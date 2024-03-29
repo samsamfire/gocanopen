@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 
 	canopen "github.com/samsamfire/gocanopen"
-	can "github.com/samsamfire/gocanopen/pkg/can"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	log "github.com/sirupsen/logrus"
 )
@@ -227,7 +226,7 @@ func writeEntry18xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 			if !valid {
 				canId = 0
 			}
-			tpdo.txBuffer = can.NewFrame(canId, 0, uint8(pdo.dataLength))
+			tpdo.txBuffer = canopen.NewFrame(canId, 0, uint8(pdo.dataLength))
 			pdo.Valid = valid
 			pdo.configuredId = uint16(canId)
 		}

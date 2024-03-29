@@ -10,7 +10,6 @@ import (
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/internal/crc"
 	"github.com/samsamfire/gocanopen/internal/fifo"
-	"github.com/samsamfire/gocanopen/pkg/can"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	log "github.com/sirupsen/logrus"
 )
@@ -40,7 +39,7 @@ type SDOClient struct {
 	od                         *od.ObjectDictionary
 	streamer                   *od.Streamer
 	nodeId                     uint8
-	txBuffer                   can.Frame
+	txBuffer                   canopen.Frame
 	cobIdClientToServer        uint32
 	cobIdServerToClient        uint32
 	nodeIdServer               uint8
@@ -67,7 +66,7 @@ type SDOClient struct {
 	blockCRC                   crc.CRC16
 }
 
-func (client *SDOClient) Handle(frame can.Frame) {
+func (client *SDOClient) Handle(frame canopen.Frame) {
 	client.mu.Lock()
 	defer client.mu.Unlock()
 
@@ -149,7 +148,7 @@ func (client *SDOClient) setupServer(cobIdClientToServer uint32, cobIdServerToCl
 	if err != nil {
 		return err
 	}
-	client.txBuffer = can.NewFrame(uint32(CanIdC2S), 0, 8)
+	client.txBuffer = canopen.NewFrame(uint32(CanIdC2S), 0, 8)
 	return nil
 }
 
