@@ -4,7 +4,6 @@ import (
 	s "sync"
 
 	canopen "github.com/samsamfire/gocanopen"
-	can "github.com/samsamfire/gocanopen/pkg/can"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/sync"
@@ -16,7 +15,7 @@ type TPDO struct {
 	mu               s.Mutex
 	sync             *sync.SYNC
 	pdo              *PDOCommon
-	txBuffer         can.Frame
+	txBuffer         canopen.Frame
 	transmissionType uint8
 	sendRequest      bool
 	syncStartValue   uint8
@@ -28,6 +27,9 @@ type TPDO struct {
 }
 
 func (tpdo *TPDO) configureTransmissionType(entry18xx *od.Entry) error {
+	tpdo.mu.Lock()
+	defer tpdo.mu.Unlock()
+
 	transmissionType, ret := entry18xx.Uint8(2)
 	if ret != nil {
 		log.Errorf("[TPDO][%x|%x] reading %v failed : %v", entry18xx.Index, 2, entry18xx.Name, ret)
@@ -42,6 +44,9 @@ func (tpdo *TPDO) configureTransmissionType(entry18xx *od.Entry) error {
 }
 
 func (tpdo *TPDO) configureCOBID(entry18xx *od.Entry, predefinedIdent uint16, erroneousMap uint32) (canId uint16, e error) {
+	tpdo.mu.Lock()
+	defer tpdo.mu.Unlock()
+
 	pdo := tpdo.pdo
 	cobId, ret := entry18xx.Uint32(1)
 	if ret != nil {
@@ -70,7 +75,7 @@ func (tpdo *TPDO) configureCOBID(entry18xx *od.Entry, predefinedIdent uint16, er
 	if canId != 0 && canId == (predefinedIdent&0xFF80) {
 		canId = predefinedIdent
 	}
-	tpdo.txBuffer = can.NewFrame(uint32(canId), 0, uint8(pdo.dataLength))
+	tpdo.txBuffer = canopen.NewFrame(uint32(canId), 0, uint8(pdo.dataLength))
 	pdo.Valid = valid
 	return canId, nil
 

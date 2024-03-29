@@ -6,7 +6,6 @@ import (
 	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
-	can "github.com/samsamfire/gocanopen/pkg/can"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	log "github.com/sirupsen/logrus"
 )
@@ -29,7 +28,7 @@ type TIME struct {
 	cobId              uint32
 }
 
-func (t *TIME) Handle(frame can.Frame) {
+func (t *TIME) Handle(frame canopen.Frame) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if frame.DLC != 6 {
@@ -69,7 +68,7 @@ func (t *TIME) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) (boo
 	if nmtIsPreOrOperational && t.isProducer && t.producerIntervalMs > 0 {
 		if t.producerTimerMs >= t.producerIntervalMs {
 			t.producerTimerMs -= t.producerIntervalMs
-			frame := can.NewFrame(t.cobId, 0, 6)
+			frame := canopen.NewFrame(t.cobId, 0, 6)
 			binary.LittleEndian.PutUint32(frame.Data[0:4], t.ms)
 			binary.LittleEndian.PutUint16(frame.Data[4:6], t.days)
 			err = t.Send(frame)

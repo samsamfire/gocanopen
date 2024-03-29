@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 
 	canopen "github.com/samsamfire/gocanopen"
-	can "github.com/samsamfire/gocanopen/pkg/can"
 	"github.com/samsamfire/gocanopen/pkg/od"
 )
 
@@ -60,6 +59,9 @@ func readEntry1003(stream *od.Stream, data []byte, countRead *uint16) error {
 	if !ok {
 		return od.ODR_DEV_INCOMPAT
 	}
+	em.mu.Lock()
+	defer em.mu.Unlock()
+
 	if len(em.fifo) < 2 {
 		return od.ODR_DEV_INCOMPAT
 	}
@@ -96,6 +98,9 @@ func writeEntry1003(stream *od.Stream, data []byte, countWritten *uint16) error 
 	if !ok {
 		return od.ODR_DEV_INCOMPAT
 	}
+	em.mu.Lock()
+	defer em.mu.Unlock()
+
 	// Clear error history
 	em.fifoCount = 0
 	*countWritten = 1
@@ -111,6 +116,9 @@ func readEntry1014(stream *od.Stream, data []byte, countRead *uint16) error {
 	if !ok {
 		return od.ODR_DEV_INCOMPAT
 	}
+	em.mu.Lock()
+	defer em.mu.Unlock()
+
 	var canId uint16
 	if em.producerIdent == SERVICE_ID {
 		canId = SERVICE_ID + uint16(em.nodeId)
@@ -138,6 +146,9 @@ func writeEntry1014(stream *od.Stream, data []byte, countWritten *uint16) error 
 	if !ok {
 		return od.ODR_DEV_INCOMPAT
 	}
+	em.mu.Lock()
+	defer em.mu.Unlock()
+
 	// Check written value, cob id musn't change when enabled
 	cobId := binary.LittleEndian.Uint32(data)
 	newCanId := cobId & 0x7FF
@@ -160,7 +171,7 @@ func writeEntry1014(stream *od.Stream, data []byte, countWritten *uint16) error 
 	}
 
 	if newEnabled {
-		em.txBuffer = can.NewFrame(newCanId, 0, 8)
+		em.txBuffer = canopen.NewFrame(newCanId, 0, 8)
 	}
 	return od.WriteEntryDefault(stream, data, countWritten)
 
@@ -175,6 +186,9 @@ func writeEntry1015(stream *od.Stream, data []byte, countWritten *uint16) error 
 	if !ok {
 		return od.ODR_DEV_INCOMPAT
 	}
+	em.mu.Lock()
+	defer em.mu.Unlock()
+
 	em.inhibitTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 100
 	em.inhibitTimer = 0
 

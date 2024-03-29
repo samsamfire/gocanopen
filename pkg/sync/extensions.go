@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 
 	canopen "github.com/samsamfire/gocanopen"
-	can "github.com/samsamfire/gocanopen/pkg/can"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	log "github.com/sirupsen/logrus"
 )
@@ -39,7 +38,7 @@ func writeEntry1005(stream *od.Stream, data []byte, countWritten *uint16) error 
 			frameSize = 1
 		}
 		log.Debugf("[OD][EXTENSION][SYNC] updated COB-ID SYNC to x%x (prev x%x)", canId, sync.cobId)
-		sync.txBuffer = can.NewFrame(uint32(canId), 0, frameSize)
+		sync.txBuffer = canopen.NewFrame(uint32(canId), 0, frameSize)
 		sync.cobId = uint32(canId)
 	}
 	// Reset in case sync is producer
@@ -112,7 +111,7 @@ func writeEntry1019(stream *od.Stream, data []byte, countWritten *uint16) error 
 	if syncCounterOverflow != 0 {
 		nbBytes = 1
 	}
-	sync.txBuffer = can.NewFrame(sync.cobId, 0, nbBytes)
+	sync.txBuffer = canopen.NewFrame(sync.cobId, 0, nbBytes)
 	sync.counterOverflow = syncCounterOverflow
 	log.Debugf("[OD][EXTENSION][SYNC] updated synchronous counter overflow to %v", syncCounterOverflow)
 	return od.WriteEntryDefault(stream, data, countWritten)

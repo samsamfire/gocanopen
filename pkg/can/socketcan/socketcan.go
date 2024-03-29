@@ -2,6 +2,7 @@ package socketcan
 
 import (
 	sockcan "github.com/brutella/can"
+	canopen "github.com/samsamfire/gocanopen"
 	can "github.com/samsamfire/gocanopen/pkg/can"
 )
 
@@ -14,7 +15,7 @@ func init() {
 
 type SocketcanBus struct {
 	bus        *sockcan.Bus
-	rxCallback can.FrameListener
+	rxCallback canopen.FrameListener
 }
 
 // "Connect" implementation of Bus interface
@@ -34,7 +35,7 @@ func (socketcan *SocketcanBus) Disconnect() error {
 }
 
 // "Send" implementation of Bus interface
-func (socketcan *SocketcanBus) Send(frame can.Frame) error {
+func (socketcan *SocketcanBus) Send(frame canopen.Frame) error {
 	return socketcan.bus.Publish(
 		sockcan.Frame{
 			ID:     frame.ID,
@@ -47,7 +48,7 @@ func (socketcan *SocketcanBus) Send(frame can.Frame) error {
 }
 
 // "Subscribe" implementation of Bus interface
-func (socketcan *SocketcanBus) Subscribe(rxCallback can.FrameListener) error {
+func (socketcan *SocketcanBus) Subscribe(rxCallback canopen.FrameListener) error {
 	socketcan.rxCallback = rxCallback
 	// brutella/can defines a "Handle" interface for handling received CAN frames
 	socketcan.bus.Subscribe(socketcan)
@@ -57,10 +58,10 @@ func (socketcan *SocketcanBus) Subscribe(rxCallback can.FrameListener) error {
 // brutella/can specific "Handle" implementation
 func (socketcan *SocketcanBus) Handle(frame sockcan.Frame) {
 	// Convert brutella frame to canopen frame
-	socketcan.rxCallback.Handle(can.Frame{ID: frame.ID, DLC: frame.Length, Flags: frame.Flags, Data: frame.Data})
+	socketcan.rxCallback.Handle(canopen.Frame{ID: frame.ID, DLC: frame.Length, Flags: frame.Flags, Data: frame.Data})
 }
 
-func NewSocketCanBus(name string) (can.Bus, error) {
+func NewSocketCanBus(name string) (canopen.Bus, error) {
 	bus, err := sockcan.NewBusForInterfaceWithName(name)
 	return &SocketcanBus{bus: bus}, err
 }

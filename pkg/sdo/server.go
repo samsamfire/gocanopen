@@ -7,7 +7,6 @@ import (
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/internal/crc"
-	"github.com/samsamfire/gocanopen/pkg/can"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	log "github.com/sirupsen/logrus"
 )
@@ -18,7 +17,7 @@ type SDOServer struct {
 	od                         *od.ObjectDictionary
 	streamer                   *od.Streamer
 	nodeId                     uint8
-	txBuffer                   can.Frame
+	txBuffer                   canopen.Frame
 	cobIdClientToServer        uint32
 	cobIdServerToClient        uint32
 	valid                      bool
@@ -47,7 +46,7 @@ type SDOServer struct {
 }
 
 // Handle received messages
-func (server *SDOServer) Handle(frame can.Frame) {
+func (server *SDOServer) Handle(frame canopen.Frame) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
 	if frame.DLC != 8 {
@@ -160,7 +159,7 @@ func (server *SDOServer) initRxTx(cobIdClientToServer uint32, cobIdServerToClien
 		server.valid = false
 		return ret
 	}
-	server.txBuffer = can.NewFrame(uint32(CanIdS2C), 0, 8)
+	server.txBuffer = canopen.NewFrame(uint32(CanIdS2C), 0, 8)
 	return ret
 }
 

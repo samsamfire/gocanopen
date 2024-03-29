@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	canopen "github.com/samsamfire/gocanopen"
 	can "github.com/samsamfire/gocanopen/pkg/can"
 	log "github.com/sirupsen/logrus"
 )
@@ -19,10 +20,11 @@ import (
 
 func init() {
 	can.RegisterInterface("virtual", NewVirtualCanBus)
+	can.RegisterInterface("virtualcan", NewVirtualCanBus)
 }
 
 // Helper function for serializing a CAN frame into the expected binary format
-func serializeFrame(frame can.Frame) ([]byte, error) {
+func serializeFrame(frame canopen.Frame) ([]byte, error) {
 	buffer := new(bytes.Buffer)
 	err := binary.Write(buffer, binary.BigEndian, frame)
 	if err != nil {
@@ -36,8 +38,8 @@ func serializeFrame(frame can.Frame) ([]byte, error) {
 }
 
 // Helper function for deserializing a CAN frame from expected binary format
-func deserializeFrame(buffer []byte) (*can.Frame, error) {
-	var frame can.Frame
+func deserializeFrame(buffer []byte) (*canopen.Frame, error) {
+	var frame canopen.Frame
 	buf := bytes.NewBuffer(buffer)
 	err := binary.Read(buf, binary.BigEndian, &frame)
 	if err != nil {
@@ -51,7 +53,7 @@ type VirtualCanBus struct {
 	channel       string
 	conn          net.Conn
 	receiveOwn    bool
-	framehandler  can.FrameListener
+	framehandler  canopen.FrameListener
 	stopChan      chan bool
 	wg            sync.WaitGroup
 	isRunning     bool
@@ -89,7 +91,7 @@ func (client *VirtualCanBus) Disconnect() error {
 }
 
 // "Send" implementation of Bus interface
-func (client *VirtualCanBus) Send(frame can.Frame) error {
+func (client *VirtualCanBus) Send(frame canopen.Frame) error {
 	// Local loopback
 	if client.receiveOwn && client.framehandler != nil {
 		client.framehandler.Handle(frame)
@@ -109,7 +111,7 @@ func (client *VirtualCanBus) Send(frame can.Frame) error {
 }
 
 // "Subscribe" implementation of Bus interface
-func (client *VirtualCanBus) Subscribe(framehandler can.FrameListener) error {
+func (client *VirtualCanBus) Subscribe(framehandler canopen.FrameListener) error {
 	client.mu.Lock()
 	defer client.mu.Unlock()
 	client.framehandler = framehandler
@@ -125,7 +127,7 @@ func (client *VirtualCanBus) Subscribe(framehandler can.FrameListener) error {
 }
 
 // Receive new CAN message
-func (client *VirtualCanBus) Recv() (*can.Frame, error) {
+func (client *VirtualCanBus) Recv() (*canopen.Frame, error) {
 	if client.conn == nil {
 		return nil, fmt.Errorf("error : no active connection, abort receive")
 	}
@@ -191,6 +193,6 @@ func (client *VirtualCanBus) SetReceiveOwn(receiveOwn bool) {
 	client.receiveOwn = receiveOwn
 }
 
-func NewVirtualCanBus(channel string) (can.Bus, error) {
+func NewVirtualCanBus(channel string) (canopen.Bus, error) {
 	return &VirtualCanBus{channel: channel, stopChan: make(chan bool), isRunning: false}, nil
 }
