@@ -482,7 +482,7 @@ func (client *SDOClient) downloadLocal(bufferPartial bool, timerNextUs *uint32) 
 		abortCode = SDO_ABORT_DATA_SHORT
 		// Last part of data !
 	} else if !bufferPartial {
-		odVarSize := client.streamer.DataLength()
+		odVarSize := client.streamer.DataLength
 		// Special case for strings where the downloaded data may be shorter (nul character can be omitted)
 		if client.streamer.CheckHasAttribute(od.ATTRIBUTE_STR) && odVarSize == 0 || client.sizeTransferred < uint32(odVarSize) {
 			count += 1
@@ -493,9 +493,9 @@ func (client *SDOClient) downloadLocal(bufferPartial bool, timerNextUs *uint32) 
 				buffer[count] = 0
 				client.sizeTransferred += 1
 			}
-			client.streamer.SetDataLength(client.sizeTransferred)
+			client.streamer.DataLength = client.sizeTransferred
 		} else if odVarSize == 0 {
-			client.streamer.SetDataLength(client.sizeTransferred)
+			client.streamer.DataLength = client.sizeTransferred
 		} else if client.sizeTransferred > uint32(odVarSize) {
 			abortCode = SDO_ABORT_DATA_LONG
 		} else if client.sizeTransferred < uint32(odVarSize) {
@@ -676,7 +676,7 @@ func (client *SDOClient) uploadLocal() (ret uint8, err error) {
 	if countFifo == 0 {
 		ret = SDO_UPLOAD_DATA_FULL
 	} else if client.streamer.Reader() != nil {
-		countData := client.streamer.DataLength()
+		countData := client.streamer.DataLength
 		countBuffer := uint32(0)
 		countRead := 0
 		if countData > 0 && countData <= uint32(countFifo) {
@@ -708,12 +708,12 @@ func (client *SDOClient) uploadLocal() (ret uint8, err error) {
 				if countStr < countRead {
 					countRead = countStr
 					odErr = od.ODR_OK
-					client.streamer.SetDataLength(client.sizeTransferred + uint32(countRead))
+					client.streamer.DataLength = client.sizeTransferred + uint32(countRead)
 				}
 			}
 			client.fifo.Write(buffer[:countRead], nil)
 			client.sizeTransferred += uint32(countRead)
-			client.sizeIndicated = client.streamer.DataLength()
+			client.sizeIndicated = client.streamer.DataLength
 			if client.sizeIndicated > 0 && client.sizeTransferred > client.sizeIndicated {
 				err = SDO_ABORT_DATA_LONG
 			} else if odErr == od.ODR_OK {
