@@ -184,20 +184,20 @@ func (tpdo *TPDO) send() error {
 	dataTPDO := make([]byte, 0)
 	for i := 0; i < int(pdo.nbMapped); i++ {
 		streamer := &pdo.streamers[i]
-		mappedLength := streamer.DataOffset()
-		dataLength := int(streamer.DataLength())
+		mappedLength := streamer.DataOffset
+		dataLength := int(streamer.DataLength)
 		if dataLength > int(MAX_PDO_LENGTH) {
 			dataLength = int(MAX_PDO_LENGTH)
 		}
 
-		streamer.SetDataOffset(0)
+		streamer.DataOffset = 0
 		buffer := make([]byte, dataLength)
 		_, err := streamer.Read(buffer)
 		if err != nil {
 			log.Warnf("[TPDO]sending TPDO cob id %x failed : %v", pdo.configuredId, err)
 			return err
 		}
-		streamer.SetDataOffset(mappedLength)
+		streamer.DataOffset = mappedLength
 		// Add to tpdo frame only up to mapped length
 		dataTPDO = append(dataTPDO, buffer[:mappedLength]...)
 

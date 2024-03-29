@@ -92,15 +92,15 @@ func (pdo *PDOCommon) configureMap(mapParam uint32, mapIndex uint32, isRPDO bool
 	case (mappedLengthBits & 0x07) != 0:
 		log.Warnf("[%v] mapping failed [x%x|x%x] : alignment error", pdo.Type(), index, subIndex)
 		return od.ODR_NO_MAP
-	case streamerCopy.DataLength() < uint32(mappedLength):
+	case streamerCopy.DataLength < uint32(mappedLength):
 		log.Warnf("[%v] mapping failed [x%x|x%x] : length error", pdo.Type(), index, subIndex)
 		return od.ODR_NO_MAP
 	default:
 	}
-	streamer.SetStream(streamerCopy.Stream())
+	streamer.SetStream(streamerCopy.Stream)
 	streamer.SetReader(streamerCopy.Reader())
 	streamer.SetWriter(streamerCopy.Writer())
-	streamer.SetDataOffset(uint32(mappedLength))
+	streamer.DataOffset = uint32(mappedLength)
 
 	if isRPDO {
 		return nil
@@ -158,7 +158,7 @@ func NewPDO(
 			}
 		}
 		if i < int(mappedObjectsCount) {
-			pdoDataLength += streamer.DataOffset()
+			pdoDataLength += streamer.DataOffset
 		}
 	}
 

@@ -52,7 +52,7 @@ type extension struct {
 // It creates a buffer from OD Data []byte slice and provides a default reader
 // and a default writer
 type Streamer struct {
-	stream Stream
+	Stream
 	reader StreamReader
 	writer StreamWriter
 }
@@ -60,14 +60,14 @@ type Streamer struct {
 // Implements io.Reader
 func (s *Streamer) Read(b []byte) (n int, err error) {
 	countRead := uint16(0)
-	err = s.reader(&s.stream, b, &countRead)
+	err = s.reader(&s.Stream, b, &countRead)
 	return int(countRead), err
 }
 
 // Implements io.Writer
 func (s *Streamer) Write(b []byte) (n int, err error) {
 	countWritten := uint16(0)
-	err = s.writer(&s.stream, b, &countWritten)
+	err = s.writer(&s.Stream, b, &countWritten)
 	return int(countWritten), err
 }
 
@@ -94,36 +94,16 @@ func (s *Streamer) SetReader(reader StreamReader) {
 // Check if streamer has an attribute
 // Returns True if has the attribute
 func (s *Streamer) CheckHasAttribute(attribute uint8) bool {
-	return (s.stream.Attribute & attribute) != 0
-}
-
-func (s *Streamer) DataLength() uint32 {
-	return s.stream.DataLength
-}
-
-func (s *Streamer) SetDataLength(length uint32) {
-	s.stream.DataLength = length
-}
-
-func (s *Streamer) DataOffset() uint32 {
-	return s.stream.DataOffset
+	return (s.Attribute & attribute) != 0
 }
 
 func (s *Streamer) ResetData(size uint32, offset uint32) {
-	s.stream.Data = make([]byte, size)
-	s.stream.DataOffset = offset
-}
-
-func (s *Streamer) Stream() Stream {
-	return s.stream
+	s.Data = make([]byte, size)
+	s.DataOffset = offset
 }
 
 func (s *Streamer) SetStream(stream Stream) {
-	s.stream = stream
-}
-
-func (s *Streamer) SetDataOffset(offset uint32) {
-	s.stream.DataOffset = offset
+	s.Stream = stream
 }
 
 // Create an object streamer for a given od entry + subindex
@@ -143,27 +123,27 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 			// Domain entries require extensions to be used, by default they are disabled
 			streamer.reader = ReadEntryDisabled
 			streamer.writer = WriteEntryDisabled
-			streamer.stream.Object = nil
-			streamer.stream.DataOffset = 0
-			streamer.stream.Subindex = subIndex
-			streamer.stream.mu = &object.mu
+			streamer.Object = nil
+			streamer.DataOffset = 0
+			streamer.Subindex = subIndex
+			streamer.mu = &object.mu
 			log.Warnf("[OD][x%x] no extension has been specified for this domain object", entry.Index)
 			return streamer, nil
 		}
-		streamer.stream.Attribute = object.Attribute
-		streamer.stream.Data = object.value
-		streamer.stream.DataLength = object.DataLength()
-		streamer.stream.mu = &object.mu
+		streamer.Attribute = object.Attribute
+		streamer.Data = object.value
+		streamer.DataLength = object.DataLength()
+		streamer.mu = &object.mu
 
 	case *VariableList:
 		variable, err := object.GetSubObject(subIndex)
 		if err != nil {
 			return nil, err
 		}
-		streamer.stream.Attribute = variable.Attribute
-		streamer.stream.Data = variable.value
-		streamer.stream.DataLength = variable.DataLength()
-		streamer.stream.mu = &variable.mu
+		streamer.Attribute = variable.Attribute
+		streamer.Data = variable.value
+		streamer.DataLength = variable.DataLength()
+		streamer.mu = &variable.mu
 
 	default:
 		log.Errorf("[OD][x%x] error, unknown type : %+v", entry.Index, object)
@@ -173,9 +153,9 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 	if entry.extension == nil || origin {
 		streamer.reader = ReadEntryDefault
 		streamer.writer = WriteEntryDefault
-		streamer.stream.Object = nil
-		streamer.stream.DataOffset = 0
-		streamer.stream.Subindex = subIndex
+		streamer.Object = nil
+		streamer.DataOffset = 0
+		streamer.Subindex = subIndex
 		return streamer, nil
 	}
 	// Add extension reader / writer for object
@@ -189,9 +169,9 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 	} else {
 		streamer.writer = entry.extension.write
 	}
-	streamer.stream.Object = entry.extension.object
-	streamer.stream.DataOffset = 0
-	streamer.stream.Subindex = subIndex
+	streamer.Object = entry.extension.object
+	streamer.DataOffset = 0
+	streamer.Subindex = subIndex
 	return streamer, nil
 }
 

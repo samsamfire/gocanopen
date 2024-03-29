@@ -179,7 +179,7 @@ func (server *SDOServer) writeObjectDictionary(crcOperation uint, crcClient crc.
 		// Golang does not have null termination characters so nothing particular to do
 		// Stream data should be limited to the sent value
 
-		varSizeInOd := server.streamer.DataLength()
+		varSizeInOd := server.streamer.DataLength
 		if server.streamer.CheckHasAttribute(od.ATTRIBUTE_STR) &&
 			(varSizeInOd == 0 || server.sizeTransferred < varSizeInOd) &&
 			int(server.bufWriteOffset+2) <= len(server.buffer) {
@@ -191,9 +191,9 @@ func (server *SDOServer) writeObjectDictionary(crcOperation uint, crcClient crc.
 				server.bufWriteOffset++
 				server.sizeTransferred++
 			}
-			server.streamer.SetDataLength(server.sizeTransferred)
+			server.streamer.DataLength = server.sizeTransferred
 		} else if varSizeInOd == 0 {
-			server.streamer.SetDataLength(server.sizeTransferred)
+			server.streamer.DataLength = server.sizeTransferred
 		} else if server.sizeTransferred != varSizeInOd {
 			if server.sizeTransferred > varSizeInOd {
 				server.state = SDO_STATE_ABORT
@@ -255,7 +255,7 @@ func (server *SDOServer) readObjectDictionary(countMinimum uint32, calculateCRC 
 		// Stop sending at null termination if string
 		if countRd > 0 && server.streamer.CheckHasAttribute(od.ATTRIBUTE_STR) {
 			server.buffer[countRd+int(buffered)] = 0
-			countStr := int(server.streamer.DataLength())
+			countStr := int(server.streamer.DataLength)
 			for i, v := range server.buffer[buffered:] {
 				if v == 0 {
 					countStr = i
@@ -269,7 +269,7 @@ func (server *SDOServer) readObjectDictionary(countMinimum uint32, calculateCRC 
 				// String terminator found
 				countRd = countStr
 				err = nil
-				server.streamer.SetDataLength(server.sizeTransferred + uint32(countRd))
+				server.streamer.DataLength = server.sizeTransferred + uint32(countRd)
 			}
 		}
 
@@ -361,7 +361,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				abortCode = server.readObjectDictionary(7, false)
 				if abortCode == nil {
 					if server.finished {
-						server.sizeIndicated = server.streamer.DataLength()
+						server.sizeIndicated = server.streamer.DataLength
 						if server.sizeIndicated == 0 {
 							server.sizeIndicated = server.bufWriteOffset
 						} else if server.sizeIndicated != server.bufWriteOffset {
@@ -371,7 +371,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 						}
 					} else {
 						if !server.streamer.CheckHasAttribute(od.ATTRIBUTE_STR) {
-							server.sizeIndicated = server.streamer.DataLength()
+							server.sizeIndicated = server.streamer.DataLength
 						} else {
 							server.sizeIndicated = 0
 						}
@@ -387,7 +387,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				if (response.raw[0] & 0x02) != 0 {
 					log.Debugf("[SERVER][RX] DOWNLOAD EXPEDITED | x%x:x%x %v", server.index, server.subindex, response.raw)
 					// Expedited 4 bytes of data max
-					varSizeInOd := server.streamer.DataLength()
+					varSizeInOd := server.streamer.DataLength
 					dataSizeToWrite := 4
 					if (response.raw[0] & 0x01) != 0 {
 						dataSizeToWrite -= (int(response.raw[0]) >> 2) & 0x03
@@ -405,9 +405,9 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 						} else {
 							dataSizeToWrite += 2
 						}
-						server.streamer.SetDataLength(uint32(dataSizeToWrite))
+						server.streamer.DataLength = uint32(dataSizeToWrite)
 					} else if varSizeInOd == 0 {
-						server.streamer.SetDataLength(uint32(dataSizeToWrite))
+						server.streamer.DataLength = uint32(dataSizeToWrite)
 					} else if dataSizeToWrite != int(varSizeInOd) {
 						if dataSizeToWrite > int(varSizeInOd) {
 							abortCode = SDO_ABORT_DATA_LONG
@@ -431,7 +431,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					if (response.raw[0] & 0x01) != 0 {
 						log.Debugf("[SERVER][RX] DOWNLOAD SEGMENTED | x%x:x%x %v", server.index, server.subindex, response.raw)
 						// Segmented transfer check if size indicated
-						sizeInOd := server.streamer.DataLength()
+						sizeInOd := server.streamer.DataLength
 						server.sizeIndicated = binary.LittleEndian.Uint32(response.raw[4:])
 						// Check if size matches
 						if sizeInOd > 0 {
@@ -468,7 +468,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 					server.bufWriteOffset += uint32(count)
 					server.sizeTransferred += uint32(count)
 
-					if server.streamer.DataLength() > 0 && server.sizeTransferred > server.streamer.DataLength() {
+					if server.streamer.DataLength > 0 && server.sizeTransferred > server.streamer.DataLength {
 						abortCode = SDO_ABORT_DATA_LONG
 						server.state = SDO_STATE_ABORT
 						break
@@ -508,7 +508,7 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 				server.blockCRCEnabled = response.IsCRCEnabled()
 				// Check if size indicated
 				if (response.raw[0] & 0x02) != 0 {
-					sizeInOd := server.streamer.DataLength()
+					sizeInOd := server.streamer.DataLength
 					server.sizeIndicated = binary.LittleEndian.Uint32(response.raw[4:])
 					// Check if size matches
 					if sizeInOd > 0 {

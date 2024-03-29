@@ -144,10 +144,10 @@ func (entry *Entry) GetRawData(subIndex uint8, length uint16) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if int(streamer.stream.DataLength) != int(length) && length != 0 {
+	if int(streamer.DataLength) != int(length) && length != 0 {
 		return nil, ODR_TYPE_MISMATCH
 	}
-	return streamer.stream.Data, nil
+	return streamer.Data, nil
 }
 
 // Uint8 reads data inside of OD as if it were and UNSIGNED8.
@@ -248,7 +248,7 @@ func (entry *Entry) readSubExactly(subIndex uint8, b []byte, origin bool) error 
 	if err != nil {
 		return err
 	}
-	if int(streamer.stream.DataLength) != len(b) {
+	if int(streamer.DataLength) != len(b) {
 		return ODR_TYPE_MISMATCH
 	}
 	_, err = streamer.Read(b)
@@ -262,7 +262,7 @@ func (entry *Entry) writeSubExactly(subIndex uint8, b []byte, origin bool) error
 	if err != nil {
 		return err
 	}
-	if int(streamer.stream.DataLength) != len(b) {
+	if int(streamer.DataLength) != len(b) {
 		return ODR_TYPE_MISMATCH
 	}
 	_, err = streamer.Write(b)
