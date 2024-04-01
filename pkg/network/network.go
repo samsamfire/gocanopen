@@ -19,6 +19,8 @@ import (
 )
 
 var ErrIdConflict = errors.New("id already exists on network, this will create conflicts")
+var ErrNotFound = errors.New("node id not found on network, add or create it first")
+var ErrInvalidNodeType = errors.New("invalid node type")
 
 // A Network is the main object of this package
 // It should be created before doint anything else
@@ -269,7 +271,7 @@ func (network *Network) CreateLocalNode(nodeId uint8, odict any) (*n.LocalNode, 
 // or the remote node should be read to create PDO mapping
 // If remote nodes PDO mapping is static and known, use useLocal = true
 // otherwise, if PDO mapping is dynamic, use useLocal = false
-func (network *Network) AddRemoteNode(nodeId uint8, odict any, useLocal bool) (*n.RemoteNode, error) {
+func (network *Network) AddRemoteNode(nodeId uint8, odict any) (*n.RemoteNode, error) {
 	var odNode *od.ObjectDictionary
 	var err error
 	if nodeId < 1 || nodeId > 127 {
@@ -295,7 +297,7 @@ func (network *Network) AddRemoteNode(nodeId uint8, odict any, useLocal bool) (*
 		return nil, fmt.Errorf("expecting string or ObjectDictionary got : %T", odict)
 	}
 
-	node, err := n.NewRemoteNode(network.BusManager, odNode, nodeId, useLocal)
+	node, err := n.NewRemoteNode(network.BusManager, odNode, nodeId)
 	if err != nil {
 		return nil, err
 	}
@@ -317,6 +319,32 @@ func (network *Network) RemoveNode(nodeId uint8) {
 	node.SetExit(true)
 	node.Wg().Wait()
 	delete(network.nodes, nodeId)
+}
+
+// Get a remote node object in network, based on its id
+func (network *Network) Remote(nodeId uint8) (*n.RemoteNode, error) {
+	node, ok := network.nodes[nodeId]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	remote, ok := node.(*n.RemoteNode)
+	if !ok {
+		return nil, ErrInvalidNodeType
+	}
+	return remote, nil
+}
+
+// Get a local node object in network, based on its id
+func (network *Network) Local(nodeId uint8) (*n.LocalNode, error) {
+	node, ok := network.nodes[nodeId]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	remote, ok := node.(*n.LocalNode)
+	if !ok {
+		return nil, ErrInvalidNodeType
+	}
+	return remote, nil
 }
 
 // Configurator creates a [NodeConfigurator] object for a given id
