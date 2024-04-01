@@ -31,13 +31,29 @@ func CreateNetworkTest() *Network {
 	return network
 }
 
-func TestAddNodeLoadODFromSDO(t *testing.T) {
+func TestReadEDS(t *testing.T) {
 	network := CreateNetworkTest()
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
 	defer network.Disconnect()
-	od, err := network.ReadEDS(NODE_ID_TEST, nil)
-	assert.Nil(t, err)
-	_, err = network.AddRemoteNode(0x55, od)
-	assert.Nil(t, err)
+	t.Run("local node", func(t *testing.T) {
+		od, err := network.ReadEDS(NODE_ID_TEST, nil)
+		assert.Nil(t, err)
+		assert.NotNil(t, od.Index(0x1021))
+	})
+	t.Run("remote node", func(t *testing.T) {
+		od, err := network2.ReadEDS(NODE_ID_TEST, nil)
+		assert.Nil(t, err)
+		assert.NotNil(t, od.Index(0x1021))
+	})
+	t.Run("with invalid format handler", func(t *testing.T) {
+		local, _ := network.Local(NODE_ID_TEST)
+		// Replace EDS format with another value
+		_, err := local.GetOD().AddVariableType(0x1022, "Storage Format", od.UNSIGNED8, od.ATTRIBUTE_SDO_RW, "0x10")
+		assert.Nil(t, err)
+		_, err = network2.ReadEDS(NODE_ID_TEST, nil)
+		assert.Equal(t, ErrEdsFormat, err)
+	})
 }
 
 func TestRemoveNode(t *testing.T) {

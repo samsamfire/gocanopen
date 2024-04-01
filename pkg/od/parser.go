@@ -68,7 +68,7 @@ const (
 )
 
 // Parse an EDS file
-// file can be either a path or an *os.File
+// file can be either a path or an *os.File or []byte
 // Other file types could be supported in the future
 func Parse(file any, nodeId uint8) (*ObjectDictionary, error) {
 	od := NewOD()
