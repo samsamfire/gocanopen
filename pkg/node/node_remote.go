@@ -84,7 +84,6 @@ func NewRemoteNode(
 	bm *canopen.BusManager,
 	remoteOd *od.ObjectDictionary,
 	remoteNodeId uint8,
-	useLocal bool,
 ) (*RemoteNode, error) {
 	if bm == nil {
 		return nil, errors.New("need at least busManager")
@@ -123,12 +122,12 @@ func NewRemoteNode(
 		return nil, err
 	}
 	node.sync = sync
-	return node, node.InitPDOs(useLocal)
+	return node, nil
 }
 
 // Initialize PDOs according to either local OD mapping or remote OD mapping
-// A TPDO corresponds to an RPDO and vice-versa
-func (node *RemoteNode) InitPDOs(useLocal bool) error {
+// A TPDO from the distant node corresponds to an RPDO on this node and vice-versa
+func (node *RemoteNode) StartPDOs(useLocal bool) error {
 	node.mu.Lock()
 	defer node.mu.Unlock()
 	// Iterate over all the possible entries : there can be a maximum of 512 maps
@@ -227,7 +226,5 @@ func (node *RemoteNode) InitPDOs(useLocal bool) error {
 		}
 		node.tpdos = append(node.tpdos, tpdo)
 	}
-
 	return nil
-
 }

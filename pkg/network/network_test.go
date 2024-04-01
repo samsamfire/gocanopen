@@ -36,7 +36,7 @@ func TestAddNodeLoadODFromSDO(t *testing.T) {
 	defer network.Disconnect()
 	od, err := network.ReadEDS(NODE_ID_TEST, nil)
 	assert.Nil(t, err)
-	_, err = network.AddRemoteNode(0x55, od, true)
+	_, err = network.AddRemoteNode(0x55, od)
 	assert.Nil(t, err)
 }
 
