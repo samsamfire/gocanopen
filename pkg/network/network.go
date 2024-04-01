@@ -2,8 +2,10 @@
 package network
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -21,6 +23,9 @@ import (
 var ErrIdConflict = errors.New("id already exists on network, this will create conflicts")
 var ErrNotFound = errors.New("node id not found on network, add or create it first")
 var ErrInvalidNodeType = errors.New("invalid node type")
+var ErrEdsFormat = errors.New("invalid EDS format")
+
+const EDS_ASCII_FORMAT = 0
 
 // A Network is the main object of this package
 // It should be created before doint anything else
@@ -39,6 +44,18 @@ type ObjectDictionaryInformation struct {
 	nodeId  uint8
 	od      *od.ObjectDictionary
 	edsPath string
+}
+
+// EDSFormatHandler takes a formatType and a reader
+// to handle an EDS file stored as a proprietary format (zip, etc)
+type EDSFormatHandler func(nodeId uint8, formatType uint8, reader io.Reader) (*od.ObjectDictionary, error)
+
+// Default EDS format handler
+func edsAsciiFormatHandler(nodeId uint8, formatType uint8, reader io.Reader) (*od.ObjectDictionary, error) {
+	if formatType != EDS_ASCII_FORMAT {
+		return nil, ErrEdsFormat
+	}
+	return od.Parse(reader, nodeId)
 }
 
 // Create a new CAN bus with given interface
@@ -195,6 +212,30 @@ func (network *Network) GetOD(nodeId uint8) (*od.ObjectDictionary, error) {
 		return network.nodes[nodeId].GetOD(), nil
 	}
 	return nil, od.ODR_OD_MISSING
+}
+
+// Read object dictionary using object 1021 (EDS storage) of a remote node
+// Optional callback can be provided to perform manufacturer specific parsing
+// in case a custom format is used (format type != 0).
+// By default, regular uncompressed ASCII will be used (format type of 0).
+func (network *Network) ReadEDS(nodeId uint8, edsFormatHandler EDSFormatHandler) (*od.ObjectDictionary, error) {
+	// Read EDS and format in memory
+	rawEds, err := network.ReadAll(nodeId, 0x1021, 0)
+	if err != nil {
+		return nil, err
+	}
+	edsFormat, err := network.ReadUint8(nodeId, 0x1022, 0)
+	if err != nil {
+		// Don't fail if format is not specified, consider it to be ASCII
+		log.Warnf("[NETWORK][x%x] read EDS format failed, defaulting to ASCII", nodeId)
+		edsFormat = 0
+	}
+	// Use ascii format handler as default if non given
+	if edsFormatHandler == nil {
+		edsFormatHandler = edsAsciiFormatHandler
+	}
+	odReader := bytes.NewBuffer(rawEds)
+	return edsFormatHandler(nodeId, edsFormat, odReader)
 }
 
 // Command can be used to send an NMT command to a specific nodeId
