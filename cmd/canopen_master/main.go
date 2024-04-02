@@ -21,10 +21,12 @@ func main() {
 	}
 
 	// Add a remote node for master control
-	node, err := network.AddRemoteNode(DEFAULT_NODE_ID, "../../testdata/base.eds", true)
+	node, err := network.AddRemoteNode(DEFAULT_NODE_ID, "../../testdata/base.eds")
 	if err != nil {
 		panic(err)
 	}
+	// Start PDOs, without reading remote configuration (useLocal = true)
+	node.StartPDOs(true)
 	// Read values via SDO
 	val, err := node.ReadUint("UNSIGNED32 value", "")
 	if err == nil {

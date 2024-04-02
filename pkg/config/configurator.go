@@ -53,3 +53,44 @@ func (config *NodeConfigurator) ReadManufacturerSoftwareVersion() (string, error
 	}
 	return string(raw[:n]), nil
 }
+
+type Identity struct {
+	VendorId       uint32
+	ProductCode    uint32
+	RevisionNumber uint32
+	SerialNumber   uint32
+}
+
+// Read identity object (0x1018, mandatory)
+func (config *NodeConfigurator) ReadIdentity() (*Identity, error) {
+	// Vendor ID is the only mandatory field
+	vendorId, err := config.ReadUint32(config.nodeId, 0x1018, 1)
+	if err != nil {
+		return nil, err
+	}
+	productCode, _ := config.ReadUint32(config.nodeId, 0x1018, 2)
+	revisionNumber, _ := config.ReadUint32(config.nodeId, 0x1018, 3)
+	serialNumber, _ := config.ReadUint32(config.nodeId, 0x1018, 4)
+	return &Identity{
+		VendorId:       vendorId,
+		ProductCode:    productCode,
+		RevisionNumber: revisionNumber,
+		SerialNumber:   serialNumber,
+	}, nil
+
+}
+
+type ManufacturerInformation struct {
+	ManufacturerDeviceName      string
+	ManufacturerHardwareVersion string
+	ManufacturerSoftwareVersion string
+}
+
+// Read manufacturer objects (0x1008,0x1009,0x100A, these are all optional)
+func (config *NodeConfigurator) ReadManufacturerInformation() ManufacturerInformation {
+	info := ManufacturerInformation{}
+	info.ManufacturerDeviceName, _ = config.ReadManufacturerDeviceName()
+	info.ManufacturerHardwareVersion, _ = config.ReadManufacturerHardwareVersion()
+	info.ManufacturerSoftwareVersion, _ = config.ReadManufacturerSoftwareVersion()
+	return info
+}

@@ -263,3 +263,26 @@ func TestTimeSynchronization(t *testing.T) {
 		assert.InDelta(t, 0, timeDiff.Milliseconds(), 5)
 	}
 }
+
+func TestScan(t *testing.T) {
+	network := CreateNetworkEmptyTest()
+	network2 := CreateNetworkEmptyTest()
+	defer network.Disconnect()
+	defer network2.Disconnect()
+	scan, err := network.Scan(100)
+	assert.Len(t, scan, 0)
+	assert.Nil(t, err)
+	// Create some local nodes
+	for i := uint8(1); i <= 10; i++ {
+		_, err := network.CreateLocalNode(i, od.Default())
+		assert.Nil(t, err)
+	}
+	// Scan from local
+	scan, err = network.Scan(100)
+	assert.Len(t, scan, 10)
+	assert.Nil(t, err)
+	// Scan from remote
+	scan, err = network2.Scan(100)
+	assert.Len(t, scan, 10)
+	assert.Nil(t, err)
+}

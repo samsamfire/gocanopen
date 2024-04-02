@@ -24,8 +24,11 @@ var ErrIdConflict = errors.New("id already exists on network, this will create c
 var ErrNotFound = errors.New("node id not found on network, add or create it first")
 var ErrInvalidNodeType = errors.New("invalid node type")
 var ErrEdsFormat = errors.New("invalid EDS format")
+var ErrNoNodesFound = errors.New("no nodes found on network when performing SDO scan")
 
-const EDS_ASCII_FORMAT = 0
+const edsAsciiFormat = 0
+const nodeIdMax = uint8(126)
+const nodeIdMin = uint8(1)
 
 // A Network is the main object of this package
 // It should be created before doint anything else
@@ -52,7 +55,7 @@ type EDSFormatHandler func(nodeId uint8, formatType uint8, reader io.Reader) (*o
 
 // Default EDS format handler
 func edsAsciiFormatHandler(nodeId uint8, formatType uint8, reader io.Reader) (*od.ObjectDictionary, error) {
-	if formatType != EDS_ASCII_FORMAT {
+	if formatType != edsAsciiFormat {
 		return nil, ErrEdsFormat
 	}
 	return od.Parse(reader, nodeId)
@@ -392,4 +395,56 @@ func (network *Network) Local(nodeId uint8) (*n.LocalNode, error) {
 // using the networks internal sdo client
 func (network *Network) Configurator(nodeId uint8) *config.NodeConfigurator {
 	return config.NewNodeConfigurator(nodeId, network.SDOClient)
+}
+
+// NodeInformation contains manufacturer information and identity object
+type NodeInformation struct {
+	config.ManufacturerInformation
+	config.Identity
+}
+
+// Scan network for nodes via SDO, and return map of found node ids and respective
+// node information. Scanning is done in parallel and requires that the scanned
+// nodes have an SDO server and that the identity object is implemented (0x1018) which
+// is mandatory per CiA standard.
+func (network *Network) Scan(timeoutMs uint32) (map[uint8]NodeInformation, error) {
+	// Create multiple sdo clients to speed up discovery
+	clients := make([]*sdo.SDOClient, 0)
+	for i := nodeIdMin; i <= nodeIdMax; i++ {
+		client, err := sdo.NewSDOClient(network.BusManager, nil, i, timeoutMs, nil)
+		if err != nil {
+			return nil, err
+		}
+		clients = append(clients, client)
+	}
+	wg := sync.WaitGroup{}
+	mu := sync.Mutex{}
+	scan := make(map[uint8]NodeInformation)
+	wg.Add(len(clients))
+	// Scanning is done in parallel to speed up discovery
+	// As the limiting factor is the SDO round-trip time which
+	// can take up to timeoutMs to complete
+	for i, client := range clients {
+		nodeId := uint8(i + 1)
+		go func(client *sdo.SDOClient) {
+			defer wg.Done()
+			config := config.NewNodeConfigurator(nodeId, client)
+			identity, err := config.ReadIdentity()
+			if err != nil {
+				// Failure to respond to ReadIdentity means node doesn't exist
+				// Or that it does not implement a mandatory object so it will
+				// be considered as not found
+				return
+			}
+			manufacturerInfo := config.ReadManufacturerInformation()
+			mu.Lock()
+			defer mu.Unlock()
+			scan[nodeId] = NodeInformation{
+				ManufacturerInformation: manufacturerInfo,
+				Identity:                *identity,
+			}
+		}(client)
+	}
+	wg.Wait()
+	return scan, nil
 }
