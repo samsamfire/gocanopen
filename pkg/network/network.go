@@ -355,14 +355,15 @@ func (network *Network) AddRemoteNode(nodeId uint8, odict any) (*n.RemoteNode, e
 
 // RemoveNode gracefully exits any running go routine for this node
 // It also removes any object associated with the node, including OD
-func (network *Network) RemoveNode(nodeId uint8) {
+func (network *Network) RemoveNode(nodeId uint8) error {
 	node, ok := network.nodes[nodeId]
 	if !ok {
-		return
+		return ErrNotFound
 	}
 	node.SetExit(true)
 	node.Wg().Wait()
 	delete(network.nodes, nodeId)
+	return nil
 }
 
 // Get a remote node object in network, based on its id

@@ -56,8 +56,37 @@ func TestReadEDS(t *testing.T) {
 	})
 }
 
-func TestRemoveNode(t *testing.T) {
+func TestAddRemoveNodes(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
-	network.RemoveNode(NODE_ID_TEST)
+	t.Run("remove node", func(t *testing.T) {
+		err := network.RemoveNode(0x12)
+		assert.Equal(t, ErrNotFound, err)
+		err = network.RemoveNode(NODE_ID_TEST)
+		assert.Nil(t, err)
+		_, err = network.CreateLocalNode(NODE_ID_TEST, od.Default())
+		assert.Len(t, network.nodes, 1)
+		assert.Nil(t, err)
+		err = network.RemoveNode(NODE_ID_TEST)
+		assert.Nil(t, err)
+		assert.Len(t, network.nodes, 0)
+	})
+	t.Run("add node", func(t *testing.T) {
+		// Test creating multiple nodes with same id
+		assert.Len(t, network.nodes, 0)
+		_, err := network.CreateLocalNode(NODE_ID_TEST, od.Default())
+		assert.Nil(t, err)
+		_, err = network.CreateLocalNode(NODE_ID_TEST, od.Default())
+		assert.Equal(t, ErrIdConflict, err)
+		// Test adding multiple nodes with same id
+		_, err = network.AddRemoteNode(NODE_ID_TEST, od.Default())
+		assert.NotEmpty(t, ErrIdConflict, err)
+	})
+
 }
+
+// func TestRemoveNode(t *testing.T) {
+// 	network := CreateNetworkTest()
+// 	defer network.Disconnect()
+// 	network.RemoveNode(NODE_ID_TEST)
+// }
