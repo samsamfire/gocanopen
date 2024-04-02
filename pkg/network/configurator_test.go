@@ -195,4 +195,13 @@ func TestGeneralObjects(t *testing.T) {
 	name, err = conf.ReadManufacturerSoftwareVersion()
 	assert.Nil(t, err)
 	assert.Equal(t, "v1.1.2r", name)
+	identity, err := conf.ReadIdentity()
+	assert.Nil(t, err)
+	assert.EqualValues(t, 0, identity.VendorId)
+	manufInfo := conf.ReadManufacturerInformation()
+	assert.Equal(t, config.ManufacturerInformation{
+		ManufacturerDeviceName:      "DUT",
+		ManufacturerHardwareVersion: "v400",
+		ManufacturerSoftwareVersion: "v1.1.2r",
+	}, manufInfo)
 }
