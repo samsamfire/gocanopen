@@ -103,7 +103,7 @@ func (gw *BaseGateway) ReadSDO(nodeId uint8, index uint16, subindex uint8) (int,
 
 // Write SDO
 func (gw *BaseGateway) WriteSDO(nodeId uint8, index uint16, subindex uint8, value string, datatype uint8) error {
-	encodedValue, err := od.Encode(value, datatype, 0)
+	encodedValue, err := od.EncodeFromString(value, datatype, 0)
 	if err != nil {
 		return sdo.SDO_ABORT_TYPE_MISMATCH
 	}

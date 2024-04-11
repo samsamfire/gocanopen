@@ -250,7 +250,7 @@ func (rec *VariableList) AddSubObject(
 	attribute uint8,
 	value string,
 ) (*Variable, error) {
-	encoded, err := Encode(value, datatype, 0)
+	encoded, err := EncodeFromString(value, datatype, 0)
 	encodedCopy := make([]byte, len(encoded))
 	copy(encodedCopy, encoded)
 	if err != nil {
