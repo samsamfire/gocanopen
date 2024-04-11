@@ -149,12 +149,7 @@ func (node *BaseNode) Write(index any, subindex any, value any) error {
 	if err != nil {
 		return err
 	}
-
-	err = node.SDOClient.WriteRaw(node.id, entry.Index, odVar.SubIndex, value, false)
-	if err != nil {
-		return err
-	}
-	return nil
+	return node.SDOClient.WriteRaw(node.id, entry.Index, odVar.SubIndex, value, false)
 }
 
 // Write an entry to a remote node

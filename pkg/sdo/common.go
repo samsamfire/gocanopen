@@ -2,12 +2,15 @@ package sdo
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/samsamfire/gocanopen/internal/crc"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	log "github.com/sirupsen/logrus"
 )
+
+var ErrWrongClientReturnValue = errors.New("wrong client return value")
 
 // Common defines to both SDO server and SDO client
 type SDOAbortCode uint32
