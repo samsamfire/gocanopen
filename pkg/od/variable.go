@@ -86,7 +86,7 @@ func NewVariableFromSection(
 		} else {
 			nodeId = 0
 		}
-		variable.valueDefault, err = Encode(defaultValueStr, variable.DataType, nodeId)
+		variable.valueDefault, err = EncodeFromString(defaultValueStr, variable.DataType, nodeId)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse DefaultValue for %x : %x, because %v", index, subindex, err)
 		}
@@ -105,7 +105,7 @@ func NewVariable(
 	attribute uint8,
 	value string,
 ) (*Variable, error) {
-	encoded, err := Encode(value, datatype, 0)
+	encoded, err := EncodeFromString(value, datatype, 0)
 	encodedCopy := make([]byte, len(encoded))
 	copy(encodedCopy, encoded)
 	if err != nil {
@@ -122,9 +122,9 @@ func NewVariable(
 	return variable, nil
 }
 
-// Encode value from EDS into bytes respecting canopen datatype
+// EncodeFromString value from EDS into bytes respecting canopen datatype
 // nodeId is used as an offset
-func Encode(variable string, datatype uint8, nodeId uint8) ([]byte, error) {
+func EncodeFromString(variable string, datatype uint8, nodeId uint8) ([]byte, error) {
 
 	var data []byte
 	var err error
@@ -170,6 +170,48 @@ func Encode(variable string, datatype uint8, nodeId uint8) ([]byte, error) {
 	}
 
 	return data, nil
+}
+
+// Encode from generic type
+func EncodeFromGeneric(data any) ([]byte, error) {
+	var encoded []byte
+	switch val := data.(type) {
+	case uint8:
+		encoded = []byte{val}
+	case int8:
+		encoded = []byte{byte(val)}
+	case uint16:
+		encoded = make([]byte, 2)
+		binary.LittleEndian.PutUint16(encoded, val)
+	case int16:
+		encoded = make([]byte, 2)
+		binary.LittleEndian.PutUint16(encoded, uint16(val))
+	case uint32:
+		encoded = make([]byte, 4)
+		binary.LittleEndian.PutUint32(encoded, val)
+	case int32:
+		encoded = make([]byte, 4)
+		binary.LittleEndian.PutUint32(encoded, uint32(val))
+	case uint64:
+		encoded = make([]byte, 8)
+		binary.LittleEndian.PutUint64(encoded, val)
+	case int64:
+		encoded = make([]byte, 8)
+		binary.LittleEndian.PutUint64(encoded, uint64(val))
+	case string:
+		encoded = []byte(val)
+	case float32:
+		encoded = make([]byte, 4)
+		binary.LittleEndian.PutUint32(encoded, math.Float32bits(val))
+	case float64:
+		encoded = make([]byte, 8)
+		binary.LittleEndian.PutUint64(encoded, math.Float64bits(val))
+	case []byte:
+		encoded = val
+	default:
+		return nil, ODR_TYPE_MISMATCH
+	}
+	return encoded, nil
 }
 
 // Helper function for checking consistency between size and datatype
