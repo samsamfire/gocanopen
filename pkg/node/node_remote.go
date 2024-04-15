@@ -154,7 +154,7 @@ func (node *RemoteNode) StartPDOs(useLocal bool) error {
 		pdoConfigurations := make([]config.PDOConfigurationParameter, 0)
 		for pdoNb := uint16(1); pdoNb <= 512; pdoNb++ {
 			conf, err := configurator.ReadConfiguration(pdoNb)
-			if err != nil && err == sdo.SDO_ABORT_NOT_EXIST {
+			if err != nil && err == sdo.AbortNotExist {
 				log.Warnf("[NODE][PDO] no more PDO after PDO nb %v", pdoNb-1)
 				break
 			} else if err != nil {

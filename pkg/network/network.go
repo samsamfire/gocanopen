@@ -292,8 +292,8 @@ func (network *Network) CreateLocalNode(nodeId uint8, odict any) (*n.LocalNode, 
 		nodeId,
 		nmt.StartupToOperational,
 		500,
-		sdo.SDO_CLIENT_TIMEOUT, // Not changeable currently
-		sdo.SDO_SERVER_TIMEOUT, // Not changeable currently
+		sdo.DefaultClientTimeout, // Not changeable currently
+		sdo.DefaultServerTimeout, // Not changeable currently
 		true,
 		nil,
 	)
