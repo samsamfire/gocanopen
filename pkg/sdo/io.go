@@ -27,11 +27,12 @@ func (client *SDOClient) newRawReadWriter(nodeId uint8, index uint16, subindex u
 		index:        index,
 		subindex:     subindex,
 		blockEnabled: blockEnabled,
+		size:         size,
 	}
 	// Setup client for a new transfer
 	err := client.setupServer(
-		uint32(CLIENT_ID)+uint32(nodeId),
-		uint32(SERVER_ID)+uint32(nodeId),
+		uint32(ClientBaseId)+uint32(nodeId),
+		uint32(ServerBaseId)+uint32(nodeId),
 		nodeId,
 	)
 	return rw, err
@@ -65,7 +66,7 @@ func (client *SDOClient) NewRawWriter(nodeId uint8, index uint16, subindex uint8
 		return nil, err
 	}
 	// Setup client for writing
-	err = client.downloadSetup(index, subindex, size, true)
+	err = client.downloadSetup(index, subindex, size, blockEnabled)
 	return rw, err
 }
 
@@ -103,7 +104,11 @@ func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, dat
 	if err != nil {
 		return 0, err
 	}
-	return r.Read(data)
+	n, err := r.Read(data)
+	if err != nil && err != io.EOF {
+		return n, err
+	}
+	return n, nil
 }
 
 // Read everything from a given index/subindex from node and return all bytes
@@ -135,8 +140,8 @@ func (rw *sdoRawReadWriter) Write(b []byte) (n int, err error) {
 	for {
 		ret, err := client.downloadMain(
 			defaultClientProcessPeriodUs,
+			false,
 			bufferPartial,
-			true,
 			&nUint32,
 			nil,
 			false,

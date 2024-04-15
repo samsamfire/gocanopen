@@ -33,10 +33,10 @@ func TestSyncConfigurator(t *testing.T) {
 	commPeriod, _ := conf.ReadCommunicationPeriod()
 	assert.EqualValues(t, 100_100, commPeriod)
 	err = conf.WriteCounterOverflow(100)
-	assert.Equal(t, sdo.SDO_ABORT_DATA_DEV_STATE, err)
+	assert.Equal(t, sdo.AbortDataDeviceState, err)
 	conf.WriteCommunicationPeriod(0)
 	err = conf.WriteCounterOverflow(250)
-	assert.Equal(t, sdo.SDO_ABORT_INVALID_VALUE, err)
+	assert.Equal(t, sdo.AbortInvalidValue, err)
 	err = conf.WriteCounterOverflow(10)
 	assert.Nil(t, err)
 	counterOverflow, err := conf.ReadCounterOverflow()
@@ -139,7 +139,7 @@ func TestHBConfigurator(t *testing.T) {
 	// Test duplicate entry
 	config.WriteMonitoredNode(2, 0x25, 100)
 	err := config.WriteMonitoredNode(3, 0x25, 100)
-	assert.Equal(t, err, sdo.SDO_ABORT_PRAM_INCOMPAT)
+	assert.Equal(t, err, sdo.AbortParamIncompat)
 	network.CreateLocalNode(0x25, od.Default())
 	max, _ := config.ReadMaxMonitorable()
 	// Test that we receive at least one emergency
