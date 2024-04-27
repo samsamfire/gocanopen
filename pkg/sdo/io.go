@@ -81,10 +81,10 @@ func (rw *sdoRawReadWriter) Read(b []byte) (n int, err error) {
 		switch {
 		case err != nil:
 			return n, err
-		case ret == SDO_UPLOAD_DATA_FULL:
+		case ret == uploadDataFull:
 			// Fifo needs emptying
 			n += client.fifo.Read(b[n:], nil)
-		case ret == SDO_SUCCESS:
+		case ret == success:
 			// Read finished successfully, empty fifo one last time and return EOF
 			n += client.fifo.Read(b[n:], nil)
 			return n, io.EOF
@@ -149,13 +149,13 @@ func (rw *sdoRawReadWriter) Write(b []byte) (n int, err error) {
 		switch {
 		case err != nil:
 			return int(nUint32), err
-		case ret == SDO_BLOCK_DOWNLOAD_IN_PROGRESS && bufferPartial:
+		case ret == blockDownloadInProgress && bufferPartial:
 			// Fill buffer whilst block download in progress
 			n += client.fifo.Write(b[n:], nil)
 			if n == len(b) {
 				bufferPartial = false
 			}
-		case ret == SDO_SUCCESS:
+		case ret == success:
 			return int(nUint32), err
 		}
 		time.Sleep(time.Duration(defaultClientProcessPeriodUs) * time.Microsecond)
@@ -170,7 +170,7 @@ func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, da
 	if err != nil {
 		return err
 	}
-	w, err := client.NewRawWriter(nodeId, index, subindex, true, uint32(len(encoded))) // size not specified
+	w, err := client.NewRawWriter(nodeId, index, subindex, true, uint32(len(encoded)))
 	if err != nil {
 		return err
 	}

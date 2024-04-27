@@ -121,7 +121,7 @@ func (network *Network) Connect(args ...any) error {
 		return err
 	}
 	// Add SDO client to network by default
-	client, err := sdo.NewSDOClient(network.BusManager, nil, 0, sdo.DEFAULT_SDO_CLIENT_TIMEOUT_MS, nil)
+	client, err := sdo.NewSDOClient(network.BusManager, nil, 0, sdo.ClientTimeoutMs, nil)
 	network.SDOClient = client
 	return err
 }

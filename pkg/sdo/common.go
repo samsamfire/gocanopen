@@ -11,10 +11,9 @@ import (
 )
 
 var ErrWrongClientReturnValue = errors.New("wrong client return value")
+var ErrInvalidArgs = errors.New("error in arguments")
 
-// Common defines to both SDO server and SDO client
-type SDOAbortCode uint32
-type SDOState uint8
+type internalState uint8
 
 const (
 	DefaultClientTimeout = 1000
@@ -24,68 +23,68 @@ const (
 )
 
 const (
-	stateIdle                   SDOState = 0x00
-	stateAbort                  SDOState = 0x01
-	stateDownloadLocalTransfer  SDOState = 0x10
-	stateDownloadInitiateReq    SDOState = 0x11
-	stateDownloadInitiateRsp    SDOState = 0x12
-	stateDownloadSegmentReq     SDOState = 0x13
-	stateDownloadSegmentRsp     SDOState = 0x14
-	stateUploadLocalTransfer    SDOState = 0x20
-	stateUploadInitiateReq      SDOState = 0x21
-	stateUploadInitiateRsp      SDOState = 0x22
-	stateUploadSegmentReq       SDOState = 0x23
-	stateUploadSegmentRsp       SDOState = 0x24
-	stateDownloadBlkInitiateReq SDOState = 0x51
-	stateDownloadBlkInitiateRsp SDOState = 0x52
-	stateDownloadBlkSubblockReq SDOState = 0x53
-	stateDownloadBlkSubblockRsp SDOState = 0x54
-	stateDownloadBlkEndReq      SDOState = 0x55
-	stateDownloadBlkEndRsp      SDOState = 0x56
-	stateUploadBlkInitiateReq   SDOState = 0x61
-	stateUploadBlkInitiateRsp   SDOState = 0x62
-	stateUploadBlkInitiateReq2  SDOState = 0x63
-	stateUploadBlkSubblockSreq  SDOState = 0x64
-	stateUploadBlkSubblockCrsp  SDOState = 0x65
-	stateUploadBlkEndSreq       SDOState = 0x66
-	stateUploadBlkEndCrsp       SDOState = 0x67
+	stateIdle                   internalState = 0x00
+	stateAbort                  internalState = 0x01
+	stateDownloadLocalTransfer  internalState = 0x10
+	stateDownloadInitiateReq    internalState = 0x11
+	stateDownloadInitiateRsp    internalState = 0x12
+	stateDownloadSegmentReq     internalState = 0x13
+	stateDownloadSegmentRsp     internalState = 0x14
+	stateUploadLocalTransfer    internalState = 0x20
+	stateUploadInitiateReq      internalState = 0x21
+	stateUploadInitiateRsp      internalState = 0x22
+	stateUploadSegmentReq       internalState = 0x23
+	stateUploadSegmentRsp       internalState = 0x24
+	stateDownloadBlkInitiateReq internalState = 0x51
+	stateDownloadBlkInitiateRsp internalState = 0x52
+	stateDownloadBlkSubblockReq internalState = 0x53
+	stateDownloadBlkSubblockRsp internalState = 0x54
+	stateDownloadBlkEndReq      internalState = 0x55
+	stateDownloadBlkEndRsp      internalState = 0x56
+	stateUploadBlkInitiateReq   internalState = 0x61
+	stateUploadBlkInitiateRsp   internalState = 0x62
+	stateUploadBlkInitiateReq2  internalState = 0x63
+	stateUploadBlkSubblockSreq  internalState = 0x64
+	stateUploadBlkSubblockCrsp  internalState = 0x65
+	stateUploadBlkEndSreq       internalState = 0x66
+	stateUploadBlkEndCrsp       internalState = 0x67
 )
 
 const (
-	AbortToggleBit         SDOAbortCode = 0x05030000
-	AbortTimeout           SDOAbortCode = 0x05040000
-	AbortCmd               SDOAbortCode = 0x05040001
-	AbortBlockSize         SDOAbortCode = 0x05040002
-	AbortSeqNum            SDOAbortCode = 0x05040003
-	AbortCRC               SDOAbortCode = 0x05040004
-	AbortOutOfMem          SDOAbortCode = 0x05040005
-	AbortUnsupportedAccess SDOAbortCode = 0x06010000
-	AbortWriteOnly         SDOAbortCode = 0x06010001
-	AbortReadOnly          SDOAbortCode = 0x06010002
-	AbortNotExist          SDOAbortCode = 0x06020000
-	AbortNoMap             SDOAbortCode = 0x06040041
-	AbortMapLen            SDOAbortCode = 0x06040042
-	AbortParamIncompat     SDOAbortCode = 0x06040043
-	AbortDeviceIncompat    SDOAbortCode = 0x06040047
-	AbortHardware          SDOAbortCode = 0x06060000
-	AbortTypeMismatch      SDOAbortCode = 0x06070010
-	AbortDataLong          SDOAbortCode = 0x06070012
-	AbortDataShort         SDOAbortCode = 0x06070013
-	AbortSubUnknown        SDOAbortCode = 0x06090011
-	AbortInvalidValue      SDOAbortCode = 0x06090030
-	AbortValueHigh         SDOAbortCode = 0x06090031
-	AbortValueLow          SDOAbortCode = 0x06090032
-	AbortMaxLessMin        SDOAbortCode = 0x06090036
-	AbortNoRessource       SDOAbortCode = 0x060A0023
-	AbortGeneral           SDOAbortCode = 0x08000000
-	AbortDataTransfer      SDOAbortCode = 0x08000020
-	AbortDataLocalControl  SDOAbortCode = 0x08000021
-	AbortDataDeviceState   SDOAbortCode = 0x08000022
-	AbortDataOD            SDOAbortCode = 0x08000023
-	AbortNoData            SDOAbortCode = 0x08000024
+	AbortToggleBit         Abort = 0x05030000
+	AbortTimeout           Abort = 0x05040000
+	AbortCmd               Abort = 0x05040001
+	AbortBlockSize         Abort = 0x05040002
+	AbortSeqNum            Abort = 0x05040003
+	AbortCRC               Abort = 0x05040004
+	AbortOutOfMem          Abort = 0x05040005
+	AbortUnsupportedAccess Abort = 0x06010000
+	AbortWriteOnly         Abort = 0x06010001
+	AbortReadOnly          Abort = 0x06010002
+	AbortNotExist          Abort = 0x06020000
+	AbortNoMap             Abort = 0x06040041
+	AbortMapLen            Abort = 0x06040042
+	AbortParamIncompat     Abort = 0x06040043
+	AbortDeviceIncompat    Abort = 0x06040047
+	AbortHardware          Abort = 0x06060000
+	AbortTypeMismatch      Abort = 0x06070010
+	AbortDataLong          Abort = 0x06070012
+	AbortDataShort         Abort = 0x06070013
+	AbortSubUnknown        Abort = 0x06090011
+	AbortInvalidValue      Abort = 0x06090030
+	AbortValueHigh         Abort = 0x06090031
+	AbortValueLow          Abort = 0x06090032
+	AbortMaxLessMin        Abort = 0x06090036
+	AbortNoRessource       Abort = 0x060A0023
+	AbortGeneral           Abort = 0x08000000
+	AbortDataTransfer      Abort = 0x08000020
+	AbortDataLocalControl  Abort = 0x08000021
+	AbortDataDeviceState   Abort = 0x08000022
+	AbortDataOD            Abort = 0x08000023
+	AbortNoData            Abort = 0x08000024
 )
 
-var AbortCodeDescriptionMap = map[SDOAbortCode]string{
+var AbortCodeDescriptionMap = map[Abort]string{
 	AbortToggleBit:         "Toggle bit not altered",
 	AbortTimeout:           "SDO protocol timed out",
 	AbortCmd:               "Command specifier not valid or unknown",
@@ -119,7 +118,7 @@ var AbortCodeDescriptionMap = map[SDOAbortCode]string{
 	AbortNoData:            "No data available",
 }
 
-var OdToAbortMap = map[od.ODR]SDOAbortCode{
+var OdToAbortMap = map[od.ODR]Abort{
 	od.ODR_OUT_OF_MEM:     AbortOutOfMem,
 	od.ODR_UNSUPP_ACCESS:  AbortUnsupportedAccess,
 	od.ODR_WRITEONLY:      AbortWriteOnly,
@@ -147,21 +146,23 @@ var OdToAbortMap = map[od.ODR]SDOAbortCode{
 	od.ODR_NO_DATA:        AbortNoData,
 }
 
+type Abort uint32
+
 // Get the associated abort code, if the code is not present in map, return ODR_DEV_INCOMPAT
-func ConvertOdToSdoAbort(oderr od.ODR) SDOAbortCode {
+func ConvertOdToSdoAbort(oderr od.ODR) Abort {
 	abort_code, ok := OdToAbortMap[oderr]
 	if ok {
-		return SDOAbortCode(abort_code)
+		return Abort(abort_code)
 	} else {
 		return OdToAbortMap[od.ODR_DEV_INCOMPAT]
 	}
 }
 
-func (abort SDOAbortCode) Error() string {
+func (abort Abort) Error() string {
 	return fmt.Sprintf("x%x : %s", uint32(abort), abort.Description())
 }
 
-func (abort SDOAbortCode) Description() string {
+func (abort Abort) Description() string {
 	description, ok := AbortCodeDescriptionMap[abort]
 	if ok {
 		return description
@@ -175,7 +176,7 @@ type SDOResponse struct {
 
 // Checks whether response command is an expected value in the present
 // state
-func (response *SDOResponse) isResponseCommandValid(state SDOState) bool {
+func (response *SDOResponse) isResponseCommandValid(state internalState) bool {
 
 	switch state {
 	case stateDownloadInitiateRsp:
@@ -229,8 +230,8 @@ func (response *SDOResponse) IsAbort() bool {
 	return response.raw[0] == 0x80
 }
 
-func (response *SDOResponse) GetAbortCode() SDOAbortCode {
-	return SDOAbortCode(binary.LittleEndian.Uint32(response.raw[4:]))
+func (response *SDOResponse) GetAbortCode() Abort {
+	return Abort(binary.LittleEndian.Uint32(response.raw[4:]))
 }
 
 func (response *SDOResponse) GetIndex() uint16 {

@@ -86,7 +86,7 @@ func (pdo *PDOCommon) configureMap(mapParam uint32, mapIndex uint32, isRPDO bool
 
 	// Check correct attribute, length, and alignment
 	switch {
-	case !streamerCopy.CheckHasAttribute(pdo.attribute()):
+	case !streamerCopy.HasAttribute(pdo.attribute()):
 		log.Warnf("[%v] mapping failed [x%x|x%x] : attribute error", pdo.Type(), index, subIndex)
 		return od.ODR_NO_MAP
 	case (mappedLengthBits & 0x07) != 0:
