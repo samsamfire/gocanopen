@@ -90,11 +90,11 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 		for i := range consumer.monitoredNodes {
 			monitoredNode := consumer.monitoredNodes[i]
 			monitoredNode.mu.Lock()
-			defer monitoredNode.mu.Unlock()
 
 			timeDifferenceUsCopy := timeDifferenceUs
 			// If unconfigured skip to next iteration
 			if monitoredNode.hbState == HB_UNCONFIGURED {
+				monitoredNode.mu.Unlock()
 				continue
 			}
 			if monitoredNode.rxNew {
@@ -138,13 +138,13 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 			if monitoredNode.nmtState != monitoredNode.nmtStatePrev {
 				monitoredNode.nmtStatePrev = monitoredNode.nmtState
 			}
+			monitoredNode.mu.Unlock()
 		}
 	} else if nmtIsPreOrOperational || consumer.nmtIsPreOrOperationalPrev {
 		// pre or operational state changed, clear vars
 		for i := range consumer.monitoredNodes {
 			monitoredNode := consumer.monitoredNodes[i]
 			monitoredNode.mu.Lock()
-			defer monitoredNode.mu.Unlock()
 
 			monitoredNode.nmtState = nmt.NMT_UNKNOWN
 			monitoredNode.nmtStatePrev = nmt.NMT_UNKNOWN
@@ -152,6 +152,7 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 			if monitoredNode.hbState != HB_UNCONFIGURED {
 				monitoredNode.hbState = HB_UNKNOWN
 			}
+			monitoredNode.mu.Unlock()
 		}
 		allMonitoredActiveCurrent = false
 		allMonitoredOperationalCurrent = false
