@@ -5,6 +5,9 @@ package main
 import (
 	"os"
 
+	"net/http"
+	_ "net/http/pprof"
+
 	"github.com/samsamfire/gocanopen/pkg/network"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	log "github.com/sirupsen/logrus"
@@ -21,6 +24,10 @@ const (
 
 func main() {
 	log.SetLevel(log.DebugLevel)
+
+	go func() {
+		http.ListenAndServe("localhost:6060", nil)
+	}()
 
 	network := network.NewNetwork(nil)
 	err := network.Connect("virtualcan", "127.0.0.1:18889", 500000)

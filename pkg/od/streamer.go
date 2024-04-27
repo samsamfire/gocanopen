@@ -91,9 +91,8 @@ func (s *Streamer) SetReader(reader StreamReader) {
 	s.reader = reader
 }
 
-// Check if streamer has an attribute
-// Returns True if has the attribute
-func (s *Streamer) CheckHasAttribute(attribute uint8) bool {
+// Returns True if has the specific OD attribute
+func (s *Streamer) HasAttribute(attribute uint8) bool {
 	return (s.Attribute & attribute) != 0
 }
 
