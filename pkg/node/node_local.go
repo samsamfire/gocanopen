@@ -37,7 +37,7 @@ func (node *LocalNode) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerN
 	if node.NodeIdUnconfigured {
 		return
 	}
-	nmtIsOperational := node.NMT.GetInternalState() == nmt.NMT_OPERATIONAL
+	nmtIsOperational := node.NMT.GetInternalState() == nmt.StateOperational
 	for _, tpdo := range node.TPDOs {
 		tpdo.Process(timeDifferenceUs, timerNextUs, nmtIsOperational, syncWas)
 	}
@@ -47,7 +47,7 @@ func (node *LocalNode) ProcessRPDO(syncWas bool, timeDifferenceUs uint32, timerN
 	if node.NodeIdUnconfigured {
 		return
 	}
-	nmtIsOperational := node.NMT.GetInternalState() == nmt.NMT_OPERATIONAL
+	nmtIsOperational := node.NMT.GetInternalState() == nmt.StateOperational
 	for _, rpdo := range node.RPDOs {
 		rpdo.Process(timeDifferenceUs, timerNextUs, nmtIsOperational, syncWas)
 	}
@@ -59,7 +59,7 @@ func (node *LocalNode) ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32)
 	if !node.NodeIdUnconfigured && s != nil {
 
 		nmtState := node.NMT.GetInternalState()
-		nmtIsPreOrOperational := nmtState == nmt.NMT_PRE_OPERATIONAL || nmtState == nmt.NMT_OPERATIONAL
+		nmtIsPreOrOperational := nmtState == nmt.StatePreOperational || nmtState == nmt.StateOperational
 		syncProcess := s.Process(nmtIsPreOrOperational, timeDifferenceUs, timerNextUs)
 
 		switch syncProcess {
@@ -77,13 +77,13 @@ func (node *LocalNode) ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32)
 func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
 	// Process all objects
 	NMTState := node.NMT.GetInternalState()
-	NMTisPreOrOperational := (NMTState == nmt.NMT_PRE_OPERATIONAL) || (NMTState == nmt.NMT_OPERATIONAL)
+	NMTisPreOrOperational := (NMTState == nmt.StatePreOperational) || (NMTState == nmt.StateOperational)
 
 	node.BusManager.Process()
 	node.EMCY.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
 	reset := node.NMT.Process(&NMTState, timeDifferenceUs, timerNextUs)
 	// Update NMTisPreOrOperational
-	NMTisPreOrOperational = (NMTState == nmt.NMT_PRE_OPERATIONAL) || (NMTState == nmt.NMT_OPERATIONAL)
+	NMTisPreOrOperational = (NMTState == nmt.StatePreOperational) || (NMTState == nmt.StateOperational)
 
 	// Process SDO servers
 	for _, server := range node.SDOServers {
@@ -208,8 +208,8 @@ func NewLocalNode(
 			nodeId,
 			nmtControl,
 			firstHbTimeMs,
-			nmt.SERVICE_ID,
-			nmt.SERVICE_ID,
+			nmt.ServiceId,
+			nmt.ServiceId,
 			heartbeat.SERVICE_ID+uint16(nodeId),
 			odict.Index(0x1017),
 		)

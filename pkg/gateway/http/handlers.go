@@ -81,7 +81,7 @@ func (gateway *GatewayServer) handleRequest(w http.ResponseWriter, raw *http.Req
 }
 
 // Create a handler for processing NMT request
-func createNmtHandler(bg *gateway.BaseGateway, command nmt.NMTCommand) GatewayRequestHandler {
+func createNmtHandler(bg *gateway.BaseGateway, command nmt.Command) GatewayRequestHandler {
 	return func(w doneWriter, req *GatewayRequest) error {
 		switch req.nodeId {
 		case TOKEN_DEFAULT, TOKEN_NONE:

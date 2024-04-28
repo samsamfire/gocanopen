@@ -18,51 +18,52 @@ const (
 	nmtErrFreeToOperational uint16 = 0x8000
 )
 
-const SERVICE_ID = 0
-
-const (
-	RESET_NOT  uint8 = 0
-	RESET_COMM uint8 = 1
-	RESET_APP  uint8 = 2
-	RESET_QUIT uint8 = 3
-)
+const ServiceId = 0
 
 // Possible NMT states
 const (
-	NMT_INITIALIZING    uint8 = 0
-	NMT_PRE_OPERATIONAL uint8 = 127
-	NMT_OPERATIONAL     uint8 = 5
-	NMT_STOPPED         uint8 = 4
-	NMT_UNKNOWN         uint8 = 255
+	StateInitializing   uint8 = 0
+	StatePreOperational uint8 = 127
+	StateOperational    uint8 = 5
+	StateStopped        uint8 = 4
+	StateUnknown        uint8 = 255
 )
 
-var NMT_STATE_MAP = map[uint8]string{
-	NMT_INITIALIZING:    "INITIALIZING",
-	NMT_PRE_OPERATIONAL: "PRE-OPERATIONAL",
-	NMT_OPERATIONAL:     "OPERATIONAL",
-	NMT_STOPPED:         "STOPPED",
-	NMT_UNKNOWN:         "UNKNOWN",
+var stateMap = map[uint8]string{
+	StateInitializing:   "INITIALIZING",
+	StatePreOperational: "PRE-OPERATIONAL",
+	StateOperational:    "OPERATIONAL",
+	StateStopped:        "STOPPED",
+	StateUnknown:        "UNKNOWN",
 }
 
-type NMTCommand uint8
+// Global node state to be used
+const (
+	ResetNot  uint8 = 0
+	ResetComm uint8 = 1
+	ResetApp  uint8 = 2
+	ResetQuit uint8 = 3
+)
 
 // Available NMT commands
 // They can be broadcasted to all nodes or to individual nodes
+type Command uint8
+
 const (
-	NMT_NO_COMMAND            NMTCommand = 0
-	NMT_ENTER_OPERATIONAL     NMTCommand = 1
-	NMT_ENTER_STOPPED         NMTCommand = 2
-	NMT_ENTER_PRE_OPERATIONAL NMTCommand = 128
-	NMT_RESET_NODE            NMTCommand = 129
-	NMT_RESET_COMMUNICATION   NMTCommand = 130
+	CommandEmpty               Command = 0
+	CommandEnterOperational    Command = 1
+	CommandEnterStopped        Command = 2
+	CommandEnterPreOperational Command = 128
+	CommandResetNode           Command = 129
+	CommandResetCommunication  Command = 130
 )
 
-var CommandDescription = map[NMTCommand]string{
-	NMT_ENTER_OPERATIONAL:     "ENTER-OPERATIONAL",
-	NMT_ENTER_STOPPED:         "ENTER-STOPPED",
-	NMT_ENTER_PRE_OPERATIONAL: "ENTER-PREOPERATIONAL",
-	NMT_RESET_NODE:            "RESET-NODE",
-	NMT_RESET_COMMUNICATION:   "RESET-COMMUNICATION",
+var CommandDescription = map[Command]string{
+	CommandEnterOperational:    "ENTER-OPERATIONAL",
+	CommandEnterStopped:        "ENTER-STOPPED",
+	CommandEnterPreOperational: "ENTER-PREOPERATIONAL",
+	CommandResetNode:           "RESET-NODE",
+	CommandResetCommunication:  "RESET-COMMUNICATION",
 }
 
 // NMT object for processing NMT behaviour, slave or master
@@ -72,7 +73,7 @@ type NMT struct {
 	emcy                   *emergency.EMCY
 	operatingState         uint8
 	operatingStatePrev     uint8
-	internalCommand        NMTCommand
+	internalCommand        Command
 	nodeId                 uint8
 	control                uint16
 	hearbeatProducerTimeUs uint32
@@ -90,20 +91,22 @@ func (nmt *NMT) Handle(frame canopen.Frame) {
 	if frame.DLC != 2 {
 		return
 	}
-	command := NMTCommand(data[0])
+	command := Command(data[0])
 	nodeId := data[1]
 	if nodeId == 0 || nodeId == nmt.nodeId {
 		nmt.internalCommand = command
 	}
 }
 
+// Process NMT related tasks. This returns the global requested node state that
+// can be used by application
 func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
 
 	nmtStateCopy := nmt.operatingState
-	resetCommand := RESET_NOT
-	nmtInit := nmtStateCopy == NMT_INITIALIZING
+	resetCommand := ResetNot
+	nmtInit := nmtStateCopy == StateInitializing
 	if nmt.hearbeatProducerTimer > timeDifferenceUs {
 		nmt.hearbeatProducerTimer -= timeDifferenceUs
 	} else {
@@ -118,11 +121,11 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 		nmt.mu.Unlock()
 		nmt.Send(nmt.hbTxBuff)
 		nmt.mu.Lock()
-		if nmtStateCopy == NMT_INITIALIZING {
+		if nmtStateCopy == StateInitializing {
 			if nmt.control&StartupToOperational != 0 {
-				nmtStateCopy = NMT_OPERATIONAL
+				nmtStateCopy = StateOperational
 			} else {
-				nmtStateCopy = NMT_PRE_OPERATIONAL
+				nmtStateCopy = StatePreOperational
 			}
 		} else {
 			nmt.hearbeatProducerTimer = nmt.hearbeatProducerTimeUs
@@ -132,28 +135,28 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 	nmt.operatingStatePrev = nmtStateCopy
 
 	// Process internal NMT commands either from RX buffer or nmt send command
-	if nmt.internalCommand != NMT_NO_COMMAND {
+	if nmt.internalCommand != CommandEmpty {
 		switch nmt.internalCommand {
-		case NMT_ENTER_OPERATIONAL:
-			nmtStateCopy = NMT_OPERATIONAL
+		case CommandEnterOperational:
+			nmtStateCopy = StateOperational
 
-		case NMT_ENTER_STOPPED:
-			nmtStateCopy = NMT_STOPPED
+		case CommandEnterStopped:
+			nmtStateCopy = StateStopped
 
-		case NMT_ENTER_PRE_OPERATIONAL:
-			nmtStateCopy = NMT_PRE_OPERATIONAL
+		case CommandEnterPreOperational:
+			nmtStateCopy = StatePreOperational
 
-		case NMT_RESET_NODE:
-			resetCommand = RESET_APP
+		case CommandResetNode:
+			resetCommand = ResetApp
 
-		case NMT_RESET_COMMUNICATION:
-			resetCommand = RESET_COMM
+		case CommandResetCommunication:
+			resetCommand = ResetComm
 
 		}
-		if resetCommand != RESET_NOT {
+		if resetCommand != ResetNot {
 			log.Debugf("[NMT] received reset command %v this should be handled by user", CommandDescription[nmt.internalCommand])
 		}
-		nmt.internalCommand = NMT_NO_COMMAND
+		nmt.internalCommand = CommandEmpty
 	}
 
 	busOff_HB := nmt.control&nmtErrOnBusOffHb != 0 &&
@@ -164,26 +167,26 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 	errRegMasked := (nmt.control&nmtErrOnErrReg != 0) &&
 		((nmt.emcy.GetErrorRegister() & byte(nmt.control)) != 0)
 
-	if nmtStateCopy == NMT_OPERATIONAL && (busOff_HB || errRegMasked) {
+	if nmtStateCopy == StateOperational && (busOff_HB || errRegMasked) {
 		if nmt.control&nmtErrToStopped != 0 {
-			nmtStateCopy = NMT_STOPPED
+			nmtStateCopy = StateStopped
 		} else {
-			nmtStateCopy = NMT_PRE_OPERATIONAL
+			nmtStateCopy = StatePreOperational
 		}
 	} else if (nmt.control&nmtErrFreeToOperational) != 0 &&
-		nmtStateCopy == NMT_PRE_OPERATIONAL &&
+		nmtStateCopy == StatePreOperational &&
 		!busOff_HB &&
 		!errRegMasked {
 
-		nmtStateCopy = NMT_OPERATIONAL
+		nmtStateCopy = StateOperational
 	}
 
 	// Callback on change
 	if nmt.operatingStatePrev != nmtStateCopy || nmtInit {
 		if nmtInit {
-			log.Debugf("[NMT] state changed | INITIALIZING ==> %v", NMT_STATE_MAP[nmtStateCopy])
+			log.Debugf("[NMT] state changed | INITIALIZING ==> %v", stateMap[nmtStateCopy])
 		} else {
-			log.Debugf("[NMT] state changed | %v ==> %v", NMT_STATE_MAP[nmt.operatingStatePrev], NMT_STATE_MAP[nmtStateCopy])
+			log.Debugf("[NMT] state changed | %v ==> %v", stateMap[nmt.operatingStatePrev], stateMap[nmtStateCopy])
 		}
 		if nmt.callback != nil {
 			nmt.callback(nmtStateCopy)
@@ -212,7 +215,7 @@ func (nmt *NMT) GetInternalState() uint8 {
 	defer nmt.mu.Unlock()
 
 	if nmt == nil {
-		return NMT_INITIALIZING
+		return StateInitializing
 	} else {
 		return nmt.operatingState
 	}
@@ -223,17 +226,17 @@ func (nmt *NMT) SendInternalCommand(command uint8) {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
 
-	nmt.internalCommand = NMTCommand(command)
+	nmt.internalCommand = Command(command)
 }
 
 // Send an NMT command to the network
-func (nmt *NMT) SendCommand(command NMTCommand, nodeId uint8) error {
+func (nmt *NMT) SendCommand(command Command, nodeId uint8) error {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
 
 	// Also apply to node if concerned
 	if nodeId == 0 || nodeId == nmt.nodeId {
-		nmt.internalCommand = NMTCommand(command)
+		nmt.internalCommand = command
 	}
 	// Send NMT command
 	nmt.nmtTxBuff.Data[0] = uint8(command)
@@ -258,7 +261,7 @@ func NewNMT(
 		return nil, canopen.ErrIllegalArgument
 	}
 
-	nmt.operatingState = NMT_INITIALIZING
+	nmt.operatingState = StateInitializing
 	nmt.operatingStatePrev = nmt.operatingState
 	nmt.nodeId = nodeId
 	nmt.control = control
