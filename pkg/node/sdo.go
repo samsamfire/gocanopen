@@ -58,7 +58,7 @@ func (node *BaseNode) ReadUint(index any, subindex any) (value uint64, e error) 
 	case od.UNSIGNED64:
 		return uint64(binary.LittleEndian.Uint64(data)), nil
 	default:
-		return 0, od.ODR_TYPE_MISMATCH
+		return 0, od.ErrTypeMismatch
 	}
 }
 
@@ -83,7 +83,7 @@ func (node *BaseNode) ReadInt(index any, subindex any) (value int64, e error) {
 	case od.INTEGER64:
 		return int64(binary.LittleEndian.Uint64(data)), nil
 	default:
-		return 0, od.ODR_TYPE_MISMATCH
+		return 0, od.ErrTypeMismatch
 	}
 }
 
@@ -106,7 +106,7 @@ func (node *BaseNode) ReadFloat(index any, subindex any) (value float64, e error
 		parsed := binary.LittleEndian.Uint64(data)
 		return math.Float64frombits(parsed), nil
 	default:
-		return 0, od.ODR_TYPE_MISMATCH
+		return 0, od.ErrTypeMismatch
 	}
 }
 
@@ -125,7 +125,7 @@ func (node *BaseNode) ReadString(index any, subindex any) (value string, e error
 	case od.OCTET_STRING, od.VISIBLE_STRING, od.UNICODE_STRING:
 		return string(data), nil
 	default:
-		return "", od.ODR_TYPE_MISMATCH
+		return "", od.ErrTypeMismatch
 	}
 }
 

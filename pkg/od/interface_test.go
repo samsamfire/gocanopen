@@ -9,11 +9,11 @@ import (
 
 func createOD() *ObjectDictionary {
 	od := NewOD()
-	od.AddVariableType(0x3016, "entry3016", UNSIGNED8, ATTRIBUTE_SDO_RW, "0x10")
-	od.AddVariableType(0x3017, "entry3017", UNSIGNED16, ATTRIBUTE_SDO_RW, "0x20")
-	od.AddVariableType(0x3018, "entry3018", UNSIGNED32, ATTRIBUTE_SDO_RW, "0x30")
+	od.AddVariableType(0x3016, "entry3016", UNSIGNED8, AttributeSdoRw, "0x10")
+	od.AddVariableType(0x3017, "entry3017", UNSIGNED16, AttributeSdoRw, "0x20")
+	od.AddVariableType(0x3018, "entry3018", UNSIGNED32, AttributeSdoRw, "0x30")
 	record := NewRecord()
-	record.AddSubObject(0, "sub0", UNSIGNED8, ATTRIBUTE_SDO_RW, "0x11")
+	record.AddSubObject(0, "sub0", UNSIGNED8, AttributeSdoRw, "0x11")
 	od.AddVariableList(0x3030, "entry3030", record)
 	return od
 }
@@ -40,7 +40,7 @@ func TestEntryUint(t *testing.T) {
 	assert.EqualValues(t, 0x4444, data)
 
 	_, err := entry.Uint8(0)
-	assert.Equal(t, ODR_TYPE_MISMATCH, err)
+	assert.Equal(t, ErrTypeMismatch, err)
 }
 
 // Test reading SDO client parameter entry
@@ -63,11 +63,11 @@ func TestReadWriteDisabled(t *testing.T) {
 	assert.Nil(t, err)
 
 	_, err = streamer.Read([]byte{0})
-	assert.Equal(t, ODR_UNSUPP_ACCESS, err)
+	assert.Equal(t, ErrUnsuppAccess, err)
 
 	var countWrite uint16
 	err = streamer.reader(&streamer.Stream, []byte{0}, &countWrite)
-	assert.Equal(t, ODR_UNSUPP_ACCESS, err)
+	assert.Equal(t, ErrUnsuppAccess, err)
 }
 
 func TestAddRPDO(t *testing.T) {

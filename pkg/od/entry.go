@@ -39,12 +39,12 @@ type Entry struct {
 // When using a string it will try to find the subindex according to the OD naming.
 func (entry *Entry) SubIndex(subIndex any) (v *Variable, e error) {
 	if entry == nil {
-		return nil, ODR_IDX_NOT_EXIST
+		return nil, ErrIdxNotExist
 	}
 	switch object := entry.object.(type) {
 	case *Variable:
 		if subIndex != 0 && subIndex != "" {
-			return nil, ODR_SUB_NOT_EXIST
+			return nil, ErrSubNotExist
 		}
 		return object, nil
 	case *VariableList:
@@ -54,23 +54,23 @@ func (entry *Entry) SubIndex(subIndex any) (v *Variable, e error) {
 		case string:
 			convertedSubIndex, ok = entry.subEntriesNameMap[sub]
 			if !ok {
-				return nil, ODR_SUB_NOT_EXIST
+				return nil, ErrSubNotExist
 			}
 		case int:
 			if sub >= 256 {
-				return nil, ODR_DEV_INCOMPAT
+				return nil, ErrDevIncompat
 			}
 			convertedSubIndex = uint8(sub)
 		case uint8:
 			convertedSubIndex = sub
 		default:
-			return nil, ODR_DEV_INCOMPAT
+			return nil, ErrDevIncompat
 
 		}
 		return object.GetSubObject(convertedSubIndex)
 	default:
 		// This is not normal
-		return nil, ODR_DEV_INCOMPAT
+		return nil, ErrDevIncompat
 	}
 
 }
@@ -145,7 +145,7 @@ func (entry *Entry) GetRawData(subIndex uint8, length uint16) ([]byte, error) {
 		return nil, err
 	}
 	if int(streamer.DataLength) != int(length) && length != 0 {
-		return nil, ODR_TYPE_MISMATCH
+		return nil, ErrTypeMismatch
 	}
 	return streamer.Data, nil
 }
@@ -249,7 +249,7 @@ func (entry *Entry) readSubExactly(subIndex uint8, b []byte, origin bool) error 
 		return err
 	}
 	if int(streamer.DataLength) != len(b) {
-		return ODR_TYPE_MISMATCH
+		return ErrTypeMismatch
 	}
 	_, err = streamer.Read(b)
 	return err
@@ -263,7 +263,7 @@ func (entry *Entry) writeSubExactly(subIndex uint8, b []byte, origin bool) error
 		return err
 	}
 	if int(streamer.DataLength) != len(b) {
-		return ODR_TYPE_MISMATCH
+		return ErrTypeMismatch
 	}
 	_, err = streamer.Write(b)
 	return err

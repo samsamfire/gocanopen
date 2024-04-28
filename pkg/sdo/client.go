@@ -450,9 +450,9 @@ func (client *SDOClient) downloadLocal(bufferPartial bool) (ret uint8, abortCode
 				return 0, AbortGeneral
 			}
 			return 0, ConvertOdToSdoAbort(odErr)
-		} else if !client.streamer.HasAttribute(od.ATTRIBUTE_SDO_RW) {
+		} else if !client.streamer.HasAttribute(od.AttributeSdoRw) {
 			return 0, AbortUnsupportedAccess
-		} else if !client.streamer.HasAttribute(od.ATTRIBUTE_SDO_W) {
+		} else if !client.streamer.HasAttribute(od.AttributeSdoW) {
 			return 0, AbortReadOnly
 		} else if client.streamer.Writer() == nil {
 			return 0, AbortDeviceIncompat
@@ -480,7 +480,7 @@ func (client *SDOClient) downloadLocal(bufferPartial bool) (ret uint8, abortCode
 	} else if !bufferPartial {
 		odVarSize := client.streamer.DataLength
 		// Special case for strings where the downloaded data may be shorter (nul character can be omitted)
-		if client.streamer.HasAttribute(od.ATTRIBUTE_STR) && odVarSize == 0 || client.sizeTransferred < uint32(odVarSize) {
+		if client.streamer.HasAttribute(od.AttributeStr) && odVarSize == 0 || client.sizeTransferred < uint32(odVarSize) {
 			count += 1
 			buffer[count] = 0
 			client.sizeTransferred += 1
@@ -501,7 +501,7 @@ func (client *SDOClient) downloadLocal(bufferPartial bool) (ret uint8, abortCode
 	if abortCode == nil {
 		_, err = client.streamer.Write(buffer[:count])
 		odErr, ok := err.(od.ODR)
-		if err != nil && odErr != od.ODR_PARTIAL {
+		if err != nil && odErr != od.ErrPartial {
 			if !ok {
 				return 0, AbortGeneral
 			}
@@ -510,7 +510,7 @@ func (client *SDOClient) downloadLocal(bufferPartial bool) (ret uint8, abortCode
 			return 0, AbortDataLong
 		} else if !bufferPartial {
 			// Error if not written completely but download end
-			if odErr == od.ODR_PARTIAL {
+			if odErr == od.ErrPartial {
 				return 0, AbortDataShort
 			} else {
 				return success, nil
@@ -660,9 +660,9 @@ func (client *SDOClient) uploadLocal() (ret uint8, err error) {
 				return 0, AbortGeneral
 			}
 			return 0, ConvertOdToSdoAbort(odErr)
-		} else if !client.streamer.HasAttribute(od.ATTRIBUTE_SDO_RW) {
+		} else if !client.streamer.HasAttribute(od.AttributeSdoRw) {
 			return 0, AbortUnsupportedAccess
-		} else if !client.streamer.HasAttribute(od.ATTRIBUTE_SDO_R) {
+		} else if !client.streamer.HasAttribute(od.AttributeSdoR) {
 			return 0, AbortWriteOnly
 		} else if client.streamer.Reader() == nil {
 			return 0, AbortDeviceIncompat
@@ -683,13 +683,13 @@ func (client *SDOClient) uploadLocal() (ret uint8, err error) {
 		buffer := make([]byte, ClientBufferSize+1)
 		countRead, err = client.streamer.Read(buffer[:countBuffer])
 		odErr, ok := err.(od.ODR)
-		if err != nil && err != od.ODR_PARTIAL {
+		if err != nil && err != od.ErrPartial {
 			if !ok {
 				return 0, AbortGeneral
 			}
 			return 0, ConvertOdToSdoAbort(odErr)
 		} else {
-			if countRead > 0 && client.streamer.HasAttribute(od.ATTRIBUTE_STR) {
+			if countRead > 0 && client.streamer.HasAttribute(od.AttributeStr) {
 				buffer[countRead] = 0
 				countStr := 0
 				for i, v := range buffer {
@@ -703,7 +703,7 @@ func (client *SDOClient) uploadLocal() (ret uint8, err error) {
 				}
 				if countStr < countRead {
 					countRead = countStr
-					odErr = od.ODR_OK
+					odErr = od.ErrNo
 					client.streamer.DataLength = client.sizeTransferred + uint32(countRead)
 				}
 			}
@@ -712,7 +712,7 @@ func (client *SDOClient) uploadLocal() (ret uint8, err error) {
 			client.sizeIndicated = client.streamer.DataLength
 			if client.sizeIndicated > 0 && client.sizeTransferred > client.sizeIndicated {
 				err = AbortDataLong
-			} else if odErr == od.ODR_OK {
+			} else if odErr == od.ErrNo {
 				if client.sizeIndicated > 0 && client.sizeTransferred < client.sizeIndicated {
 					err = AbortDataShort
 				}

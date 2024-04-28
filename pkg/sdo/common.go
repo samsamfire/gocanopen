@@ -18,8 +18,8 @@ type internalState uint8
 const (
 	DefaultClientTimeout = 1000
 	DefaultServerTimeout = 1000
-	ClientBaseId         = 0x600
-	ServerBaseId         = 0x580
+	ClientServiceId      = 0x600
+	ServerServiceId      = 0x580
 )
 
 const (
@@ -119,31 +119,31 @@ var AbortCodeDescriptionMap = map[Abort]string{
 }
 
 var OdToAbortMap = map[od.ODR]Abort{
-	od.ODR_OUT_OF_MEM:     AbortOutOfMem,
-	od.ODR_UNSUPP_ACCESS:  AbortUnsupportedAccess,
-	od.ODR_WRITEONLY:      AbortWriteOnly,
-	od.ODR_READONLY:       AbortReadOnly,
-	od.ODR_IDX_NOT_EXIST:  AbortNotExist,
-	od.ODR_NO_MAP:         AbortNoMap,
-	od.ODR_MAP_LEN:        AbortMapLen,
-	od.ODR_PAR_INCOMPAT:   AbortParamIncompat,
-	od.ODR_DEV_INCOMPAT:   AbortDeviceIncompat,
-	od.ODR_HW:             AbortHardware,
-	od.ODR_TYPE_MISMATCH:  AbortTypeMismatch,
-	od.ODR_DATA_LONG:      AbortDataLong,
-	od.ODR_DATA_SHORT:     AbortDataShort,
-	od.ODR_SUB_NOT_EXIST:  AbortSubUnknown,
-	od.ODR_INVALID_VALUE:  AbortInvalidValue,
-	od.ODR_VALUE_HIGH:     AbortValueHigh,
-	od.ODR_VALUE_LOW:      AbortValueLow,
-	od.ODR_MAX_LESS_MIN:   AbortMaxLessMin,
-	od.ODR_NO_RESOURCE:    AbortNoRessource,
-	od.ODR_GENERAL:        AbortGeneral,
-	od.ODR_DATA_TRANSF:    AbortDataTransfer,
-	od.ODR_DATA_LOC_CTRL:  AbortDataLocalControl,
-	od.ODR_DATA_DEV_STATE: AbortDataDeviceState,
-	od.ODR_OD_MISSING:     AbortDataOD,
-	od.ODR_NO_DATA:        AbortNoData,
+	od.ErrOutOfMem:     AbortOutOfMem,
+	od.ErrUnsuppAccess: AbortUnsupportedAccess,
+	od.ErrWriteOnly:    AbortWriteOnly,
+	od.ErrReadonly:     AbortReadOnly,
+	od.ErrIdxNotExist:  AbortNotExist,
+	od.ErrNoMap:        AbortNoMap,
+	od.ErrMapLen:       AbortMapLen,
+	od.ErrParIncompat:  AbortParamIncompat,
+	od.ErrDevIncompat:  AbortDeviceIncompat,
+	od.ErrHw:           AbortHardware,
+	od.ErrTypeMismatch: AbortTypeMismatch,
+	od.ErrDataLong:     AbortDataLong,
+	od.ErrDataShort:    AbortDataShort,
+	od.ErrSubNotExist:  AbortSubUnknown,
+	od.ErrInvalidValue: AbortInvalidValue,
+	od.ErrValueHigh:    AbortValueHigh,
+	od.ErrValueLow:     AbortValueLow,
+	od.ErrMaxLessMin:   AbortMaxLessMin,
+	od.ErrNoRessource:  AbortNoRessource,
+	od.ErrGeneral:      AbortGeneral,
+	od.ErrDataTransf:   AbortDataTransfer,
+	od.ErrDataLocCtrl:  AbortDataLocalControl,
+	od.ErrDataDevState: AbortDataDeviceState,
+	od.ErrOdMissing:    AbortDataOD,
+	od.ErrNoData:       AbortNoData,
 }
 
 type Abort uint32
@@ -154,7 +154,7 @@ func ConvertOdToSdoAbort(oderr od.ODR) Abort {
 	if ok {
 		return Abort(abort_code)
 	} else {
-		return OdToAbortMap[od.ODR_DEV_INCOMPAT]
+		return OdToAbortMap[od.ErrDevIncompat]
 	}
 }
 

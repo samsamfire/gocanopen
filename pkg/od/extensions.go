@@ -19,19 +19,19 @@ type FileObject struct {
 // [SDO] Custom function for reading a file like object
 func ReadEntryFileObject(stream *Stream, data []byte, countRead *uint16) error {
 	if stream == nil || data == nil || countRead == nil || stream.Subindex != 0 || stream.Object == nil {
-		return ODR_DEV_INCOMPAT
+		return ErrDevIncompat
 	}
 	fileObject, ok := stream.Object.(*FileObject)
 	if !ok {
 		stream.DataOffset = 0
-		return ODR_DEV_INCOMPAT
+		return ErrDevIncompat
 	}
 	if stream.DataOffset == 0 {
 		var err error
 		log.Infof("[OD][EXTENSION][FILE] opening %v for reading", fileObject.FilePath)
 		fileObject.File, err = os.OpenFile(fileObject.FilePath, fileObject.ReadMode, 0644)
 		if err != nil {
-			return ODR_DEV_INCOMPAT
+			return ErrDevIncompat
 		}
 	}
 	countReadInt, err := io.ReadFull(fileObject.File, data)
@@ -40,7 +40,7 @@ func ReadEntryFileObject(stream *Stream, data []byte, countRead *uint16) error {
 	case nil:
 		*countRead = uint16(countReadInt)
 		stream.DataOffset += uint32(countReadInt)
-		return ODR_PARTIAL
+		return ErrPartial
 	case io.EOF, io.ErrUnexpectedEOF:
 		*countRead = uint16(countReadInt)
 		log.Infof("[OD][EXTENSION][FILE] finished reading %v", fileObject.FilePath)
@@ -50,7 +50,7 @@ func ReadEntryFileObject(stream *Stream, data []byte, countRead *uint16) error {
 		// unexpected error
 		log.Errorf("[OD][EXTENSION][FILE] error reading file %v", err)
 		fileObject.File.Close()
-		return ODR_DEV_INCOMPAT
+		return ErrDevIncompat
 
 	}
 }
@@ -58,19 +58,19 @@ func ReadEntryFileObject(stream *Stream, data []byte, countRead *uint16) error {
 // [SDO] Custom function for writing a file like object
 func WriteEntryFileObject(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || countWritten == nil || stream.Subindex != 0 || stream.Object == nil {
-		return ODR_DEV_INCOMPAT
+		return ErrDevIncompat
 	}
 	fileObject, ok := stream.Object.(*FileObject)
 	if !ok {
 		stream.DataOffset = 0
-		return ODR_DEV_INCOMPAT
+		return ErrDevIncompat
 	}
 	if stream.DataOffset == 0 {
 		var err error
 		log.Infof("[OD][EXTENSION][FILE] opening %v for writing", fileObject.FilePath)
 		fileObject.File, err = os.OpenFile(fileObject.FilePath, fileObject.WriteMode, 0644)
 		if err != nil {
-			return ODR_DEV_INCOMPAT
+			return ErrDevIncompat
 		}
 	}
 
@@ -83,12 +83,12 @@ func WriteEntryFileObject(stream *Stream, data []byte, countWritten *uint16) err
 			fileObject.File.Close()
 			return nil
 		} else {
-			return ODR_PARTIAL
+			return ErrPartial
 		}
 	} else {
 		log.Errorf("[OD][EXTENSION][FILE] error writing file %v", err)
 		fileObject.File.Close()
-		return ODR_DEV_INCOMPAT
+		return ErrDevIncompat
 	}
 
 }
@@ -96,18 +96,18 @@ func WriteEntryFileObject(stream *Stream, data []byte, countWritten *uint16) err
 // [SDO] Custom function for reading an io.Reader
 func ReadEntryReader(stream *Stream, data []byte, countRead *uint16) error {
 	if stream == nil || data == nil || countRead == nil || stream.Subindex != 0 || stream.Object == nil {
-		return ODR_DEV_INCOMPAT
+		return ErrDevIncompat
 	}
 	reader, ok := stream.Object.(io.ReadSeeker)
 	if !ok {
 		stream.DataOffset = 0
-		return ODR_DEV_INCOMPAT
+		return ErrDevIncompat
 	}
 	// If first read, go back to initial point
 	if stream.DataOffset == 0 {
 		_, err := reader.Seek(0, io.SeekStart)
 		if err != nil {
-			return ODR_DEV_INCOMPAT
+			return ErrDevIncompat
 		}
 	}
 	// Read len(data) bytes
@@ -117,14 +117,14 @@ func ReadEntryReader(stream *Stream, data []byte, countRead *uint16) error {
 		// Not finished reading
 		*countRead = uint16(countReadInt)
 		stream.DataOffset += uint32(countReadInt)
-		return ODR_PARTIAL
+		return ErrPartial
 	case io.EOF, io.ErrUnexpectedEOF:
 		*countRead = uint16(countReadInt)
 		log.Infof("[OD][EXTENSION][FILE] finished reading")
 		return nil
 	default:
 		log.Errorf("[OD][EXTENSION][FILE] error reading file %v", err)
-		return ODR_DEV_INCOMPAT
+		return ErrDevIncompat
 
 	}
 }

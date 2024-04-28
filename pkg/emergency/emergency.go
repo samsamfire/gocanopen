@@ -9,8 +9,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const CO_CONFIG_EM_ERR_STATUS_BITS_COUNT = 80
-const SERVICE_ID = 0x80
+const EmergencyErrorStatusBits = 80
+const ServiceId = 0x80
 
 // Error register values
 const (
@@ -170,7 +170,7 @@ const (
 	EmCalculationOfParameters = 0x2E
 	EmNonVolatileMemory       = 0x2F
 	EmManufacturerStart       = 0x30
-	EmManufacturerEnd         = CO_CONFIG_EM_ERR_STATUS_BITS_COUNT - 1
+	EmManufacturerEnd         = EmergencyErrorStatusBits - 1
 )
 
 var errorStatusMap = map[uint8]string{
@@ -259,7 +259,7 @@ type EMCY struct {
 	mu sync.Mutex
 	*canopen.BusManager
 	nodeId          byte
-	errorStatusBits [CO_CONFIG_EM_ERR_STATUS_BITS_COUNT / 8]byte
+	errorStatusBits [EmergencyErrorStatusBits / 8]byte
 	errorRegister   *byte
 	canErrorOld     uint16
 	txBuffer        canopen.Frame
@@ -429,7 +429,7 @@ func (emcy *EMCY) Error(setError bool, errorBit byte, errorCode uint16, infoCode
 	bitMask := 1 << (errorBit & 0x7)
 
 	// Unsupported errorBit
-	if index >= CO_CONFIG_EM_ERR_STATUS_BITS_COUNT/8 {
+	if index >= EmergencyErrorStatusBits/8 {
 		index = EmWrongErrorReport >> 3
 		bitMask = 1 << (EmWrongErrorReport & 0x7)
 		errorCode = ErrSoftwareInternal
@@ -497,7 +497,7 @@ func (emcy *EMCY) IsError(errorBit byte) bool {
 	}
 	byteIndex := errorBit >> 3
 	bitMask := uint8(1) << (errorBit & 0x7)
-	if byteIndex >= (CO_CONFIG_EM_ERR_STATUS_BITS_COUNT / 8) {
+	if byteIndex >= (EmergencyErrorStatusBits / 8) {
 		return true
 	}
 	return (emcy.errorStatusBits[byteIndex] & bitMask) != 0
@@ -555,7 +555,7 @@ func NewEM(
 	emcy.producerEnabled = (cobIdEmergency&0x80000000) == 0 && producerCanId != 0
 	entry1014.AddExtension(emcy, readEntry1014, writeEntry1014)
 	emcy.producerIdent = uint16(producerCanId)
-	if producerCanId == uint32(SERVICE_ID) {
+	if producerCanId == uint32(ServiceId) {
 		producerCanId += uint32(nodeId)
 	}
 	emcy.nodeId = nodeId
@@ -572,7 +572,7 @@ func NewEM(
 		entryStatusBits.AddExtension(emcy, readEntryStatusBits, writeEntryStatusBits)
 	}
 
-	err := emcy.Subscribe(uint32(SERVICE_ID), 0x780, false, emcy)
+	err := emcy.Subscribe(uint32(ServiceId), 0x780, false, emcy)
 	if err != nil {
 		return nil, err
 	}

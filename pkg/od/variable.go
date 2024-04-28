@@ -162,7 +162,7 @@ func EncodeFromString(variable string, datatype uint8, nodeId uint8) ([]byte, er
 		return []byte{}, nil
 
 	default:
-		return nil, ODR_TYPE_MISMATCH
+		return nil, ErrTypeMismatch
 
 	}
 	if err != nil {
@@ -209,7 +209,7 @@ func EncodeFromGeneric(data any) ([]byte, error) {
 	case []byte:
 		encoded = val
 	default:
-		return nil, ODR_TYPE_MISMATCH
+		return nil, ErrTypeMismatch
 	}
 	return encoded, nil
 }
@@ -219,28 +219,28 @@ func CheckSize(length int, dataType uint8) error {
 	switch dataType {
 	case BOOLEAN, UNSIGNED8, INTEGER8:
 		if length < 1 {
-			return ODR_DATA_SHORT
+			return ErrDataShort
 		} else if length > 1 {
-			return ODR_DATA_LONG
+			return ErrDataLong
 		}
 	case UNSIGNED16, INTEGER16:
 		if length < 2 {
-			return ODR_DATA_SHORT
+			return ErrDataShort
 		} else if length > 2 {
-			return ODR_DATA_LONG
+			return ErrDataLong
 		}
 
 	case UNSIGNED32, INTEGER32, REAL32:
 		if length < 4 {
-			return ODR_DATA_SHORT
+			return ErrDataShort
 		} else if length > 4 {
-			return ODR_DATA_LONG
+			return ErrDataLong
 		}
 	case UNSIGNED64, INTEGER64, REAL64:
 		if length < 8 {
-			return ODR_DATA_SHORT
+			return ErrDataShort
 		} else if length > 8 {
-			return ODR_DATA_LONG
+			return ErrDataLong
 		}
 	// All other datatypes, no size check
 	default:
@@ -284,7 +284,7 @@ func Decode(data []byte, dataType uint8) (v any, e error) {
 	case VISIBLE_STRING:
 		return string(data), nil
 	default:
-		return nil, ODR_TYPE_MISMATCH
+		return nil, ErrTypeMismatch
 	}
 }
 
@@ -295,19 +295,19 @@ func CalculateAttribute(accessType string, pdoMapping bool, dataType uint8) uint
 
 	switch accessType {
 	case "rw":
-		attribute = ATTRIBUTE_SDO_RW
+		attribute = AttributeSdoRw
 	case "ro", "const":
-		attribute = ATTRIBUTE_SDO_R
+		attribute = AttributeSdoR
 	case "wo":
-		attribute = ATTRIBUTE_SDO_W
+		attribute = AttributeSdoW
 	default:
-		attribute = ATTRIBUTE_SDO_RW
+		attribute = AttributeSdoRw
 	}
 	if pdoMapping {
-		attribute |= ATTRIBUTE_TRPDO
+		attribute |= AttributeTrpdo
 	}
 	if dataType == VISIBLE_STRING || dataType == OCTET_STRING {
-		attribute |= ATTRIBUTE_STR
+		attribute |= AttributeStr
 	}
 	return attribute
 }

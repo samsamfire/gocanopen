@@ -9,14 +9,14 @@ import (
 
 func readEntryStatusBits(stream *od.Stream, data []byte, countRead *uint16) error {
 	if stream == nil || stream.Subindex != 0 || data == nil || countRead == nil {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	em, ok := stream.Object.(*EMCY)
 	if !ok {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 
-	countReadLocal := CO_CONFIG_EM_ERR_STATUS_BITS_COUNT / 8
+	countReadLocal := EmergencyErrorStatusBits / 8
 	if countReadLocal > len(data) {
 		countReadLocal = len(data)
 	}
@@ -30,13 +30,13 @@ func readEntryStatusBits(stream *od.Stream, data []byte, countRead *uint16) erro
 
 func writeEntryStatusBits(stream *od.Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || stream.Subindex != 0 || countWritten == nil || data == nil {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	em, ok := stream.Object.(*EMCY)
 	if !ok {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
-	countWriteLocal := CO_CONFIG_EM_ERR_STATUS_BITS_COUNT / 8
+	countWriteLocal := EmergencyErrorStatusBits / 8
 	if countWriteLocal > len(data) {
 		countWriteLocal = len(data)
 	}
@@ -53,17 +53,17 @@ func readEntry1003(stream *od.Stream, data []byte, countRead *uint16) error {
 	if stream == nil || data == nil || countRead == nil ||
 		(len(data) < 4 && stream.Subindex > 0) ||
 		len(data) < 1 {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	em, ok := stream.Object.(*EMCY)
 	if !ok {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	em.mu.Lock()
 	defer em.mu.Unlock()
 
 	if len(em.fifo) < 2 {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	if stream.Subindex == 0 {
 		data[0] = em.fifoCount
@@ -71,12 +71,12 @@ func readEntry1003(stream *od.Stream, data []byte, countRead *uint16) error {
 		return nil
 	}
 	if stream.Subindex > em.fifoCount {
-		return od.ODR_NO_DATA
+		return od.ErrNoData
 	}
 	// Most recent error is in subindex 1 and stored behind fifoWrPtr
 	index := int(em.fifoWrPtr) - int(stream.Subindex)
 	if index >= len(em.fifo) {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	if index < 0 {
 		index += len(em.fifo)
@@ -89,14 +89,14 @@ func readEntry1003(stream *od.Stream, data []byte, countRead *uint16) error {
 // [EMCY] clear emergency history
 func writeEntry1003(stream *od.Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || stream.Subindex != 0 || data == nil || len(data) != 1 || countWritten == nil {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	if data[0] != 0 {
-		return od.ODR_INVALID_VALUE
+		return od.ErrInvalidValue
 	}
 	em, ok := stream.Object.(*EMCY)
 	if !ok {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	em.mu.Lock()
 	defer em.mu.Unlock()
@@ -110,18 +110,18 @@ func writeEntry1003(stream *od.Stream, data []byte, countWritten *uint16) error 
 // [EMCY] read emergency cob id
 func readEntry1014(stream *od.Stream, data []byte, countRead *uint16) error {
 	if stream == nil || data == nil || countRead == nil || len(data) < 4 || stream.Subindex != 0 {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	em, ok := stream.Object.(*EMCY)
 	if !ok {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	em.mu.Lock()
 	defer em.mu.Unlock()
 
 	var canId uint16
-	if em.producerIdent == SERVICE_ID {
-		canId = SERVICE_ID + uint16(em.nodeId)
+	if em.producerIdent == ServiceId {
+		canId = ServiceId + uint16(em.nodeId)
 	} else {
 		canId = em.producerIdent
 	}
@@ -140,11 +140,11 @@ func readEntry1014(stream *od.Stream, data []byte, countRead *uint16) error {
 // [EMCY] update emergency producer cob id
 func writeEntry1014(stream *od.Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || countWritten == nil || len(data) != 4 || stream.Subindex != 0 {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	em, ok := stream.Object.(*EMCY)
 	if !ok {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	em.mu.Lock()
 	defer em.mu.Unlock()
@@ -153,19 +153,19 @@ func writeEntry1014(stream *od.Stream, data []byte, countWritten *uint16) error 
 	cobId := binary.LittleEndian.Uint32(data)
 	newCanId := cobId & 0x7FF
 	var currentCanId uint16
-	if em.producerIdent == SERVICE_ID {
-		currentCanId = SERVICE_ID + uint16(em.nodeId)
+	if em.producerIdent == ServiceId {
+		currentCanId = ServiceId + uint16(em.nodeId)
 	} else {
 		currentCanId = em.producerIdent
 	}
 	newEnabled := (cobId&uint32(currentCanId)) == 0 && newCanId != 0
 	if cobId&0x7FFFF800 != 0 || canopen.IsIDRestricted(uint16(newCanId)) ||
 		(em.producerEnabled && newEnabled && newCanId != uint32(currentCanId)) {
-		return od.ODR_INVALID_VALUE
+		return od.ErrInvalidValue
 	}
 	em.producerEnabled = newEnabled
-	if newCanId == uint32(SERVICE_ID+uint16(em.nodeId)) {
-		em.producerIdent = SERVICE_ID
+	if newCanId == uint32(ServiceId+uint16(em.nodeId)) {
+		em.producerIdent = ServiceId
 	} else {
 		em.producerIdent = uint16(newCanId)
 	}
@@ -180,11 +180,11 @@ func writeEntry1014(stream *od.Stream, data []byte, countWritten *uint16) error 
 // [EMCY] update inhibite time
 func writeEntry1015(stream *od.Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || stream.Subindex != 0 || data == nil || len(data) != 2 || countWritten == nil {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	em, ok := stream.Object.(*EMCY)
 	if !ok {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	em.mu.Lock()
 	defer em.mu.Unlock()

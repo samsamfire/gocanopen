@@ -31,8 +31,8 @@ func (client *SDOClient) newRawReadWriter(nodeId uint8, index uint16, subindex u
 	}
 	// Setup client for a new transfer
 	err := client.setupServer(
-		uint32(ClientBaseId)+uint32(nodeId),
-		uint32(ServerBaseId)+uint32(nodeId),
+		uint32(ClientServiceId)+uint32(nodeId),
+		uint32(ServerServiceId)+uint32(nodeId),
 		nodeId,
 	)
 	return rw, err
@@ -185,7 +185,7 @@ func (client *SDOClient) ReadUint8(nodeId uint8, index uint16, subindex uint8) (
 	if err != nil {
 		return 0, err
 	} else if n != 1 {
-		return 0, od.ODR_TYPE_MISMATCH
+		return 0, od.ErrTypeMismatch
 	}
 	return buf[0], nil
 }
@@ -197,7 +197,7 @@ func (client *SDOClient) ReadUint16(nodeId uint8, index uint16, subindex uint8) 
 	if err != nil {
 		return 0, err
 	} else if n != 2 {
-		return 0, od.ODR_TYPE_MISMATCH
+		return 0, od.ErrTypeMismatch
 	}
 	return binary.LittleEndian.Uint16(buf), nil
 }
@@ -209,7 +209,7 @@ func (client *SDOClient) ReadUint32(nodeId uint8, index uint16, subindex uint8) 
 	if err != nil {
 		return 0, err
 	} else if n != 4 {
-		return 0, od.ODR_TYPE_MISMATCH
+		return 0, od.ErrTypeMismatch
 	}
 	return binary.LittleEndian.Uint32(buf), nil
 }
@@ -221,7 +221,7 @@ func (client *SDOClient) ReadUint64(nodeId uint8, index uint16, subindex uint8) 
 	if err != nil {
 		return 0, err
 	} else if n != 8 {
-		return 0, od.ODR_TYPE_MISMATCH
+		return 0, od.ErrTypeMismatch
 	}
 	return binary.LittleEndian.Uint64(buf), nil
 }

@@ -210,7 +210,7 @@ func NewLocalNode(
 			firstHbTimeMs,
 			nmt.ServiceId,
 			nmt.ServiceId,
-			heartbeat.SERVICE_ID+uint16(nodeId),
+			heartbeat.ServiceId+uint16(nodeId),
 			odict.Index(0x1017),
 		)
 		if err != nil {

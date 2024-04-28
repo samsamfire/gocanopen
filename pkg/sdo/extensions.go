@@ -10,15 +10,15 @@ import (
 // [SDO server] update server parameters
 func writeEntry1201(stream *od.Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || countWritten == nil {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	server, ok := stream.Object.(*SDOServer)
 	if !ok {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	switch stream.Subindex {
 	case 0:
-		return od.ODR_READONLY
+		return od.ErrReadonly
 	// cob id client to server
 	case 1:
 		cobId := binary.LittleEndian.Uint32(data)
@@ -28,7 +28,7 @@ func writeEntry1201(stream *od.Stream, data []byte, countWritten *uint16) error 
 		if (cobId&0x3FFFF800) != 0 ||
 			(valid && server.valid && canId != canIdCurrent) ||
 			(valid && canopen.IsIDRestricted(canId)) {
-			return od.ODR_INVALID_VALUE
+			return od.ErrInvalidValue
 		}
 		server.initRxTx(cobId, server.cobIdServerToClient)
 	// cob id server to client
@@ -40,22 +40,22 @@ func writeEntry1201(stream *od.Stream, data []byte, countWritten *uint16) error 
 		if (cobId&0x3FFFF800) != 0 ||
 			(valid && server.valid && canId != canIdCurrent) ||
 			(valid && canopen.IsIDRestricted(canId)) {
-			return od.ODR_INVALID_VALUE
+			return od.ErrInvalidValue
 		}
 		server.initRxTx(server.cobIdClientToServer, cobId)
 	// node id of server
 	case 3:
 		if len(data) != 1 {
-			return od.ODR_TYPE_MISMATCH
+			return od.ErrTypeMismatch
 		}
 		nodeId := data[0]
 		if nodeId < 1 || nodeId > 127 {
-			return od.ODR_INVALID_VALUE
+			return od.ErrInvalidValue
 		}
 		server.nodeId = nodeId // ??
 
 	default:
-		return od.ODR_SUB_NOT_EXIST
+		return od.ErrSubNotExist
 
 	}
 	return od.WriteEntryDefault(stream, data, countWritten)
@@ -64,15 +64,15 @@ func writeEntry1201(stream *od.Stream, data []byte, countWritten *uint16) error 
 // [SDO Client] update parameters
 func writeEntry1280(stream *od.Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || data == nil || countWritten == nil {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	client, ok := stream.Object.(*SDOClient)
 	if !ok {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	switch stream.Subindex {
 	case 0:
-		return od.ODR_READONLY
+		return od.ErrReadonly
 	// cob id client to server
 	case 1:
 		cobId := binary.LittleEndian.Uint32(data)
@@ -82,7 +82,7 @@ func writeEntry1280(stream *od.Stream, data []byte, countWritten *uint16) error 
 		if (cobId&0x3FFFF800) != 0 ||
 			(valid && client.valid && canId != canIdCurrent) ||
 			(valid && canopen.IsIDRestricted(canId)) {
-			return od.ODR_INVALID_VALUE
+			return od.ErrInvalidValue
 		}
 		client.setupServer(cobId, client.cobIdServerToClient, client.nodeIdServer)
 	// cob id server to client
@@ -94,22 +94,22 @@ func writeEntry1280(stream *od.Stream, data []byte, countWritten *uint16) error 
 		if (cobId&0x3FFFF800) != 0 ||
 			(valid && client.valid && canId != canIdCurrent) ||
 			(valid && canopen.IsIDRestricted(canId)) {
-			return od.ODR_INVALID_VALUE
+			return od.ErrInvalidValue
 		}
 		client.setupServer(cobId, client.cobIdClientToServer, client.nodeIdServer)
 	// node id of server
 	case 3:
 		if len(data) != 1 {
-			return od.ODR_TYPE_MISMATCH
+			return od.ErrTypeMismatch
 		}
 		nodeId := data[0]
 		if nodeId > 127 {
-			return od.ODR_INVALID_VALUE
+			return od.ErrInvalidValue
 		}
 		client.nodeIdServer = nodeId
 
 	default:
-		return od.ODR_SUB_NOT_EXIST
+		return od.ErrSubNotExist
 
 	}
 	return od.WriteEntryDefault(stream, data, countWritten)

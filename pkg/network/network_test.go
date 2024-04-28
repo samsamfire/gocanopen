@@ -49,7 +49,7 @@ func TestReadEDS(t *testing.T) {
 	t.Run("with invalid format handler", func(t *testing.T) {
 		local, _ := network.Local(NODE_ID_TEST)
 		// Replace EDS format with another value
-		_, err := local.GetOD().AddVariableType(0x1022, "Storage Format", od.UNSIGNED8, od.ATTRIBUTE_SDO_RW, "0x10")
+		_, err := local.GetOD().AddVariableType(0x1022, "Storage Format", od.UNSIGNED8, od.AttributeSdoRw, "0x10")
 		assert.Nil(t, err)
 		_, err = network2.ReadEDS(NODE_ID_TEST, nil)
 		assert.Equal(t, ErrEdsFormat, err)
