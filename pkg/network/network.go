@@ -179,7 +179,7 @@ func (network *Network) launchNodeProcess(node n.Node) {
 				state := node.ProcessMain(false, timeDifferenceUs, nil)
 				node.MainCallback()
 				time.Sleep(mainPeriod)
-				if state == nmt.RESET_APP || state == nmt.RESET_COMM {
+				if state == nmt.ResetApp || state == nmt.ResetComm {
 					node.SetState(n.NODE_RESETING)
 				}
 				select {
@@ -247,15 +247,15 @@ func (network *Network) ReadEDS(nodeId uint8, edsFormatHandler EDSFormatHandler)
 //
 //	network.Command(0,NMT_RESET_NODE) // resets all nodes
 //	network.Command(12,NMT_RESET_NODE) // resets nodeId 12
-func (network *Network) Command(nodeId uint8, nmtCommand nmt.NMTCommand) error {
-	if nodeId > 127 || (nmtCommand != nmt.NMT_ENTER_OPERATIONAL &&
-		nmtCommand != nmt.NMT_ENTER_PRE_OPERATIONAL &&
-		nmtCommand != nmt.NMT_ENTER_STOPPED &&
-		nmtCommand != nmt.NMT_RESET_COMMUNICATION &&
-		nmtCommand != nmt.NMT_RESET_NODE) {
+func (network *Network) Command(nodeId uint8, nmtCommand nmt.Command) error {
+	if nodeId > 127 || (nmtCommand != nmt.CommandEnterOperational &&
+		nmtCommand != nmt.CommandEnterPreOperational &&
+		nmtCommand != nmt.CommandEnterStopped &&
+		nmtCommand != nmt.CommandResetCommunication &&
+		nmtCommand != nmt.CommandResetNode) {
 		return canopen.ErrIllegalArgument
 	}
-	frame := canopen.NewFrame(uint32(nmt.SERVICE_ID), 0, 2)
+	frame := canopen.NewFrame(uint32(nmt.ServiceId), 0, 2)
 	frame.Data[0] = uint8(nmtCommand)
 	frame.Data[1] = nodeId
 	log.Debugf("[NMT] sending nmt command : %v to node(s) %v (x%x)", nmt.CommandDescription[nmtCommand], nodeId, nodeId)

@@ -70,7 +70,7 @@ func (node *RemoteNode) ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32
 }
 
 func (node *RemoteNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
-	return nmt.RESET_NOT
+	return nmt.ResetNot
 }
 
 func (node *RemoteNode) MainCallback() {

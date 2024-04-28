@@ -78,7 +78,7 @@ func (gw *BaseGateway) GetVersion() (GatewayVersion, error) {
 }
 
 // Broadcast nmt command to one or all nodes
-func (gw *BaseGateway) NMTCommand(id uint8, command nmt.NMTCommand) error {
+func (gw *BaseGateway) NMTCommand(id uint8, command nmt.Command) error {
 	return gw.network.Command(id, command)
 }
 

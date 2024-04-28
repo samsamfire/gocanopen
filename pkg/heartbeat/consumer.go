@@ -98,7 +98,7 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 				continue
 			}
 			if monitoredNode.rxNew {
-				if monitoredNode.nmtState == nmt.NMT_INITIALIZING {
+				if monitoredNode.nmtState == nmt.StateInitializing {
 					// Boot up message is an error if previously received (means reboot)
 					if monitoredNode.hbState == HB_ACTIVE {
 						consumer.emcy.ErrorReport(emergency.EmHBConsumerRemoteReset, emergency.ErrHeartbeat, uint32(i))
@@ -118,7 +118,7 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 				if monitoredNode.timeoutTimer >= monitoredNode.timeUs {
 					// Timeout is expired
 					consumer.emcy.ErrorReport(emergency.EmHBConsumerRemoteReset, emergency.ErrHeartbeat, uint32(i))
-					monitoredNode.nmtState = nmt.NMT_UNKNOWN
+					monitoredNode.nmtState = nmt.StateUnknown
 					monitoredNode.hbState = HB_TIMEOUT
 				} else if timerNextUs != nil {
 					// Calculate when to recheck
@@ -131,7 +131,7 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 			if monitoredNode.hbState != HB_ACTIVE {
 				allMonitoredActiveCurrent = false
 			}
-			if monitoredNode.nmtState != nmt.NMT_OPERATIONAL {
+			if monitoredNode.nmtState != nmt.StateOperational {
 				allMonitoredOperationalCurrent = false
 			}
 
@@ -146,8 +146,8 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 			monitoredNode := consumer.monitoredNodes[i]
 			monitoredNode.mu.Lock()
 
-			monitoredNode.nmtState = nmt.NMT_UNKNOWN
-			monitoredNode.nmtStatePrev = nmt.NMT_UNKNOWN
+			monitoredNode.nmtState = nmt.StateUnknown
+			monitoredNode.nmtStatePrev = nmt.StateUnknown
 			monitoredNode.rxNew = false
 			if monitoredNode.hbState != HB_UNCONFIGURED {
 				monitoredNode.hbState = HB_UNKNOWN
@@ -174,8 +174,8 @@ func newHbConsumerNode(nodeId uint8, consumerTimeMs uint16) *monitoredNode {
 	monitoredNode := &monitoredNode{}
 	monitoredNode.nodeId = nodeId
 	monitoredNode.timeUs = uint32(consumerTimeMs) * 1000
-	monitoredNode.nmtState = nmt.NMT_UNKNOWN
-	monitoredNode.nmtStatePrev = nmt.NMT_UNKNOWN
+	monitoredNode.nmtState = nmt.StateUnknown
+	monitoredNode.nmtStatePrev = nmt.StateUnknown
 	monitoredNode.rxNew = false
 
 	if monitoredNode.nodeId != 0 && monitoredNode.timeUs != 0 {
