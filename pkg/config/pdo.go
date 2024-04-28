@@ -46,11 +46,11 @@ func (conf *PDOConfig) getType() string {
 }
 
 func (conf *PDOConfig) getMappingIndex(pdoNb uint16) uint16 {
-	return conf.indexOffset + od.BASE_RPDO_MAPPING_INDEX + pdoNb - 1
+	return conf.indexOffset + od.IndexRpdoMappingBase + pdoNb - 1
 }
 
 func (conf *PDOConfig) getCommunicationIndex(pdoNb uint16) uint16 {
-	return conf.indexOffset + od.BASE_RPDO_COMMUNICATION_INDEX + pdoNb - 1
+	return conf.indexOffset + od.IndexRpdoCommunicationBase + pdoNb - 1
 }
 
 func (config *PDOConfig) ReadCobId(pdoNb uint16) (uint32, error) {
@@ -188,7 +188,7 @@ func (config *PDOConfig) ClearMappings(pdoNb uint16) error {
 		return err
 	}
 	// Then clear entries
-	for i := uint8(1); i <= od.PDO_MAX_MAPPED_ENTRIES; i++ {
+	for i := uint8(1); i <= od.MaxMappedEntriesPdo; i++ {
 		err := config.WriteRaw(config.nodeId, pdoMappingIndex, i, uint32(0), false)
 		if err != nil {
 			return err

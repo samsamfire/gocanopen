@@ -23,8 +23,8 @@ type RPDO struct {
 	*canopen.BusManager
 	mu            s.Mutex
 	pdo           *PDOCommon
-	rxNew         [RPDO_BUFFER_COUNT]bool
-	rxData        [RPDO_BUFFER_COUNT][MAX_PDO_LENGTH]byte
+	rxNew         [BufferCountRpdo]bool
+	rxData        [BufferCountRpdo][MaxPdoLength]byte
 	receiveError  uint8
 	sync          *sync.SYNC
 	synchronous   bool
@@ -150,15 +150,15 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 			streamer := &pdo.streamers[i]
 			mappedLength := streamer.DataOffset
 			dataLength := streamer.DataLength
-			if dataLength > uint32(MAX_PDO_LENGTH) {
-				dataLength = uint32(MAX_PDO_LENGTH)
+			if dataLength > uint32(MaxPdoLength) {
+				dataLength = uint32(MaxPdoLength)
 			}
 			// Prepare for writing into OD
 			var buffer []byte
 			buffer, dataRPDO = dataRPDO[:mappedLength], dataRPDO[mappedLength:]
 			if dataLength > uint32(mappedLength) {
 				// Append zeroes up to 8 bytes
-				buffer = append(buffer, make([]byte, int(MAX_PDO_LENGTH)-len(buffer))...)
+				buffer = append(buffer, make([]byte, int(MaxPdoLength)-len(buffer))...)
 			}
 			streamer.DataOffset = 0
 			_, err := streamer.Write(buffer)
@@ -225,7 +225,7 @@ func NewRPDO(
 		return nil, canopen.ErrOdParameters
 	}
 	rpdo.sync = sync
-	rpdo.synchronous = transmissionType <= TRANSMISSION_TYPE_SYNC_240
+	rpdo.synchronous = transmissionType <= TransmissionTypeSync240
 
 	// Configure event timer
 	eventTime, ret := entry14xx.Uint16(5)

@@ -67,7 +67,7 @@ func TestReadLocal(t *testing.T) {
 			assert.Equal(t, key, val)
 		}
 		_, err := local.ReadUint("INTEGER8 value", "")
-		assert.Equal(t, od.ODR_TYPE_MISMATCH, err)
+		assert.Equal(t, od.ErrTypeMismatch, err)
 	})
 
 	t.Run("Read Uint", func(t *testing.T) {
@@ -76,7 +76,7 @@ func TestReadLocal(t *testing.T) {
 			assert.Equal(t, key, val)
 		}
 		_, err := local.ReadUint("INTEGER8 value", "")
-		assert.Equal(t, od.ODR_TYPE_MISMATCH, err)
+		assert.Equal(t, od.ErrTypeMismatch, err)
 	})
 
 	t.Run("Read Int", func(t *testing.T) {
@@ -85,7 +85,7 @@ func TestReadLocal(t *testing.T) {
 			assert.Equal(t, key, val)
 		}
 		_, err := local.ReadInt("UNSIGNED8 value", "")
-		assert.Equal(t, od.ODR_TYPE_MISMATCH, err)
+		assert.Equal(t, od.ErrTypeMismatch, err)
 	})
 
 	t.Run("Read Float", func(t *testing.T) {
@@ -94,7 +94,7 @@ func TestReadLocal(t *testing.T) {
 			assert.InDelta(t, key, val, 0.01)
 		}
 		_, err := local.ReadFloat("UNSIGNED8 value", "")
-		assert.Equal(t, od.ODR_TYPE_MISMATCH, err)
+		assert.Equal(t, od.ErrTypeMismatch, err)
 	})
 
 	t.Run("Read String", func(t *testing.T) {
@@ -140,7 +140,7 @@ func TestReadRemote(t *testing.T) {
 			assert.Equal(t, key, val)
 		}
 		_, err := remote.ReadUint("INTEGER8 value", "")
-		assert.Equal(t, od.ODR_TYPE_MISMATCH, err)
+		assert.Equal(t, od.ErrTypeMismatch, err)
 	})
 
 	t.Run("Read Uint", func(t *testing.T) {
@@ -149,7 +149,7 @@ func TestReadRemote(t *testing.T) {
 			assert.Equal(t, key, val)
 		}
 		_, err := remote.ReadUint("INTEGER8 value", "")
-		assert.Equal(t, od.ODR_TYPE_MISMATCH, err)
+		assert.Equal(t, od.ErrTypeMismatch, err)
 	})
 
 	t.Run("Read Int", func(t *testing.T) {
@@ -158,7 +158,7 @@ func TestReadRemote(t *testing.T) {
 			assert.Equal(t, key, val)
 		}
 		_, err := remote.ReadInt("UNSIGNED8 value", "")
-		assert.Equal(t, od.ODR_TYPE_MISMATCH, err)
+		assert.Equal(t, od.ErrTypeMismatch, err)
 	})
 
 	t.Run("Read Float", func(t *testing.T) {
@@ -167,7 +167,7 @@ func TestReadRemote(t *testing.T) {
 			assert.InDelta(t, key, val, 0.01)
 		}
 		_, err := remote.ReadFloat("UNSIGNED8 value", "")
-		assert.Equal(t, od.ODR_TYPE_MISMATCH, err)
+		assert.Equal(t, od.ErrTypeMismatch, err)
 	})
 
 	t.Run("Read String", func(t *testing.T) {

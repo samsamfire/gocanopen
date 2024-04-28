@@ -12,7 +12,7 @@ func TestStreamer(t *testing.T) {
 	assert.NotNil(t, entry)
 	// Test access to subindex > 1 for variable
 	_, err := NewStreamer(entry, 1, true)
-	assert.Equal(t, ODR_SUB_NOT_EXIST, err)
+	assert.Equal(t, ErrSubNotExist, err)
 	// Test that subindex 0 returns nil
 	_, err = NewStreamer(entry, 0, true)
 	assert.Nil(t, err)
@@ -22,6 +22,6 @@ func TestStreamer(t *testing.T) {
 	assert.Nil(t, err)
 	// Test access to out of range subindex
 	_, err = NewStreamer(entry, 10, true)
-	assert.Equal(t, ODR_SUB_NOT_EXIST, err)
+	assert.Equal(t, ErrSubNotExist, err)
 
 }

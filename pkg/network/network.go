@@ -214,7 +214,7 @@ func (network *Network) GetOD(nodeId uint8) (*od.ObjectDictionary, error) {
 	if odLoaded {
 		return network.nodes[nodeId].GetOD(), nil
 	}
-	return nil, od.ODR_OD_MISSING
+	return nil, od.ErrOdMissing
 }
 
 // Read object dictionary using object 1021 (EDS storage) of a remote node

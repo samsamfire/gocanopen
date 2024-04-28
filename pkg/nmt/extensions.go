@@ -10,11 +10,11 @@ import (
 // [NMT] update heartbeat period
 func writeEntry1017(stream *od.Stream, data []byte, countWritten *uint16) error {
 	if stream.Subindex != 0 || data == nil || len(data) != 2 || countWritten == nil || stream == nil {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	nmt, ok := stream.Object.(*NMT)
 	if !ok {
-		return od.ODR_DEV_INCOMPAT
+		return od.ErrDevIncompat
 	}
 	nmt.hearbeatProducerTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 1000
 	nmt.hearbeatProducerTimer = 0

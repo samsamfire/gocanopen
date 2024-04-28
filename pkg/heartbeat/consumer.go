@@ -11,11 +11,11 @@ import (
 )
 
 const (
-	HB_UNCONFIGURED = 0x00 // Consumer entry inactive
-	HB_UNKNOWN      = 0x01 // Consumer enabled, but no heartbeat received yet
-	HB_ACTIVE       = 0x02 // Heartbeat received within set time
-	HB_TIMEOUT      = 0x03 // No heatbeat received for set time
-	SERVICE_ID      = 0x700
+	HeartbeatUnconfigured = 0x00 // Consumer entry inactive
+	HeartbeatUnknown      = 0x01 // Consumer enabled, but no heartbeat received yet
+	HeartbeatActive       = 0x02 // Heartbeat received within set time
+	HeartbeatTimeout      = 0x03 // No heatbeat received for set time
+	ServiceId             = 0x700
 )
 
 // Node specific hearbeat consumer part
@@ -71,7 +71,7 @@ func (consumer *HBConsumer) addHearbeatConsumerNode(index uint8, nodeId uint8, c
 	consumerNode := newHbConsumerNode(nodeId, consumerTimeMs)
 
 	// Configure RX buffer for hearbeat reception
-	if consumerNode.hbState != HB_UNCONFIGURED {
+	if consumerNode.hbState != HeartbeatUnconfigured {
 		log.Debugf("[HB CONSUMER] will monitor x%x | timeout %v us", consumerNode.nodeId, consumerNode.timeUs)
 		consumer.Subscribe(uint32(consumerNode.cobId), 0x7FF, false, consumerNode)
 	}
@@ -93,33 +93,33 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 
 			timeDifferenceUsCopy := timeDifferenceUs
 			// If unconfigured skip to next iteration
-			if monitoredNode.hbState == HB_UNCONFIGURED {
+			if monitoredNode.hbState == HeartbeatUnconfigured {
 				monitoredNode.mu.Unlock()
 				continue
 			}
 			if monitoredNode.rxNew {
 				if monitoredNode.nmtState == nmt.StateInitializing {
 					// Boot up message is an error if previously received (means reboot)
-					if monitoredNode.hbState == HB_ACTIVE {
+					if monitoredNode.hbState == HeartbeatActive {
 						consumer.emcy.ErrorReport(emergency.EmHBConsumerRemoteReset, emergency.ErrHeartbeat, uint32(i))
 					}
-					monitoredNode.hbState = HB_UNKNOWN
+					monitoredNode.hbState = HeartbeatUnknown
 				} else {
 					// Heartbeat message
-					monitoredNode.hbState = HB_ACTIVE
+					monitoredNode.hbState = HeartbeatActive
 					monitoredNode.timeoutTimer = 0
 					timeDifferenceUsCopy = 0
 				}
 				monitoredNode.rxNew = false
 			}
 			// Check timeout
-			if monitoredNode.hbState == HB_ACTIVE {
+			if monitoredNode.hbState == HeartbeatActive {
 				monitoredNode.timeoutTimer += timeDifferenceUsCopy
 				if monitoredNode.timeoutTimer >= monitoredNode.timeUs {
 					// Timeout is expired
 					consumer.emcy.ErrorReport(emergency.EmHBConsumerRemoteReset, emergency.ErrHeartbeat, uint32(i))
 					monitoredNode.nmtState = nmt.StateUnknown
-					monitoredNode.hbState = HB_TIMEOUT
+					monitoredNode.hbState = HeartbeatTimeout
 				} else if timerNextUs != nil {
 					// Calculate when to recheck
 					diff := monitoredNode.timeUs - monitoredNode.timeoutTimer
@@ -128,7 +128,7 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 					}
 				}
 			}
-			if monitoredNode.hbState != HB_ACTIVE {
+			if monitoredNode.hbState != HeartbeatActive {
 				allMonitoredActiveCurrent = false
 			}
 			if monitoredNode.nmtState != nmt.StateOperational {
@@ -149,8 +149,8 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 			monitoredNode.nmtState = nmt.StateUnknown
 			monitoredNode.nmtStatePrev = nmt.StateUnknown
 			monitoredNode.rxNew = false
-			if monitoredNode.hbState != HB_UNCONFIGURED {
-				monitoredNode.hbState = HB_UNKNOWN
+			if monitoredNode.hbState != HeartbeatUnconfigured {
+				monitoredNode.hbState = HeartbeatUnknown
 			}
 			monitoredNode.mu.Unlock()
 		}
@@ -179,12 +179,12 @@ func newHbConsumerNode(nodeId uint8, consumerTimeMs uint16) *monitoredNode {
 	monitoredNode.rxNew = false
 
 	if monitoredNode.nodeId != 0 && monitoredNode.timeUs != 0 {
-		monitoredNode.cobId = uint16(monitoredNode.nodeId) + SERVICE_ID
-		monitoredNode.hbState = HB_UNKNOWN
+		monitoredNode.cobId = uint16(monitoredNode.nodeId) + ServiceId
+		monitoredNode.hbState = HeartbeatUnknown
 	} else {
 		monitoredNode.cobId = 0
 		monitoredNode.timeUs = 0
-		monitoredNode.hbState = HB_UNCONFIGURED
+		monitoredNode.hbState = HeartbeatUnconfigured
 	}
 	return monitoredNode
 }

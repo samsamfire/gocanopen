@@ -79,14 +79,14 @@ func (od *ObjectDictionary) AddVariableList(index uint16, name string, varList *
 func (od *ObjectDictionary) AddFile(index uint16, indexName string, filePath string, readMode int, writeMode int) {
 	log.Infof("[OD] adding file object entry : %v at x%x", filePath, index)
 	fileObject := &FileObject{FilePath: filePath, ReadMode: readMode, WriteMode: writeMode}
-	entry, _ := od.AddVariableType(index, indexName, DOMAIN, ATTRIBUTE_SDO_RW, "") // Cannot error
+	entry, _ := od.AddVariableType(index, indexName, DOMAIN, AttributeSdoRw, "") // Cannot error
 	entry.AddExtension(fileObject, ReadEntryFileObject, WriteEntryFileObject)
 }
 
 // AddReader adds an io.Reader object, of type DOMAIN to OD
 func (od *ObjectDictionary) AddReader(index uint16, indexName string, reader io.Reader) {
 	log.Infof("[OD] adding a reader entry : %v at x%x", indexName, index)
-	entry, _ := od.AddVariableType(index, indexName, DOMAIN, ATTRIBUTE_SDO_R, "") // Cannot error
+	entry, _ := od.AddVariableType(index, indexName, DOMAIN, AttributeSdoR, "") // Cannot error
 	entry.AddExtension(reader, ReadEntryReader, WriteEntryDisabled)
 }
 
@@ -100,21 +100,21 @@ func (od *ObjectDictionary) addPDO(pdoNb uint16, isRPDO bool) error {
 	}
 
 	pdoComm := NewRecord()
-	pdoComm.AddSubObject(0, "Highest sub-index supported", UNSIGNED8, ATTRIBUTE_SDO_R, "0x5")
-	pdoComm.AddSubObject(1, fmt.Sprintf("COB-ID used by %s", pdoType), UNSIGNED32, ATTRIBUTE_SDO_RW, "0x0")
-	pdoComm.AddSubObject(2, "Transmission type", UNSIGNED8, ATTRIBUTE_SDO_RW, "0x0")
-	pdoComm.AddSubObject(3, "Inhibit time", UNSIGNED16, ATTRIBUTE_SDO_RW, "0x0")
-	pdoComm.AddSubObject(4, "Reserved", UNSIGNED8, ATTRIBUTE_SDO_RW, "0x0")
-	pdoComm.AddSubObject(5, "Event timer", UNSIGNED16, ATTRIBUTE_SDO_RW, "0x0")
+	pdoComm.AddSubObject(0, "Highest sub-index supported", UNSIGNED8, AttributeSdoR, "0x5")
+	pdoComm.AddSubObject(1, fmt.Sprintf("COB-ID used by %s", pdoType), UNSIGNED32, AttributeSdoRw, "0x0")
+	pdoComm.AddSubObject(2, "Transmission type", UNSIGNED8, AttributeSdoRw, "0x0")
+	pdoComm.AddSubObject(3, "Inhibit time", UNSIGNED16, AttributeSdoRw, "0x0")
+	pdoComm.AddSubObject(4, "Reserved", UNSIGNED8, AttributeSdoRw, "0x0")
+	pdoComm.AddSubObject(5, "Event timer", UNSIGNED16, AttributeSdoRw, "0x0")
 
-	od.AddVariableList(BASE_RPDO_COMMUNICATION_INDEX+indexOffset, fmt.Sprintf("%s communication parameter", pdoType), pdoComm)
+	od.AddVariableList(IndexRpdoCommunicationBase+indexOffset, fmt.Sprintf("%s communication parameter", pdoType), pdoComm)
 
 	pdoMap := NewRecord()
-	pdoMap.AddSubObject(0, "Number of mapped application objects in PDO", UNSIGNED8, ATTRIBUTE_SDO_RW, "0x0")
-	for i := uint8(1); i <= PDO_MAX_MAPPED_ENTRIES; i++ {
-		pdoMap.AddSubObject(i, fmt.Sprintf("Application object %d", i), UNSIGNED32, ATTRIBUTE_SDO_RW, "0x0")
+	pdoMap.AddSubObject(0, "Number of mapped application objects in PDO", UNSIGNED8, AttributeSdoRw, "0x0")
+	for i := uint8(1); i <= MaxMappedEntriesPdo; i++ {
+		pdoMap.AddSubObject(i, fmt.Sprintf("Application object %d", i), UNSIGNED32, AttributeSdoRw, "0x0")
 	}
-	od.AddVariableList(BASE_RPDO_MAPPING_INDEX+indexOffset, fmt.Sprintf("%s mapping parameter", pdoType), pdoMap)
+	od.AddVariableList(IndexRpdoMappingBase+indexOffset, fmt.Sprintf("%s mapping parameter", pdoType), pdoMap)
 
 	log.Infof("[OD] Added new PDO object to OD : %s%v", pdoType, pdoNb)
 	return nil
@@ -126,7 +126,7 @@ func (od *ObjectDictionary) addPDO(pdoNb uint16, isRPDO bool) error {
 // This however does not create the corresponding CANopen objects
 func (od *ObjectDictionary) AddRPDO(rpdoNb uint16) error {
 	if rpdoNb < 1 || rpdoNb > 512 {
-		return ODR_DEV_INCOMPAT
+		return ErrDevIncompat
 	}
 	return od.addPDO(rpdoNb, true)
 }
@@ -137,7 +137,7 @@ func (od *ObjectDictionary) AddRPDO(rpdoNb uint16) error {
 // This however does not create the corresponding CANopen objects
 func (od *ObjectDictionary) AddTPDO(tpdoNb uint16) error {
 	if tpdoNb < 1 || tpdoNb > 512 {
-		return ODR_DEV_INCOMPAT
+		return ErrDevIncompat
 	}
 	return od.addPDO(tpdoNb, false)
 }
@@ -146,10 +146,10 @@ func (od *ObjectDictionary) AddTPDO(tpdoNb uint16) error {
 // This adds objects 0x1005, 0x1006, 0x1007 & 0x1019 to the OD.
 // By default, SYNC is added with producer disabled and can id of 0x80
 func (od *ObjectDictionary) AddSYNC() {
-	od.AddVariableType(0x1005, "COB-ID SYNC message", UNSIGNED32, ATTRIBUTE_SDO_RW, "0x80000080") // Disabled with standard cob-id
-	od.AddVariableType(0x1006, "Communication cycle period", UNSIGNED32, ATTRIBUTE_SDO_RW, "0x0")
-	od.AddVariableType(0x1007, "Synchronous window length", UNSIGNED32, ATTRIBUTE_SDO_RW, "0x0")
-	od.AddVariableType(0x1019, "Synchronous counter overflow value", UNSIGNED8, ATTRIBUTE_SDO_RW, "0x0")
+	od.AddVariableType(0x1005, "COB-ID SYNC message", UNSIGNED32, AttributeSdoRw, "0x80000080") // Disabled with standard cob-id
+	od.AddVariableType(0x1006, "Communication cycle period", UNSIGNED32, AttributeSdoRw, "0x0")
+	od.AddVariableType(0x1007, "Synchronous window length", UNSIGNED32, AttributeSdoRw, "0x0")
+	od.AddVariableType(0x1019, "Synchronous counter overflow value", UNSIGNED8, AttributeSdoRw, "0x0")
 	log.Infof("[OD] Added new SYNC object to OD")
 }
 
@@ -226,7 +226,7 @@ func (rec *VariableList) GetSubObject(subindex uint8) (*Variable, error) {
 	if rec.objectType == OBJ_ARR {
 		subEntriesCount := len(rec.Variables)
 		if subindex >= uint8(subEntriesCount) {
-			return nil, ODR_SUB_NOT_EXIST
+			return nil, ErrSubNotExist
 		}
 		return rec.Variables[subindex], nil
 	}
@@ -235,7 +235,7 @@ func (rec *VariableList) GetSubObject(subindex uint8) (*Variable, error) {
 			return rec.Variables[i], nil
 		}
 	}
-	return nil, ODR_SUB_NOT_EXIST
+	return nil, ErrSubNotExist
 }
 
 // AddSubObject adds a [Variable] to the VariableList
@@ -259,7 +259,7 @@ func (rec *VariableList) AddSubObject(
 	if rec.objectType == OBJ_ARR {
 		if int(subindex) >= len(rec.Variables) {
 			log.Error("[OD] trying to add a sub object to array but out of bounds")
-			return nil, ODR_SUB_NOT_EXIST
+			return nil, ErrSubNotExist
 		}
 		variable, err := NewVariable(subindex, name, datatype, attribute, value)
 		if err != nil {

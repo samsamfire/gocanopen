@@ -45,7 +45,7 @@ type extension struct {
 	object   any          // Any object to link with extension
 	read     StreamReader // A [StreamReader] that will be called when reading entry
 	write    StreamWriter // A [StreamWriter] that will be called when writing to entry
-	flagsPDO [OD_FLAGS_PDO_SIZE]uint8
+	flagsPDO [FlagsPdoSize]uint8
 }
 
 // Streamer is created before accessing an OD entry
@@ -108,7 +108,7 @@ func (s *Streamer) SetStream(stream Stream) {
 // Create an object streamer for a given od entry + subindex
 func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 	if entry == nil || entry.object == nil {
-		return nil, ODR_IDX_NOT_EXIST
+		return nil, ErrIdxNotExist
 	}
 	streamer := &Streamer{}
 	object := entry.object
@@ -116,7 +116,7 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 	switch object := object.(type) {
 	case *Variable:
 		if subIndex > 0 {
-			return nil, ODR_SUB_NOT_EXIST
+			return nil, ErrSubNotExist
 		}
 		if object.DataType == DOMAIN && entry.extension == nil {
 			// Domain entries require extensions to be used, by default they are disabled
@@ -146,7 +146,7 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 
 	default:
 		log.Errorf("[OD][x%x] error, unknown type : %+v", entry.Index, object)
-		return nil, ODR_DEV_INCOMPAT
+		return nil, ErrDevIncompat
 	}
 	// Add normal reader / writer for object
 	if entry.extension == nil || origin {
@@ -179,11 +179,11 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 // And writes it inside data. It also updates the actual read count, countRead
 func ReadEntryDefault(stream *Stream, data []byte, countRead *uint16) error {
 	if stream == nil || stream.Data == nil || data == nil || countRead == nil {
-		return ODR_DEV_INCOMPAT
+		return ErrDevIncompat
 	}
 	// Check if variable is accessible (i.e.) no write is currently being performed
 	if stream.mu == nil {
-		return ODR_DEV_INCOMPAT
+		return ErrDevIncompat
 	}
 	// Reading will hang if entry is already being written to. This is problematic
 	// For SDO block transfers.
@@ -198,14 +198,14 @@ func ReadEntryDefault(stream *Stream, data []byte, countRead *uint16) error {
 	// in several calls
 	if stream.DataOffset > 0 || dataLenToCopy > count {
 		if stream.DataOffset >= uint32(dataLenToCopy) {
-			return ODR_DEV_INCOMPAT
+			return ErrDevIncompat
 		}
 		dataLenToCopy -= int(stream.DataOffset)
 		if dataLenToCopy > count {
 			// Partial read
 			dataLenToCopy = count
 			stream.DataOffset += uint32(dataLenToCopy)
-			err = ODR_PARTIAL
+			err = ErrPartial
 		} else {
 			stream.DataOffset = 0
 		}
@@ -221,7 +221,7 @@ func ReadEntryDefault(stream *Stream, data []byte, countRead *uint16) error {
 // It also updates the number write count, countWritten
 func WriteEntryDefault(stream *Stream, data []byte, countWritten *uint16) error {
 	if stream == nil || stream.Data == nil || data == nil || countWritten == nil {
-		return ODR_DEV_INCOMPAT
+		return ErrDevIncompat
 	}
 	// Writing will hang if entry is already being read. This is problematic
 	// For SDO block transfers.
@@ -236,7 +236,7 @@ func WriteEntryDefault(stream *Stream, data []byte, countWritten *uint16) error 
 	// in several calls
 	if stream.DataOffset > 0 || dataLenToCopy > count {
 		if stream.DataOffset >= uint32(dataLenToCopy) {
-			return ODR_DEV_INCOMPAT
+			return ErrDevIncompat
 		}
 		dataLenToCopy -= int(stream.DataOffset)
 
@@ -244,7 +244,7 @@ func WriteEntryDefault(stream *Stream, data []byte, countWritten *uint16) error 
 			// Partial write
 			dataLenToCopy = count
 			stream.DataOffset += uint32(dataLenToCopy)
-			err = ODR_PARTIAL
+			err = ErrPartial
 		} else {
 			stream.DataOffset = 0
 		}
@@ -253,7 +253,7 @@ func WriteEntryDefault(stream *Stream, data []byte, countWritten *uint16) error 
 	// OD variable is smaller than the provided buffer
 	if dataLenToCopy < count ||
 		stream.DataOffset+uint32(dataLenToCopy) > uint32(len(stream.Data)) {
-		return ODR_DATA_LONG
+		return ErrDataLong
 	}
 
 	copy(stream.Data[stream.DataOffset:stream.DataOffset+uint32(dataLenToCopy)], data)
@@ -263,10 +263,10 @@ func WriteEntryDefault(stream *Stream, data []byte, countWritten *uint16) error 
 
 // "StreamReader" when the actual OD entry to be read is disabled
 func ReadEntryDisabled(stream *Stream, data []byte, countRead *uint16) error {
-	return ODR_UNSUPP_ACCESS
+	return ErrUnsuppAccess
 }
 
 // "StreamWriter" when the actual OD entry to be written is disabled
 func WriteEntryDisabled(stream *Stream, data []byte, countWritten *uint16) error {
-	return ODR_UNSUPP_ACCESS
+	return ErrUnsuppAccess
 }

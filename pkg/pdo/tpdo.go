@@ -35,8 +35,8 @@ func (tpdo *TPDO) configureTransmissionType(entry18xx *od.Entry) error {
 		log.Errorf("[TPDO][%x|%x] reading %v failed : %v", entry18xx.Index, 2, entry18xx.Name, ret)
 		return canopen.ErrOdParameters
 	}
-	if transmissionType < TRANSMISSION_TYPE_SYNC_EVENT_LO && transmissionType > TRANSMISSION_TYPE_SYNC_240 {
-		transmissionType = TRANSMISSION_TYPE_SYNC_EVENT_LO
+	if transmissionType < TransmissionTypeSyncEventLo && transmissionType > TransmissionTypeSync240 {
+		transmissionType = TransmissionTypeSyncEventLo
 	}
 	tpdo.transmissionType = transmissionType
 	tpdo.sendRequest = true
@@ -94,7 +94,7 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 		return nil
 	}
 
-	if tpdo.transmissionType == TRANSMISSION_TYPE_SYNC_ACYCLIC || tpdo.transmissionType >= TRANSMISSION_TYPE_SYNC_EVENT_LO {
+	if tpdo.transmissionType == TransmissionTypeSyncAcyclic || tpdo.transmissionType >= TransmissionTypeSyncEventLo {
 		if tpdo.eventTimeUs != 0 {
 			if tpdo.eventTimer > timeDifferenceUs {
 				tpdo.eventTimer -= timeDifferenceUs
@@ -121,7 +121,7 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 		}
 	}
 	// Send PDO by application request or event timer
-	if tpdo.transmissionType >= TRANSMISSION_TYPE_SYNC_EVENT_LO {
+	if tpdo.transmissionType >= TransmissionTypeSyncEventLo {
 		if tpdo.inhibitTimer > timeDifferenceUs {
 			tpdo.inhibitTimer -= timeDifferenceUs
 		} else {
@@ -138,7 +138,7 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 	} else if tpdo.sync != nil && syncWas {
 
 		// Send synchronous acyclic tpdo
-		if tpdo.transmissionType == TRANSMISSION_TYPE_SYNC_ACYCLIC &&
+		if tpdo.transmissionType == TransmissionTypeSyncAcyclic &&
 			tpdo.sendRequest {
 			tpdo.mu.Unlock()
 			return tpdo.send()
@@ -180,14 +180,14 @@ func (tpdo *TPDO) send() error {
 	defer tpdo.mu.Unlock()
 
 	pdo := tpdo.pdo
-	eventDriven := tpdo.transmissionType == TRANSMISSION_TYPE_SYNC_ACYCLIC || tpdo.transmissionType >= uint8(TRANSMISSION_TYPE_SYNC_EVENT_LO)
+	eventDriven := tpdo.transmissionType == TransmissionTypeSyncAcyclic || tpdo.transmissionType >= uint8(TransmissionTypeSyncEventLo)
 	dataTPDO := make([]byte, 0)
 	for i := 0; i < int(pdo.nbMapped); i++ {
 		streamer := &pdo.streamers[i]
 		mappedLength := streamer.DataOffset
 		dataLength := int(streamer.DataLength)
-		if dataLength > int(MAX_PDO_LENGTH) {
-			dataLength = int(MAX_PDO_LENGTH)
+		if dataLength > int(MaxPdoLength) {
+			dataLength = int(MaxPdoLength)
 		}
 
 		streamer.DataOffset = 0
