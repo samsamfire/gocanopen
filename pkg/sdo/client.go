@@ -58,6 +58,7 @@ type SDOClient struct {
 	blockCRC                   crc.CRC16
 }
 
+// Handle [SDOClient] related RX CAN frames
 func (client *SDOClient) Handle(frame canopen.Frame) {
 	client.mu.Lock()
 	defer client.mu.Unlock()
