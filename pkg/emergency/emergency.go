@@ -275,6 +275,7 @@ type EMCY struct {
 	rxCallback      EMCYRxCallback
 }
 
+// Handle [EMCY] related RX CAN frames
 func (emcy *EMCY) Handle(frame canopen.Frame) {
 	// Ignore sync messages and only accept 8 bytes size
 	if emcy == nil || emcy.rxCallback == nil ||
@@ -292,6 +293,8 @@ func (emcy *EMCY) Handle(frame canopen.Frame) {
 		infoCode)
 }
 
+// Process [EMCY] state machine and TX CAN frames
+// This should be called periodically
 func (emcy *EMCY) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
 	emcy.mu.Lock()
 	defer emcy.mu.Unlock()

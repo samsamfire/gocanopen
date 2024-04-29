@@ -83,6 +83,7 @@ type NMT struct {
 	callback               func(nmtState uint8)
 }
 
+// Handle [NMT] related RX CAN frames
 func (nmt *NMT) Handle(frame canopen.Frame) {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
@@ -98,8 +99,9 @@ func (nmt *NMT) Handle(frame canopen.Frame) {
 	}
 }
 
-// Process NMT related tasks. This returns the global requested node state that
-// can be used by application
+// Process [NMT] state machine and TX CAN frames
+// It returns a computed global state request for the node
+// This should be called periodically
 func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()

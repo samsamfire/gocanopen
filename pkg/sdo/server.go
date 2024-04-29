@@ -45,7 +45,7 @@ type SDOServer struct {
 	errorExtraInfo             error
 }
 
-// Handle received messages
+// Handle [SDOServer] related RX CAN frames
 func (server *SDOServer) Handle(frame canopen.Frame) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
@@ -125,195 +125,14 @@ func (server *SDOServer) Handle(frame canopen.Frame) {
 	}
 }
 
-func (server *SDOServer) initRxTx(cobIdClientToServer uint32, cobIdServerToClient uint32) error {
-	var ret error
-	// Only proceed if parameters change (i.e. different client)
-	if cobIdServerToClient == server.cobIdServerToClient && cobIdClientToServer == server.cobIdClientToServer {
-		return nil
-	}
-	server.cobIdServerToClient = cobIdServerToClient
-	server.cobIdClientToServer = cobIdClientToServer
-
-	// Check the valid bit
-	var CanIdC2S, CanIdS2C uint16
-	if cobIdClientToServer&0x80000000 == 0 {
-		CanIdC2S = uint16(cobIdClientToServer & 0x7FF)
-	} else {
-		CanIdC2S = 0
-	}
-	if cobIdServerToClient&0x80000000 == 0 {
-		CanIdS2C = uint16(cobIdServerToClient & 0x7FF)
-	} else {
-		CanIdS2C = 0
-	}
-	if CanIdC2S != 0 && CanIdS2C != 0 {
-		server.valid = true
-	} else {
-		CanIdC2S = 0
-		CanIdS2C = 0
-		server.valid = false
-	}
-	// Configure buffers, if initializing then insert in buffer, otherwise, update
-	ret = server.Subscribe(uint32(CanIdC2S), 0x7FF, false, server)
-	if ret != nil {
-		server.valid = false
-		return ret
-	}
-	server.txBuffer = canopen.NewFrame(uint32(CanIdS2C), 0, 8)
-	return ret
-}
-
-func (server *SDOServer) writeObjectDictionary(crcOperation uint, crcClient crc.CRC16) error {
-
-	bufferOffsetWriteOriginal := server.bufWriteOffset
-
-	if server.finished {
-		// Check size
-		if server.sizeIndicated > 0 && server.sizeTransferred > server.sizeIndicated {
-			server.state = stateAbort
-			return AbortDataLong
-		} else if server.sizeIndicated > 0 && server.sizeTransferred < server.sizeIndicated {
-			server.state = stateAbort
-			return AbortDataShort
-		}
-		// Golang does not have null termination characters so nothing particular to do
-		// Stream data should be limited to the sent value
-
-		varSizeInOd := server.streamer.DataLength
-		if server.streamer.HasAttribute(od.AttributeStr) &&
-			(varSizeInOd == 0 || server.sizeTransferred < varSizeInOd) &&
-			int(server.bufWriteOffset+2) <= len(server.buffer) {
-			server.buffer[server.bufWriteOffset] = 0x00
-			server.bufWriteOffset++
-			server.sizeTransferred++
-			if varSizeInOd == 0 || server.sizeTransferred < varSizeInOd {
-				server.buffer[server.bufWriteOffset] = 0x00
-				server.bufWriteOffset++
-				server.sizeTransferred++
-			}
-			server.streamer.DataLength = server.sizeTransferred
-		} else if varSizeInOd == 0 {
-			server.streamer.DataLength = server.sizeTransferred
-		} else if server.sizeTransferred != varSizeInOd {
-			if server.sizeTransferred > varSizeInOd {
-				server.state = stateAbort
-				return AbortDataLong
-			} else if server.sizeTransferred < varSizeInOd {
-				server.state = stateAbort
-				return AbortDataShort
-			}
-		}
-
-	} else if server.sizeIndicated > 0 && server.sizeTransferred > server.sizeIndicated {
-		// Still check if not bigger than max size
-		server.state = stateAbort
-		return AbortDataLong
-	}
-
-	// Calculate CRC
-	if server.blockCRCEnabled && crcOperation > 0 {
-		server.blockCRC.Block(server.buffer[:bufferOffsetWriteOriginal])
-		if crcOperation == 2 && crcClient != server.blockCRC {
-			server.state = stateAbort
-			server.errorExtraInfo = fmt.Errorf("server was expecting %v but got %v", server.blockCRC, crcClient)
-			return AbortCRC
-		}
-	}
-
-	// Write the data
-	_, ret := server.streamer.Write(server.buffer[:server.bufWriteOffset])
-	server.bufWriteOffset = 0
-	if ret != nil && ret != od.ErrPartial {
-		server.state = stateAbort
-		return ConvertOdToSdoAbort(ret.(od.ODR))
-	} else if server.finished && ret == od.ErrPartial {
-		server.state = stateAbort
-		return AbortDataShort
-	} else if !server.finished && ret == nil {
-		server.state = stateAbort
-		return AbortDataLong
-	}
-	return nil
-}
-
-func (server *SDOServer) readObjectDictionary(countMinimum uint32, calculateCRC bool) error {
-	buffered := server.bufWriteOffset - server.bufReadOffset
-	if !server.finished && buffered < countMinimum {
-		// Move buffered bytes to beginning
-		copy(server.buffer, server.buffer[server.bufReadOffset:server.bufReadOffset+buffered])
-		server.bufReadOffset = 0
-		server.bufWriteOffset = buffered
-
-		// Read from OD into the buffer
-		countRd, err := server.streamer.Read(server.buffer[buffered:])
-
-		if err != nil && err != od.ErrPartial {
-			server.state = stateAbort
-			return ConvertOdToSdoAbort(err.(od.ODR))
-		}
-
-		// Stop sending at null termination if string
-		if countRd > 0 && server.streamer.HasAttribute(od.AttributeStr) {
-			server.buffer[countRd+int(buffered)] = 0
-			countStr := int(server.streamer.DataLength)
-			for i, v := range server.buffer[buffered:] {
-				if v == 0 {
-					countStr = i
-					break
-				}
-			}
-			if countStr == 0 {
-				countStr = 1
-			}
-			if countStr < countRd {
-				// String terminator found
-				countRd = countStr
-				err = nil
-				server.streamer.DataLength = server.sizeTransferred + uint32(countRd)
-			}
-		}
-
-		server.bufWriteOffset = buffered + uint32(countRd) // Move offset write by countRd (number of read bytes)
-		if server.bufWriteOffset == 0 || err == od.ErrPartial {
-			server.finished = false
-			if server.bufWriteOffset < countMinimum {
-				server.state = stateAbort
-				server.errorExtraInfo = fmt.Errorf("buffer offset write %v is less than the minimum count %v", server.bufWriteOffset, countMinimum)
-				return AbortDeviceIncompat
-			}
-		} else {
-			server.finished = true
-		}
-		if calculateCRC && server.blockCRCEnabled {
-			// Calculate CRC for the read data
-			server.blockCRC.Block(server.buffer[buffered:server.bufWriteOffset])
-		}
-
-	}
-
-	return nil
-}
-
-func updateStateFromRequest(stateReq uint8, state *internalState, upload *bool) error {
-	*upload = false
-	if (stateReq & 0xF0) == 0x20 {
-		*state = stateDownloadInitiateReq
-	} else if stateReq == 0x40 {
-		*upload = true
-		*state = stateUploadInitiateReq
-	} else if (stateReq & 0xF9) == 0xC0 {
-		*state = stateDownloadBlkInitiateReq
-	} else if (stateReq & 0xFB) == 0xA0 {
-		*upload = true
-		*state = stateUploadBlkInitiateReq
-	} else {
-		*state = stateAbort
-		return AbortCmd
-	}
-	return nil
-}
-
-func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs uint32, timerNextUs *uint32) (state uint8, err error) {
+// Process [SDOServer] state machine and TX CAN frames
+// It returns the global server state and error if any
+// This should be called periodically
+func (server *SDOServer) Process(
+	nmtIsPreOrOperationnal bool,
+	timeDifferenceUs uint32,
+	timerNextUs *uint32,
+) (state uint8, err error) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
 	ret := waitingResponse
@@ -961,6 +780,194 @@ func (server *SDOServer) Process(nmtIsPreOrOperationnal bool, timeDifferenceUs u
 		}
 	}
 	return ret, abortCode
+}
+
+func (server *SDOServer) initRxTx(cobIdClientToServer uint32, cobIdServerToClient uint32) error {
+	var ret error
+	// Only proceed if parameters change (i.e. different client)
+	if cobIdServerToClient == server.cobIdServerToClient && cobIdClientToServer == server.cobIdClientToServer {
+		return nil
+	}
+	server.cobIdServerToClient = cobIdServerToClient
+	server.cobIdClientToServer = cobIdClientToServer
+
+	// Check the valid bit
+	var CanIdC2S, CanIdS2C uint16
+	if cobIdClientToServer&0x80000000 == 0 {
+		CanIdC2S = uint16(cobIdClientToServer & 0x7FF)
+	} else {
+		CanIdC2S = 0
+	}
+	if cobIdServerToClient&0x80000000 == 0 {
+		CanIdS2C = uint16(cobIdServerToClient & 0x7FF)
+	} else {
+		CanIdS2C = 0
+	}
+	if CanIdC2S != 0 && CanIdS2C != 0 {
+		server.valid = true
+	} else {
+		CanIdC2S = 0
+		CanIdS2C = 0
+		server.valid = false
+	}
+	// Configure buffers, if initializing then insert in buffer, otherwise, update
+	ret = server.Subscribe(uint32(CanIdC2S), 0x7FF, false, server)
+	if ret != nil {
+		server.valid = false
+		return ret
+	}
+	server.txBuffer = canopen.NewFrame(uint32(CanIdS2C), 0, 8)
+	return ret
+}
+
+func (server *SDOServer) writeObjectDictionary(crcOperation uint, crcClient crc.CRC16) error {
+
+	bufferOffsetWriteOriginal := server.bufWriteOffset
+
+	if server.finished {
+		// Check size
+		if server.sizeIndicated > 0 && server.sizeTransferred > server.sizeIndicated {
+			server.state = stateAbort
+			return AbortDataLong
+		} else if server.sizeIndicated > 0 && server.sizeTransferred < server.sizeIndicated {
+			server.state = stateAbort
+			return AbortDataShort
+		}
+		// Golang does not have null termination characters so nothing particular to do
+		// Stream data should be limited to the sent value
+
+		varSizeInOd := server.streamer.DataLength
+		if server.streamer.HasAttribute(od.AttributeStr) &&
+			(varSizeInOd == 0 || server.sizeTransferred < varSizeInOd) &&
+			int(server.bufWriteOffset+2) <= len(server.buffer) {
+			server.buffer[server.bufWriteOffset] = 0x00
+			server.bufWriteOffset++
+			server.sizeTransferred++
+			if varSizeInOd == 0 || server.sizeTransferred < varSizeInOd {
+				server.buffer[server.bufWriteOffset] = 0x00
+				server.bufWriteOffset++
+				server.sizeTransferred++
+			}
+			server.streamer.DataLength = server.sizeTransferred
+		} else if varSizeInOd == 0 {
+			server.streamer.DataLength = server.sizeTransferred
+		} else if server.sizeTransferred != varSizeInOd {
+			if server.sizeTransferred > varSizeInOd {
+				server.state = stateAbort
+				return AbortDataLong
+			} else if server.sizeTransferred < varSizeInOd {
+				server.state = stateAbort
+				return AbortDataShort
+			}
+		}
+
+	} else if server.sizeIndicated > 0 && server.sizeTransferred > server.sizeIndicated {
+		// Still check if not bigger than max size
+		server.state = stateAbort
+		return AbortDataLong
+	}
+
+	// Calculate CRC
+	if server.blockCRCEnabled && crcOperation > 0 {
+		server.blockCRC.Block(server.buffer[:bufferOffsetWriteOriginal])
+		if crcOperation == 2 && crcClient != server.blockCRC {
+			server.state = stateAbort
+			server.errorExtraInfo = fmt.Errorf("server was expecting %v but got %v", server.blockCRC, crcClient)
+			return AbortCRC
+		}
+	}
+
+	// Write the data
+	_, ret := server.streamer.Write(server.buffer[:server.bufWriteOffset])
+	server.bufWriteOffset = 0
+	if ret != nil && ret != od.ErrPartial {
+		server.state = stateAbort
+		return ConvertOdToSdoAbort(ret.(od.ODR))
+	} else if server.finished && ret == od.ErrPartial {
+		server.state = stateAbort
+		return AbortDataShort
+	} else if !server.finished && ret == nil {
+		server.state = stateAbort
+		return AbortDataLong
+	}
+	return nil
+}
+
+func (server *SDOServer) readObjectDictionary(countMinimum uint32, calculateCRC bool) error {
+	buffered := server.bufWriteOffset - server.bufReadOffset
+	if !server.finished && buffered < countMinimum {
+		// Move buffered bytes to beginning
+		copy(server.buffer, server.buffer[server.bufReadOffset:server.bufReadOffset+buffered])
+		server.bufReadOffset = 0
+		server.bufWriteOffset = buffered
+
+		// Read from OD into the buffer
+		countRd, err := server.streamer.Read(server.buffer[buffered:])
+
+		if err != nil && err != od.ErrPartial {
+			server.state = stateAbort
+			return ConvertOdToSdoAbort(err.(od.ODR))
+		}
+
+		// Stop sending at null termination if string
+		if countRd > 0 && server.streamer.HasAttribute(od.AttributeStr) {
+			server.buffer[countRd+int(buffered)] = 0
+			countStr := int(server.streamer.DataLength)
+			for i, v := range server.buffer[buffered:] {
+				if v == 0 {
+					countStr = i
+					break
+				}
+			}
+			if countStr == 0 {
+				countStr = 1
+			}
+			if countStr < countRd {
+				// String terminator found
+				countRd = countStr
+				err = nil
+				server.streamer.DataLength = server.sizeTransferred + uint32(countRd)
+			}
+		}
+
+		server.bufWriteOffset = buffered + uint32(countRd) // Move offset write by countRd (number of read bytes)
+		if server.bufWriteOffset == 0 || err == od.ErrPartial {
+			server.finished = false
+			if server.bufWriteOffset < countMinimum {
+				server.state = stateAbort
+				server.errorExtraInfo = fmt.Errorf("buffer offset write %v is less than the minimum count %v", server.bufWriteOffset, countMinimum)
+				return AbortDeviceIncompat
+			}
+		} else {
+			server.finished = true
+		}
+		if calculateCRC && server.blockCRCEnabled {
+			// Calculate CRC for the read data
+			server.blockCRC.Block(server.buffer[buffered:server.bufWriteOffset])
+		}
+
+	}
+
+	return nil
+}
+
+func updateStateFromRequest(stateReq uint8, state *internalState, upload *bool) error {
+	*upload = false
+	if (stateReq & 0xF0) == 0x20 {
+		*state = stateDownloadInitiateReq
+	} else if stateReq == 0x40 {
+		*upload = true
+		*state = stateUploadInitiateReq
+	} else if (stateReq & 0xF9) == 0xC0 {
+		*state = stateDownloadBlkInitiateReq
+	} else if (stateReq & 0xFB) == 0xA0 {
+		*upload = true
+		*state = stateUploadBlkInitiateReq
+	} else {
+		*state = stateAbort
+		return AbortCmd
+	}
+	return nil
 }
 
 // Create & send abort on bus

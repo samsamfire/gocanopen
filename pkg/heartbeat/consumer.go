@@ -43,7 +43,7 @@ type HBConsumer struct {
 	nmtIsPreOrOperationalPrev bool
 }
 
-// Handle hearbeat reception specific to a node
+// Handle [HBConsumer] related RX CAN frames
 func (nodeConsumer *monitoredNode) Handle(frame canopen.Frame) {
 	nodeConsumer.mu.Lock()
 	defer nodeConsumer.mu.Unlock()
@@ -55,31 +55,8 @@ func (nodeConsumer *monitoredNode) Handle(frame canopen.Frame) {
 	nodeConsumer.rxNew = true
 }
 
-// Add a consumer node
-func (consumer *HBConsumer) addHearbeatConsumerNode(index uint8, nodeId uint8, consumerTimeMs uint16) error {
-	if index >= consumer.nbMonitoredNodes {
-		return canopen.ErrIllegalArgument
-	}
-	// Check duplicate entries
-	if consumerTimeMs != 0 && nodeId != 0 {
-		for i, consumerNode := range consumer.monitoredNodes {
-			if int(index) != i && consumerNode.timeUs != 0 && consumerNode.nodeId == nodeId {
-				return canopen.ErrIllegalArgument
-			}
-		}
-	}
-	consumerNode := newHbConsumerNode(nodeId, consumerTimeMs)
-
-	// Configure RX buffer for hearbeat reception
-	if consumerNode.hbState != HeartbeatUnconfigured {
-		log.Debugf("[HB CONSUMER] will monitor x%x | timeout %v us", consumerNode.nodeId, consumerNode.timeUs)
-		consumer.Subscribe(uint32(consumerNode.cobId), 0x7FF, false, consumerNode)
-	}
-	consumer.monitoredNodes[index] = consumerNode
-	return nil
-}
-
-// process Hearbeat consuming
+// Process [HBConsumer] state machine and TX CAN frames
+// This should be called periodically
 func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
 	consumer.mu.Lock()
 	defer consumer.mu.Unlock()
@@ -166,6 +143,30 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 	consumer.allMonitoredActive = allMonitoredActiveCurrent
 	consumer.allMonitoredOperational = allMonitoredOperationalCurrent
 	consumer.nmtIsPreOrOperationalPrev = nmtIsPreOrOperational
+}
+
+// Add a consumer node
+func (consumer *HBConsumer) addHearbeatConsumerNode(index uint8, nodeId uint8, consumerTimeMs uint16) error {
+	if index >= consumer.nbMonitoredNodes {
+		return canopen.ErrIllegalArgument
+	}
+	// Check duplicate entries
+	if consumerTimeMs != 0 && nodeId != 0 {
+		for i, consumerNode := range consumer.monitoredNodes {
+			if int(index) != i && consumerNode.timeUs != 0 && consumerNode.nodeId == nodeId {
+				return canopen.ErrIllegalArgument
+			}
+		}
+	}
+	consumerNode := newHbConsumerNode(nodeId, consumerTimeMs)
+
+	// Configure RX buffer for hearbeat reception
+	if consumerNode.hbState != HeartbeatUnconfigured {
+		log.Debugf("[HB CONSUMER] will monitor x%x | timeout %v us", consumerNode.nodeId, consumerNode.timeUs)
+		consumer.Subscribe(uint32(consumerNode.cobId), 0x7FF, false, consumerNode)
+	}
+	consumer.monitoredNodes[index] = consumerNode
+	return nil
 }
 
 // Initialize a single node consumer

@@ -26,61 +26,8 @@ type TPDO struct {
 	eventTimer       uint32
 }
 
-func (tpdo *TPDO) configureTransmissionType(entry18xx *od.Entry) error {
-	tpdo.mu.Lock()
-	defer tpdo.mu.Unlock()
-
-	transmissionType, ret := entry18xx.Uint8(2)
-	if ret != nil {
-		log.Errorf("[TPDO][%x|%x] reading %v failed : %v", entry18xx.Index, 2, entry18xx.Name, ret)
-		return canopen.ErrOdParameters
-	}
-	if transmissionType < TransmissionTypeSyncEventLo && transmissionType > TransmissionTypeSync240 {
-		transmissionType = TransmissionTypeSyncEventLo
-	}
-	tpdo.transmissionType = transmissionType
-	tpdo.sendRequest = true
-	return nil
-}
-
-func (tpdo *TPDO) configureCOBID(entry18xx *od.Entry, predefinedIdent uint16, erroneousMap uint32) (canId uint16, e error) {
-	tpdo.mu.Lock()
-	defer tpdo.mu.Unlock()
-
-	pdo := tpdo.pdo
-	cobId, ret := entry18xx.Uint32(1)
-	if ret != nil {
-		log.Errorf("[TPDO][%x|%x] reading %v failed : %v", entry18xx.Index, 1, entry18xx.Name, ret)
-		return 0, canopen.ErrOdParameters
-	}
-	valid := (cobId & 0x80000000) == 0
-	canId = uint16(cobId & 0x7FF)
-	if valid && (pdo.nbMapped == 0 || canId == 0) {
-		valid = false
-		if erroneousMap == 0 {
-			erroneousMap = 1
-		}
-	}
-	if erroneousMap != 0 {
-		errorInfo := erroneousMap
-		if erroneousMap == 1 {
-			errorInfo = cobId
-		}
-		pdo.emcy.ErrorReport(emergency.EmPDOWrongMapping, emergency.ErrProtocolError, errorInfo)
-	}
-	if !valid {
-		canId = 0
-	}
-	// If default canId is stored in od add node id
-	if canId != 0 && canId == (predefinedIdent&0xFF80) {
-		canId = predefinedIdent
-	}
-	tpdo.txBuffer = canopen.NewFrame(uint32(canId), 0, uint8(pdo.dataLength))
-	pdo.Valid = valid
-	return canId, nil
-
-}
-
+// Process [TPDO] state machine and TX CAN frames
+// This should be called periodically
 func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOperational bool, syncWas bool) error {
 	tpdo.mu.Lock()
 
@@ -173,6 +120,61 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 	}
 	tpdo.mu.Unlock()
 	return nil
+}
+
+func (tpdo *TPDO) configureTransmissionType(entry18xx *od.Entry) error {
+	tpdo.mu.Lock()
+	defer tpdo.mu.Unlock()
+
+	transmissionType, ret := entry18xx.Uint8(2)
+	if ret != nil {
+		log.Errorf("[TPDO][%x|%x] reading %v failed : %v", entry18xx.Index, 2, entry18xx.Name, ret)
+		return canopen.ErrOdParameters
+	}
+	if transmissionType < TransmissionTypeSyncEventLo && transmissionType > TransmissionTypeSync240 {
+		transmissionType = TransmissionTypeSyncEventLo
+	}
+	tpdo.transmissionType = transmissionType
+	tpdo.sendRequest = true
+	return nil
+}
+
+func (tpdo *TPDO) configureCOBID(entry18xx *od.Entry, predefinedIdent uint16, erroneousMap uint32) (canId uint16, e error) {
+	tpdo.mu.Lock()
+	defer tpdo.mu.Unlock()
+
+	pdo := tpdo.pdo
+	cobId, ret := entry18xx.Uint32(1)
+	if ret != nil {
+		log.Errorf("[TPDO][%x|%x] reading %v failed : %v", entry18xx.Index, 1, entry18xx.Name, ret)
+		return 0, canopen.ErrOdParameters
+	}
+	valid := (cobId & 0x80000000) == 0
+	canId = uint16(cobId & 0x7FF)
+	if valid && (pdo.nbMapped == 0 || canId == 0) {
+		valid = false
+		if erroneousMap == 0 {
+			erroneousMap = 1
+		}
+	}
+	if erroneousMap != 0 {
+		errorInfo := erroneousMap
+		if erroneousMap == 1 {
+			errorInfo = cobId
+		}
+		pdo.emcy.ErrorReport(emergency.EmPDOWrongMapping, emergency.ErrProtocolError, errorInfo)
+	}
+	if !valid {
+		canId = 0
+	}
+	// If default canId is stored in od add node id
+	if canId != 0 && canId == (predefinedIdent&0xFF80) {
+		canId = predefinedIdent
+	}
+	tpdo.txBuffer = canopen.NewFrame(uint32(canId), 0, uint8(pdo.dataLength))
+	pdo.Valid = valid
+	return canId, nil
+
 }
 
 func (tpdo *TPDO) send() error {
