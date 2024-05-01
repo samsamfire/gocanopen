@@ -2,7 +2,7 @@
 package main
 
 import (
-	canopen "github.com/samsamfire/gocanopen"
+	"github.com/samsamfire/gocanopen/pkg/network"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -14,17 +14,19 @@ var EDS_PATH = "../../testdata/base.eds"
 func main() {
 	log.SetLevel(log.DebugLevel)
 
-	network := canopen.NewNetwork(nil)
+	network := network.NewNetwork(nil)
 	err := network.Connect("socketcan", DEFAULT_CAN_INTERFACE, DEFAULT_CAN_BITRATE)
 	if err != nil {
 		panic(err)
 	}
 
 	// Add a remote node for master control
-	node, err := network.AddRemoteNode(DEFAULT_NODE_ID, "../../testdata/base.eds", true)
+	node, err := network.AddRemoteNode(DEFAULT_NODE_ID, "../../testdata/base.eds")
 	if err != nil {
 		panic(err)
 	}
+	// Start PDOs, without reading remote configuration (useLocal = true)
+	node.StartPDOs(true)
 	// Read values via SDO
 	val, err := node.ReadUint("UNSIGNED32 value", "")
 	if err == nil {

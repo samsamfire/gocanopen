@@ -4,7 +4,8 @@ import (
 	"flag"
 	"fmt"
 
-	canopen "github.com/samsamfire/gocanopen"
+	"github.com/samsamfire/gocanopen/pkg/gateway/http"
+	"github.com/samsamfire/gocanopen/pkg/network"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -24,12 +25,12 @@ func main() {
 	channel := flag.String("i", DEFAULT_CAN_INTERFACE, "socketcan channel e.g. can0,vcan0")
 	flag.Parse()
 
-	network := canopen.NewNetwork(nil)
+	network := network.NewNetwork(nil)
 	e := network.Connect("", *channel, 500000)
 	if e != nil {
 		panic(e)
 	}
-	gateway := canopen.NewGateway(1, 1, 100, &network)
+	gateway := http.NewGatewayServer(&network, 1, 1, 1000)
 	gateway.ListenAndServe(fmt.Sprintf(":%d", DEFAULT_HTTP_PORT))
 
 }
