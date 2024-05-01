@@ -10,6 +10,15 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
+@pytest.fixture(scope="module")
+def node(node: canopen.RemoteNode) -> canopen.RemoteNode:
+    node.pdo.read()
+    for pdo in node.pdo.values():
+        pdo.enabled = False
+        pdo.save()
+    yield node
+
+
 def test_sdo_expedited_upload_download_uint8(node: canopen.RemoteNode):
     for value in [10, 22, 89, 253]:
         node.sdo["UNSIGNED8 value"].raw = value
@@ -325,7 +334,7 @@ def test_sdo_block_upload_crc_invalid(node: canopen.RemoteNode):
                 # Mess up CRC
                 stream._crc.process(b"randomdata")
             stream.close()
-    
+
     # Do some dummy reads
     for value in [10, 22, 89, 253]:
         node.sdo["UNSIGNED8 value"].raw = value

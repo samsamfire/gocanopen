@@ -5,7 +5,7 @@ import pathlib
 import canopen
 
 EDS_PATH = str(
-    pathlib.Path(__file__).parent.absolute().parent.joinpath("testdata/base.eds")
+    pathlib.Path(__file__).parent.absolute().parent.joinpath("pkg/od/base.eds")
 )
 TEST_ID = 0x10
 
