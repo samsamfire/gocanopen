@@ -220,20 +220,20 @@ func (tpdo *TPDO) send() error {
 func NewTPDO(
 	bm *canopen.BusManager,
 	odict *od.ObjectDictionary,
-	em *emergency.EMCY,
+	emcy *emergency.EMCY,
 	sync *sync.SYNC,
 	entry18xx *od.Entry,
 	entry1Axx *od.Entry,
 	predefinedIdent uint16,
 
 ) (*TPDO, error) {
-	if odict == nil || entry18xx == nil || entry1Axx == nil || bm == nil {
+	if odict == nil || entry18xx == nil || entry1Axx == nil || bm == nil || emcy == nil {
 		return nil, canopen.ErrIllegalArgument
 	}
 	tpdo := &TPDO{BusManager: bm}
 	// Configure mapping parameters
 	erroneousMap := uint32(0)
-	pdo, err := NewPDO(odict, entry1Axx, false, em, &erroneousMap)
+	pdo, err := NewPDO(odict, entry1Axx, false, emcy, &erroneousMap)
 	if err != nil {
 		return nil, err
 	}
