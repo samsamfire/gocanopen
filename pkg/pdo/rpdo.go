@@ -197,19 +197,19 @@ func (rpdo *RPDO) configureCOBID(entry14xx *od.Entry, predefinedIdent uint32, er
 func NewRPDO(
 	bm *canopen.BusManager,
 	odict *od.ObjectDictionary,
-	em *emergency.EMCY,
+	emcy *emergency.EMCY,
 	sync *sync.SYNC,
 	entry14xx *od.Entry,
 	entry16xx *od.Entry,
 	predefinedIdent uint16,
 ) (*RPDO, error) {
-	if odict == nil || entry14xx == nil || entry16xx == nil || bm == nil {
+	if odict == nil || entry14xx == nil || entry16xx == nil || bm == nil || emcy == nil {
 		return nil, canopen.ErrIllegalArgument
 	}
 	rpdo := &RPDO{BusManager: bm}
 	// Configure mapping parameters
 	erroneousMap := uint32(0)
-	pdo, err := NewPDO(odict, entry16xx, true, em, &erroneousMap)
+	pdo, err := NewPDO(odict, entry16xx, true, emcy, &erroneousMap)
 	if err != nil {
 		return nil, err
 	}
