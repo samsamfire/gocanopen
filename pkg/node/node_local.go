@@ -53,7 +53,7 @@ func (node *LocalNode) ProcessRPDO(syncWas bool, timeDifferenceUs uint32, timerN
 	}
 }
 
-func (node *LocalNode) ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32) bool {
+func (node *LocalNode) ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32) bool {
 	syncWas := false
 	s := node.SYNC
 	if !node.NodeIdUnconfigured && s != nil {

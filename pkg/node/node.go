@@ -19,7 +19,7 @@ const (
 type Node interface {
 	ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32)
 	ProcessRPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32)
-	ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32) bool
+	ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32) bool
 	ProcessMain(enableGateway bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8
 	GetOD() *od.ObjectDictionary
 	GetID() uint8

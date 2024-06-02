@@ -163,7 +163,7 @@ func (network *Network) launchNodeProcess(node n.Node) {
 							elapsed := time.Since(startBackground)
 							startBackground = time.Now()
 							timeDifferenceUs := uint32(elapsed.Microseconds())
-							syncWas := node.ProcessSync(timeDifferenceUs, nil)
+							syncWas := node.ProcessSYNC(timeDifferenceUs, nil)
 							node.ProcessTPDO(syncWas, timeDifferenceUs, nil)
 							node.ProcessRPDO(syncWas, timeDifferenceUs, nil)
 							time.Sleep(backgroundPeriod)
