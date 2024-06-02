@@ -43,12 +43,8 @@ func (odr ODR) Error() string {
 }
 
 const (
-	IndexRpdoCommunicationBase = uint16(0x1400)
-	IndexRpdoMappingBase       = uint16(0x1600)
-	IndexTpdoCommunicationBase = uint16(0x1800)
-	IndexTpdoMappingBase       = uint16(0x1A00)
-	MaxMappedEntriesPdo        = uint8(8)
-	FlagsPdoSize               = uint8(32)
+	MaxMappedEntriesPdo = uint8(8)
+	FlagsPdoSize        = uint8(32)
 )
 
 // Object dictionary object attribute
@@ -67,4 +63,36 @@ const (
 	// written to the variable. SDO write will fill remaining memory with zeroes.
 	// Attribute is used for VISIBLE_STRING and UNICODE_STRING.
 	AttributeStr uint8 = 0x80
+)
+
+// Standard CANopen object entries index
+const (
+	EntryDeviceType                  uint16 = 0x1000
+	EntryErrorRegister               uint16 = 0x1001
+	EntryManufacturerStatusRegister  uint16 = 0x1003
+	EntryCobIdSYNC                   uint16 = 0x1005
+	EntryCommunicationCyclePeriod    uint16 = 0x1006
+	EntrySynchronousWindowLength     uint16 = 0x1007
+	EntryManufacturerDeviceName      uint16 = 0x1008
+	EntryManufacturerHardwareVersion uint16 = 0x1009
+	EntryManufacturerSoftwareVersion uint16 = 0x100A
+	EntryStoreParameters             uint16 = 0x1010
+	EntryRestoreDefaultParameters    uint16 = 0x1011
+	EntryCobIdTIME                   uint16 = 0x1012
+	EntryHighResTimestamp            uint16 = 0x1013
+	EntryCobIdEMCY                   uint16 = 0x1014
+	EntryInhibitTimeEMCY             uint16 = 0x1015
+	EntryConsumerHeartbeatTime       uint16 = 0x1016
+	EntryProducerHeartbeatTime       uint16 = 0x1017
+	EntryIdentityObject              uint16 = 0x1018
+	EntryStoreEDS                    uint16 = 0x1021
+	EntryStorageFormat               uint16 = 0x1022
+	EntryRPDOCommunicationStart      uint16 = 0x1400
+	EntryRPDOCommunicationEnd        uint16 = 0x15FF
+	EntryRPDOMappingStart            uint16 = 0x1600
+	EntryRPDOMappingEnd              uint16 = 0x17FF
+	EntryTPDOCommunicationStart      uint16 = 0x1800
+	EntryTPDOCommunicationEnd        uint16 = 0x19FF
+	EntryTPDOMappingStart            uint16 = 0x1A00
+	EntryTPDOMappingEnd              uint16 = 0x1BFF
 )

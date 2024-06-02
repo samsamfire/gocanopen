@@ -36,7 +36,6 @@ type RPDO struct {
 func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
-
 	pdo := rpdo.pdo
 	err := rpdo.receiveError
 	if !pdo.Valid {
