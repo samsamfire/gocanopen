@@ -84,6 +84,7 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 	if sync.rxNew {
 		sync.timer = 0
 		sync.rxNew = false
+		status = EventRxOrTx
 	}
 	communicationCyclePeriod := binary.LittleEndian.Uint32(sync.rawCommunicationCyclePeriod)
 	if communicationCyclePeriod > 0 {
