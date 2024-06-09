@@ -1943,7 +1943,7 @@ PDOMapping=1
 ParameterName=REAL32 value
 ObjectType=0x7
 DataType=0x0008
-DefaultValue=0x55555555
+DefaultValue=0.1
 AccessType=rw
 PDOMapping=1
 
@@ -1968,7 +1968,7 @@ PDOMapping=0
 ParameterName=REAL64 value
 ObjectType=0x7
 DataType=0x0011
-DefaultValue=0x55555555
+DefaultValue=0.55
 AccessType=rw
 PDOMapping=1
 

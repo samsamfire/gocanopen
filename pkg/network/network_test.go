@@ -84,9 +84,3 @@ func TestAddRemoveNodes(t *testing.T) {
 	})
 
 }
-
-// func TestRemoveNode(t *testing.T) {
-// 	network := CreateNetworkTest()
-// 	defer network.Disconnect()
-// 	network.RemoveNode(NODE_ID_TEST)
-// }
