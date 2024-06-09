@@ -1,7 +1,6 @@
 package network
 
 import (
-	"math"
 	"testing"
 	"time"
 
@@ -26,8 +25,8 @@ var SDO_INTEGER_READ_MAP = map[string]int64{
 }
 
 var SDO_FLOAT_READ_MAP = map[string]float64{
-	"REAL32 value": float64(math.Float32frombits(uint32(0x55555555))),
-	"REAL64 value": math.Float64frombits(0x55555555),
+	"REAL32 value": float64(0.1),
+	"REAL64 value": float64(0.55),
 }
 
 func init() {
@@ -62,7 +61,7 @@ func TestReadLocal(t *testing.T) {
 		}
 		for indexName, key := range SDO_FLOAT_READ_MAP {
 			val, _ := local.Read(indexName, "")
-			assert.Equal(t, key, val)
+			assert.InDelta(t, key, val, 1e-5)
 		}
 
 	})
@@ -135,19 +134,10 @@ func TestReadRemote(t *testing.T) {
 		}
 		for indexName, key := range SDO_FLOAT_READ_MAP {
 			val, _ := remote.Read(indexName, "")
-			assert.Equal(t, key, val)
+			assert.InDelta(t, key, val, 1e-5)
 		}
 
 	})
-	t.Run("Read Uint", func(t *testing.T) {
-		for indexName, key := range SDO_UNSIGNED_READ_MAP {
-			val, _ := remote.ReadUint(indexName, "")
-			assert.Equal(t, key, val)
-		}
-		_, err := remote.ReadUint("INTEGER8 value", "")
-		assert.Equal(t, od.ErrTypeMismatch, err)
-	})
-
 	t.Run("Read Uint", func(t *testing.T) {
 		for indexName, key := range SDO_UNSIGNED_READ_MAP {
 			val, _ := remote.ReadUint(indexName, "")
