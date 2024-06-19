@@ -121,7 +121,7 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 	if nmtInit || (nmt.hearbeatProducerTimeUs != 0 && (nmt.hearbeatProducerTimer == 0 || nmtStateCopy != nmt.operatingStatePrev)) {
 		nmt.hbTxBuff.Data[0] = nmtStateCopy
 		nmt.mu.Unlock()
-		nmt.Send(nmt.hbTxBuff)
+		_ = nmt.Send(nmt.hbTxBuff)
 		nmt.mu.Lock()
 		if nmtStateCopy == StateInitializing {
 			if nmt.control&StartupToOperational != 0 {
@@ -213,14 +213,12 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 
 // Get a NMT state
 func (nmt *NMT) GetInternalState() uint8 {
-	nmt.mu.Lock()
-	defer nmt.mu.Unlock()
-
 	if nmt == nil {
 		return StateInitializing
-	} else {
-		return nmt.operatingState
 	}
+	nmt.mu.Lock()
+	defer nmt.mu.Unlock()
+	return nmt.operatingState
 }
 
 // Send NMT command to self, don't send on network

@@ -384,7 +384,7 @@ func (emcy *EMCY) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 
 			emcy.fifo[fifoPpPtr].msg |= uint32(errorRegister) << 16
 			binary.LittleEndian.PutUint32(emcy.txBuffer.Data[:4], emcy.fifo[fifoPpPtr].msg)
-			emcy.Send(emcy.txBuffer)
+			_ = emcy.Send(emcy.txBuffer)
 			// Also report own emergency message
 			if emcy.rxCallback != nil {
 				errMsg := uint32(emcy.fifo[fifoPpPtr].msg)
@@ -493,11 +493,11 @@ func (emcy *EMCY) ErrorReset(errorBit byte, infoCode uint32) {
 }
 
 func (emcy *EMCY) IsError(errorBit byte) bool {
-	emcy.mu.Lock()
-	defer emcy.mu.Unlock()
 	if emcy == nil {
 		return true
 	}
+	emcy.mu.Lock()
+	defer emcy.mu.Unlock()
 	byteIndex := errorBit >> 3
 	bitMask := uint8(1) << (errorBit & 0x7)
 	if byteIndex >= (EmergencyErrorStatusBits / 8) {
@@ -507,11 +507,11 @@ func (emcy *EMCY) IsError(errorBit byte) bool {
 }
 
 func (emcy *EMCY) GetErrorRegister() byte {
-	emcy.mu.Lock()
-	defer emcy.mu.Unlock()
 	if emcy == nil || emcy.errorRegister == nil {
 		return 0
 	}
+	emcy.mu.Lock()
+	defer emcy.mu.Unlock()
 	return *emcy.errorRegister
 }
 

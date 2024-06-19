@@ -133,7 +133,7 @@ func (network *Network) Disconnect() {
 		node.SetExit(true)
 	}
 	network.wgProcess.Wait()
-	network.BusManager.Bus().Disconnect()
+	_ = network.BusManager.Bus().Disconnect()
 }
 
 // Launch goroutine that handles CANopen stack processing of a node

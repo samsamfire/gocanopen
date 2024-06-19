@@ -34,7 +34,8 @@ func TestSyncConfigurator(t *testing.T) {
 	assert.EqualValues(t, 100_100, commPeriod)
 	err = conf.WriteCounterOverflow(100)
 	assert.Equal(t, sdo.AbortDataDeviceState, err)
-	conf.WriteCommunicationPeriod(0)
+	err = conf.WriteCommunicationPeriod(0)
+	assert.Nil(t, err)
 	err = conf.WriteCounterOverflow(250)
 	assert.Equal(t, sdo.AbortInvalidValue, err)
 	err = conf.WriteCounterOverflow(10)
@@ -144,12 +145,13 @@ func TestHBConfigurator(t *testing.T) {
 	node := network.nodes[NODE_ID_TEST].(*node.LocalNode)
 	node.EMCY.SetCallback(emCallback)
 	config := network.Configurator(NODE_ID_TEST)
-	config.WriteMonitoredNode(1, 0x25, 100)
+	err := config.WriteMonitoredNode(1, 0x25, 100)
+	assert.Nil(t, err)
 	// Test duplicate entry
-	config.WriteMonitoredNode(2, 0x25, 100)
-	err := config.WriteMonitoredNode(3, 0x25, 100)
+	err = config.WriteMonitoredNode(3, 0x25, 100)
 	assert.Equal(t, err, sdo.AbortParamIncompat)
-	network.CreateLocalNode(0x25, od.Default())
+	_, err = network.CreateLocalNode(0x25, od.Default())
+	assert.Nil(t, err)
 	max, _ := config.ReadMaxMonitorableNodes()
 	// Test that we receive at least one emergency
 	assert.EqualValues(t, 8, max)
@@ -161,7 +163,8 @@ func TestHBConfigurator(t *testing.T) {
 	// Test hearbeat update / read
 	val, _ := config.ReadHeartbeatPeriod()
 	assert.EqualValues(t, 1000, val)
-	config.WriteHeartbeatPeriod(900)
+	err = config.WriteHeartbeatPeriod(900)
+	assert.Nil(t, err)
 	val, _ = config.ReadHeartbeatPeriod()
 	assert.EqualValues(t, val, 900)
 }

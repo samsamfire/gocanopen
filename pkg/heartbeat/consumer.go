@@ -229,7 +229,7 @@ func (consumer *HBConsumer) updateConsumerEntry(index uint8, nodeId uint8, consu
 	// Configure RX buffer for hearbeat reception
 	if entry.hbState != HeartbeatUnconfigured {
 		log.Debugf("[HB CONSUMER] will monitor x%x | timeout %v us", entry.nodeId, entry.timeUs)
-		consumer.Subscribe(uint32(entry.cobId), 0x7FF, false, entry)
+		return consumer.Subscribe(uint32(entry.cobId), 0x7FF, false, entry)
 	}
 	return nil
 }

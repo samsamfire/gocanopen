@@ -356,7 +356,7 @@ func (client *SDOClient) downloadMain(
 			client.state = stateDownloadSegmentRsp
 
 		case stateDownloadBlkInitiateReq:
-			client.downloadBlockInitiate()
+			_ = client.downloadBlockInitiate()
 			client.state = stateDownloadBlkInitiateRsp
 
 		case stateDownloadBlkSubblockReq:
@@ -430,9 +430,7 @@ func (client *SDOClient) downloadInitiate(forceSegmented bool) error {
 		log.Debugf("[CLIENT][TX][x%x] DOWNLOAD SEGMENT | x%x:x%x %v", client.nodeIdServer, client.index, client.subindex, client.txBuffer.Data)
 	}
 	client.timeoutTimer = 0
-	client.Send(client.txBuffer)
-	return nil
-
+	return client.Send(client.txBuffer)
 }
 
 // Write value to OD locally
@@ -546,8 +544,7 @@ func (client *SDOClient) downloadSegment(bufferPartial bool) error {
 
 	client.timeoutTimer = 0
 	log.Debugf("[CLIENT][TX][x%x] DOWNLOAD SEGMENT | x%x:x%x %v", client.nodeIdServer, client.index, client.subindex, client.txBuffer.Data)
-	client.Send(client.txBuffer)
-	return nil
+	return client.Send(client.txBuffer)
 }
 
 // Helper function for initiating a block download
@@ -561,9 +558,7 @@ func (client *SDOClient) downloadBlockInitiate() error {
 		binary.LittleEndian.PutUint32(client.txBuffer.Data[4:], client.sizeIndicated)
 	}
 	client.timeoutTimer = 0
-	client.Send(client.txBuffer)
-	return nil
-
+	return client.Send(client.txBuffer)
 }
 
 // Helper function for downloading a sub-block
@@ -594,9 +589,7 @@ func (client *SDOClient) downloadBlock(bufferPartial bool, timerNext *uint32) er
 		*timerNext = 0
 	}
 	client.timeoutTimer = 0
-	client.Send(client.txBuffer)
-	return nil
-
+	return client.Send(client.txBuffer)
 }
 
 // Helper function for end of block
@@ -605,7 +598,7 @@ func (client *SDOClient) downloadBlockEnd() {
 	client.txBuffer.Data[1] = byte(client.blockCRC)
 	client.txBuffer.Data[2] = byte(client.blockCRC >> 8)
 	client.timeoutTimer = 0
-	client.Send(client.txBuffer)
+	_ = client.Send(client.txBuffer)
 }
 
 // Create & send abort on bus
@@ -617,8 +610,7 @@ func (client *SDOClient) abort(abortCode Abort) {
 	client.txBuffer.Data[3] = client.subindex
 	binary.LittleEndian.PutUint32(client.txBuffer.Data[4:], code)
 	log.Warnf("[CLIENT][TX][x%x] CLIENT ABORT | x%x:x%x | %v (x%x)", client.nodeIdServer, client.index, client.subindex, abortCode, code)
-	client.Send(client.txBuffer)
-
+	_ = client.Send(client.txBuffer)
 }
 
 /////////////////////////////////////
@@ -982,7 +974,7 @@ func (client *SDOClient) upload(
 			client.txBuffer.Data[2] = byte(client.index >> 8)
 			client.txBuffer.Data[3] = client.subindex
 			client.timeoutTimer = 0
-			client.Send(client.txBuffer)
+			_ = client.Send(client.txBuffer)
 			client.state = stateUploadInitiateRsp
 			log.Debugf("[CLIENT][TX][x%x] UPLOAD SEGMENT | x%x:x%x %v", client.nodeIdServer, client.index, client.subindex, client.txBuffer.Data)
 
@@ -993,7 +985,7 @@ func (client *SDOClient) upload(
 			}
 			client.txBuffer.Data[0] = 0x60 | client.toggle
 			client.timeoutTimer = 0
-			client.Send(client.txBuffer)
+			_ = client.Send(client.txBuffer)
 			client.state = stateUploadSegmentRsp
 			log.Debugf("[CLIENT][TX][x%x] UPLOAD SEGMENT | x%x:x%x %v", client.nodeIdServer, client.index, client.subindex, client.txBuffer.Data)
 
@@ -1015,7 +1007,7 @@ func (client *SDOClient) upload(
 			client.txBuffer.Data[4] = client.blockSize
 			client.txBuffer.Data[5] = ClientProtocolSwitchThreshold
 			client.timeoutTimer = 0
-			client.Send(client.txBuffer)
+			_ = client.Send(client.txBuffer)
 			client.state = stateUploadBlkInitiateRsp
 			log.Debugf("[CLIENT][TX][x%x] BLOCK UPLOAD INITIATE | x%x:x%x %v blksize : %v", client.nodeIdServer, client.index, client.subindex, client.txBuffer.Data, client.blockSize)
 
@@ -1027,7 +1019,7 @@ func (client *SDOClient) upload(
 			client.blockCRC = crc.CRC16(0)
 			client.state = stateUploadBlkSubblockSreq
 			client.rxNew = false
-			client.Send(client.txBuffer)
+			_ = client.Send(client.txBuffer)
 
 		case stateUploadBlkSubblockCrsp:
 			client.txBuffer.Data[0] = 0xA2
@@ -1065,14 +1057,14 @@ func (client *SDOClient) upload(
 			}
 			client.txBuffer.Data[2] = client.blockSize
 			client.timeoutTimerBlock = 0
-			client.Send(client.txBuffer)
+			_ = client.Send(client.txBuffer)
 			if transferShort && !client.finished {
 				log.Warnf("sub-block restarted: seqnoPrev=%v, blksize=%v", seqnoStart, client.blockSize)
 			}
 
 		case stateUploadBlkEndCrsp:
 			client.txBuffer.Data[0] = 0xA1
-			client.Send(client.txBuffer)
+			_ = client.Send(client.txBuffer)
 			client.state = stateIdle
 			ret = success
 
