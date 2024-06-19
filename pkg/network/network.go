@@ -258,7 +258,7 @@ func (network *Network) Command(nodeId uint8, nmtCommand nmt.Command) error {
 	frame := canopen.NewFrame(uint32(nmt.ServiceId), 0, 2)
 	frame.Data[0] = uint8(nmtCommand)
 	frame.Data[1] = nodeId
-	log.Debugf("[NMT] sending nmt command : %v to node(s) %v (x%x)", nmt.CommandDescription[nmtCommand], nodeId, nodeId)
+	log.Debugf("[NMT][TX] nmt command : %v to node(s) %v (x%x)", nmt.CommandDescription[nmtCommand], nodeId, nodeId)
 	return network.Send(frame)
 }
 

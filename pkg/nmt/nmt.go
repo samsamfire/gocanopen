@@ -156,7 +156,7 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 
 		}
 		if resetCommand != ResetNot {
-			log.Debugf("[NMT] received reset command %v this should be handled by user", CommandDescription[nmt.internalCommand])
+			log.Debugf("[NMT][RX] reset command %v this should be handled by user", CommandDescription[nmt.internalCommand])
 		}
 		nmt.internalCommand = CommandEmpty
 	}
@@ -186,9 +186,9 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 	// Callback on change
 	if nmt.operatingStatePrev != nmtStateCopy || nmtInit {
 		if nmtInit {
-			log.Debugf("[NMT] state changed | INITIALIZING ==> %v", stateMap[nmtStateCopy])
+			log.Debugf("[NMT][RX] state changed | INITIALIZING ==> %v", stateMap[nmtStateCopy])
 		} else {
-			log.Debugf("[NMT] state changed | %v ==> %v", stateMap[nmt.operatingStatePrev], stateMap[nmtStateCopy])
+			log.Debugf("[NMT][RX] state changed | %v ==> %v", stateMap[nmt.operatingStatePrev], stateMap[nmtStateCopy])
 		}
 		if nmt.callback != nil {
 			nmt.callback(nmtStateCopy)
