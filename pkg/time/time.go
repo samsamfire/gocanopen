@@ -12,7 +12,6 @@ import (
 
 // time origin is 1st of jan 1984
 var timestampOrigin = time.Date(1984, time.January, 1, 0, 0, 0, 0, time.Local)
-var dayInMilliseconds = 1000 * 60 * 60 * 24 // milliseconds * seconds * minutes * hours
 
 type TIME struct {
 	*canopen.BusManager
