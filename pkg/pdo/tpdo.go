@@ -76,7 +76,7 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 		}
 		if tpdo.sendRequest && tpdo.inhibitTimer == 0 {
 			tpdo.mu.Unlock()
-			tpdo.send()
+			_ = tpdo.send()
 			tpdo.mu.Lock()
 		}
 		if tpdo.sendRequest && timerNextUs != nil && *timerNextUs > tpdo.inhibitTimer {

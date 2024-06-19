@@ -35,7 +35,8 @@ const minDelayHeartbeat = 200 * time.Millisecond
 
 func TestHeartbeatEventCallback(t *testing.T) {
 	network := CreateNetworkEmptyTest()
-	network.Connect()
+	err := network.Connect()
+	assert.Nil(t, err)
 	defer network.Disconnect()
 
 	// Create node that will emit heartbeats (producer)
@@ -81,8 +82,10 @@ func TestHeartbeatEventCallback(t *testing.T) {
 	t.Run("heartbeat reset & started event", func(t *testing.T) {
 		eventHandler := EventHandler{}
 		consumer.HBConsumer.OnEvent(eventHandler.OnEvent)
-		configProducer.WriteHeartbeatPeriod(100)
-		configConsumer.WriteMonitoredNode(1, 0x22, 150)
+		err = configProducer.WriteHeartbeatPeriod(100)
+		assert.Nil(t, err)
+		err = configConsumer.WriteMonitoredNode(1, 0x22, 150)
+		assert.Nil(t, err)
 		time.Sleep(minDelayHeartbeat)
 
 		// Remove node, and start it again
@@ -90,20 +93,23 @@ func TestHeartbeatEventCallback(t *testing.T) {
 		assert.Nil(t, err)
 		producer, err = network.CreateLocalNode(0x22, od.Default())
 		assert.Nil(t, err)
-		configProducer.WriteHeartbeatPeriod(100)
+		err = configProducer.WriteHeartbeatPeriod(100)
+		assert.Nil(t, err)
 		time.Sleep(minDelayHeartbeat)
 		assert.Equal(t, 1, eventHandler.nbReset)
 		assert.Equal(t, 2, eventHandler.nbStarted)
 	})
 
 	t.Run("heartbeat nmt changed event", func(t *testing.T) {
-		configProducer.WriteHeartbeatPeriod(100)
-		configConsumer.WriteMonitoredNode(1, 0x22, 500)
+		err := configProducer.WriteHeartbeatPeriod(100)
+		assert.Nil(t, err)
+		err = configConsumer.WriteMonitoredNode(1, 0x22, 500)
+		assert.Nil(t, err)
 		time.Sleep(minDelayHeartbeat)
 		eventHandler := EventHandler{}
 		consumer.HBConsumer.OnEvent(eventHandler.OnEvent)
 		// Send pre-operational command to trigger nmt change
-		err := network.Command(0x22, nmt.CommandEnterPreOperational)
+		err = network.Command(0x22, nmt.CommandEnterPreOperational)
 		assert.Nil(t, err)
 		time.Sleep(minDelayHeartbeat)
 		assert.Equal(t, 1, eventHandler.nbChanged)

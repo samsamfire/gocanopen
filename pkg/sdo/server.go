@@ -522,7 +522,7 @@ func (server *SDOServer) Process(
 			server.txBuffer.Data[2] = byte(server.index >> 8)
 			server.txBuffer.Data[3] = server.subindex
 			server.timeoutTimer = 0
-			server.Send(server.txBuffer)
+			_ = server.Send(server.txBuffer)
 			if server.finished {
 				log.Debugf("[SERVER][TX] DOWNLOAD EXPEDITED | x%x:x%x %v", server.index, server.subindex, server.txBuffer.Data)
 				server.state = stateIdle
@@ -541,7 +541,7 @@ func (server *SDOServer) Process(
 			server.toggle ^= 0x10
 			server.timeoutTimer = 0
 			log.Debugf("[SERVER][TX] DOWNLOAD SEGMENT | x%x:x%x %v", server.index, server.subindex, server.txBuffer.Data)
-			server.Send(server.txBuffer)
+			_ = server.Send(server.txBuffer)
 			if server.finished {
 				server.state = stateIdle
 				ret = success
@@ -574,7 +574,7 @@ func (server *SDOServer) Process(
 			server.txBuffer.Data[1] = byte(server.index)
 			server.txBuffer.Data[2] = byte(server.index >> 8)
 			server.txBuffer.Data[3] = server.subindex
-			server.Send(server.txBuffer)
+			_ = server.Send(server.txBuffer)
 
 		case stateUploadSegmentRsp:
 			// Refill buffer if needed
@@ -612,7 +612,7 @@ func (server *SDOServer) Process(
 				}
 			}
 			log.Debugf("[SERVER][TX] UPLOAD SEGMENTED | x%x:x%x %v", server.index, server.subindex, server.txBuffer.Data)
-			server.Send(server.txBuffer)
+			_ = server.Send(server.txBuffer)
 
 		case stateDownloadBlkInitiateRsp:
 			server.txBuffer.Data[0] = 0xA4
