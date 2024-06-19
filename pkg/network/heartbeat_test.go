@@ -1,7 +1,6 @@
 package network
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -25,7 +24,6 @@ func (e *EventHandler) OnEvent(event uint8, index uint8, nodeId uint8, nmtState 
 	case heartbeat.EventBoot:
 		e.nbReset++
 	case heartbeat.EventChanged:
-		fmt.Println("changed", index, nodeId, nmtState)
 		e.nbChanged++
 	case heartbeat.EventStarted:
 		e.nbStarted++
@@ -100,7 +98,7 @@ func TestHeartbeatEventCallback(t *testing.T) {
 
 	t.Run("heartbeat nmt changed event", func(t *testing.T) {
 		configProducer.WriteHeartbeatPeriod(100)
-		configConsumer.WriteMonitoredNode(1, 0x22, 150)
+		configConsumer.WriteMonitoredNode(1, 0x22, 500)
 		time.Sleep(minDelayHeartbeat)
 		eventHandler := EventHandler{}
 		consumer.HBConsumer.OnEvent(eventHandler.OnEvent)
@@ -109,6 +107,5 @@ func TestHeartbeatEventCallback(t *testing.T) {
 		assert.Nil(t, err)
 		time.Sleep(minDelayHeartbeat)
 		assert.Equal(t, 1, eventHandler.nbChanged)
-
 	})
 }
