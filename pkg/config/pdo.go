@@ -184,7 +184,7 @@ func (config *NodeConfigurator) EnablePDO(pdoNb uint16) error {
 	return config.client.WriteRaw(config.nodeId, pdoCommIndex, 1, cobId, false)
 }
 
-func (config *NodeConfigurator) WriteCanId(pdoNb uint16, canId uint16) error {
+func (config *NodeConfigurator) WriteCanIdPDO(pdoNb uint16, canId uint16) error {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
 	cobId, err := config.ReadCobIdPDO(pdoNb)
 	if err != nil {
@@ -251,9 +251,9 @@ func (config *NodeConfigurator) WriteMappings(pdoNb uint16, mappings []PDOMappin
 }
 
 // Update hole configuration
-func (config *NodeConfigurator) WriteConfiguration(pdoNb uint16, conf PDOConfigurationParameter) error {
+func (config *NodeConfigurator) WriteConfigurationPDO(pdoNb uint16, conf PDOConfigurationParameter) error {
 	log.Debugf("[CONFIGURATOR][%s%v] updating configuration : %+v", config.getType(pdoNb), pdoNb, conf)
-	err := config.WriteCanId(pdoNb, conf.CanId)
+	err := config.WriteCanIdPDO(pdoNb, conf.CanId)
 	if err != nil {
 		return err
 	}

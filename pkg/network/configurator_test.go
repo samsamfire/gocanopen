@@ -83,7 +83,7 @@ func TestPDOConfiguratorCommon(t *testing.T) {
 			assert.Nil(t, err)
 			mappingsFdbk, _ := conf.ReadMappings(pdoNb)
 			assert.Equal(t, TEST_MAPPING, mappingsFdbk)
-			err = conf.WriteCanId(pdoNb, 0x211)
+			err = conf.WriteCanIdPDO(pdoNb, 0x211)
 			assert.Nil(t, err)
 			cobId, _ := conf.ReadCobIdPDO(pdoNb)
 			assert.EqualValues(t, 0x211, cobId&0x7FF)
@@ -94,7 +94,7 @@ func TestPDOConfiguratorCommon(t *testing.T) {
 				InhibitTime:      1200,
 				Mappings:         TEST_MAPPING,
 			}
-			err = conf.WriteConfiguration(pdoNb, config)
+			err = conf.WriteConfigurationPDO(pdoNb, config)
 			assert.Nil(t, err)
 			readConfig, _ := conf.ReadConfigurationPDO(pdoNb)
 			assert.EqualValues(t, config.CanId, readConfig.CanId)
@@ -150,7 +150,7 @@ func TestHBConfigurator(t *testing.T) {
 	err := config.WriteMonitoredNode(3, 0x25, 100)
 	assert.Equal(t, err, sdo.AbortParamIncompat)
 	network.CreateLocalNode(0x25, od.Default())
-	max, _ := config.ReadMaxMonitorable()
+	max, _ := config.ReadMaxMonitorableNodes()
 	// Test that we receive at least one emergency
 	assert.EqualValues(t, 8, max)
 	time.Sleep(1 * time.Second)
