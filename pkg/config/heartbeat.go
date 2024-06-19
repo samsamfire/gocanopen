@@ -4,9 +4,9 @@ import "github.com/samsamfire/gocanopen/pkg/od"
 
 // Read current monitored nodes
 // Returns a list of all the entries composed as the id of the monitored node
-// And the expected period in ms
+// And the expected heartbeat period in ms
 func (config *NodeConfigurator) ReadMonitoredNodes() ([][]uint16, error) {
-	nbMonitored, err := config.ReadMaxMonitorable()
+	nbMonitored, err := config.ReadMaxMonitorableNodes()
 	if err != nil {
 		return nil, err
 	}
@@ -24,7 +24,7 @@ func (config *NodeConfigurator) ReadMonitoredNodes() ([][]uint16, error) {
 }
 
 // Read max available entries for monitoring
-func (config *NodeConfigurator) ReadMaxMonitorable() (uint8, error) {
+func (config *NodeConfigurator) ReadMaxMonitorableNodes() (uint8, error) {
 	nbMonitored, err := config.client.ReadUint8(config.nodeId, od.EntryConsumerHeartbeatTime, 0x0)
 	if err != nil {
 		return 0, err

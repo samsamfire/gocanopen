@@ -163,7 +163,7 @@ func (node *RemoteNode) StartPDOs(useLocal bool) error {
 		if err != nil {
 			return err
 		}
-		err = localConf.WriteConfiguration(uint16(i)+1, pdoConfig)
+		err = localConf.WriteConfigurationPDO(uint16(i)+1, pdoConfig)
 		if err != nil {
 			return err
 		}
@@ -197,7 +197,7 @@ func (node *RemoteNode) StartPDOs(useLocal bool) error {
 		if err != nil {
 			return err
 		}
-		err = localConf.WriteConfiguration(uint16(i)+1+pdo.MaxRpdoNumber, pdoConfig)
+		err = localConf.WriteConfigurationPDO(uint16(i)+1+pdo.MaxRpdoNumber, pdoConfig)
 		if err != nil {
 			return err
 		}
