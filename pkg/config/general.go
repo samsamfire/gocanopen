@@ -1,5 +1,7 @@
 package config
 
+import "github.com/samsamfire/gocanopen/pkg/od"
+
 type Identity struct {
 	VendorId       uint32
 	ProductCode    uint32
@@ -13,16 +15,16 @@ type ManufacturerInformation struct {
 	ManufacturerSoftwareVersion string
 }
 
-// Read identity object (0x1018, mandatory)
+// Read identity object (od.EntryIdentityObject, mandatory)
 func (config *NodeConfigurator) ReadIdentity() (*Identity, error) {
 	// Vendor ID is the only mandatory field
-	vendorId, err := config.client.ReadUint32(config.nodeId, 0x1018, 1)
+	vendorId, err := config.client.ReadUint32(config.nodeId, od.EntryIdentityObject, 1)
 	if err != nil {
 		return nil, err
 	}
-	productCode, _ := config.client.ReadUint32(config.nodeId, 0x1018, 2)
-	revisionNumber, _ := config.client.ReadUint32(config.nodeId, 0x1018, 3)
-	serialNumber, _ := config.client.ReadUint32(config.nodeId, 0x1018, 4)
+	productCode, _ := config.client.ReadUint32(config.nodeId, od.EntryIdentityObject, 2)
+	revisionNumber, _ := config.client.ReadUint32(config.nodeId, od.EntryIdentityObject, 3)
+	serialNumber, _ := config.client.ReadUint32(config.nodeId, od.EntryIdentityObject, 4)
 	return &Identity{
 		VendorId:       vendorId,
 		ProductCode:    productCode,
@@ -34,7 +36,7 @@ func (config *NodeConfigurator) ReadIdentity() (*Identity, error) {
 // Read manufacturer device name
 func (config *NodeConfigurator) ReadManufacturerDeviceName() (string, error) {
 	raw := make([]byte, 256)
-	n, err := config.client.ReadRaw(config.nodeId, 0x1008, 0, raw)
+	n, err := config.client.ReadRaw(config.nodeId, od.EntryManufacturerDeviceName, 0, raw)
 	if err != nil {
 		return "", err
 	}
@@ -44,7 +46,7 @@ func (config *NodeConfigurator) ReadManufacturerDeviceName() (string, error) {
 // Read Manufacturer hardware version
 func (config *NodeConfigurator) ReadManufacturerHardwareVersion() (string, error) {
 	raw := make([]byte, 256)
-	n, err := config.client.ReadRaw(config.nodeId, 0x1009, 0, raw)
+	n, err := config.client.ReadRaw(config.nodeId, od.EntryManufacturerHardwareVersion, 0, raw)
 	if err != nil {
 		return "", err
 	}
@@ -54,14 +56,14 @@ func (config *NodeConfigurator) ReadManufacturerHardwareVersion() (string, error
 // Read manufacturer software version
 func (config *NodeConfigurator) ReadManufacturerSoftwareVersion() (string, error) {
 	raw := make([]byte, 256)
-	n, err := config.client.ReadRaw(config.nodeId, 0x100A, 0, raw)
+	n, err := config.client.ReadRaw(config.nodeId, od.EntryManufacturerSoftwareVersion, 0, raw)
 	if err != nil {
 		return "", err
 	}
 	return string(raw[:n]), nil
 }
 
-// Read manufacturer objects (0x1008,0x1009,0x100A, these are all optional)
+// Read manufacturer objects (od.EntryManufacturerDeviceName,od.EntryManufacturerHardwareVersion,od.EntryManufacturerSoftwareVersion, these are all optional)
 func (config *NodeConfigurator) ReadManufacturerInformation() ManufacturerInformation {
 	info := ManufacturerInformation{}
 	info.ManufacturerDeviceName, _ = config.ReadManufacturerDeviceName()

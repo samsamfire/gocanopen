@@ -85,6 +85,7 @@ const (
 	EntryConsumerHeartbeatTime       uint16 = 0x1016
 	EntryProducerHeartbeatTime       uint16 = 0x1017
 	EntryIdentityObject              uint16 = 0x1018
+	EntrySynchronousCounterOverflow  uint16 = 0x1019
 	EntryStoreEDS                    uint16 = 0x1021
 	EntryStorageFormat               uint16 = 0x1022
 	EntryRPDOCommunicationStart      uint16 = 0x1400
