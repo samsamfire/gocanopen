@@ -185,7 +185,7 @@ func NewLocalNode(
 	node.state = NODE_INIT
 
 	if emcy == nil {
-		emergency, err := emergency.NewEM(
+		emergency, err := emergency.NewEMCY(
 			bm,
 			nodeId,
 			odict.Index(0x1001),
