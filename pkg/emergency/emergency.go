@@ -525,7 +525,7 @@ func (emcy *EMCY) SetCallback(callback EMCYRxCallback) {
 	emcy.rxCallback = callback
 }
 
-func NewEM(
+func NewEMCY(
 	bm *canopen.BusManager,
 	nodeId uint8,
 	entry1001 *od.Entry,
@@ -574,10 +574,5 @@ func NewEM(
 	if entryStatusBits != nil {
 		entryStatusBits.AddExtension(emcy, readEntryStatusBits, writeEntryStatusBits)
 	}
-
-	err := emcy.Subscribe(uint32(ServiceId), 0x780, false, emcy)
-	if err != nil {
-		return nil, err
-	}
-	return emcy, nil
+	return emcy, emcy.Subscribe(uint32(ServiceId), 0x780, false, emcy)
 }
