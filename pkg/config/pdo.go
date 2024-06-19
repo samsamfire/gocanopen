@@ -86,8 +86,8 @@ func (config *NodeConfigurator) ReadMappings(pdoNb uint16) ([]PDOMappingParamete
 	if err != nil {
 		return nil, err
 	}
-	for i := uint8(0); i < nbMappings; i++ {
-		rawMap, err := config.client.ReadUint32(config.nodeId, pdoMappingIndex, uint8(i)+1)
+	for i := range nbMappings {
+		rawMap, err := config.client.ReadUint32(config.nodeId, pdoMappingIndex, i+1)
 		if err != nil {
 			return nil, err
 		}
@@ -220,8 +220,8 @@ func (config *NodeConfigurator) ClearMappings(pdoNb uint16) error {
 		return err
 	}
 	// Then clear entries
-	for i := uint8(1); i <= od.MaxMappedEntriesPdo; i++ {
-		err := config.client.WriteRaw(config.nodeId, pdoMappingIndex, i, uint32(0), false)
+	for i := range od.MaxMappedEntriesPdo {
+		err := config.client.WriteRaw(config.nodeId, pdoMappingIndex, i+1, uint32(0), false)
 		if err != nil {
 			return err
 		}

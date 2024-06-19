@@ -235,7 +235,7 @@ func TestTimeSynchronization(t *testing.T) {
 	defer network.Disconnect()
 	// Create 10 slave nodes that will update there internal time
 	slaveNodes := make([]*node.LocalNode, 0)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		slaveNode, err := network.CreateLocalNode(slaveId+uint8(i), od.Default())
 		assert.Nil(t, err)
 		err = slaveNode.Configurator().ProducerDisableTIME()
@@ -274,8 +274,8 @@ func TestScan(t *testing.T) {
 	assert.Len(t, scan, 0)
 	assert.Nil(t, err)
 	// Create some local nodes
-	for i := uint8(1); i <= 10; i++ {
-		_, err := network.CreateLocalNode(i, od.Default())
+	for i := range 10 {
+		_, err := network.CreateLocalNode(uint8(i)+1, od.Default())
 		assert.Nil(t, err)
 	}
 	// Scan from local

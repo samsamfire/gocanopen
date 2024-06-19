@@ -117,7 +117,7 @@ func (node *LocalNode) initPDO() error {
 	}
 	// Iterate over all the possible entries : there can be a maximum of 512 maps
 	// Break loops when an entry doesn't exist (don't allow holes in mapping)
-	for i := uint16(0); i < 512; i++ {
+	for i := range uint16(512) {
 		entry14xx := node.GetOD().Index(0x1400 + i)
 		entry16xx := node.GetOD().Index(0x1600 + i)
 		preDefinedIdent := uint16(0)
@@ -133,7 +133,7 @@ func (node *LocalNode) initPDO() error {
 		}
 	}
 	// Do the same for TPDOS
-	for i := uint16(0); i < 512; i++ {
+	for i := range uint16(512) {
 		entry18xx := node.GetOD().Index(0x1800 + i)
 		entry1Axx := node.GetOD().Index(0x1A00 + i)
 		preDefinedIdent := uint16(0)
