@@ -11,8 +11,8 @@ func (config *NodeConfigurator) ReadMonitoredNodes() ([][]uint16, error) {
 		return nil, err
 	}
 	monitored := make([][]uint16, 0)
-	for i := uint8(1); i <= nbMonitored; i++ {
-		periodAndId, err := config.client.ReadUint32(config.nodeId, od.EntryConsumerHeartbeatTime, i)
+	for i := range nbMonitored {
+		periodAndId, err := config.client.ReadUint32(config.nodeId, od.EntryConsumerHeartbeatTime, i+1)
 		if err != nil {
 			return monitored, err
 		}

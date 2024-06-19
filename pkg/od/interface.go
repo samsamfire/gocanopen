@@ -111,8 +111,8 @@ func (od *ObjectDictionary) addPDO(pdoNb uint16, isRPDO bool) error {
 
 	pdoMap := NewRecord()
 	pdoMap.AddSubObject(0, "Number of mapped application objects in PDO", UNSIGNED8, AttributeSdoRw, "0x0")
-	for i := uint8(1); i <= MaxMappedEntriesPdo; i++ {
-		pdoMap.AddSubObject(i, fmt.Sprintf("Application object %d", i), UNSIGNED32, AttributeSdoRw, "0x0")
+	for i := range MaxMappedEntriesPdo {
+		pdoMap.AddSubObject(i+1, fmt.Sprintf("Application object %d", i+1), UNSIGNED32, AttributeSdoRw, "0x0")
 	}
 	od.AddVariableList(EntryRPDOMappingStart+indexOffset, fmt.Sprintf("%s mapping parameter", pdoType), pdoMap)
 

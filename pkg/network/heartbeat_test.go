@@ -70,7 +70,7 @@ func TestHeartbeatEventCallback(t *testing.T) {
 		assert.Equal(t, 1, eventHandler.nbTimeout)
 
 		// Enable / Disable heartbeat multiple times
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			configProducer.WriteHeartbeatPeriod(20)
 			time.Sleep(minDelayHeartbeat)
 			configProducer.WriteHeartbeatPeriod(0)

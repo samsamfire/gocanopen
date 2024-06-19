@@ -107,7 +107,7 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 		rpdoReceived = true
 		dataRPDO := rpdo.rxData[bufNo][:]
 		rpdo.rxNew[bufNo] = false
-		for i := 0; i < int(pdo.nbMapped); i++ {
+		for i := range pdo.nbMapped {
 			streamer := &pdo.streamers[i]
 			mappedLength := streamer.DataOffset
 			dataLength := streamer.DataLength

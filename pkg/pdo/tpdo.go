@@ -57,7 +57,7 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 		}
 		// Check for tpdo send requests
 		if !tpdo.sendRequest {
-			for i := 0; i < int(pdo.nbMapped); i++ {
+			for i := range pdo.nbMapped {
 				flagPDOByte := pdo.flagPDOByte[i]
 				if flagPDOByte != nil {
 					if (*flagPDOByte & pdo.flagPDOBitmask[i]) == 0 {
@@ -184,7 +184,7 @@ func (tpdo *TPDO) send() error {
 	pdo := tpdo.pdo
 	eventDriven := tpdo.transmissionType == TransmissionTypeSyncAcyclic || tpdo.transmissionType >= uint8(TransmissionTypeSyncEventLo)
 	dataTPDO := make([]byte, 0)
-	for i := 0; i < int(pdo.nbMapped); i++ {
+	for i := range pdo.nbMapped {
 		streamer := &pdo.streamers[i]
 		mappedLength := streamer.DataOffset
 		dataLength := int(streamer.DataLength)
