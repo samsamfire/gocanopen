@@ -5,6 +5,7 @@ import (
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/config"
+	"github.com/samsamfire/gocanopen/pkg/emergency"
 	"github.com/samsamfire/gocanopen/pkg/nmt"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/pdo"
@@ -32,6 +33,7 @@ type RemoteNode struct {
 	rpdos    []*pdo.RPDO          // Local RPDOs (corresponds to remote TPDOs)
 	tpdos    []*pdo.TPDO          // Local TPDOs (corresponds to remote RPDOs)
 	sync     *sync.SYNC           // Sync consumer (for synchronous PDOs)
+	emcy     *emergency.EMCY      // Emergency consumer (fake producer for logging internal errors)
 }
 
 func (node *RemoteNode) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
@@ -54,7 +56,7 @@ func (node *RemoteNode) ProcessRPDO(syncWas bool, timeDifferenceUs uint32, timer
 	}
 }
 
-func (node *RemoteNode) ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32) bool {
+func (node *RemoteNode) ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32) bool {
 	syncWas := false
 	s := node.sync
 	if s != nil {
@@ -122,6 +124,10 @@ func NewRemoteNode(
 		return nil, err
 	}
 	node.sync = sync
+
+	// Add empty EMCY, only used for logging for now
+	node.emcy = &emergency.EMCY{}
+
 	return node, nil
 }
 
@@ -130,61 +136,41 @@ func NewRemoteNode(
 func (node *RemoteNode) StartPDOs(useLocal bool) error {
 	node.mu.Lock()
 	defer node.mu.Unlock()
-	// Iterate over all the possible entries : there can be a maximum of 512 maps
-	// Break loops when an entry doesn't exist (don't allow holes in mapping)
-	var pdoConfigurators []*config.PDOConfig
 
-	localRPDOConfigurator := config.NewRPDOConfigurator(0, node.client)
-	localTPDOConfigurator := config.NewTPDOConfigurator(0, node.client)
+	var conf *config.NodeConfigurator
+
+	localConf := config.NewNodeConfigurator(0, node.client)
 
 	if useLocal {
-		pdoConfigurators = []*config.PDOConfig{localRPDOConfigurator, localTPDOConfigurator}
+		conf = localConf
 	} else {
-		pdoConfigurators = []*config.PDOConfig{
-			config.NewRPDOConfigurator(node.id, node.client),
-			config.NewTPDOConfigurator(node.id, node.client),
-		}
+		conf = config.NewNodeConfigurator(node.id, node.client)
 	}
 
-	// Read TPDO & RPDO configurations
-	// RPDO becomes TPDO & vice versa
-	allPdoConfigurations := make([][]config.PDOConfigurationParameter, 0)
-
-	for _, configurator := range pdoConfigurators {
-		pdoConfigurations := make([]config.PDOConfigurationParameter, 0)
-		for pdoNb := uint16(1); pdoNb <= 512; pdoNb++ {
-			conf, err := configurator.ReadConfiguration(pdoNb)
-			if err != nil && err == sdo.AbortNotExist {
-				log.Warnf("[NODE][PDO] no more PDO after PDO nb %v", pdoNb-1)
-				break
-			} else if err != nil {
-				log.Errorf("[NODE][PDO] unable to read configuration : %v", err)
-				return err
-			}
-			pdoConfigurations = append(pdoConfigurations, conf)
-		}
-		allPdoConfigurations = append(allPdoConfigurations, pdoConfigurations)
+	rpdos, tpdos, err := conf.ReadConfigurationAllPDO()
+	if err != nil {
+		return err
 	}
 
-	rpdoConfigurations := allPdoConfigurations[0]
-	tpdoConfigurations := allPdoConfigurations[1]
-	for i, configuration := range tpdoConfigurations {
-		err := node.od.AddRPDO(uint16(i + 1))
+	// Remote TPDOs become local RPDOs
+	// Create CANopen RPDO objects
+	for i, pdoConfig := range tpdos {
+		err := node.od.AddRPDO(uint16(i) + 1)
 		if err != nil {
 			return err
 		}
-		err = localRPDOConfigurator.Disable(uint16(i) + 1)
+		err = localConf.DisablePDO(uint16(i) + 1)
 		if err != nil {
 			return err
 		}
-		err = localRPDOConfigurator.WriteConfiguration(uint16(i)+1, configuration)
+		err = localConf.WriteConfigurationPDO(uint16(i)+1, pdoConfig)
 		if err != nil {
 			return err
 		}
 		rpdo, err := pdo.NewRPDO(
 			node.BusManager,
 			node.od,
-			nil,
+			node.emcy, // Empty emergency object used for logging
 			node.sync,
 			node.GetOD().Index(0x1400+i),
 			node.GetOD().Index(0x1600+i),
@@ -194,28 +180,31 @@ func (node *RemoteNode) StartPDOs(useLocal bool) error {
 			return err
 		}
 		node.rpdos = append(node.rpdos, rpdo)
-		err = localRPDOConfigurator.Enable(uint16(i) + 1) // This can fail but not critical
+		err = localConf.EnablePDO(uint16(i) + 1) // This can fail but not critical
 		if err != nil {
 			log.Warnf("[NODE] failed to initialize RPDO %v : %v", uint16(i)+1, err)
 		}
 	}
-	for i, configuration := range rpdoConfigurations {
+
+	// Remote node RPDOs become local TPDOs
+	// Create CANopen TPDO objects
+	for i, pdoConfig := range rpdos {
 		err := node.od.AddTPDO(uint16(i + 1))
 		if err != nil {
 			return err
 		}
-		err = localTPDOConfigurator.Disable(uint16(i) + 1)
+		err = localConf.DisablePDO(uint16(i) + 1 + pdo.MaxRpdoNumber)
 		if err != nil {
 			return err
 		}
-		err = localTPDOConfigurator.WriteConfiguration(uint16(i)+1, configuration)
+		err = localConf.WriteConfigurationPDO(uint16(i)+1+pdo.MaxRpdoNumber, pdoConfig)
 		if err != nil {
 			return err
 		}
 		tpdo, err := pdo.NewTPDO(
 			node.BusManager,
 			node.od,
-			nil,
+			node.emcy, // Empty emergency object used for logging
 			node.sync,
 			node.GetOD().Index(0x1800+i),
 			node.GetOD().Index(0x1A00+i),
@@ -225,6 +214,11 @@ func (node *RemoteNode) StartPDOs(useLocal bool) error {
 			return err
 		}
 		node.tpdos = append(node.tpdos, tpdo)
+		err = localConf.EnablePDO(uint16(i) + 1 + pdo.MaxRpdoNumber) // This can fail but not critical
+		if err != nil {
+			log.Warnf("[NODE] failed to initialize RPDO %v : %v", uint16(i)+1, err)
+		}
 	}
+
 	return nil
 }

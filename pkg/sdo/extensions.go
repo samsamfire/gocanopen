@@ -30,7 +30,10 @@ func writeEntry1201(stream *od.Stream, data []byte, countWritten *uint16) error 
 			(valid && canopen.IsIDRestricted(canId)) {
 			return od.ErrInvalidValue
 		}
-		server.initRxTx(cobId, server.cobIdServerToClient)
+		err := server.initRxTx(cobId, server.cobIdServerToClient)
+		if err != nil {
+			return od.ErrDevIncompat
+		}
 	// cob id server to client
 	case 2:
 		cobId := binary.LittleEndian.Uint32(data)
@@ -42,7 +45,10 @@ func writeEntry1201(stream *od.Stream, data []byte, countWritten *uint16) error 
 			(valid && canopen.IsIDRestricted(canId)) {
 			return od.ErrInvalidValue
 		}
-		server.initRxTx(server.cobIdClientToServer, cobId)
+		err := server.initRxTx(server.cobIdClientToServer, cobId)
+		if err != nil {
+			return od.ErrDevIncompat
+		}
 	// node id of server
 	case 3:
 		if len(data) != 1 {
@@ -84,7 +90,10 @@ func writeEntry1280(stream *od.Stream, data []byte, countWritten *uint16) error 
 			(valid && canopen.IsIDRestricted(canId)) {
 			return od.ErrInvalidValue
 		}
-		client.setupServer(cobId, client.cobIdServerToClient, client.nodeIdServer)
+		err := client.setupServer(cobId, client.cobIdServerToClient, client.nodeIdServer)
+		if err != nil {
+			return od.ErrDevIncompat
+		}
 	// cob id server to client
 	case 2:
 		cobId := binary.LittleEndian.Uint32(data)
@@ -96,7 +105,10 @@ func writeEntry1280(stream *od.Stream, data []byte, countWritten *uint16) error 
 			(valid && canopen.IsIDRestricted(canId)) {
 			return od.ErrInvalidValue
 		}
-		client.setupServer(cobId, client.cobIdClientToServer, client.nodeIdServer)
+		err := client.setupServer(cobId, client.cobIdClientToServer, client.nodeIdServer)
+		if err != nil {
+			return od.ErrDevIncompat
+		}
 	// node id of server
 	case 3:
 		if len(data) != 1 {

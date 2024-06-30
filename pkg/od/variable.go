@@ -38,7 +38,7 @@ func NewVariableFromSection(
 	// Get AccessType
 	accessType, err := section.GetKey("AccessType")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get AccessType for %x : %x", index, subindex)
+		return nil, fmt.Errorf("failed to get 'AccessType' for %x : %x", index, subindex)
 	}
 
 	// Get PDOMapping to know if pdo mappable
@@ -55,7 +55,7 @@ func NewVariableFromSection(
 	// TODO maybe add support for datatype particularities (>1B)
 	dataType, err := strconv.ParseInt(section.Key("DataType").Value(), 0, 8)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse DataType for %x : %x, because %v", index, subindex, err)
+		return nil, fmt.Errorf("failed to parse 'DataType' for %x : %x, because %v", index, subindex, err)
 	}
 	variable.DataType = byte(dataType)
 
@@ -66,14 +66,14 @@ func NewVariableFromSection(
 	if highLimit, err := section.GetKey("HighLimit"); err == nil {
 		variable.HighLimit, err = highLimit.Int()
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse HighLimit for %x : %x, because %v", index, subindex, err)
+			return nil, fmt.Errorf("failed to parse 'HighLimit' for %x : %x, because %v", index, subindex, err)
 		}
 	}
 
 	if lowLimit, err := section.GetKey("LowLimit"); err == nil {
 		variable.LowLimit, err = lowLimit.Int()
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse LowLimit for %x : %x, because %v", index, subindex, err)
+			return nil, fmt.Errorf("failed to parse 'LowLimit' for %x : %x, because %v", index, subindex, err)
 		}
 	}
 
@@ -88,7 +88,7 @@ func NewVariableFromSection(
 		}
 		variable.valueDefault, err = EncodeFromString(defaultValueStr, variable.DataType, nodeId)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse DefaultValue for %x : %x, because %v", index, subindex, err)
+			return nil, fmt.Errorf("failed to parse 'DefaultValue' for %x : %x, because %v (datatype :%v)", index, subindex, err, variable.DataType)
 		}
 		variable.value = make([]byte, len(variable.valueDefault))
 		copy(variable.value, variable.valueDefault)
@@ -145,17 +145,29 @@ func EncodeFromString(variable string, datatype uint8, nodeId uint8) ([]byte, er
 		data = make([]byte, 2)
 		binary.LittleEndian.PutUint16(data, uint16(parsed+uint64(nodeId)))
 
-	case UNSIGNED32, INTEGER32, REAL32:
+	case UNSIGNED32, INTEGER32:
 		parsed, err = strconv.ParseUint(variable, 0, 32)
 		data = make([]byte, 4)
 		binary.LittleEndian.PutUint32(data, uint32(parsed+uint64(nodeId)))
 
-	case UNSIGNED64, INTEGER64, REAL64:
+	case REAL32:
+		var parsedFloat float64
+		parsedFloat, err = strconv.ParseFloat(variable, 32)
+		data = make([]byte, 4)
+		binary.LittleEndian.PutUint32(data, math.Float32bits(float32(parsedFloat)))
+
+	case UNSIGNED64, INTEGER64:
 		parsed, err = strconv.ParseUint(variable, 0, 64)
 		data = make([]byte, 8)
 		binary.LittleEndian.PutUint64(data, parsed+uint64(nodeId))
 
-	case VISIBLE_STRING:
+	case REAL64:
+		var parsedFloat float64
+		parsedFloat, err = strconv.ParseFloat(variable, 64)
+		data = make([]byte, 8)
+		binary.LittleEndian.PutUint64(data, math.Float64bits(parsedFloat))
+
+	case VISIBLE_STRING, OCTET_STRING:
 		return []byte(variable), nil
 
 	case DOMAIN:
@@ -165,11 +177,7 @@ func EncodeFromString(variable string, datatype uint8, nodeId uint8) ([]byte, er
 		return nil, ErrTypeMismatch
 
 	}
-	if err != nil {
-		return nil, err
-	}
-
-	return data, nil
+	return data, err
 }
 
 // Encode from generic type

@@ -1,12 +1,12 @@
 package network
 
 import (
-	"math"
 	"testing"
 	"time"
 
 	"github.com/samsamfire/gocanopen/pkg/node"
 	"github.com/samsamfire/gocanopen/pkg/od"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -25,8 +25,12 @@ var SDO_INTEGER_READ_MAP = map[string]int64{
 }
 
 var SDO_FLOAT_READ_MAP = map[string]float64{
-	"REAL32 value": float64(math.Float32frombits(uint32(0x55555555))),
-	"REAL64 value": math.Float64frombits(0x55555555),
+	"REAL32 value": float64(0.1),
+	"REAL64 value": float64(0.55),
+}
+
+func init() {
+	log.SetLevel(log.DebugLevel)
 }
 
 func TestCreateRemoteNode(t *testing.T) {
@@ -57,7 +61,7 @@ func TestReadLocal(t *testing.T) {
 		}
 		for indexName, key := range SDO_FLOAT_READ_MAP {
 			val, _ := local.Read(indexName, "")
-			assert.Equal(t, key, val)
+			assert.InDelta(t, key, val, 1e-5)
 		}
 
 	})
@@ -130,19 +134,10 @@ func TestReadRemote(t *testing.T) {
 		}
 		for indexName, key := range SDO_FLOAT_READ_MAP {
 			val, _ := remote.Read(indexName, "")
-			assert.Equal(t, key, val)
+			assert.InDelta(t, key, val, 1e-5)
 		}
 
 	})
-	t.Run("Read Uint", func(t *testing.T) {
-		for indexName, key := range SDO_UNSIGNED_READ_MAP {
-			val, _ := remote.ReadUint(indexName, "")
-			assert.Equal(t, key, val)
-		}
-		_, err := remote.ReadUint("INTEGER8 value", "")
-		assert.Equal(t, od.ErrTypeMismatch, err)
-	})
-
 	t.Run("Read Uint", func(t *testing.T) {
 		for indexName, key := range SDO_UNSIGNED_READ_MAP {
 			val, _ := remote.ReadUint(indexName, "")
@@ -196,7 +191,7 @@ func TestRemoteNodeRPDO(t *testing.T) {
 	defer networkRemote.Disconnect()
 	remoteNode, err := networkRemote.AddRemoteNode(NODE_ID_TEST, od.Default())
 	configurator := network.Configurator(NODE_ID_TEST)
-	configurator.TPDO.Enable(1)
+	configurator.EnablePDO(1 + 256)
 	assert.Nil(t, err)
 	assert.NotNil(t, remoteNode)
 	err = network.WriteRaw(NODE_ID_TEST, 0x2002, 0, []byte{10}, false)
@@ -214,15 +209,21 @@ func TestRemoteNodeRPDOUsingRemote(t *testing.T) {
 	defer network.Disconnect()
 	defer networkRemote.Disconnect()
 	remoteNode, err := networkRemote.AddRemoteNode(NODE_ID_TEST, od.Default())
-	remoteNode.StartPDOs(false)
+	assert.Nil(t, err)
+	// Setup remote node PDOs by reading configuration from remote
+	err = remoteNode.StartPDOs(false)
+	assert.Nil(t, err)
+	// Enable real node TPDO nb 1
 	configurator := network.Configurator(NODE_ID_TEST)
-	configurator.TPDO.Enable(1)
+	err = configurator.EnablePDO(1 + 256)
 	assert.Nil(t, err)
 	assert.NotNil(t, remoteNode)
+	// Write value to remote node
 	err = network.WriteRaw(NODE_ID_TEST, 0x2002, 0, []byte{10}, false)
 	assert.Nil(t, err)
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1000 * time.Millisecond)
 	read := make([]byte, 1)
+	// Check that value received from remote node was correctly updated in internal OD
 	remoteNode.SDOClient.ReadRaw(0, 0x2002, 0x0, read)
 	assert.Equal(t, node.NODE_RUNNING, remoteNode.GetState())
 	assert.Equal(t, []byte{10}, read)
@@ -234,12 +235,12 @@ func TestTimeSynchronization(t *testing.T) {
 	defer network.Disconnect()
 	// Create 10 slave nodes that will update there internal time
 	slaveNodes := make([]*node.LocalNode, 0)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		slaveNode, err := network.CreateLocalNode(slaveId+uint8(i), od.Default())
 		assert.Nil(t, err)
-		err = slaveNode.Configurator().TIME.ProducerDisable()
+		err = slaveNode.Configurator().ProducerDisableTIME()
 		assert.Nil(t, err)
-		err = slaveNode.Configurator().TIME.ConsumerEnable()
+		err = slaveNode.Configurator().ConsumerEnableTIME()
 		assert.Nil(t, err)
 		// Set internal time of slave to now - 24h (wrong time)
 		slaveNode.TIME.SetInternalTime(time.Now().Add(24 * time.Hour))
@@ -254,7 +255,7 @@ func TestTimeSynchronization(t *testing.T) {
 		assert.InDelta(t, 24, timeDiff.Hours(), 1)
 	}
 	// Start publishing time
-	err := masterNode.Configurator().TIME.ProducerEnable()
+	err := masterNode.Configurator().ProducerEnableTIME()
 	assert.Nil(t, err)
 	// After enabling producer, time should be updated inside all slave nodes
 	time.Sleep(150 * time.Millisecond)
@@ -273,8 +274,8 @@ func TestScan(t *testing.T) {
 	assert.Len(t, scan, 0)
 	assert.Nil(t, err)
 	// Create some local nodes
-	for i := uint8(1); i <= 10; i++ {
-		_, err := network.CreateLocalNode(i, od.Default())
+	for i := range 10 {
+		_, err := network.CreateLocalNode(uint8(i)+1, od.Default())
 		assert.Nil(t, err)
 	}
 	// Scan from local

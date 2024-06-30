@@ -28,6 +28,7 @@ type TIME struct {
 	cobId              uint32
 }
 
+// Handle [TIME] related RX CAN frames
 func (t *TIME) Handle(frame canopen.Frame) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -38,6 +39,9 @@ func (t *TIME) Handle(frame canopen.Frame) {
 	t.rxNew = true
 }
 
+// Process [TIME] state machine and TX CAN frames
+// This returns whether timestamp has been received and if any error occured
+// This should be called periodically
 func (t *TIME) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) (bool, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -66,18 +70,18 @@ func (t *TIME) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) (boo
 	}
 	var err error
 	if nmtIsPreOrOperational && t.isProducer && t.producerIntervalMs > 0 {
-		if t.producerTimerMs >= t.producerIntervalMs {
-			t.producerTimerMs -= t.producerIntervalMs
-			frame := canopen.NewFrame(t.cobId, 0, 6)
-			binary.LittleEndian.PutUint32(frame.Data[0:4], t.ms)
-			binary.LittleEndian.PutUint16(frame.Data[4:6], t.days)
-			err = t.Send(frame)
-		} else {
+		if t.producerTimerMs < t.producerIntervalMs {
 			t.producerTimerMs += ms
+			return timestampReceived, nil
 		}
-	} else {
-		t.producerTimerMs = t.producerIntervalMs
+		t.producerTimerMs -= t.producerIntervalMs
+		frame := canopen.NewFrame(t.cobId, 0, 6)
+		binary.LittleEndian.PutUint32(frame.Data[0:4], t.ms)
+		binary.LittleEndian.PutUint16(frame.Data[4:6], t.days)
+		return timestampReceived, t.Send(frame)
+
 	}
+	t.producerTimerMs = t.producerIntervalMs
 	return timestampReceived, err
 }
 

@@ -83,6 +83,7 @@ type NMT struct {
 	callback               func(nmtState uint8)
 }
 
+// Handle [NMT] related RX CAN frames
 func (nmt *NMT) Handle(frame canopen.Frame) {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
@@ -98,8 +99,9 @@ func (nmt *NMT) Handle(frame canopen.Frame) {
 	}
 }
 
-// Process NMT related tasks. This returns the global requested node state that
-// can be used by application
+// Process [NMT] state machine and TX CAN frames
+// It returns a computed global state request for the node
+// This should be called periodically
 func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
@@ -119,7 +121,7 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 	if nmtInit || (nmt.hearbeatProducerTimeUs != 0 && (nmt.hearbeatProducerTimer == 0 || nmtStateCopy != nmt.operatingStatePrev)) {
 		nmt.hbTxBuff.Data[0] = nmtStateCopy
 		nmt.mu.Unlock()
-		nmt.Send(nmt.hbTxBuff)
+		_ = nmt.Send(nmt.hbTxBuff)
 		nmt.mu.Lock()
 		if nmtStateCopy == StateInitializing {
 			if nmt.control&StartupToOperational != 0 {
@@ -154,7 +156,7 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 
 		}
 		if resetCommand != ResetNot {
-			log.Debugf("[NMT] received reset command %v this should be handled by user", CommandDescription[nmt.internalCommand])
+			log.Debugf("[NMT][RX] reset command %v this should be handled by user", CommandDescription[nmt.internalCommand])
 		}
 		nmt.internalCommand = CommandEmpty
 	}
@@ -184,9 +186,9 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 	// Callback on change
 	if nmt.operatingStatePrev != nmtStateCopy || nmtInit {
 		if nmtInit {
-			log.Debugf("[NMT] state changed | INITIALIZING ==> %v", stateMap[nmtStateCopy])
+			log.Debugf("[NMT][RX] state changed | INITIALIZING ==> %v", stateMap[nmtStateCopy])
 		} else {
-			log.Debugf("[NMT] state changed | %v ==> %v", stateMap[nmt.operatingStatePrev], stateMap[nmtStateCopy])
+			log.Debugf("[NMT][RX] state changed | %v ==> %v", stateMap[nmt.operatingStatePrev], stateMap[nmtStateCopy])
 		}
 		if nmt.callback != nil {
 			nmt.callback(nmtStateCopy)
@@ -211,14 +213,12 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 
 // Get a NMT state
 func (nmt *NMT) GetInternalState() uint8 {
-	nmt.mu.Lock()
-	defer nmt.mu.Unlock()
-
 	if nmt == nil {
 		return StateInitializing
-	} else {
-		return nmt.operatingState
 	}
+	nmt.mu.Lock()
+	defer nmt.mu.Unlock()
+	return nmt.operatingState
 }
 
 // Send NMT command to self, don't send on network

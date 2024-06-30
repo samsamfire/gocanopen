@@ -32,10 +32,10 @@ type RPDO struct {
 	timeoutTimer  uint32
 }
 
+// Handle [RPDO] related RX CAN frames
 func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
-
 	pdo := rpdo.pdo
 	err := rpdo.receiveError
 	if !pdo.Valid {
@@ -64,49 +64,10 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 		err = rpdoRxShort
 	}
 	rpdo.receiveError = err
-
 }
 
-func (rpdo *RPDO) configureCOBID(entry14xx *od.Entry, predefinedIdent uint32, erroneousMap uint32) (canId uint32, e error) {
-	rpdo.mu.Lock()
-	defer rpdo.mu.Unlock()
-
-	pdo := rpdo.pdo
-	cobId, ret := entry14xx.Uint32(1)
-	if ret != nil {
-		log.Errorf("[RPDO][%x|%x] reading %v failed : %v", entry14xx.Index, 1, entry14xx.Name, ret)
-		return 0, canopen.ErrOdParameters
-	}
-	valid := (cobId & 0x80000000) == 0
-	canId = cobId & 0x7FF
-	if valid && (pdo.nbMapped == 0 || canId == 0) {
-		valid = false
-		if erroneousMap == 0 {
-			erroneousMap = 1
-		}
-	}
-	if erroneousMap != 0 {
-		errorInfo := erroneousMap
-		if erroneousMap == 1 {
-			errorInfo = cobId
-		}
-		pdo.emcy.ErrorReport(emergency.EmPDOWrongMapping, emergency.ErrProtocolError, errorInfo)
-	}
-	if !valid {
-		canId = 0
-	}
-	// If default canId is stored in od add node id
-	if canId != 0 && canId == (predefinedIdent&0xFF80) {
-		canId = predefinedIdent
-	}
-	ret = rpdo.Subscribe(canId, 0x7FF, false, rpdo)
-	if ret != nil {
-		return 0, ret
-	}
-	pdo.Valid = valid
-	return canId, nil
-}
-
+// Process [RPDO] state machine and TX CAN frames
+// This should be called periodically
 func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOperational bool, syncWas bool) {
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
@@ -146,7 +107,7 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 		rpdoReceived = true
 		dataRPDO := rpdo.rxData[bufNo][:]
 		rpdo.rxNew[bufNo] = false
-		for i := 0; i < int(pdo.nbMapped); i++ {
+		for i := range pdo.nbMapped {
 			streamer := &pdo.streamers[i]
 			mappedLength := streamer.DataOffset
 			dataLength := streamer.DataLength
@@ -190,25 +151,64 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 			*timerNext = diff
 		}
 	}
+}
 
+func (rpdo *RPDO) configureCOBID(entry14xx *od.Entry, predefinedIdent uint32, erroneousMap uint32) (canId uint32, e error) {
+	rpdo.mu.Lock()
+	defer rpdo.mu.Unlock()
+
+	pdo := rpdo.pdo
+	cobId, ret := entry14xx.Uint32(1)
+	if ret != nil {
+		log.Errorf("[RPDO][%x|%x] reading %v failed : %v", entry14xx.Index, 1, entry14xx.Name, ret)
+		return 0, canopen.ErrOdParameters
+	}
+	valid := (cobId & 0x80000000) == 0
+	canId = cobId & 0x7FF
+	if valid && (pdo.nbMapped == 0 || canId == 0) {
+		valid = false
+		if erroneousMap == 0 {
+			erroneousMap = 1
+		}
+	}
+	if erroneousMap != 0 {
+		errorInfo := erroneousMap
+		if erroneousMap == 1 {
+			errorInfo = cobId
+		}
+		pdo.emcy.ErrorReport(emergency.EmPDOWrongMapping, emergency.ErrProtocolError, errorInfo)
+	}
+	if !valid {
+		canId = 0
+	}
+	// If default canId is stored in od add node id
+	if canId != 0 && canId == (predefinedIdent&0xFF80) {
+		canId = predefinedIdent
+	}
+	ret = rpdo.Subscribe(canId, 0x7FF, false, rpdo)
+	if ret != nil {
+		return 0, ret
+	}
+	pdo.Valid = valid
+	return canId, nil
 }
 
 func NewRPDO(
 	bm *canopen.BusManager,
 	odict *od.ObjectDictionary,
-	em *emergency.EMCY,
+	emcy *emergency.EMCY,
 	sync *sync.SYNC,
 	entry14xx *od.Entry,
 	entry16xx *od.Entry,
 	predefinedIdent uint16,
 ) (*RPDO, error) {
-	if odict == nil || entry14xx == nil || entry16xx == nil || bm == nil {
+	if odict == nil || entry14xx == nil || entry16xx == nil || bm == nil || emcy == nil {
 		return nil, canopen.ErrIllegalArgument
 	}
 	rpdo := &RPDO{BusManager: bm}
 	// Configure mapping parameters
 	erroneousMap := uint32(0)
-	pdo, err := NewPDO(odict, entry16xx, true, em, &erroneousMap)
+	pdo, err := NewPDO(odict, entry16xx, true, emcy, &erroneousMap)
 	if err != nil {
 		return nil, err
 	}

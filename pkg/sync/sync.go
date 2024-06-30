@@ -10,6 +10,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const (
+	EventNone         uint8 = 0 // No SYNC event in last cycle
+	EventRxOrTx       uint8 = 1 // SYNC message was received or transmitted in last cycle
+	EventPassedWindow uint8 = 2 // Time has just passed SYNC window in last cycle (0x1007)
+)
+
 type SYNC struct {
 	*canopen.BusManager
 	mu                          s.Mutex
@@ -29,12 +35,7 @@ type SYNC struct {
 	txBuffer                    canopen.Frame
 }
 
-const (
-	EventNone         uint8 = 0 // No SYNC event in last cycle
-	EventRxOrTx       uint8 = 1 // SYNC message was received or transmitted in last cycle
-	EventPassedWindow uint8 = 2 // Time has just passed SYNC window in last cycle (0x1007)
-)
-
+// Handle [SYNC] related RX CAN frames
 func (sync *SYNC) Handle(frame canopen.Frame) {
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
@@ -58,46 +59,11 @@ func (sync *SYNC) Handle(frame canopen.Frame) {
 		sync.rxToggle = !sync.rxToggle
 		sync.rxNew = true
 	}
-
 }
 
-func (sync *SYNC) send() {
-	sync.mu.Lock()
-
-	sync.counter += 1
-	if sync.counter > sync.counterOverflow {
-		sync.counter = 1
-	}
-	sync.timer = 0
-	sync.rxToggle = !sync.rxToggle
-	sync.txBuffer.Data[0] = sync.counter
-	sync.mu.Unlock()
-	// When listening to own messages, this will trigger Handle to be called
-	// So make sure sync is unlocked before sending
-	_ = sync.Send(sync.txBuffer)
-}
-
-func (sync *SYNC) Counter() uint8 {
-	sync.mu.Lock()
-	defer sync.mu.Unlock()
-
-	return sync.counter
-}
-
-func (sync *SYNC) RxToggle() bool {
-	sync.mu.Lock()
-	defer sync.mu.Unlock()
-
-	return sync.rxToggle
-}
-
-func (sync *SYNC) CounterOverflow() uint8 {
-	sync.mu.Lock()
-	defer sync.mu.Unlock()
-
-	return sync.counterOverflow
-}
-
+// Process [SYNC] state machine and TX CAN frames
+// It returns the according sync event
+// This should be called periodically
 func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
@@ -118,6 +84,7 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 	if sync.rxNew {
 		sync.timer = 0
 		sync.rxNew = false
+		status = EventRxOrTx
 	}
 	communicationCyclePeriod := binary.LittleEndian.Uint32(sync.rawCommunicationCyclePeriod)
 	if communicationCyclePeriod > 0 {
@@ -175,6 +142,43 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 		sync.timeoutError = 1
 	}
 	return status
+}
+
+func (sync *SYNC) send() {
+	sync.mu.Lock()
+
+	sync.counter += 1
+	if sync.counter > sync.counterOverflow {
+		sync.counter = 1
+	}
+	sync.timer = 0
+	sync.rxToggle = !sync.rxToggle
+	sync.txBuffer.Data[0] = sync.counter
+	sync.mu.Unlock()
+	// When listening to own messages, this will trigger Handle to be called
+	// So make sure sync is unlocked before sending
+	_ = sync.Send(sync.txBuffer)
+}
+
+func (sync *SYNC) Counter() uint8 {
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
+
+	return sync.counter
+}
+
+func (sync *SYNC) RxToggle() bool {
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
+
+	return sync.rxToggle
+}
+
+func (sync *SYNC) CounterOverflow() uint8 {
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
+
+	return sync.counterOverflow
 }
 
 func NewSYNC(

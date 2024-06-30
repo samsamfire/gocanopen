@@ -1,15 +1,15 @@
 [FileInfo]
-FileName=DS301_profile.eds
+FileName=gocanopen
 FileVersion=1
 FileRevision=1
 LastEDS=
 EDSVersion=4.0
 Description=
 CreationTime=1:00PM
-CreationDate=11-23-2020
+CreationDate=06-30-2024
 CreatedBy=
 ModificationTime=6:39PM
-ModificationDate=08-09-2021
+ModificationDate=06-30-2024
 ModifiedBy=
 
 [DeviceInfo]
@@ -1943,7 +1943,7 @@ PDOMapping=1
 ParameterName=REAL32 value
 ObjectType=0x7
 DataType=0x0008
-DefaultValue=0x55555555
+DefaultValue=0.1
 AccessType=rw
 PDOMapping=1
 
@@ -1968,7 +1968,7 @@ PDOMapping=0
 ParameterName=REAL64 value
 ObjectType=0x7
 DataType=0x0011
-DefaultValue=0x55555555
+DefaultValue=0.55
 AccessType=rw
 PDOMapping=1
 

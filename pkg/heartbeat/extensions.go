@@ -17,16 +17,16 @@ func writeEntry1016(stream *od.Stream, data []byte, countWritten *uint16) error 
 	defer consumer.mu.Unlock()
 
 	if stream == nil || stream.Subindex < 1 ||
-		int(stream.Subindex) > len(consumer.monitoredNodes) ||
+		int(stream.Subindex) > len(consumer.entries) ||
 		len(data) != 4 {
 		return od.ErrDevIncompat
 	}
 
 	hbConsValue := binary.LittleEndian.Uint32(data)
 	nodeId := uint8(hbConsValue >> 16)
-	time := hbConsValue & 0xFFFF
-	log.Debugf("[OD][EXTENSION][HB CONSUMER] will monitor x%x with period %v ms", nodeId, time)
-	err := consumer.addHearbeatConsumerNode(stream.Subindex-1, nodeId, uint16(time))
+	periodMs := uint16(hbConsValue & 0xFFFF)
+	log.Debugf("[OD][EXTENSION][HB CONSUMER] will monitor x%x with period %v ms", nodeId, periodMs)
+	err := consumer.updateConsumerEntry(stream.Subindex-1, nodeId, periodMs)
 	if err != nil {
 		return od.ErrParIncompat
 	}

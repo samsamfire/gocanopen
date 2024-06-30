@@ -72,7 +72,7 @@ func TestSendAndSubscribe(t *testing.T) {
 	// Send 100 frames from vcan 1 && read 100 frames from vcan2
 	// Check order and value
 	frame := canopen.Frame{ID: 0x111, Flags: 0, DLC: 8, Data: [8]byte{0, 1, 2, 3, 4, 5, 6, 7}}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		frame.Data[0] = uint8(i)
 		vcan1.Send(frame)
 	}
