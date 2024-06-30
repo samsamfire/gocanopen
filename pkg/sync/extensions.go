@@ -10,7 +10,6 @@ import (
 
 // [SYNC] update cob id & if should be producer
 func writeEntry1005(stream *od.Stream, data []byte, countWritten *uint16) error {
-	log.Debugf("[OD][EXTENSION][SYNC] updating COB-ID SYNC")
 	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
 		return od.ErrDevIncompat
 	}
@@ -22,6 +21,7 @@ func writeEntry1005(stream *od.Stream, data []byte, countWritten *uint16) error 
 	defer sync.mu.Unlock()
 
 	cobIdSync := binary.LittleEndian.Uint32(data)
+	log.Debugf("[OD][EXTENSION][SYNC] updating COB-ID SYNC : %x", cobIdSync)
 	canId := uint16(cobIdSync & 0x7FF)
 	isProducer := (cobIdSync & 0x40000000) != 0
 	if (cobIdSync&0xBFFFF800) != 0 || canopen.IsIDRestricted(canId) || (sync.isProducer && isProducer && canId != uint16(sync.cobId)) {

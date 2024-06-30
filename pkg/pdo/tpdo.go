@@ -26,6 +26,102 @@ type TPDO struct {
 	eventTimer       uint32
 }
 
+// Process [TPDO] state machine and TX CAN frames
+// This should be called periodically
+func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOperational bool, syncWas bool) error {
+	tpdo.mu.Lock()
+
+	pdo := tpdo.pdo
+	if !pdo.Valid || !nmtIsOperational {
+		tpdo.sendRequest = true
+		tpdo.inhibitTimer = 0
+		tpdo.eventTimer = 0
+		tpdo.syncCounter = 255
+		tpdo.mu.Unlock()
+		return nil
+	}
+
+	if tpdo.transmissionType == TransmissionTypeSyncAcyclic || tpdo.transmissionType >= TransmissionTypeSyncEventLo {
+		if tpdo.eventTimeUs != 0 {
+			if tpdo.eventTimer > timeDifferenceUs {
+				tpdo.eventTimer -= timeDifferenceUs
+			} else {
+				tpdo.eventTimer = 0
+			}
+			if tpdo.eventTimer == 0 {
+				tpdo.sendRequest = true
+			}
+			if timerNextUs != nil && *timerNextUs > tpdo.eventTimer {
+				*timerNextUs = tpdo.eventTimer
+			}
+		}
+		// Check for tpdo send requests
+		if !tpdo.sendRequest {
+			for i := range pdo.nbMapped {
+				flagPDOByte := pdo.flagPDOByte[i]
+				if flagPDOByte != nil {
+					if (*flagPDOByte & pdo.flagPDOBitmask[i]) == 0 {
+						tpdo.sendRequest = true
+					}
+				}
+			}
+		}
+	}
+	// Send PDO by application request or event timer
+	if tpdo.transmissionType >= TransmissionTypeSyncEventLo {
+		if tpdo.inhibitTimer > timeDifferenceUs {
+			tpdo.inhibitTimer -= timeDifferenceUs
+		} else {
+			tpdo.inhibitTimer = 0
+		}
+		if tpdo.sendRequest && tpdo.inhibitTimer == 0 {
+			tpdo.mu.Unlock()
+			_ = tpdo.send()
+			tpdo.mu.Lock()
+		}
+		if tpdo.sendRequest && timerNextUs != nil && *timerNextUs > tpdo.inhibitTimer {
+			*timerNextUs = tpdo.inhibitTimer
+		}
+	} else if tpdo.sync != nil && syncWas {
+
+		// Send synchronous acyclic tpdo
+		if tpdo.transmissionType == TransmissionTypeSyncAcyclic &&
+			tpdo.sendRequest {
+			tpdo.mu.Unlock()
+			return tpdo.send()
+		}
+		// Send synchronous cyclic TPDOs
+		if tpdo.syncCounter == 255 {
+			if tpdo.sync.CounterOverflow() != 0 && tpdo.syncStartValue != 0 {
+				// Sync start value used
+				tpdo.syncCounter = 254
+			} else {
+				tpdo.syncCounter = tpdo.transmissionType/2 + 1
+			}
+		}
+		// If sync start value is used , start first TPDO
+		// after sync with matched syncstartvalue
+		switch tpdo.syncCounter {
+		case 254:
+			if tpdo.sync.Counter() == tpdo.syncStartValue {
+				tpdo.syncCounter = tpdo.transmissionType
+				tpdo.mu.Unlock()
+				return tpdo.send()
+			}
+		case 1:
+			tpdo.syncCounter = tpdo.transmissionType
+			tpdo.mu.Unlock()
+			return tpdo.send()
+
+		default:
+			tpdo.syncCounter--
+		}
+
+	}
+	tpdo.mu.Unlock()
+	return nil
+}
+
 func (tpdo *TPDO) configureTransmissionType(entry18xx *od.Entry) error {
 	tpdo.mu.Lock()
 	defer tpdo.mu.Unlock()
@@ -81,100 +177,6 @@ func (tpdo *TPDO) configureCOBID(entry18xx *od.Entry, predefinedIdent uint16, er
 
 }
 
-func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOperational bool, syncWas bool) error {
-	tpdo.mu.Lock()
-
-	pdo := tpdo.pdo
-	if !pdo.Valid || !nmtIsOperational {
-		tpdo.sendRequest = true
-		tpdo.inhibitTimer = 0
-		tpdo.eventTimer = 0
-		tpdo.syncCounter = 255
-		tpdo.mu.Unlock()
-		return nil
-	}
-
-	if tpdo.transmissionType == TransmissionTypeSyncAcyclic || tpdo.transmissionType >= TransmissionTypeSyncEventLo {
-		if tpdo.eventTimeUs != 0 {
-			if tpdo.eventTimer > timeDifferenceUs {
-				tpdo.eventTimer -= timeDifferenceUs
-			} else {
-				tpdo.eventTimer = 0
-			}
-			if tpdo.eventTimer == 0 {
-				tpdo.sendRequest = true
-			}
-			if timerNextUs != nil && *timerNextUs > tpdo.eventTimer {
-				*timerNextUs = tpdo.eventTimer
-			}
-		}
-		// Check for tpdo send requests
-		if !tpdo.sendRequest {
-			for i := 0; i < int(pdo.nbMapped); i++ {
-				flagPDOByte := pdo.flagPDOByte[i]
-				if flagPDOByte != nil {
-					if (*flagPDOByte & pdo.flagPDOBitmask[i]) == 0 {
-						tpdo.sendRequest = true
-					}
-				}
-			}
-		}
-	}
-	// Send PDO by application request or event timer
-	if tpdo.transmissionType >= TransmissionTypeSyncEventLo {
-		if tpdo.inhibitTimer > timeDifferenceUs {
-			tpdo.inhibitTimer -= timeDifferenceUs
-		} else {
-			tpdo.inhibitTimer = 0
-		}
-		if tpdo.sendRequest && tpdo.inhibitTimer == 0 {
-			tpdo.mu.Unlock()
-			tpdo.send()
-			tpdo.mu.Lock()
-		}
-		if tpdo.sendRequest && timerNextUs != nil && *timerNextUs > tpdo.inhibitTimer {
-			*timerNextUs = tpdo.inhibitTimer
-		}
-	} else if tpdo.sync != nil && syncWas {
-
-		// Send synchronous acyclic tpdo
-		if tpdo.transmissionType == TransmissionTypeSyncAcyclic &&
-			tpdo.sendRequest {
-			tpdo.mu.Unlock()
-			return tpdo.send()
-		}
-		// Send synchronous cyclic TPDOs
-		if tpdo.syncCounter == 255 {
-			if tpdo.sync.CounterOverflow() != 0 && tpdo.syncStartValue != 0 {
-				// Sync start value used
-				tpdo.syncCounter = 254
-			} else {
-				tpdo.syncCounter = tpdo.transmissionType/2 + 1
-			}
-		}
-		// If sync start value is used , start first TPDO
-		// after sync with matched syncstartvalue
-		switch tpdo.syncCounter {
-		case 254:
-			if tpdo.sync.Counter() == tpdo.syncStartValue {
-				tpdo.syncCounter = tpdo.transmissionType
-				tpdo.mu.Unlock()
-				return tpdo.send()
-			}
-		case 1:
-			tpdo.syncCounter = tpdo.transmissionType
-			tpdo.mu.Unlock()
-			return tpdo.send()
-
-		default:
-			tpdo.syncCounter--
-		}
-
-	}
-	tpdo.mu.Unlock()
-	return nil
-}
-
 func (tpdo *TPDO) send() error {
 	tpdo.mu.Lock()
 	defer tpdo.mu.Unlock()
@@ -182,7 +184,7 @@ func (tpdo *TPDO) send() error {
 	pdo := tpdo.pdo
 	eventDriven := tpdo.transmissionType == TransmissionTypeSyncAcyclic || tpdo.transmissionType >= uint8(TransmissionTypeSyncEventLo)
 	dataTPDO := make([]byte, 0)
-	for i := 0; i < int(pdo.nbMapped); i++ {
+	for i := range pdo.nbMapped {
 		streamer := &pdo.streamers[i]
 		mappedLength := streamer.DataOffset
 		dataLength := int(streamer.DataLength)
@@ -218,20 +220,20 @@ func (tpdo *TPDO) send() error {
 func NewTPDO(
 	bm *canopen.BusManager,
 	odict *od.ObjectDictionary,
-	em *emergency.EMCY,
+	emcy *emergency.EMCY,
 	sync *sync.SYNC,
 	entry18xx *od.Entry,
 	entry1Axx *od.Entry,
 	predefinedIdent uint16,
 
 ) (*TPDO, error) {
-	if odict == nil || entry18xx == nil || entry1Axx == nil || bm == nil {
+	if odict == nil || entry18xx == nil || entry1Axx == nil || bm == nil || emcy == nil {
 		return nil, canopen.ErrIllegalArgument
 	}
 	tpdo := &TPDO{BusManager: bm}
 	// Configure mapping parameters
 	erroneousMap := uint32(0)
-	pdo, err := NewPDO(odict, entry1Axx, false, em, &erroneousMap)
+	pdo, err := NewPDO(odict, entry1Axx, false, emcy, &erroneousMap)
 	if err != nil {
 		return nil, err
 	}

@@ -155,7 +155,7 @@ func writeEntry16xxOr1Axx(stream *od.Stream, data []byte, countWritten *uint16) 
 		if mappedObjectsCount > od.MaxMappedEntriesPdo {
 			return od.ErrMapLen
 		}
-		for i := 0; i < int(mappedObjectsCount); i++ {
+		for i := range mappedObjectsCount {
 			streamer := pdo.streamers[i]
 			dataLength := streamer.DataLength
 			mappedLength := streamer.DataOffset

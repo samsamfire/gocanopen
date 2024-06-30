@@ -53,7 +53,7 @@ func (node *LocalNode) ProcessRPDO(syncWas bool, timeDifferenceUs uint32, timerN
 	}
 }
 
-func (node *LocalNode) ProcessSync(timeDifferenceUs uint32, timerNextUs *uint32) bool {
+func (node *LocalNode) ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32) bool {
 	syncWas := false
 	s := node.SYNC
 	if !node.NodeIdUnconfigured && s != nil {
@@ -82,6 +82,7 @@ func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, 
 	node.BusManager.Process()
 	node.EMCY.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
 	reset := node.NMT.Process(&NMTState, timeDifferenceUs, timerNextUs)
+
 	// Update NMTisPreOrOperational
 	NMTisPreOrOperational = (NMTState == nmt.StatePreOperational) || (NMTState == nmt.StateOperational)
 
@@ -90,7 +91,10 @@ func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, 
 		server.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
 	}
 	node.HBConsumer.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
-	node.TIME.Process(NMTisPreOrOperational, timeDifferenceUs)
+
+	if node.TIME != nil {
+		node.TIME.Process(NMTisPreOrOperational, timeDifferenceUs)
+	}
 
 	return reset
 
@@ -113,7 +117,7 @@ func (node *LocalNode) initPDO() error {
 	}
 	// Iterate over all the possible entries : there can be a maximum of 512 maps
 	// Break loops when an entry doesn't exist (don't allow holes in mapping)
-	for i := uint16(0); i < 512; i++ {
+	for i := range uint16(512) {
 		entry14xx := node.GetOD().Index(0x1400 + i)
 		entry16xx := node.GetOD().Index(0x1600 + i)
 		preDefinedIdent := uint16(0)
@@ -129,7 +133,7 @@ func (node *LocalNode) initPDO() error {
 		}
 	}
 	// Do the same for TPDOS
-	for i := uint16(0); i < 512; i++ {
+	for i := range uint16(512) {
 		entry18xx := node.GetOD().Index(0x1800 + i)
 		entry1Axx := node.GetOD().Index(0x1A00 + i)
 		preDefinedIdent := uint16(0)
@@ -181,7 +185,7 @@ func NewLocalNode(
 	node.state = NODE_INIT
 
 	if emcy == nil {
-		emergency, err := emergency.NewEM(
+		emergency, err := emergency.NewEMCY(
 			bm,
 			nodeId,
 			odict.Index(0x1001),

@@ -65,13 +65,13 @@ jobs:
             **/requirements*.txt
 
       - run: |
-          pip install -r ./requirements.txt
+          pip install -r ./tests/requirements.txt
           pip install ./virtualcan/python
 
       - name: Run python integration tests
         run: |
           nohup ~/vcan/virtualcan --port 18889 &
-          nohup go run ./cmd/canopen_test -p ./testdata/base.eds &
+          nohup go run ./examples/test &
           sleep 15
           python -m pytest ./tests/test_sdo.py -v
           python -m pytest ./tests/test_pdo.py -v

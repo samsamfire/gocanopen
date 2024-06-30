@@ -12,7 +12,7 @@ func TestSDOReadExpedited(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
 	data := make([]byte, 10)
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		_, err := network.ReadRaw(NODE_ID_TEST, 0x2001+uint16(i), 0, data)
 		assert.Nil(t, err)
 	}

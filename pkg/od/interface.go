@@ -107,14 +107,14 @@ func (od *ObjectDictionary) addPDO(pdoNb uint16, isRPDO bool) error {
 	pdoComm.AddSubObject(4, "Reserved", UNSIGNED8, AttributeSdoRw, "0x0")
 	pdoComm.AddSubObject(5, "Event timer", UNSIGNED16, AttributeSdoRw, "0x0")
 
-	od.AddVariableList(IndexRpdoCommunicationBase+indexOffset, fmt.Sprintf("%s communication parameter", pdoType), pdoComm)
+	od.AddVariableList(EntryRPDOCommunicationStart+indexOffset, fmt.Sprintf("%s communication parameter", pdoType), pdoComm)
 
 	pdoMap := NewRecord()
 	pdoMap.AddSubObject(0, "Number of mapped application objects in PDO", UNSIGNED8, AttributeSdoRw, "0x0")
-	for i := uint8(1); i <= MaxMappedEntriesPdo; i++ {
-		pdoMap.AddSubObject(i, fmt.Sprintf("Application object %d", i), UNSIGNED32, AttributeSdoRw, "0x0")
+	for i := range MaxMappedEntriesPdo {
+		pdoMap.AddSubObject(i+1, fmt.Sprintf("Application object %d", i+1), UNSIGNED32, AttributeSdoRw, "0x0")
 	}
-	od.AddVariableList(IndexRpdoMappingBase+indexOffset, fmt.Sprintf("%s mapping parameter", pdoType), pdoMap)
+	od.AddVariableList(EntryRPDOMappingStart+indexOffset, fmt.Sprintf("%s mapping parameter", pdoType), pdoMap)
 
 	log.Infof("[OD] Added new PDO object to OD : %s%v", pdoType, pdoNb)
 	return nil

@@ -46,18 +46,4 @@ func TestReaderWriter(t *testing.T) {
 	n, err = w.Write([]byte{0, 1})
 	assert.Nil(t, err)
 	assert.Equal(t, 2, n)
-
-	// rw, err = client.NewRawReader(NODE_ID_TEST, 0x1021, 0, true)
-	// Test reading eds
-	// rw, err = client.NewRawReader(NODE_ID_TEST, 0x1021, 0, true)
-	// assert.Nil(t, err)
-	// buffer = make([]byte, 1000)
-	// n, err = rw.Read(buffer)
-	// assert.Nil(t, err)
-	// assert.EqualValues(t, 1000, n)
-	// raw, err := io.ReadAll(rw)
-	// assert.Nil(t, err)
-	// od, err := od.Parse(raw, NODE_ID_TEST)
-	// assert.Nil(t, err)
-	// assert.NotNil(t, od)
 }

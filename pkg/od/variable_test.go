@@ -33,6 +33,12 @@ func TestEncode(t *testing.T) {
 	_, err = EncodeFromString("90000", UNSIGNED8, 0)
 	assert.NotNil(t, err)
 
+	_, err = EncodeFromString("0.01", REAL32, 0)
+	assert.Nil(t, err)
+
+	_, err = EncodeFromString("0.01", REAL64, 0)
+	assert.Nil(t, err)
+
 	data, err = EncodeFromGeneric(uint8(0))
 	assert.Equal(t, []byte{uint8(0)}, data)
 	assert.Nil(t, err)

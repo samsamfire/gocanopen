@@ -133,7 +133,7 @@ func (network *Network) Disconnect() {
 		node.SetExit(true)
 	}
 	network.wgProcess.Wait()
-	network.BusManager.Bus().Disconnect()
+	_ = network.BusManager.Bus().Disconnect()
 }
 
 // Launch goroutine that handles CANopen stack processing of a node
@@ -163,7 +163,7 @@ func (network *Network) launchNodeProcess(node n.Node) {
 							elapsed := time.Since(startBackground)
 							startBackground = time.Now()
 							timeDifferenceUs := uint32(elapsed.Microseconds())
-							syncWas := node.ProcessSync(timeDifferenceUs, nil)
+							syncWas := node.ProcessSYNC(timeDifferenceUs, nil)
 							node.ProcessTPDO(syncWas, timeDifferenceUs, nil)
 							node.ProcessRPDO(syncWas, timeDifferenceUs, nil)
 							time.Sleep(backgroundPeriod)
@@ -258,7 +258,7 @@ func (network *Network) Command(nodeId uint8, nmtCommand nmt.Command) error {
 	frame := canopen.NewFrame(uint32(nmt.ServiceId), 0, 2)
 	frame.Data[0] = uint8(nmtCommand)
 	frame.Data[1] = nodeId
-	log.Debugf("[NMT] sending nmt command : %v to node(s) %v (x%x)", nmt.CommandDescription[nmtCommand], nodeId, nodeId)
+	log.Debugf("[NMT][TX] nmt command : %v to node(s) %v (x%x)", nmt.CommandDescription[nmtCommand], nodeId, nodeId)
 	return network.Send(frame)
 }
 

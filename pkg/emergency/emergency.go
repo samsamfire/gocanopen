@@ -275,6 +275,7 @@ type EMCY struct {
 	rxCallback      EMCYRxCallback
 }
 
+// Handle [EMCY] related RX CAN frames
 func (emcy *EMCY) Handle(frame canopen.Frame) {
 	// Ignore sync messages and only accept 8 bytes size
 	if emcy == nil || emcy.rxCallback == nil ||
@@ -292,6 +293,8 @@ func (emcy *EMCY) Handle(frame canopen.Frame) {
 		infoCode)
 }
 
+// Process [EMCY] state machine and TX CAN frames
+// This should be called periodically
 func (emcy *EMCY) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
 	emcy.mu.Lock()
 	defer emcy.mu.Unlock()
@@ -381,7 +384,7 @@ func (emcy *EMCY) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 
 			emcy.fifo[fifoPpPtr].msg |= uint32(errorRegister) << 16
 			binary.LittleEndian.PutUint32(emcy.txBuffer.Data[:4], emcy.fifo[fifoPpPtr].msg)
-			emcy.Send(emcy.txBuffer)
+			_ = emcy.Send(emcy.txBuffer)
 			// Also report own emergency message
 			if emcy.rxCallback != nil {
 				errMsg := uint32(emcy.fifo[fifoPpPtr].msg)
@@ -490,11 +493,11 @@ func (emcy *EMCY) ErrorReset(errorBit byte, infoCode uint32) {
 }
 
 func (emcy *EMCY) IsError(errorBit byte) bool {
-	emcy.mu.Lock()
-	defer emcy.mu.Unlock()
 	if emcy == nil {
 		return true
 	}
+	emcy.mu.Lock()
+	defer emcy.mu.Unlock()
 	byteIndex := errorBit >> 3
 	bitMask := uint8(1) << (errorBit & 0x7)
 	if byteIndex >= (EmergencyErrorStatusBits / 8) {
@@ -504,11 +507,11 @@ func (emcy *EMCY) IsError(errorBit byte) bool {
 }
 
 func (emcy *EMCY) GetErrorRegister() byte {
-	emcy.mu.Lock()
-	defer emcy.mu.Unlock()
 	if emcy == nil || emcy.errorRegister == nil {
 		return 0
 	}
+	emcy.mu.Lock()
+	defer emcy.mu.Unlock()
 	return *emcy.errorRegister
 }
 
@@ -522,7 +525,7 @@ func (emcy *EMCY) SetCallback(callback EMCYRxCallback) {
 	emcy.rxCallback = callback
 }
 
-func NewEM(
+func NewEMCY(
 	bm *canopen.BusManager,
 	nodeId uint8,
 	entry1001 *od.Entry,
@@ -571,10 +574,5 @@ func NewEM(
 	if entryStatusBits != nil {
 		entryStatusBits.AddExtension(emcy, readEntryStatusBits, writeEntryStatusBits)
 	}
-
-	err := emcy.Subscribe(uint32(ServiceId), 0x780, false, emcy)
-	if err != nil {
-		return nil, err
-	}
-	return emcy, nil
+	return emcy, emcy.Subscribe(uint32(ServiceId), 0x780, false, emcy)
 }
