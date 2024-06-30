@@ -65,7 +65,7 @@ jobs:
             **/requirements*.txt
 
       - run: |
-          pip install -r .tests/requirements.txt
+          pip install -r ./tests/requirements.txt
           pip install ./virtualcan/python
 
       - name: Run python integration tests
