@@ -61,15 +61,17 @@ jobs:
           go-version: '1.21'
       
       - name: Install Go deps
-        run: go get .
+        run: | 
+        go get . &
+        go install gotest.tools/gotestsum@latest
 
       - name: Build gocanopen
         run: go build -v ./...
 
       - name: Run gocanopen unit tests
         run: |
-          ~/vcan/virtualcan --port 18888 &
-          go test -v ./...
+          nohup ~/vcan/virtualcan --port 18888 &
+          go run gotest.tools/gotestsum@latest --format testname
 
 
 
