@@ -51,7 +51,8 @@ func createClient() (*GatewayClient, func()) {
 	ts := httptest.NewServer(gw.serveMux)
 	client := NewGatewayClient(ts.URL, API_VERSION, 1)
 	return client, func() {
-		defer gw.Disconnect()
+		gw.Disconnect()
+		ts.Close()
 	}
 }
 
