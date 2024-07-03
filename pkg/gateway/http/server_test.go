@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/samsamfire/gocanopen/pkg/can/virtual"
 	"github.com/samsamfire/gocanopen/pkg/network"
@@ -102,6 +103,7 @@ func TestNMTCommand(t *testing.T) {
 		assert.Nil(t, err)
 		assert.NotNil(t, resp)
 	}
+	time.Sleep(5 * time.Second)
 }
 
 func TestRead(t *testing.T) {
