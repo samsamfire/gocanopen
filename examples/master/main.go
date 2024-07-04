@@ -37,20 +37,4 @@ func main() {
 	if err != nil {
 		log.Info("failed to write", err)
 	}
-	// Send NMT commands
-
-	// network.Read(0x10, "INTEGER16 value", "")
-	// network.Read(0x10, "INTEGER8 value", "")
-	// network.Read(0x10, "INTEGER32 value", "")
-	// network.Read(0x10, "INTEGER64 value", "")
-	// network.Read(0x10, "UNSIGNED8 value", "")
-	// network.Read(0x10, "UNSIGNED16 value", "")
-	// network.Read(0x10, "UNSIGNED32 value", "")
-	// network.Read(0x10, "UNSIGNED64 value", "")
-	// network.Write(0x10, "INTEGER16 value", 0, int16(-10))
-	// fmt.Println(network.Read(0x10, "INTEGER16 value", ""))
-	// network.Write(0x10, "INTEGER16 value", 0, int16(50))
-	// fmt.Println(network.Read(0x10, "INTEGER16 value", ""))
-	// fmt.Print(network.Command(0x10, canopen.NMT_ENTER_PRE_OPERATIONAL))
-
 }
