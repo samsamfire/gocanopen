@@ -245,8 +245,8 @@ func (network *Network) ReadEDS(nodeId uint8, edsFormatHandler EDSFormatHandler)
 // nodeId = 0 is used as a broadcast command i.e. affects all nodes
 // on the network
 //
-//	network.Command(0,NMT_RESET_NODE) // resets all nodes
-//	network.Command(12,NMT_RESET_NODE) // resets nodeId 12
+//	network.Command(0,nmt.CommandResetNode) // resets all nodes
+//	network.Command(12,nmt.CommandResetNode) // resets nodeId 12
 func (network *Network) Command(nodeId uint8, nmtCommand nmt.Command) error {
 	if nodeId > 127 || (nmtCommand != nmt.CommandEnterOperational &&
 		nmtCommand != nmt.CommandEnterPreOperational &&

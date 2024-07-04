@@ -30,10 +30,10 @@ odict.Index(0x1018).SubIndex(1) // access sub-object of array
 It is also possible to create new dictionary entries dynamically :
 
 ```go
-odict.AddVariableType(index, indexName, od.DOMAIN, od.ATTRIBUTE_SDO_RW, "") // add a DOMAIN entry, and returns it
-odict.AddVariableType(0x2500, "a number", od.UNSIGNED32, od.ATTRIBUTE_SDO_RW, "0x1000") // add an UNSIGNED32 entry, readable and writable
+odict.AddVariableType(index, indexName, od.DOMAIN, od.AttributeSdoRw, "") // add a DOMAIN entry, and returns it
+odict.AddVariableType(0x2500, "a number", od.UNSIGNED32, od.AttributeSdoRw, "0x1000") // add an UNSIGNED32 entry, readable and writable
 record := od.NewRecord()
-record.AddSubObject(0, "sub0", od.UNSIGNED8, od.ATTRIBUTE_SDO_RW, "0x11")
+record.AddSubObject(0, "sub0", od.UNSIGNED8, od.AttributeSdoRw, "0x11")
 odict.AddVariableList(0x3030, "record", record) // add a RECORD entry
 ```
 
@@ -99,7 +99,7 @@ The default implementations, i.e. for regular reading and writing are **od.ReadE
 
 ```go
 odict := od.Parse("../testdata/base.eds", 0x20)
-entry := odict.AddVariableType(index, indexName, od.DOMAIN, od.ATTRIBUTE_SDO_RW, "")
+entry := odict.AddVariableType(index, indexName, od.DOMAIN, od.AttributeSdoRw, "")
 entry.AddExtension(someObject,od.ReadEntryDefault,od.WriteEntryDefault)
 ```
 

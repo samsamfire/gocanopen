@@ -199,7 +199,7 @@ type Variable struct {
 	// The CiA 301 data type of this variable
 	DataType byte
 	// Attribute contains the access type as well as the mapping
-	// information. e.g. ATTRIBUTE_SDO_RW | ATTRIBUTE_RPDO
+	// information. e.g. AttributeSdoRw | AttributeRpdo
 	Attribute uint8
 	// StorageLocation has information on which medium is the data
 	// stored. Currently this is unused, everything is stored in RAM

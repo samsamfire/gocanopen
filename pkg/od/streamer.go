@@ -25,7 +25,7 @@ type Stream struct {
 	// A custom object that can be used when using a custom extension
 	// see [AddExtension]
 	Object any
-	// The OD attribute of the entry inside OD. e.g. ATTRIBUTE_SDO_R
+	// The OD attribute of the entry inside OD. e.g. AttributeSdoR
 	Attribute uint8
 	// The subindex of this OD entry. For a VAR type this is always 0.
 	Subindex uint8
