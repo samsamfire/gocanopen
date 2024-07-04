@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/samsamfire/gocanopen/pkg/can/virtual"
 	"github.com/samsamfire/gocanopen/pkg/network"
@@ -47,19 +46,17 @@ func createGateway() *GatewayServer {
 	return gateway
 }
 
-func createClient() (*GatewayClient, func()) {
+func createClient() (*GatewayClient, *GatewayServer, *httptest.Server) {
 	gw := createGateway()
 	ts := httptest.NewServer(gw.serveMux)
 	client := NewGatewayClient(ts.URL, API_VERSION, 1)
-	return client, func() {
-		gw.Disconnect()
-		ts.Close()
-	}
+	return client, gw, ts
 }
 
 func TestInvalidURIs(t *testing.T) {
-	client, close := createClient()
-	defer close()
+	client, gw, ts := createClient()
+	defer gw.Disconnect()
+	defer ts.Close()
 	resp := new(GatewayResponseBase)
 	err := client.Do(http.MethodGet, "/", nil, resp)
 	assert.EqualValues(t, ErrGwSyntaxError, err)
@@ -68,8 +65,9 @@ func TestInvalidURIs(t *testing.T) {
 }
 
 func TestNMTCommand(t *testing.T) {
-	client, close := createClient()
-	defer close()
+	client, gw, ts := createClient()
+	defer gw.Disconnect()
+	defer ts.Close()
 	commands := []string{
 		"start",
 		"stop",
@@ -103,12 +101,12 @@ func TestNMTCommand(t *testing.T) {
 		assert.Nil(t, err)
 		assert.NotNil(t, resp)
 	}
-	time.Sleep(5 * time.Second)
 }
 
 func TestRead(t *testing.T) {
-	client, close := createClient()
-	defer close()
+	client, gw, ts := createClient()
+	defer gw.Disconnect()
+	defer ts.Close()
 	for i := uint16(0x2001); i <= 0x2009; i++ {
 		_, _, err := client.ReadRaw(NODE_ID_TEST, i, 0)
 		assert.Nil(t, err)
@@ -116,8 +114,9 @@ func TestRead(t *testing.T) {
 }
 
 func TestWriteRead(t *testing.T) {
-	client, close := createClient()
-	defer close()
+	client, gw, ts := createClient()
+	defer gw.Disconnect()
+	defer ts.Close()
 	err := client.WriteRaw(NODE_ID_TEST, 0x2002, 0, "0x10", "i8")
 	assert.Nil(t, err)
 	err = client.WriteRaw(NODE_ID_TEST, 0x2003, 0, "0x5432", "i16")
@@ -127,15 +126,17 @@ func TestWriteRead(t *testing.T) {
 }
 
 func TestSDOTimeout(t *testing.T) {
-	client, close := createClient()
-	defer close()
+	client, gw, ts := createClient()
+	defer gw.Disconnect()
+	defer ts.Close()
 	err := client.SetSDOTimeout(1222)
 	assert.Nil(t, err)
 }
 
 func TestGetVersion(t *testing.T) {
-	client, close := createClient()
-	defer close()
+	client, gw, ts := createClient()
+	defer gw.Disconnect()
+	defer ts.Close()
 	version, err := client.GetVersion()
 	assert.Nil(t, err)
 	assert.Equal(t, "02.01", version.ProtocolVersion)
