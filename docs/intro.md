@@ -30,8 +30,8 @@ The network object itself can be used to perform high level commands.
 The following uses **NMT** commands :
 
 ``` golang
-network.Command(0,canopen.NMT_RESET_NODE) // resets all nodes
-network.Command(12,canopen.NMT_RESET_NODE) // resets node with id 12
+network.Command(0,nmt.CommandResetNode) // resets all nodes
+network.Command(12,nmt.CommandResetNode) // resets node with id 12
 ```
 
 
