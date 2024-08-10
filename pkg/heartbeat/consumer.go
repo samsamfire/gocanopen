@@ -251,9 +251,12 @@ func NewHBConsumer(bm *canopen.BusManager, emcy *emergency.EMCY, entry1016 *od.E
 	nbEntries := uint8(entry1016.SubCount() - 1)
 	log.Debugf("[HB CONSUMER] %v possible entries for nodes to monitor", nbEntries)
 	consumer.entries = make([]*hbConsumerEntry, nbEntries)
+	for i := range consumer.entries {
+		consumer.entries[i] = &hbConsumerEntry{}
+	}
 
 	// For each entry, get expected heartbeat period and node id to monitor
-	for index := 0; index < len(consumer.entries); index++ {
+	for index := 0; index < int(nbEntries); index++ {
 		hbConsValue, err := entry1016.Uint32(uint8(index) + 1)
 		if err != nil {
 			log.Errorf("[HB CONSUMER][%x|%x] reading %v failed : %v", entry1016.Index, index+1, entry1016.Name, err)
@@ -261,8 +264,6 @@ func NewHBConsumer(bm *canopen.BusManager, emcy *emergency.EMCY, entry1016 *od.E
 		}
 		nodeId := uint8(hbConsValue >> 16)
 		time := uint16(hbConsValue & 0xFFFF)
-
-		consumer.entries[index] = &hbConsumerEntry{}
 		err = consumer.updateConsumerEntry(uint8(index), nodeId, time)
 		if err != nil {
 			return nil, err
