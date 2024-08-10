@@ -11,9 +11,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const ClientBufferSize = 1000
-const ClientProtocolSwitchThreshold = 21
-const ClientTimeoutMs = 1000
+const (
+	ClientBufferSize = 1000
+)
 
 const (
 	waitingLocalTransfer    uint8 = 6 // Waiting in client local transfer.
@@ -52,9 +52,10 @@ type SDOClient struct {
 	timeoutTimerBlock          uint32
 	blockSequenceNb            uint8
 	blockSize                  uint8
+	blockMaxSize               int
 	blockNoData                uint8
 	blockCRCEnabled            bool
-	blockDataUploadLast        [7]byte
+	blockDataUploadLast        [BlockSeqSize]byte
 	blockCRC                   crc.CRC16
 }
 
@@ -84,7 +85,7 @@ func (client *SDOClient) Handle(frame canopen.Frame) {
 					state = stateUploadBlkSubblockCrsp
 				} else {
 					client.fifo.Write(frame.Data[1:], &client.blockCRC)
-					client.sizeTransferred += 7
+					client.sizeTransferred += BlockSeqSize
 					if seqno == client.blockSize {
 						log.Debugf("[CLIENT][RX][x%x] BLOCK UPLOAD END SUB-BLOCK | x%x:x%x | %v", client.nodeIdServer, client.index, client.subindex, frame.Data)
 						state = stateUploadBlkSubblockCrsp
@@ -271,8 +272,8 @@ func (client *SDOClient) downloadMain(
 				}
 				client.blockCRC = crc.CRC16(0)
 				client.blockSize = response.GetBlockSize()
-				if client.blockSize < 1 || client.blockSize > 127 {
-					client.blockSize = 127
+				if client.blockSize < 1 || client.blockSize > MaxBlockSize {
+					client.blockSize = MaxBlockSize
 				}
 				client.blockSequenceNb = 0
 				client.fifo.AltBegin(0)
@@ -283,7 +284,7 @@ func (client *SDOClient) downloadMain(
 
 				if response.GetNumberOfSegments() < client.blockSequenceNb {
 					log.Error("Not all segments transferred successfully")
-					client.fifo.AltBegin(int(response.raw[1]) * 7)
+					client.fifo.AltBegin(int(response.raw[1]) * BlockSeqSize)
 					client.finished = false
 
 				} else if response.GetNumberOfSegments() > client.blockSequenceNb {
@@ -462,7 +463,7 @@ func (client *SDOClient) downloadLocal(bufferPartial bool) (ret uint8, abortCode
 		return
 	}
 
-	buffer := make([]byte, ClientBufferSize+2)
+	buffer := make([]byte, +2)
 	count := client.fifo.Read(buffer, nil)
 	client.sizeTransferred += uint32(count)
 	// No data error
@@ -533,7 +534,7 @@ func (client *SDOClient) downloadSegment(bufferPartial bool) error {
 	}
 
 	// Command specifier
-	client.txBuffer.Data[0] = uint8(uint32(client.toggle) | ((7 - count) << 1))
+	client.txBuffer.Data[0] = uint8(uint32(client.toggle) | ((BlockSeqSize - count) << 1))
 	if client.fifo.GetOccupied() == 0 && !bufferPartial {
 		if client.sizeIndicated > 0 && client.sizeTransferred < client.sizeIndicated {
 			return AbortDataShort
@@ -563,14 +564,14 @@ func (client *SDOClient) downloadBlockInitiate() error {
 
 // Helper function for downloading a sub-block
 func (client *SDOClient) downloadBlock(bufferPartial bool, timerNext *uint32) error {
-	if client.fifo.AltGetOccupied() < 7 && bufferPartial {
+	if client.fifo.AltGetOccupied() < BlockSeqSize && bufferPartial {
 		// No data yet
 		return nil
 	}
 	client.blockSequenceNb++
 	client.txBuffer.Data[0] = client.blockSequenceNb
 	count := uint32(client.fifo.AltRead(client.txBuffer.Data[1:]))
-	client.blockNoData = uint8(7 - count)
+	client.blockNoData = uint8(BlockSeqSize - count)
 	client.sizeTransferred += count
 	if client.sizeIndicated > 0 && client.sizeTransferred > client.sizeIndicated {
 		client.sizeTransferred -= count
@@ -805,7 +806,7 @@ func (client *SDOClient) upload(
 					break
 				}
 				client.toggle ^= 0x10
-				count := 7 - (response.raw[0]>>1)&0x07
+				count := BlockSeqSize - (response.raw[0]>>1)&0x07
 				countWr := client.fifo.Write(response.raw[1:1+count], nil)
 				client.sizeTransferred += uint32(countWr)
 				// Check enough space if fifo
@@ -893,8 +894,8 @@ func (client *SDOClient) upload(
 				// Get number of data bytes in last segment, that do not
 				// contain data. Then copy remaining data into fifo
 				noData := (response.raw[0] >> 2) & 0x07
-				client.fifo.Write(client.blockDataUploadLast[:7-noData], &client.blockCRC)
-				client.sizeTransferred += uint32(7 - noData)
+				client.fifo.Write(client.blockDataUploadLast[:BlockSeqSize-noData], &client.blockCRC)
+				client.sizeTransferred += uint32(BlockSeqSize - noData)
 
 				if client.sizeIndicated > 0 && client.sizeTransferred > client.sizeIndicated {
 					abortCode = AbortDataLong
@@ -979,7 +980,7 @@ func (client *SDOClient) upload(
 			log.Debugf("[CLIENT][TX][x%x] UPLOAD SEGMENT | x%x:x%x %v", client.nodeIdServer, client.index, client.subindex, client.txBuffer.Data)
 
 		case stateUploadSegmentReq:
-			if client.fifo.GetSpace() < 7 {
+			if client.fifo.GetSpace() < BlockSeqSize {
 				ret = uploadDataFull
 				break
 			}
@@ -995,14 +996,13 @@ func (client *SDOClient) upload(
 			client.txBuffer.Data[2] = byte(client.index >> 8)
 			client.txBuffer.Data[3] = client.subindex
 			// Calculate number of block segments from free space
-			count := client.fifo.GetSpace() / 7
-			if count >= 127 {
-				count = 127
-			} else if count == 0 {
+			count := client.fifo.GetSpace() / BlockSeqSize
+			if count == 0 {
 				abortCode = AbortOutOfMem
 				client.state = stateAbort
 				break
 			}
+			count = min(client.blockMaxSize, MaxBlockSize)
 			client.blockSize = uint8(count)
 			client.txBuffer.Data[4] = client.blockSize
 			client.txBuffer.Data[5] = ClientProtocolSwitchThreshold
@@ -1035,12 +1035,10 @@ func (client *SDOClient) upload(
 					client.state = stateAbort
 					break
 				}
-				// Calculate number of block segments from free space
-				count := client.fifo.GetSpace() / 7
-				if count >= 127 {
-					count = 127
-
-				} else if client.fifo.GetOccupied() > 0 {
+				// Calculate number of block segments from remaining space
+				count := client.fifo.GetSpace() / BlockSeqSize
+				count = min(count, MaxBlockSize, client.blockMaxSize)
+				if client.fifo.GetOccupied() > 0 {
 					ret = uploadDataFull
 					if transferShort {
 						log.Warnf("sub-block , upload data is full seqno=%v", seqnoStart)
@@ -1117,7 +1115,7 @@ func NewSDOClient(
 	client.timeoutTimeUs = 1000 * timeoutMs
 	client.timeoutTimeBlockTransferUs = client.timeoutTimeUs
 	client.streamer = &od.Streamer{}
-	client.fifo = fifo.NewFifo(1000) // At least 127*7
+	client.fifo = fifo.NewFifo(MaxBlockSize * BlockSeqSize)
 
 	var nodeIdServer uint8
 	var CobIdClientToServer, CobIdServerToClient uint32
@@ -1161,4 +1159,16 @@ func (client *SDOClient) SetTimeout(timeoutMs uint32) {
 // Set timeout for SDO block transfers
 func (client *SDOClient) SetTimeoutBlockTransfer(timeoutMs uint32) {
 	client.timeoutTimeBlockTransferUs = timeoutMs * 1000
+}
+
+// Set maximum block size to use during block transfers
+// Some devices may not support big block sizes as it can use a lot of RAM.
+func (client *SDOClient) SetBlockMaxSize(size int) {
+	if size > MaxBlockSize {
+		client.blockMaxSize = MaxBlockSize
+		return
+	} else if size < 1 {
+		client.blockMaxSize = 1
+	}
+	client.blockMaxSize = size
 }

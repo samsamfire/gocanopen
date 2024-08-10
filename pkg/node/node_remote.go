@@ -102,7 +102,7 @@ func NewRemoteNode(
 	node.remoteOd = remoteOd
 
 	// Create a new SDO client for the remote node & for local access
-	client, err := sdo.NewSDOClient(bm, remoteOd, 0, sdo.ClientTimeoutMs, nil)
+	client, err := sdo.NewSDOClient(bm, remoteOd, 0, sdo.DefaultClientTimeout, nil)
 	if err != nil {
 		log.Errorf("[NODE][SDO CLIENT] error when initializing SDO client object %v", err)
 		return nil, err
