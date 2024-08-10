@@ -65,7 +65,7 @@ func (server *SDOServer) Handle(frame canopen.Frame) {
 		server.state = stateIdle
 	} else if server.state == stateDownloadBlkSubblockReq {
 		// Condition should always pass but check
-		if int(server.bufWriteOffset) <= (len(server.buffer) - (7 + 2)) {
+		if int(server.bufWriteOffset) <= (len(server.buffer) - (BlockSeqSize + 2)) {
 			// Block download, copy data in handle
 			state := stateDownloadBlkSubblockReq
 			seqno := frame.Data[0] & 0x7F
@@ -76,8 +76,8 @@ func (server *SDOServer) Handle(frame canopen.Frame) {
 				server.blockSequenceNb = seqno
 				// Copy data
 				copy(server.buffer[server.bufWriteOffset:], frame.Data[1:])
-				server.bufWriteOffset += 7
-				server.sizeTransferred += 7
+				server.bufWriteOffset += BlockSeqSize
+				server.sizeTransferred += BlockSeqSize
 				// Check if last segment
 				if (frame.Data[0] & 0x80) != 0 {
 					server.finished = true
@@ -177,7 +177,7 @@ func (server *SDOServer) Process(
 				server.bufWriteOffset = 0
 				server.sizeTransferred = 0
 				server.finished = false
-				abortCode = server.readObjectDictionary(7, false)
+				abortCode = server.readObjectDictionary(BlockSeqSize, false)
 				if abortCode == nil {
 					if server.finished {
 						server.sizeIndicated = server.streamer.DataLength
@@ -282,7 +282,7 @@ func (server *SDOServer) Process(
 						break
 					}
 					// Get size and write to buffer
-					count := 7 - ((response.raw[0] >> 1) & 0x07)
+					count := BlockSeqSize - ((response.raw[0] >> 1) & 0x07)
 					copy(server.buffer[server.bufWriteOffset:], response.raw[1:1+count])
 					server.bufWriteOffset += uint32(count)
 					server.sizeTransferred += uint32(count)
@@ -292,7 +292,7 @@ func (server *SDOServer) Process(
 						server.state = stateAbort
 						break
 					}
-					if server.finished || (len(server.buffer)-int(server.bufWriteOffset) < (7 + 2)) {
+					if server.finished || (len(server.buffer)-int(server.bufWriteOffset) < (BlockSeqSize + 2)) {
 						abortCode = server.writeObjectDictionary(0, 0)
 						if abortCode != nil {
 							break
@@ -402,14 +402,14 @@ func (server *SDOServer) Process(
 				// Get block size and check okay
 				server.blockSize = response.GetBlockSize()
 				log.Debugf("[SERVER][RX] UPLOAD BLOCK INIT | x%x:x%x %v | crc : %v, blksize :%v", server.index, server.subindex, response.raw, server.blockCRCEnabled, server.blockSize)
-				if server.blockSize < 1 || server.blockSize > 127 {
+				if server.blockSize < 1 || server.blockSize > MaxBlockSize {
 					abortCode = AbortBlockSize
 					server.state = stateAbort
 					break
 				}
 
 				// Check that we have enough data for sending a complete sub-block with the requested size
-				if !server.finished && server.bufWriteOffset < uint32(server.blockSize)*7 {
+				if !server.finished && server.bufWriteOffset < uint32(server.blockSize)*BlockSeqSize {
 					abortCode = AbortBlockSize
 					server.state = stateAbort
 					break
@@ -439,7 +439,7 @@ func (server *SDOServer) Process(
 				)
 				// Check block size
 				server.blockSize = response.raw[2]
-				if server.blockSize < 1 || server.blockSize > 127 {
+				if server.blockSize < 1 || server.blockSize > MaxBlockSize {
 					abortCode = AbortBlockSize
 					server.state = stateAbort
 					break
@@ -448,7 +448,7 @@ func (server *SDOServer) Process(
 				if response.raw[1] < server.blockSequenceNb {
 					// Some error occurd, re-transmit missing chunks
 					cntFailed := server.blockSequenceNb - response.raw[1]
-					cntFailed = cntFailed*7 - server.blockNoData
+					cntFailed = cntFailed*BlockSeqSize - server.blockNoData
 					server.bufReadOffset -= uint32(cntFailed)
 					server.sizeTransferred -= uint32(cntFailed)
 				} else if response.raw[1] > server.blockSequenceNb {
@@ -457,7 +457,7 @@ func (server *SDOServer) Process(
 					break
 				}
 				// Refill buffer if needed
-				abortCode = server.readObjectDictionary(uint32(server.blockSize)*7, true)
+				abortCode = server.readObjectDictionary(uint32(server.blockSize)*BlockSeqSize, true)
 				if abortCode != nil {
 					break
 				}
@@ -578,7 +578,7 @@ func (server *SDOServer) Process(
 
 		case stateUploadSegmentRsp:
 			// Refill buffer if needed
-			abortCode = server.readObjectDictionary(7, false)
+			abortCode = server.readObjectDictionary(BlockSeqSize, false)
 			if abortCode != nil {
 				break
 			}
@@ -586,14 +586,14 @@ func (server *SDOServer) Process(
 			server.toggle ^= 0x10
 			count := server.bufWriteOffset - server.bufReadOffset
 			// Check if last segment
-			if count < 7 || (server.finished && count == 7) {
-				server.txBuffer.Data[0] |= (byte((7 - count) << 1)) | 0x01
+			if count < BlockSeqSize || (server.finished && count == BlockSeqSize) {
+				server.txBuffer.Data[0] |= (byte((BlockSeqSize - count) << 1)) | 0x01
 				server.state = stateIdle
 				ret = success
 			} else {
 				server.timeoutTimer = 0
 				server.state = stateUploadSegmentReq
-				count = 7
+				count = BlockSeqSize
 			}
 			copy(server.txBuffer.Data[1:], server.buffer[server.bufReadOffset:server.bufReadOffset+count])
 			server.bufReadOffset += count
@@ -620,9 +620,9 @@ func (server *SDOServer) Process(
 			server.txBuffer.Data[2] = byte(server.index >> 8)
 			server.txBuffer.Data[3] = server.subindex
 			// Calculate blocks from free space
-			count := (len(server.buffer) - 2) / 7
-			if count > 127 {
-				count = 127
+			count := (len(server.buffer) - 2) / BlockSeqSize
+			if count > MaxBlockSize {
+				count = MaxBlockSize
 			}
 			server.blockSize = uint8(count)
 			server.txBuffer.Data[4] = server.blockSize
@@ -650,18 +650,18 @@ func (server *SDOServer) Process(
 				server.state = stateDownloadBlkEndReq
 			} else {
 				// Calclate from free buffer space
-				count := (len(server.buffer) - 2 - int(server.bufWriteOffset)) / 7
-				if count > 127 {
-					count = 127
+				count := (len(server.buffer) - 2 - int(server.bufWriteOffset)) / BlockSeqSize
+				if count > MaxBlockSize {
+					count = MaxBlockSize
 				} else if server.bufWriteOffset > 0 {
 					// Empty buffer
 					abortCode = server.writeObjectDictionary(1, 0)
 					if abortCode != nil {
 						break
 					}
-					count = (len(server.buffer) - 2 - int(server.bufWriteOffset)) / 7
-					if count > 127 {
-						count = 127
+					count = (len(server.buffer) - 2 - int(server.bufWriteOffset)) / BlockSeqSize
+					if count > MaxBlockSize {
+						count = MaxBlockSize
 					}
 				}
 				server.blockSize = uint8(count)
@@ -713,14 +713,14 @@ func (server *SDOServer) Process(
 			server.txBuffer.Data[0] = server.blockSequenceNb
 			count := server.bufWriteOffset - server.bufReadOffset
 			// Check if last segment
-			if count < 7 || (server.finished && count == 7) {
+			if count < BlockSeqSize || (server.finished && count == BlockSeqSize) {
 				server.txBuffer.Data[0] |= 0x80
 			} else {
-				count = 7
+				count = BlockSeqSize
 			}
 			copy(server.txBuffer.Data[1:], server.buffer[server.bufReadOffset:server.bufReadOffset+count])
 			server.bufReadOffset += count
-			server.blockNoData = byte(7 - count)
+			server.blockNoData = byte(BlockSeqSize - count)
 			server.sizeTransferred += count
 			// Check if too short or too large in last segment
 			if server.sizeIndicated > 0 {
@@ -1011,7 +1011,7 @@ func NewSDOServer(
 	var canIdServerToClient uint16
 	if entry12xx.Index == 0x1200 {
 		// Default channels
-		if nodeId < 1 || nodeId > 127 {
+		if nodeId < 1 || nodeId > MaxBlockSize {
 			log.Errorf("SDO server node id is not valid : %x", nodeId)
 			return nil, canopen.ErrIllegalArgument
 		}
