@@ -60,7 +60,7 @@ func newBaseNode(
 		exit:           make(chan bool),
 		state:          NODE_INIT,
 	}
-	sdoClient, err := sdo.NewSDOClient(bm, odict, nodeId, sdo.ClientTimeoutMs, nil)
+	sdoClient, err := sdo.NewSDOClient(bm, odict, nodeId, sdo.DefaultClientTimeout, nil)
 	if err != nil {
 		return nil, err
 	}
