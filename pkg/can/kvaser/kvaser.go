@@ -1,3 +1,5 @@
+//go:build kvaser
+
 package kvaser
 
 /*
