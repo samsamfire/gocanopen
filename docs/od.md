@@ -55,6 +55,12 @@ like so :
 odict := od.Default() // this creates a default object dictionary with pre-configured values
 ```
 
+Exporting OD to an EDS file is also possible
+
+```go
+    od.ExportEDS(odict,true,"path_to_exported.eds")
+```
+
 ## Special entries
 
 CiA 301 defines a certain number of CANopen communication specific objects inside the object dictionary. 
