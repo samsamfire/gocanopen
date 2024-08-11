@@ -98,7 +98,7 @@ func (rw *sdoRawReadWriter) Read(b []byte) (n int, err error) {
 // Read a given index/subindex from node into data
 // This is blocking
 func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, data []byte) (int, error) {
-	r, err := client.NewRawReader(nodeId, index, subindex, true, 0) // size not specified
+	r, err := client.NewRawReader(nodeId, index, subindex, false, 0) // size not specified
 	if err != nil {
 		return 0, err
 	}
@@ -168,7 +168,7 @@ func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, da
 	if err != nil {
 		return err
 	}
-	w, err := client.NewRawWriter(nodeId, index, subindex, true, uint32(len(encoded)))
+	w, err := client.NewRawWriter(nodeId, index, subindex, false, uint32(len(encoded)))
 	if err != nil {
 		return err
 	}
