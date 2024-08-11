@@ -287,3 +287,25 @@ func TestScan(t *testing.T) {
 	assert.Len(t, scan, 10)
 	assert.Nil(t, err)
 }
+
+func TestDump(t *testing.T) {
+	network := CreateNetworkEmptyTest()
+	network2 := CreateNetworkEmptyTest()
+	defer network.Disconnect()
+	defer network2.Disconnect()
+
+	// Create a local node
+	network.CreateLocalNode(0x20, od.Default())
+	remote, err := network2.AddRemoteNode(0x20, od.Default())
+	assert.Nil(t, err)
+	tempdir := t.TempDir()
+	t.Run("dump successful", func(t *testing.T) {
+		err = remote.Dump(tempdir + "/dumped.eds")
+		assert.Nil(t, err)
+	})
+	t.Run("load from dump", func(t *testing.T) {
+		_, err := network2.AddRemoteNode(0x55, tempdir+"/dumped.eds")
+		assert.Nil(t, err)
+	})
+
+}
