@@ -38,8 +38,42 @@ const (
 	ErrCount        ODR = 26
 )
 
+var ErrorDescriptionMap = map[ODR]string{
+	ErrPartial:      "Incomplete transfer",
+	ErrNo:           "No error",
+	ErrOutOfMem:     "Out of memory",
+	ErrUnsuppAccess: "Unsupported access to an object",
+	ErrWriteOnly:    "Attempt to read a write only object",
+	ErrReadonly:     "Attempt to write a read only object",
+	ErrIdxNotExist:  "Object does not exist in the object dictionary",
+	ErrNoMap:        "Object cannot be mapped to the PDO",
+	ErrMapLen:       "Num and len of object to be mapped exceeds PDO len",
+	ErrParIncompat:  "General parameter incompatibility reasons",
+	ErrDevIncompat:  "General internal incompatibility in device",
+	ErrHw:           "Access failed due to hardware error",
+	ErrTypeMismatch: "Data type does not match, length does not match",
+	ErrDataLong:     "Data type does not match, length too high",
+	ErrDataShort:    "Data type does not match, length too short",
+	ErrSubNotExist:  "Sub index does not exist",
+	ErrInvalidValue: "Invalid value for parameter (download only)",
+	ErrValueHigh:    "Value range of parameter written too high",
+	ErrValueLow:     "Value range of parameter written too low",
+	ErrMaxLessMin:   "Maximum value is less than minimum value.",
+	ErrNoRessource:  "Resource not available: SDO connection",
+	ErrGeneral:      "General error",
+	ErrDataTransf:   "Data cannot be transferred or stored to application",
+	ErrDataLocCtrl:  "Data cannot be transferred because of local control",
+	ErrDataDevState: "Data cannot be tran. because of present device state",
+	ErrOdMissing:    "Object dict. not present or dynamic generation fails",
+	ErrNoData:       "No data available",
+}
+
 func (odr ODR) Error() string {
-	return fmt.Sprintf("OD error %v", strconv.Itoa(int(odr)))
+	description, ok := ErrorDescriptionMap[odr]
+	if !ok {
+		return fmt.Sprintf("OD error %v (%v)", strconv.Itoa(int(odr)), "unknown")
+	}
+	return fmt.Sprintf("OD error %v (%v)", strconv.Itoa(int(odr)), description)
 }
 
 const (
