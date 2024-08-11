@@ -150,11 +150,21 @@ func (entry *Entry) GetRawData(subIndex uint8, length uint16) ([]byte, error) {
 	return streamer.Data, nil
 }
 
+// PutRawData updates the raw byte slice stored in OD
+func (entry *Entry) PutRawData(subindex uint8, data []byte) error {
+	streamer, err := NewStreamer(entry, subindex, true)
+	if err != nil {
+		return err
+	}
+	streamer.Data = data
+	return nil
+}
+
 // Uint8 reads data inside of OD as if it were and UNSIGNED8.
 // It returns an error if length is incorrect or read failed.
 func (entry *Entry) Uint8(subIndex uint8) (uint8, error) {
 	b := make([]byte, 1)
-	err := entry.readSubExactly(subIndex, b, true)
+	err := entry.ReadExactly(subIndex, b, true)
 	if err != nil {
 		return 0, err
 	}
@@ -165,7 +175,7 @@ func (entry *Entry) Uint8(subIndex uint8) (uint8, error) {
 // It returns an error if length is incorrect or read failed.
 func (entry *Entry) Uint16(subIndex uint8) (uint16, error) {
 	b := make([]byte, 2)
-	err := entry.readSubExactly(subIndex, b, true)
+	err := entry.ReadExactly(subIndex, b, true)
 	if err != nil {
 		return 0, err
 	}
@@ -176,7 +186,7 @@ func (entry *Entry) Uint16(subIndex uint8) (uint16, error) {
 // It returns an error if length is incorrect or read failed.
 func (entry *Entry) Uint32(subIndex uint8) (uint32, error) {
 	b := make([]byte, 4)
-	err := entry.readSubExactly(subIndex, b, true)
+	err := entry.ReadExactly(subIndex, b, true)
 	if err != nil {
 		return 0, err
 	}
@@ -187,7 +197,7 @@ func (entry *Entry) Uint32(subIndex uint8) (uint32, error) {
 // It returns an error if length is incorrect or read failed.
 func (entry *Entry) Uint64(subIndex uint8) (uint64, error) {
 	b := make([]byte, 8)
-	err := entry.readSubExactly(subIndex, b, true)
+	err := entry.ReadExactly(subIndex, b, true)
 	if err != nil {
 		return 0, err
 	}
@@ -198,7 +208,7 @@ func (entry *Entry) Uint64(subIndex uint8) (uint64, error) {
 // origin can be set to true in order to bypass any existing extension.
 func (entry *Entry) PutUint8(subIndex uint8, value uint8, origin bool) error {
 	b := []byte{value}
-	err := entry.writeSubExactly(subIndex, b, origin)
+	err := entry.WriteExactly(subIndex, b, origin)
 	if err != nil {
 		return err
 	}
@@ -210,7 +220,7 @@ func (entry *Entry) PutUint8(subIndex uint8, value uint8, origin bool) error {
 func (entry *Entry) PutUint16(subIndex uint8, data uint16, origin bool) error {
 	b := make([]byte, 2)
 	binary.LittleEndian.PutUint16(b, data)
-	err := entry.writeSubExactly(subIndex, b, origin)
+	err := entry.WriteExactly(subIndex, b, origin)
 	if err != nil {
 		return err
 	}
@@ -222,7 +232,7 @@ func (entry *Entry) PutUint16(subIndex uint8, data uint16, origin bool) error {
 func (entry *Entry) PutUint32(subIndex uint8, data uint32, origin bool) error {
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint32(b, data)
-	err := entry.writeSubExactly(subIndex, b, origin)
+	err := entry.WriteExactly(subIndex, b, origin)
 	if err != nil {
 		return err
 	}
@@ -234,7 +244,7 @@ func (entry *Entry) PutUint32(subIndex uint8, data uint32, origin bool) error {
 func (entry *Entry) PutUint64(subIndex uint8, data uint64, origin bool) error {
 	b := make([]byte, 8)
 	binary.LittleEndian.PutUint64(b, data)
-	err := entry.writeSubExactly(subIndex, b, origin)
+	err := entry.WriteExactly(subIndex, b, origin)
 	if err != nil {
 		return err
 	}
@@ -242,8 +252,8 @@ func (entry *Entry) PutUint64(subIndex uint8, data uint64, origin bool) error {
 }
 
 // Read exactly len(b) bytes from OD at (index,subIndex)
-// Origin parameter controls extension usage if exists
-func (entry *Entry) readSubExactly(subIndex uint8, b []byte, origin bool) error {
+// origin parameter controls extension usage if any
+func (entry *Entry) ReadExactly(subIndex uint8, b []byte, origin bool) error {
 	streamer, err := NewStreamer(entry, subIndex, origin)
 	if err != nil {
 		return err
@@ -256,8 +266,8 @@ func (entry *Entry) readSubExactly(subIndex uint8, b []byte, origin bool) error 
 }
 
 // Write exactly len(b) bytes to OD at (index,subIndex)
-// Origin parameter controls extension usage if exists
-func (entry *Entry) writeSubExactly(subIndex uint8, b []byte, origin bool) error {
+// origin parameter controls extension usage if exists
+func (entry *Entry) WriteExactly(subIndex uint8, b []byte, origin bool) error {
 	streamer, err := NewStreamer(entry, subIndex, origin)
 	if err != nil {
 		return err
