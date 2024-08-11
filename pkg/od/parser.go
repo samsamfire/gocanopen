@@ -87,6 +87,7 @@ func Parse(file any, nodeId uint8) (*ObjectDictionary, error) {
 	_, _ = edsFile.WriteTo(&buf)
 	reader := bytes.NewReader(buf.Bytes())
 	od.Reader = reader
+	od.iniFile = edsFile
 
 	// Get all the sections in the file
 	sections := edsFile.Sections()

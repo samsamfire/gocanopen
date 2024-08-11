@@ -6,12 +6,14 @@ import (
 	"sync"
 
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/ini.v1"
 )
 
 // ObjectDictionary is used for storing all entries of a CANopen node
 // according to CiA 301. This is the internal representation of an EDS file
 type ObjectDictionary struct {
 	Reader              io.ReadSeeker
+	iniFile             *ini.File
 	entriesByIndexValue map[uint16]*Entry
 	entriesByIndexName  map[string]*Entry
 }
@@ -170,6 +172,11 @@ func (od *ObjectDictionary) Index(index any) *Entry {
 	default:
 		return nil
 	}
+}
+
+// Entries returns map of indexes and entries
+func (od *ObjectDictionary) Entries() map[uint16]*Entry {
+	return od.entriesByIndexValue
 }
 
 // type FileInfo struct {
