@@ -60,7 +60,7 @@ func NewVariableFromSection(
 	variable.DataType = byte(dataType)
 
 	// Determine variable attribute
-	variable.Attribute = CalculateAttribute(accessType.String(), pdoMapping, variable.DataType)
+	variable.Attribute = EncodeAttribute(accessType.String(), pdoMapping, variable.DataType)
 
 	// All the parameters aftewards are optional elements that can be used in EDS
 	if highLimit, err := section.GetKey("HighLimit"); err == nil {
@@ -260,7 +260,7 @@ func CheckSize(length int, dataType uint8) error {
 
 // Decode byte array given the CANopen data type
 // Function will return either string, int64, uint64, or float64
-func Decode(data []byte, dataType uint8) (v any, e error) {
+func DecodeToType(data []byte, dataType uint8) (v any, e error) {
 	e = CheckSize(len(data), dataType)
 	if e != nil {
 		return nil, e
@@ -289,15 +289,57 @@ func Decode(data []byte, dataType uint8) (v any, e error) {
 	case REAL64:
 		parsed := binary.LittleEndian.Uint64(data)
 		return math.Float64frombits(parsed), nil
-	case VISIBLE_STRING:
+	case VISIBLE_STRING, OCTET_STRING:
 		return string(data), nil
+	case DOMAIN:
+		return int64(0), nil
 	default:
 		return nil, ErrTypeMismatch
 	}
 }
 
-// Calculate the attribute in function of the of attribute type and pdo mapping for EDS entry
-func CalculateAttribute(accessType string, pdoMapping bool, dataType uint8) uint8 {
+// Decode byte array given the CANopen data type
+// Function will return either string, int64, uint64, or float64
+func DecodeToString(data []byte, dataType uint8, base int) (v string, e error) {
+	e = CheckSize(len(data), dataType)
+	if e != nil {
+		return "", e
+	}
+	// Cast to correct type
+	switch dataType {
+	case BOOLEAN, UNSIGNED8:
+		return strconv.FormatUint(uint64(data[0]), base), nil
+	case INTEGER8:
+		return strconv.FormatInt(int64(data[0]), base), nil
+	case UNSIGNED16:
+		return strconv.FormatUint(uint64(binary.LittleEndian.Uint16(data)), base), nil
+	case INTEGER16:
+		return strconv.FormatInt(int64(int16(binary.LittleEndian.Uint16(data))), base), nil
+	case UNSIGNED32:
+		return strconv.FormatUint(uint64(binary.LittleEndian.Uint32(data)), base), nil
+	case INTEGER32:
+		return strconv.FormatInt(int64(int32(binary.LittleEndian.Uint32(data))), base), nil
+	case UNSIGNED64:
+		return strconv.FormatUint(uint64(binary.LittleEndian.Uint64(data)), base), nil
+	case INTEGER64:
+		return strconv.FormatInt(int64(binary.LittleEndian.Uint64(data)), base), nil
+	case REAL32:
+		parsed := binary.LittleEndian.Uint32(data)
+		return strconv.FormatFloat(float64(math.Float32frombits(parsed)), 'f', -1, 64), nil
+	case REAL64:
+		parsed := binary.LittleEndian.Uint64(data)
+		return strconv.FormatFloat(math.Float64frombits(parsed), 'f', -1, 64), nil
+	case VISIBLE_STRING, OCTET_STRING:
+		return string(data), nil
+	case DOMAIN:
+		return "0", nil
+	default:
+		return "", ErrTypeMismatch
+	}
+}
+
+// Decode the attribute in function of the of attribute type and pdo mapping for EDS entry
+func EncodeAttribute(accessType string, pdoMapping bool, dataType uint8) uint8 {
 
 	var attribute uint8
 
@@ -318,4 +360,18 @@ func CalculateAttribute(accessType string, pdoMapping bool, dataType uint8) uint
 		attribute |= AttributeStr
 	}
 	return attribute
+}
+
+// Encode attribute
+func DecodeAttribute(attribute uint8) string {
+	switch {
+	case attribute&AttributeSdoRw > 0:
+		return "rw"
+	case attribute&AttributeSdoR > 0:
+		return "ro"
+	case attribute&AttributeSdoW > 0:
+		return "wo"
+	default:
+		return "rw"
+	}
 }
