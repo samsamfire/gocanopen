@@ -16,8 +16,11 @@ var ErrInvalidArgs = errors.New("error in arguments")
 type internalState uint8
 
 const (
-	DefaultClientTimeout          = 1000
-	DefaultServerTimeout          = 1000
+	DefaultClientTimeout         = 1_000
+	DefaultClientProcessPeriodUs = 10_000
+	DefaultClientBufferSize      = 1_000
+
+	DefaultServerTimeout          = 1_000
 	ClientProtocolSwitchThreshold = 21
 	MaxBlockSize                  = 127
 	BlockSeqSize                  = 7

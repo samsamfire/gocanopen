@@ -12,10 +12,6 @@ import (
 )
 
 const (
-	ClientBufferSize = 1000
-)
-
-const (
 	waitingLocalTransfer    uint8 = 6 // Waiting in client local transfer.
 	uploadDataFull          uint8 = 5 // Data buffer is full.SDO client: data must be read before next upload cycle begins.
 	transmitBufferFull      uint8 = 4 // CAN transmit buffer is full. Waiting.
@@ -44,6 +40,7 @@ type SDOClient struct {
 	state                      internalState
 	timeoutTimeUs              uint32
 	timeoutTimer               uint32
+	processingPeriodUs         int
 	fifo                       *fifo.Fifo
 	rxNew                      bool
 	response                   SDOResponse
@@ -674,7 +671,7 @@ func (client *SDOClient) uploadLocal() (ret uint8, err error) {
 		} else {
 			countBuffer = uint32(countFifo)
 		}
-		buffer := make([]byte, ClientBufferSize+1)
+		buffer := make([]byte, DefaultClientBufferSize+1)
 		countRead, err = client.streamer.Read(buffer[:countBuffer])
 		odErr, ok := err.(od.ODR)
 		if err != nil && err != od.ErrPartial {
@@ -1112,10 +1109,12 @@ func NewSDOClient(
 	client := &SDOClient{BusManager: bm}
 	client.od = odict
 	client.nodeId = nodeId
-	client.timeoutTimeUs = 1000 * timeoutMs
-	client.timeoutTimeBlockTransferUs = client.timeoutTimeUs
 	client.streamer = &od.Streamer{}
 	client.fifo = fifo.NewFifo(MaxBlockSize * BlockSeqSize)
+	client.SetTimeout(DefaultClientTimeout)
+	client.SetTimeoutBlockTransfer(DefaultClientTimeout)
+	client.SetBlockMaxSize(MaxBlockSize)
+	client.SetProcessingPeriod(DefaultClientProcessPeriodUs)
 
 	var nodeIdServer uint8
 	var CobIdClientToServer, CobIdServerToClient uint32
@@ -1159,6 +1158,13 @@ func (client *SDOClient) SetTimeout(timeoutMs uint32) {
 // Set timeout for SDO block transfers
 func (client *SDOClient) SetTimeoutBlockTransfer(timeoutMs uint32) {
 	client.timeoutTimeBlockTransferUs = timeoutMs * 1000
+}
+
+// Set the processing period for SDO client
+// lower number can increase transfer speeds at the cost
+// of more CPU usage
+func (client *SDOClient) SetProcessingPeriod(periodUs int) {
+	client.processingPeriodUs = periodUs
 }
 
 // Set maximum block size to use during block transfers

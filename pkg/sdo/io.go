@@ -17,8 +17,6 @@ type sdoRawReadWriter struct {
 	size         uint32
 }
 
-var defaultClientProcessPeriodUs = uint32(10000)
-
 func (client *SDOClient) newRawReadWriter(nodeId uint8, index uint16, subindex uint8, blockEnabled bool, size uint32,
 ) (*sdoRawReadWriter, error) {
 	rw := &sdoRawReadWriter{
@@ -77,7 +75,7 @@ func (rw *sdoRawReadWriter) Read(b []byte) (n int, err error) {
 	n = 0
 
 	for {
-		ret, err := client.upload(defaultClientProcessPeriodUs, false, nil, nil, nil)
+		ret, err := client.upload(DefaultClientProcessPeriodUs, false, nil, nil, nil)
 		switch {
 		case err != nil:
 			return n, err
@@ -93,7 +91,7 @@ func (rw *sdoRawReadWriter) Read(b []byte) (n int, err error) {
 		if n >= len(b) {
 			return n, err
 		}
-		time.Sleep(time.Duration(defaultClientProcessPeriodUs) * time.Microsecond)
+		time.Sleep(time.Duration(client.processingPeriodUs) * time.Microsecond)
 	}
 }
 
@@ -139,7 +137,7 @@ func (rw *sdoRawReadWriter) Write(b []byte) (n int, err error) {
 	}
 	for {
 		ret, err := client.downloadMain(
-			defaultClientProcessPeriodUs,
+			DefaultClientProcessPeriodUs,
 			false,
 			bufferPartial,
 			&nUint32,
@@ -158,7 +156,7 @@ func (rw *sdoRawReadWriter) Write(b []byte) (n int, err error) {
 		case ret == success:
 			return int(nUint32), err
 		}
-		time.Sleep(time.Duration(defaultClientProcessPeriodUs) * time.Microsecond)
+		time.Sleep(time.Duration(client.processingPeriodUs) * time.Microsecond)
 	}
 }
 
