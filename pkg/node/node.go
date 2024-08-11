@@ -7,6 +7,7 @@ import (
 	"github.com/samsamfire/gocanopen/pkg/config"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/sdo"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -25,6 +26,7 @@ type Node interface {
 	GetID() uint8
 	GetState() uint8
 	SetState(newState uint8)
+	Dump(filename string) error
 	GetExitBackground() chan bool
 	SetExitBackground(exit bool) // Exit background processing
 	GetExit() chan bool
@@ -113,4 +115,34 @@ func (node *BaseNode) SetMainCallback(mainCallback func(node Node)) {
 
 func (node *BaseNode) Configurator() *config.NodeConfigurator {
 	return config.NewNodeConfigurator(node.id, node.SDOClient)
+}
+
+// Dump current state inside EDS file
+func (node *BaseNode) Dump(filename string) error {
+	countRead := 0
+	countErrors := 0
+	for index, entry := range node.GetOD().Entries() {
+		if entry.ObjectType == od.OBJ_DOMAIN {
+			log.Warnf("skipping domain object %x", index)
+			continue
+		}
+		for j := range uint8(entry.SubCount()) {
+			buffer := make([]byte, 100)
+			n, err := node.ReadRaw(index, j, buffer)
+			if err != nil {
+				countErrors++
+				log.Warnf("failed to read remote value %x|%x : %v", index, j, err)
+				continue
+			}
+			err = entry.WriteExactly(j, buffer[:n], true)
+			if err != nil {
+				log.Warnf("failed to write remote value to local od %x|%x : %v", index, j, err)
+				countErrors++
+				continue
+			}
+			countRead++
+		}
+	}
+	log.Infof("dump successful, read : %v, errors : %v", countRead, countErrors)
+	return od.ExportEDS(node.GetOD(), false, filename)
 }
