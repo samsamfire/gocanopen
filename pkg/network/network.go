@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sync"
 	"time"
 
@@ -62,11 +63,14 @@ func edsAsciiFormatHandler(nodeId uint8, formatType uint8, reader io.Reader) (*o
 }
 
 // Create a new CAN bus with given interface
-// Currently supported : socketcan, virtualcan
 func NewBus(canInterfaceName string, channel string, bitrate int) (canopen.Bus, error) {
-	createInterface, ok := can.CanInterfaces[canInterfaceName]
+	createInterface, ok := can.AvailableInterfaces[canInterfaceName]
 	if !ok {
-		return nil, fmt.Errorf("unsupported interface : %v", canInterfaceName)
+		if slices.Contains(can.ImplementedInterfaces, canInterfaceName) {
+			return nil, fmt.Errorf("not enabled : %v, check build flags for project", canInterfaceName)
+		} else {
+			return nil, fmt.Errorf("not supported : %v", canInterfaceName)
+		}
 	}
 	return createInterface(channel)
 }
