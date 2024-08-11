@@ -34,7 +34,7 @@ func (node *BaseNode) Read(index any, subindex any) (value any, e error) {
 	if err != nil {
 		return nil, err
 	}
-	return od.Decode(data, dataType)
+	return od.DecodeToType(data, dataType)
 }
 
 // Same as Read but enforces the returned type as uint64
