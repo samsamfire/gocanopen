@@ -88,7 +88,7 @@ func NewVariableFromSection(
 		}
 		variable.valueDefault, err = EncodeFromString(defaultValueStr, variable.DataType, nodeId)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse 'DefaultValue' for %x : %x, because %v (datatype :%v)", index, subindex, err, variable.DataType)
+			return nil, fmt.Errorf("failed to parse 'DefaultValue' for x%x|x%x, because %v (datatype :x%x)", index, subindex, err, variable.DataType)
 		}
 		variable.value = make([]byte, len(variable.valueDefault))
 		copy(variable.value, variable.valueDefault)
@@ -123,52 +123,71 @@ func NewVariable(
 }
 
 // EncodeFromString value from EDS into bytes respecting canopen datatype
-// nodeId is used as an offset
-func EncodeFromString(variable string, datatype uint8, nodeId uint8) ([]byte, error) {
+func EncodeFromString(value string, datatype uint8, offset uint8) ([]byte, error) {
 
 	var data []byte
 	var err error
-	var parsed uint64
+	var parsedInt int64
+	var parsedUint uint64
 
-	if variable == "" {
+	if value == "" {
 		// Treat empty string as a 0 value
-		variable = "0x0"
+		value = "0"
 	}
 
 	switch datatype {
-	case BOOLEAN, UNSIGNED8, INTEGER8:
-		parsed, err = strconv.ParseUint(variable, 0, 8)
-		data = []byte{byte(uint8(parsed + uint64(nodeId)))}
+	case BOOLEAN, UNSIGNED8:
+		parsedUint, err = strconv.ParseUint(value, 0, 8)
+		data = []byte{byte(uint8(parsedUint + uint64(offset)))}
 
-	case UNSIGNED16, INTEGER16:
-		parsed, err = strconv.ParseUint(variable, 0, 16)
+	case INTEGER8:
+		parsedInt, err = strconv.ParseInt(value, 0, 8)
+		data = []byte{byte(parsedInt + int64(offset))}
+
+	case UNSIGNED16:
+		parsedUint, err = strconv.ParseUint(value, 0, 16)
 		data = make([]byte, 2)
-		binary.LittleEndian.PutUint16(data, uint16(parsed+uint64(nodeId)))
+		binary.LittleEndian.PutUint16(data, uint16(parsedUint+uint64(offset)))
 
-	case UNSIGNED32, INTEGER32:
-		parsed, err = strconv.ParseUint(variable, 0, 32)
+	case INTEGER16:
+		parsedInt, err = strconv.ParseInt(value, 0, 16)
+		data = make([]byte, 2)
+		binary.LittleEndian.PutUint16(data, uint16(parsedInt+int64(offset)))
+
+	case UNSIGNED32:
+		parsedUint, err = strconv.ParseUint(value, 0, 32)
 		data = make([]byte, 4)
-		binary.LittleEndian.PutUint32(data, uint32(parsed+uint64(nodeId)))
+		binary.LittleEndian.PutUint32(data, uint32(parsedUint+uint64(offset)))
+
+	case INTEGER32:
+		parsedInt, err = strconv.ParseInt(value, 0, 32)
+		data = make([]byte, 4)
+		binary.LittleEndian.PutUint32(data, uint32(parsedInt+int64(offset)))
 
 	case REAL32:
 		var parsedFloat float64
-		parsedFloat, err = strconv.ParseFloat(variable, 32)
+		parsedFloat, err = strconv.ParseFloat(value, 32)
 		data = make([]byte, 4)
 		binary.LittleEndian.PutUint32(data, math.Float32bits(float32(parsedFloat)))
 
-	case UNSIGNED64, INTEGER64:
-		parsed, err = strconv.ParseUint(variable, 0, 64)
+	case UNSIGNED64:
+		parsedUint, err = strconv.ParseUint(value, 0, 64)
 		data = make([]byte, 8)
-		binary.LittleEndian.PutUint64(data, parsed+uint64(nodeId))
+		binary.LittleEndian.PutUint64(data, parsedUint+uint64(offset))
+
+	case INTEGER64:
+		parsedInt, err = strconv.ParseInt(value, 0, 64)
+		data = make([]byte, 8)
+		binary.LittleEndian.PutUint64(data, uint64(parsedInt+int64(offset)))
 
 	case REAL64:
 		var parsedFloat float64
-		parsedFloat, err = strconv.ParseFloat(variable, 64)
+		parsedFloat, err = strconv.ParseFloat(value, 64)
 		data = make([]byte, 8)
 		binary.LittleEndian.PutUint64(data, math.Float64bits(parsedFloat))
 
 	case VISIBLE_STRING, OCTET_STRING:
-		return []byte(variable), nil
+		return []byte(value), nil
 
 	case DOMAIN:
 		return []byte{}, nil
