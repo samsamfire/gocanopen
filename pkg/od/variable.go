@@ -64,16 +64,24 @@ func NewVariableFromSection(
 
 	// All the parameters aftewards are optional elements that can be used in EDS
 	if highLimit, err := section.GetKey("HighLimit"); err == nil {
-		variable.HighLimit, err = highLimit.Int()
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse 'HighLimit' for %x : %x, because %v", index, subindex, err)
+		if highLimit.Value() == "" {
+			variable.HighLimit = 0
+		} else {
+			variable.HighLimit, err = highLimit.Int()
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse 'HighLimit' for %x : %x, because %v", index, subindex, err)
+			}
 		}
 	}
 
 	if lowLimit, err := section.GetKey("LowLimit"); err == nil {
-		variable.LowLimit, err = lowLimit.Int()
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse 'LowLimit' for %x : %x, because %v", index, subindex, err)
+		if lowLimit.Value() == "" {
+			variable.LowLimit = 0
+		} else {
+			variable.LowLimit, err = lowLimit.Int()
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse 'LowLimit' for %x : %x, because %v", index, subindex, err)
+			}
 		}
 	}
 
