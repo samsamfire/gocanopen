@@ -212,9 +212,9 @@ type Variable struct {
 	// stored. Currently this is unused, everything is stored in RAM
 	StorageLocation string
 	// The minimum value for this variable
-	LowLimit int
+	lowLimit []byte
 	// The maximum value for this variable
-	HighLimit int
+	highLimit []byte
 	// The subindex for this variable if part of an ARRAY or RECORD
 	SubIndex uint8
 }
