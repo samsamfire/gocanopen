@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
 )
 
@@ -58,30 +59,19 @@ func NewVariableFromSection(
 		return nil, fmt.Errorf("failed to parse 'DataType' for %x : %x, because %v", index, subindex, err)
 	}
 	variable.DataType = byte(dataType)
-
-	// Determine variable attribute
 	variable.Attribute = EncodeAttribute(accessType.String(), pdoMapping, variable.DataType)
 
-	// All the parameters aftewards are optional elements that can be used in EDS
 	if highLimit, err := section.GetKey("HighLimit"); err == nil {
-		if highLimit.Value() == "" {
-			variable.HighLimit = 0
-		} else {
-			variable.HighLimit, err = highLimit.Int()
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse 'HighLimit' for %x : %x, because %v", index, subindex, err)
-			}
+		variable.highLimit, err = EncodeFromString(highLimit.Value(), variable.DataType, 0)
+		if err != nil {
+			log.Warnf("[OD] error parsing HighLimit at x%x|x%x : %v", index, subindex, err)
 		}
 	}
 
 	if lowLimit, err := section.GetKey("LowLimit"); err == nil {
-		if lowLimit.Value() == "" {
-			variable.LowLimit = 0
-		} else {
-			variable.LowLimit, err = lowLimit.Int()
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse 'LowLimit' for %x : %x, because %v", index, subindex, err)
-			}
+		variable.lowLimit, err = EncodeFromString(lowLimit.Value(), variable.DataType, 0)
+		if err != nil {
+			log.Warnf("[OD] error parsing LowLimit at x%x|x%x : %v", index, subindex, err)
 		}
 	}
 
