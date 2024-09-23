@@ -269,8 +269,8 @@ func (client *SDOClient) downloadMain(
 				}
 				client.blockCRC = crc.CRC16(0)
 				client.blockSize = response.GetBlockSize()
-				if client.blockSize < 1 || client.blockSize > MaxBlockSize {
-					client.blockSize = MaxBlockSize
+				if client.blockSize < 1 || client.blockSize > BlockMaxSize {
+					client.blockSize = BlockMaxSize
 				}
 				client.blockSequenceNb = 0
 				client.fifo.AltBegin(0)
@@ -994,12 +994,13 @@ func (client *SDOClient) upload(
 			client.txBuffer.Data[3] = client.subindex
 			// Calculate number of block segments from free space
 			count := client.fifo.GetSpace() / BlockSeqSize
-			if count == 0 {
+			if count >= BlockMaxSize {
+				count = BlockMaxSize
+			} else if count == 0 {
 				abortCode = AbortOutOfMem
 				client.state = stateAbort
 				break
 			}
-			count = min(client.blockMaxSize, MaxBlockSize)
 			client.blockSize = uint8(count)
 			client.txBuffer.Data[4] = client.blockSize
 			client.txBuffer.Data[5] = ClientProtocolSwitchThreshold
@@ -1034,8 +1035,9 @@ func (client *SDOClient) upload(
 				}
 				// Calculate number of block segments from remaining space
 				count := client.fifo.GetSpace() / BlockSeqSize
-				count = min(count, MaxBlockSize, client.blockMaxSize)
-				if client.fifo.GetOccupied() > 0 {
+				if count >= BlockMaxSize {
+					count = BlockMaxSize
+				} else if client.fifo.GetOccupied() > 0 {
 					ret = uploadDataFull
 					if transferShort {
 						log.Warnf("sub-block , upload data is full seqno=%v", seqnoStart)
@@ -1110,10 +1112,10 @@ func NewSDOClient(
 	client.od = odict
 	client.nodeId = nodeId
 	client.streamer = &od.Streamer{}
-	client.fifo = fifo.NewFifo(MaxBlockSize * BlockSeqSize)
+	client.fifo = fifo.NewFifo(BlockMaxSize * BlockSeqSize)
 	client.SetTimeout(DefaultClientTimeout)
 	client.SetTimeoutBlockTransfer(DefaultClientTimeout)
-	client.SetBlockMaxSize(MaxBlockSize)
+	client.SetBlockMaxSize(BlockMaxSize)
 	client.SetProcessingPeriod(DefaultClientProcessPeriodUs)
 
 	var nodeIdServer uint8
@@ -1170,8 +1172,8 @@ func (client *SDOClient) SetProcessingPeriod(periodUs int) {
 // Set maximum block size to use during block transfers
 // Some devices may not support big block sizes as it can use a lot of RAM.
 func (client *SDOClient) SetBlockMaxSize(size int) {
-	if size > MaxBlockSize {
-		client.blockMaxSize = MaxBlockSize
+	if size > BlockMaxSize {
+		client.blockMaxSize = BlockMaxSize
 		return
 	} else if size < 1 {
 		client.blockMaxSize = 1

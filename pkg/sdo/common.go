@@ -22,7 +22,7 @@ const (
 
 	DefaultServerTimeout          = 1_000
 	ClientProtocolSwitchThreshold = 21
-	MaxBlockSize                  = 127
+	BlockMaxSize                  = 127
 	BlockSeqSize                  = 7
 	ClientServiceId               = 0x600
 	ServerServiceId               = 0x580
