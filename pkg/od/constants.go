@@ -131,3 +131,17 @@ const (
 	EntryTPDOMappingStart            uint16 = 0x1A00
 	EntryTPDOMappingEnd              uint16 = 0x1BFF
 )
+
+// Standard CANopen object areas
+const (
+	AreaCommunicationProfileStart        uint16 = 0x1000
+	AreaCommunicationProfileEnd          uint16 = 0x1FFF
+	AreaManufacturerSpecificProfileStart uint16 = 0x2000
+	AreaManufacturerSpecificProfileEnd   uint16 = 0x5FFF
+	AreaDeviceProfileStart               uint16 = 0x6000
+	AreaDeviceProfileEnd                 uint16 = 0x9FFF
+	AreaInterfaceProfileStart            uint16 = 0xA000
+	AreaInterfaceProfileEnd              uint16 = 0xBFFF
+	AreaFutureUseStart                   uint16 = 0xC000
+	AreaFutureUseEnd                     uint16 = 0xFFFF
+)
