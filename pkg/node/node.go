@@ -26,7 +26,7 @@ type Node interface {
 	GetID() uint8
 	GetState() uint8
 	SetState(newState uint8)
-	Dump(filename string) error
+	Export(filename string) error
 	GetExitBackground() chan bool
 	SetExitBackground(exit bool) // Exit background processing
 	GetExit() chan bool
@@ -117,8 +117,8 @@ func (node *BaseNode) Configurator() *config.NodeConfigurator {
 	return config.NewNodeConfigurator(node.id, node.SDOClient)
 }
 
-// Dump current state inside EDS file
-func (node *BaseNode) Dump(filename string) error {
+// Export EDS file with current state
+func (node *BaseNode) Export(filename string) error {
 	countRead := 0
 	countErrors := 0
 	for index, entry := range node.GetOD().Entries() {
