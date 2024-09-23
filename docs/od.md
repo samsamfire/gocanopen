@@ -55,7 +55,9 @@ like so :
 odict := od.Default() // this creates a default object dictionary with pre-configured values
 ```
 
-Exporting OD to an EDS file is also possible
+## Exporting
+
+Exporting OD to an EDS file is also possible. OD can be exported with default or current values.
 
 ```go
     od.ExportEDS(odict,true,"path_to_exported.eds")

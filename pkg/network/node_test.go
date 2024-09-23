@@ -300,7 +300,7 @@ func TestDump(t *testing.T) {
 	assert.Nil(t, err)
 	tempdir := t.TempDir()
 	t.Run("dump successful", func(t *testing.T) {
-		err = remote.Dump(tempdir + "/dumped.eds")
+		err = remote.Export(tempdir + "/dumped.eds")
 		assert.Nil(t, err)
 	})
 	t.Run("load from dump", func(t *testing.T) {
