@@ -93,10 +93,13 @@ func populateSection(section *ini.Section, index uint16, variable *Variable, obj
 		return err
 	}
 	var decoded string
-	if index >= 0x1000 && index <= 0x1FFF {
+	if index >= AreaCommunicationProfileStart && index <= AreaCommunicationProfileEnd {
 		// Write values as hex strings, facilitates reading
 		decoded, err = DecodeToString(variable.value, variable.DataType, 16)
-		decoded = "0x" + decoded
+		if variable.DataType != VISIBLE_STRING && variable.DataType != UNICODE_STRING {
+			decoded = "0x" + decoded
+		}
+
 	} else {
 		decoded, err = DecodeToString(variable.value, variable.DataType, 10)
 	}
