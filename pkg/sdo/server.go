@@ -402,7 +402,7 @@ func (server *SDOServer) Process(
 				// Get block size and check okay
 				server.blockSize = response.GetBlockSize()
 				log.Debugf("[SERVER][RX] UPLOAD BLOCK INIT | x%x:x%x %v | crc : %v, blksize :%v", server.index, server.subindex, response.raw, server.blockCRCEnabled, server.blockSize)
-				if server.blockSize < 1 || server.blockSize > MaxBlockSize {
+				if server.blockSize < 1 || server.blockSize > BlockMaxSize {
 					abortCode = AbortBlockSize
 					server.state = stateAbort
 					break
@@ -439,7 +439,7 @@ func (server *SDOServer) Process(
 				)
 				// Check block size
 				server.blockSize = response.raw[2]
-				if server.blockSize < 1 || server.blockSize > MaxBlockSize {
+				if server.blockSize < 1 || server.blockSize > BlockMaxSize {
 					abortCode = AbortBlockSize
 					server.state = stateAbort
 					break
@@ -621,8 +621,8 @@ func (server *SDOServer) Process(
 			server.txBuffer.Data[3] = server.subindex
 			// Calculate blocks from free space
 			count := (len(server.buffer) - 2) / BlockSeqSize
-			if count > MaxBlockSize {
-				count = MaxBlockSize
+			if count > BlockMaxSize {
+				count = BlockMaxSize
 			}
 			server.blockSize = uint8(count)
 			server.txBuffer.Data[4] = server.blockSize
@@ -651,8 +651,8 @@ func (server *SDOServer) Process(
 			} else {
 				// Calclate from free buffer space
 				count := (len(server.buffer) - 2 - int(server.bufWriteOffset)) / BlockSeqSize
-				if count > MaxBlockSize {
-					count = MaxBlockSize
+				if count > BlockMaxSize {
+					count = BlockMaxSize
 				} else if server.bufWriteOffset > 0 {
 					// Empty buffer
 					abortCode = server.writeObjectDictionary(1, 0)
@@ -660,8 +660,8 @@ func (server *SDOServer) Process(
 						break
 					}
 					count = (len(server.buffer) - 2 - int(server.bufWriteOffset)) / BlockSeqSize
-					if count > MaxBlockSize {
-						count = MaxBlockSize
+					if count > BlockMaxSize {
+						count = BlockMaxSize
 					}
 				}
 				server.blockSize = uint8(count)
@@ -1011,7 +1011,7 @@ func NewSDOServer(
 	var canIdServerToClient uint16
 	if entry12xx.Index == 0x1200 {
 		// Default channels
-		if nodeId < 1 || nodeId > MaxBlockSize {
+		if nodeId < 1 || nodeId > BlockMaxSize {
 			log.Errorf("SDO server node id is not valid : %x", nodeId)
 			return nil, canopen.ErrIllegalArgument
 		}
