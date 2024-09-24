@@ -1,9 +1,12 @@
 package od
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 )
+
+var ErrEdsFormat = errors.New("invalid EDS format")
 
 type ODR int8
 
@@ -144,4 +147,10 @@ const (
 	AreaInterfaceProfileEnd              uint16 = 0xBFFF
 	AreaFutureUseStart                   uint16 = 0xC000
 	AreaFutureUseEnd                     uint16 = 0xFFFF
+)
+
+// EDS formats
+const (
+	FormatEDSAscii  = 0
+	FormatEDSZipped = 0x90
 )
