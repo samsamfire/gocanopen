@@ -1,9 +1,11 @@
 package od
 
 import (
+	"archive/zip"
 	"bytes"
 	"embed"
 	"fmt"
+	"io"
 	"regexp"
 	"strconv"
 
@@ -174,6 +176,46 @@ func Parse(file any, nodeId uint8) (*ObjectDictionary, error) {
 	}
 
 	return od, nil
+}
+
+// [EDSFormatHandler] takes a formatType, nodeId and a reader
+// to handle an EDS file stored as a proprietary format (zip, etc)
+type EDSFormatHandler func(nodeId uint8, formatType uint8, reader io.Reader) (*ObjectDictionary, error)
+
+// Default EDS format handler used by this library
+// This can be used as a template to add other format handlers
+func DefaultEDSFormatHandler(nodeId uint8, formatType uint8, reader io.Reader) (*ObjectDictionary, error) {
+
+	switch formatType {
+
+	case FormatEDSAscii:
+		return Parse(reader, nodeId)
+
+	case FormatEDSZipped:
+		raw, err := io.ReadAll(reader)
+		if err != nil {
+			return nil, err
+		}
+		zipped, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
+		if err != nil {
+			return nil, err
+		}
+		if len(zipped.File) != 1 {
+			return nil, fmt.Errorf("expecting exactly 1 file")
+		}
+		r, err := zipped.File[0].Open()
+		if err != nil {
+			return nil, err
+		}
+		uncompressed, err := io.ReadAll(r)
+		if err != nil {
+			return nil, err
+		}
+		return Parse(uncompressed, nodeId)
+
+	default:
+		return nil, ErrEdsFormat
+	}
 }
 
 func NewOD() *ObjectDictionary {

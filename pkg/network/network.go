@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"slices"
 	"sync"
 	"time"
@@ -24,10 +23,8 @@ import (
 var ErrIdConflict = errors.New("id already exists on network, this will create conflicts")
 var ErrNotFound = errors.New("node id not found on network, add or create it first")
 var ErrInvalidNodeType = errors.New("invalid node type")
-var ErrEdsFormat = errors.New("invalid EDS format")
 var ErrNoNodesFound = errors.New("no nodes found on network when performing SDO scan")
 
-const edsAsciiFormat = 0
 const nodeIdMax = uint8(126)
 const nodeIdMin = uint8(1)
 
@@ -48,18 +45,6 @@ type ObjectDictionaryInformation struct {
 	nodeId  uint8
 	od      *od.ObjectDictionary
 	edsPath string
-}
-
-// EDSFormatHandler takes a formatType and a reader
-// to handle an EDS file stored as a proprietary format (zip, etc)
-type EDSFormatHandler func(nodeId uint8, formatType uint8, reader io.Reader) (*od.ObjectDictionary, error)
-
-// Default EDS format handler
-func edsAsciiFormatHandler(nodeId uint8, formatType uint8, reader io.Reader) (*od.ObjectDictionary, error) {
-	if formatType != edsAsciiFormat {
-		return nil, ErrEdsFormat
-	}
-	return od.Parse(reader, nodeId)
 }
 
 // Create a new CAN bus with given interface
@@ -225,7 +210,7 @@ func (network *Network) GetOD(nodeId uint8) (*od.ObjectDictionary, error) {
 // Optional callback can be provided to perform manufacturer specific parsing
 // in case a custom format is used (format type != 0).
 // By default, regular uncompressed ASCII will be used (format type of 0).
-func (network *Network) ReadEDS(nodeId uint8, edsFormatHandler EDSFormatHandler) (*od.ObjectDictionary, error) {
+func (network *Network) ReadEDS(nodeId uint8, edsFormatHandler od.EDSFormatHandler) (*od.ObjectDictionary, error) {
 	// Read EDS and format in memory
 	rawEds, err := network.ReadAll(nodeId, 0x1021, 0)
 	if err != nil {
@@ -239,7 +224,7 @@ func (network *Network) ReadEDS(nodeId uint8, edsFormatHandler EDSFormatHandler)
 	}
 	// Use ascii format handler as default if non given
 	if edsFormatHandler == nil {
-		edsFormatHandler = edsAsciiFormatHandler
+		edsFormatHandler = od.DefaultEDSFormatHandler
 	}
 	odReader := bytes.NewBuffer(rawEds)
 	return edsFormatHandler(nodeId, edsFormat, odReader)

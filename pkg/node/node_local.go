@@ -1,7 +1,11 @@
 package node
 
 import (
+	"archive/zip"
+	"bytes"
 	"errors"
+	"fmt"
+	"io"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
@@ -298,15 +302,70 @@ func NewLocalNode(
 		node.SYNC = sync
 	}
 
-	// Add EDS storage if supported
-	edsEntry := odict.Index(0x1021)
-	if edsEntry != nil {
-		log.Info("[NODE][EDS] EDS is downloadable via object 0x1021")
-		odict.AddReader(edsEntry.Index, edsEntry.Name, odict.Reader)
+	// Add EDS storage if supported, library supports either plain ascii
+	// Or zipped format
+	edsStore := odict.Index(od.EntryStoreEDS)
+	edsFormat := odict.Index(od.EntryStorageFormat)
+	if edsStore != nil {
+		var format uint8
+		if edsFormat == nil {
+			format = 0
+		} else {
+			format, err = edsFormat.Uint8(0)
+			if err != nil {
+				log.Warnf("[NODE][EDS] error reading format for node x%x, default to ASCII, %v", nodeId, err)
+				format = 0
+			}
+		}
+		switch format {
+		case od.FormatEDSAscii:
+			log.Info("[NODE][EDS] EDS is downloadable via object 0x1021 in ASCII format")
+			odict.AddReader(edsStore.Index, edsStore.Name, odict.Reader)
+		case od.FormatEDSZipped:
+			log.Info("[NODE][EDS] EDS is downloadable via object 0x1021 in Zipped format")
+			compressed, err := createInMemoryZip("compressed.eds", odict.Reader)
+			if err != nil {
+				log.Errorf("[NODE][EDS] Failed to compress EDS %v", err)
+				return nil, err
+			}
+			odict.AddReader(edsStore.Index, edsStore.Name, bytes.NewReader(compressed))
+		default:
+			return nil, fmt.Errorf("invalid eds storage format %v", format)
+		}
 	}
 	err = node.initPDO()
+	return node, err
+}
+
+// Create an in memory zip representation of an io.Reader.
+// This can be used to increase transfer speeds in block transfers
+// for example.
+func createInMemoryZip(filename string, r io.ReadSeeker) ([]byte, error) {
+
+	buffer := new(bytes.Buffer)
+	zipWriter := zip.NewWriter(buffer)
+	// Create a file inside the zip
+	writer, err := zipWriter.Create(filename)
 	if err != nil {
 		return nil, err
 	}
-	return node, nil
+
+	// Write the content to the file
+	_, err = r.Seek(0, io.SeekStart)
+	if err != nil {
+		return nil, err
+	}
+	_, err = io.Copy(writer, r)
+	if err != nil {
+		return nil, err
+	}
+
+	// Close the zip writer to finalize the zip file
+	err = zipWriter.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	// Return the zip file as bytes
+	return buffer.Bytes(), nil
 }
