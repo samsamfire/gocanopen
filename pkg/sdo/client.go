@@ -460,7 +460,7 @@ func (client *SDOClient) downloadLocal(bufferPartial bool) (ret uint8, abortCode
 		return
 	}
 
-	buffer := make([]byte, +2)
+	buffer := make([]byte, DefaultClientBufferSize+2)
 	count := client.fifo.Read(buffer, nil)
 	client.sizeTransferred += uint32(count)
 	// No data error
