@@ -122,7 +122,7 @@ func (node *BaseNode) Export(filename string) error {
 	countRead := 0
 	countErrors := 0
 	for index, entry := range node.GetOD().Entries() {
-		if entry.ObjectType == od.OBJ_DOMAIN {
+		if entry.ObjectType == od.ObjectTypeDOMAIN {
 			log.Warnf("skipping domain object %x", index)
 			continue
 		}
