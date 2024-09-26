@@ -36,15 +36,22 @@ func TestReadEDS(t *testing.T) {
 	network2 := CreateNetworkEmptyTest()
 	defer network2.Disconnect()
 	defer network.Disconnect()
+	_, err := network.CreateLocalNode(NODE_ID_TEST+1, "../../testdata/test_zipped_format.eds")
+	assert.Nil(t, err)
+
 	t.Run("local node ascii format", func(t *testing.T) {
 		od, err := network.ReadEDS(NODE_ID_TEST, od.DefaultEDSFormatHandler)
 		assert.Nil(t, err)
 		assert.NotNil(t, od.Index(0x1021))
 	})
-	t.Run("local node zipped format", func(t *testing.T) {
-		_, err := network.CreateLocalNode(NODE_ID_TEST+1, "../../testdata/test_zipped_format.eds")
+	t.Run("local node zipped format local", func(t *testing.T) {
 		assert.Nil(t, err)
 		od, err := network.ReadEDS(NODE_ID_TEST+1, od.DefaultEDSFormatHandler)
+		assert.Nil(t, err)
+		assert.NotNil(t, od.Index(0x1021))
+	})
+	t.Run("local node zipped format remote", func(t *testing.T) {
+		od, err := network2.ReadEDS(NODE_ID_TEST+1, od.DefaultEDSFormatHandler)
 		assert.Nil(t, err)
 		assert.NotNil(t, od.Index(0x1021))
 	})
