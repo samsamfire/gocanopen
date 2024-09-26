@@ -64,7 +64,7 @@ func ExportEDS(odict *ObjectDictionary, defaultValues bool, filename string) err
 				if err != nil {
 					return err
 				}
-				err = populateSection(section, uint16(index), variable, entry.ObjectType)
+				err = populateSection(section, uint16(index), variable, ObjectTypeVAR)
 				if err != nil {
 					return fmt.Errorf("[OD] error populating section index at %x|%x : %v", index, i, err)
 				}
