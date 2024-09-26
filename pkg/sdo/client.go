@@ -26,6 +26,7 @@ type SDOClient struct {
 	mu                         sync.Mutex
 	od                         *od.ObjectDictionary
 	streamer                   *od.Streamer
+	localBuffer                []byte
 	nodeId                     uint8
 	txBuffer                   canopen.Frame
 	cobIdClientToServer        uint32
@@ -38,13 +39,13 @@ type SDOClient struct {
 	sizeIndicated              uint32
 	sizeTransferred            uint32
 	state                      internalState
-	timeoutTimeUs              uint32
-	timeoutTimer               uint32
 	processingPeriodUs         int
 	fifo                       *fifo.Fifo
 	rxNew                      bool
 	response                   SDOResponse
 	toggle                     uint8
+	timeoutTimeUs              uint32
+	timeoutTimer               uint32
 	timeoutTimeBlockTransferUs uint32
 	timeoutTimerBlock          uint32
 	blockSequenceNb            uint8
@@ -459,9 +460,7 @@ func (client *SDOClient) downloadLocal(bufferPartial bool) (ret uint8, abortCode
 	if client.streamer.Writer() == nil {
 		return
 	}
-
-	buffer := make([]byte, DefaultClientBufferSize+2)
-	count := client.fifo.Read(buffer, nil)
+	count := client.fifo.Read(client.localBuffer, nil)
 	client.sizeTransferred += uint32(count)
 	// No data error
 	if count == 0 {
@@ -479,11 +478,11 @@ func (client *SDOClient) downloadLocal(bufferPartial bool) (ret uint8, abortCode
 		// Special case for strings where the downloaded data may be shorter (nul character can be omitted)
 		if client.streamer.HasAttribute(od.AttributeStr) && odVarSize == 0 || client.sizeTransferred < uint32(odVarSize) {
 			count += 1
-			buffer[count] = 0
+			client.localBuffer[count] = 0
 			client.sizeTransferred += 1
 			if odVarSize == 0 || odVarSize > client.sizeTransferred {
 				count += 1
-				buffer[count] = 0
+				client.localBuffer[count] = 0
 				client.sizeTransferred += 1
 			}
 			client.streamer.DataLength = client.sizeTransferred
@@ -496,7 +495,7 @@ func (client *SDOClient) downloadLocal(bufferPartial bool) (ret uint8, abortCode
 		}
 	}
 	if abortCode == nil {
-		_, err = client.streamer.Write(buffer[:count])
+		_, err = client.streamer.Write(client.localBuffer[:count])
 		odErr, ok := err.(od.ODR)
 		if err != nil && odErr != od.ErrPartial {
 			if !ok {
@@ -671,8 +670,7 @@ func (client *SDOClient) uploadLocal() (ret uint8, err error) {
 		} else {
 			countBuffer = uint32(countFifo)
 		}
-		buffer := make([]byte, DefaultClientBufferSize+1)
-		countRead, err = client.streamer.Read(buffer[:countBuffer])
+		countRead, err = client.streamer.Read(client.localBuffer[:countBuffer])
 		odErr, ok := err.(od.ODR)
 		if err != nil && err != od.ErrPartial {
 			if !ok {
@@ -681,9 +679,9 @@ func (client *SDOClient) uploadLocal() (ret uint8, err error) {
 			return 0, ConvertOdToSdoAbort(odErr)
 		} else {
 			if countRead > 0 && client.streamer.HasAttribute(od.AttributeStr) {
-				buffer[countRead] = 0
+				client.localBuffer[countRead] = 0
 				countStr := 0
-				for i, v := range buffer {
+				for i, v := range client.localBuffer {
 					if v == 0 {
 						countStr = i
 						break
@@ -698,7 +696,7 @@ func (client *SDOClient) uploadLocal() (ret uint8, err error) {
 					client.streamer.DataLength = client.sizeTransferred + uint32(countRead)
 				}
 			}
-			client.fifo.Write(buffer[:countRead], nil)
+			client.fifo.Write(client.localBuffer[:countRead], nil)
 			client.sizeTransferred += uint32(countRead)
 			client.sizeIndicated = client.streamer.DataLength
 			if client.sizeIndicated > 0 && client.sizeTransferred > client.sizeIndicated {
@@ -1113,6 +1111,7 @@ func NewSDOClient(
 	client.nodeId = nodeId
 	client.streamer = &od.Streamer{}
 	client.fifo = fifo.NewFifo(BlockMaxSize * BlockSeqSize)
+	client.localBuffer = make([]byte, DefaultClientBufferSize+2)
 	client.SetTimeout(DefaultClientTimeout)
 	client.SetTimeoutBlockTransfer(DefaultClientTimeout)
 	client.SetBlockMaxSize(BlockMaxSize)
@@ -1172,11 +1171,5 @@ func (client *SDOClient) SetProcessingPeriod(periodUs int) {
 // Set maximum block size to use during block transfers
 // Some devices may not support big block sizes as it can use a lot of RAM.
 func (client *SDOClient) SetBlockMaxSize(size int) {
-	if size > BlockMaxSize {
-		client.blockMaxSize = BlockMaxSize
-		return
-	} else if size < 1 {
-		client.blockMaxSize = 1
-	}
-	client.blockMaxSize = size
+	client.blockMaxSize = max(min(size, BlockMaxSize), BlockMinSize)
 }
