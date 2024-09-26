@@ -122,8 +122,8 @@ func (node *LocalNode) initPDO() error {
 	// Iterate over all the possible entries : there can be a maximum of 512 maps
 	// Break loops when an entry doesn't exist (don't allow holes in mapping)
 	for i := range uint16(512) {
-		entry14xx := node.GetOD().Index(0x1400 + i)
-		entry16xx := node.GetOD().Index(0x1600 + i)
+		entry14xx := node.GetOD().Index(od.EntryRPDOCommunicationStart + i)
+		entry16xx := node.GetOD().Index(od.EntryRPDOMappingStart + i)
 		preDefinedIdent := uint16(0)
 		pdoOffset := i % 4
 		nodeIdOffset := i / 4
@@ -138,8 +138,8 @@ func (node *LocalNode) initPDO() error {
 	}
 	// Do the same for TPDOS
 	for i := range uint16(512) {
-		entry18xx := node.GetOD().Index(0x1800 + i)
-		entry1Axx := node.GetOD().Index(0x1A00 + i)
+		entry18xx := node.GetOD().Index(od.EntryTPDOCommunicationStart + i)
+		entry1Axx := node.GetOD().Index(od.EntryTPDOMappingStart + i)
 		preDefinedIdent := uint16(0)
 		pdoOffset := i % 4
 		nodeIdOffset := i / 4
@@ -192,10 +192,10 @@ func NewLocalNode(
 		emergency, err := emergency.NewEMCY(
 			bm,
 			nodeId,
-			odict.Index(0x1001),
-			odict.Index(0x1014),
-			odict.Index(0x1015),
-			odict.Index(0x1003),
+			odict.Index(od.EntryErrorRegister),
+			odict.Index(od.EntryCobIdEMCY),
+			odict.Index(od.EntryInhibitTimeEMCY),
+			odict.Index(od.EntryManufacturerStatusRegister),
 			nil,
 		)
 		if err != nil {
@@ -219,7 +219,7 @@ func NewLocalNode(
 			nmt.ServiceId,
 			nmt.ServiceId,
 			heartbeat.ServiceId+uint16(nodeId),
-			odict.Index(0x1017),
+			odict.Index(od.EntryProducerHeartbeatTime),
 		)
 		if err != nil {
 			log.Errorf("[NODE][NMT] error when initializing NMT object %v", err)
@@ -234,7 +234,7 @@ func NewLocalNode(
 	}
 
 	// Initialize HB consumer
-	hbCons, err := heartbeat.NewHBConsumer(bm, emcy, odict.Index(0x1016))
+	hbCons, err := heartbeat.NewHBConsumer(bm, emcy, odict.Index(od.EntryConsumerHeartbeatTime))
 	if err != nil {
 		log.Errorf("[NODE][HB Consumer] error when initializing HB consummers %v", err)
 		return nil, err
@@ -245,7 +245,7 @@ func NewLocalNode(
 
 	// Initialize SDO server
 	// For now only one server
-	entry1200 := odict.Index(0x1200)
+	entry1200 := odict.Index(od.EntrySDOServerParameter)
 	sdoServers := make([]*sdo.SDOServer, 0)
 	if entry1200 == nil {
 		log.Warnf("[NODE][SDO SERVER] no sdo servers initialized for node x%x", nodeId)
@@ -263,7 +263,7 @@ func NewLocalNode(
 
 	// Initialize SDO clients if any
 	// For now only one client
-	entry1280 := odict.Index(0x1280)
+	entry1280 := odict.Index(od.EntrySDOClientParameter)
 	sdoClients := make([]*sdo.SDOClient, 0)
 	if entry1280 == nil {
 		log.Info("[NODE][SDO CLIENT] no SDO clients initialized for node")
@@ -280,7 +280,7 @@ func NewLocalNode(
 	}
 
 	// Initialize TIME
-	time, err := time.NewTIME(bm, odict.Index(0x1012), 1000) // hardcoded for now
+	time, err := time.NewTIME(bm, odict.Index(od.EntryCobIdTIME), 1000) // hardcoded for now
 	if err != nil {
 		log.Errorf("[NODE][TIME] error when initializing TIME object %v", err)
 	} else {
@@ -291,10 +291,10 @@ func NewLocalNode(
 	sync, err := sync.NewSYNC(
 		bm,
 		emcy,
-		odict.Index(0x1005),
-		odict.Index(0x1006),
-		odict.Index(0x1007),
-		odict.Index(0x1019),
+		odict.Index(od.EntryCobIdSYNC),
+		odict.Index(od.EntryCommunicationCyclePeriod),
+		odict.Index(od.EntrySynchronousWindowLength),
+		odict.Index(od.EntrySynchronousCounterOverflow),
 	)
 	if err != nil {
 		log.Errorf("[NODE][SYNC] error when initialising SYNC object %v", err)
