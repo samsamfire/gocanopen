@@ -35,7 +35,7 @@ func (od *ObjectDictionary) addVariable(index uint16, variable *Variable) *Entry
 		Index:             index,
 		Name:              variable.Name,
 		object:            variable,
-		ObjectType:        OBJ_VAR,
+		ObjectType:        ObjectTypeVAR,
 		extension:         nil,
 		subEntriesNameMap: map[string]uint8{}}
 	od.addEntry(entry)
@@ -230,7 +230,7 @@ type VariableList struct {
 // a given subindex if not found, it errors with
 // ODR_SUB_NOT_EXIST
 func (rec *VariableList) GetSubObject(subindex uint8) (*Variable, error) {
-	if rec.objectType == OBJ_ARR {
+	if rec.objectType == ObjectTypeARRAY {
 		subEntriesCount := len(rec.Variables)
 		if subindex >= uint8(subEntriesCount) {
 			return nil, ErrSubNotExist
@@ -263,7 +263,7 @@ func (rec *VariableList) AddSubObject(
 	if err != nil {
 		return nil, err
 	}
-	if rec.objectType == OBJ_ARR {
+	if rec.objectType == ObjectTypeARRAY {
 		if int(subindex) >= len(rec.Variables) {
 			log.Error("[OD] trying to add a sub object to array but out of bounds")
 			return nil, ErrSubNotExist
@@ -284,9 +284,9 @@ func (rec *VariableList) AddSubObject(
 }
 
 func NewRecord() *VariableList {
-	return &VariableList{objectType: OBJ_RECORD, Variables: make([]*Variable, 0)}
+	return &VariableList{objectType: ObjectTypeRECORD, Variables: make([]*Variable, 0)}
 }
 
 func NewArray(length uint8) *VariableList {
-	return &VariableList{objectType: OBJ_ARR, Variables: make([]*Variable, length)}
+	return &VariableList{objectType: ObjectTypeARRAY, Variables: make([]*Variable, length)}
 }

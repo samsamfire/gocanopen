@@ -86,10 +86,10 @@ func (entry *Entry) addSectionMember(section *ini.Section, name string, nodeId u
 		return err
 	}
 	switch entry.ObjectType {
-	case OBJ_ARR:
+	case ObjectTypeARRAY:
 		record.Variables[subIndex] = variable
 		entry.subEntriesNameMap[name] = subIndex
-	case OBJ_RECORD:
+	case ObjectTypeRECORD:
 		record.Variables = append(record.Variables, variable)
 		entry.subEntriesNameMap[name] = subIndex
 	default:
