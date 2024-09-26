@@ -8,6 +8,40 @@ import (
 
 var ErrEdsFormat = errors.New("invalid EDS format")
 
+// CANopen supported ObjectType
+const (
+	ObjectTypeDOMAIN byte = 0x2
+	ObjectTypeVAR    byte = 0x7
+	ObjectTypeARRAY  byte = 0x8
+	ObjectTypeRECORD byte = 0x9
+)
+
+var OBJ_NAME_MAP = map[byte]string{
+	ObjectTypeDOMAIN: "DOMAIN  ",
+	ObjectTypeVAR:    "VARIABLE",
+	ObjectTypeARRAY:  "ARRAY   ",
+	ObjectTypeRECORD: "RECORD  ",
+}
+
+// CANopen supported datatypes
+const (
+	BOOLEAN        uint8 = 0x01
+	INTEGER8       uint8 = 0x02
+	INTEGER16      uint8 = 0x03
+	INTEGER32      uint8 = 0x04
+	UNSIGNED8      uint8 = 0x05
+	UNSIGNED16     uint8 = 0x06
+	UNSIGNED32     uint8 = 0x07
+	REAL32         uint8 = 0x08
+	VISIBLE_STRING uint8 = 0x09
+	OCTET_STRING   uint8 = 0x0A
+	UNICODE_STRING uint8 = 0x0B
+	DOMAIN         uint8 = 0x0F
+	REAL64         uint8 = 0x11
+	INTEGER64      uint8 = 0x15
+	UNSIGNED64     uint8 = 0x1B
+)
+
 type ODR int8
 
 const (
@@ -125,6 +159,8 @@ const (
 	EntrySynchronousCounterOverflow  uint16 = 0x1019
 	EntryStoreEDS                    uint16 = 0x1021
 	EntryStorageFormat               uint16 = 0x1022
+	EntrySDOServerParameter          uint16 = 0x1200
+	EntrySDOClientParameter          uint16 = 0x1280
 	EntryRPDOCommunicationStart      uint16 = 0x1400
 	EntryRPDOCommunicationEnd        uint16 = 0x15FF
 	EntryRPDOMappingStart            uint16 = 0x1600

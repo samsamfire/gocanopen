@@ -26,49 +26,6 @@ func Default() *ObjectDictionary {
 	return defaultOd
 }
 
-// CANopen supported object types
-const (
-	OBJ_DOMAIN byte = 2
-	OBJ_VAR    byte = 7
-	OBJ_ARR    byte = 8
-	OBJ_RECORD byte = 9
-)
-
-var OBJ_NAME_MAP = map[byte]string{
-	OBJ_DOMAIN: "DOMAIN  ",
-	OBJ_VAR:    "VARIABLE",
-	OBJ_ARR:    "ARRAY   ",
-	OBJ_RECORD: "RECORD  ",
-}
-
-// CANopen supported datatypes
-const (
-	BOOLEAN        uint8 = 0x01
-	INTEGER8       uint8 = 0x02
-	INTEGER16      uint8 = 0x03
-	INTEGER32      uint8 = 0x04
-	UNSIGNED8      uint8 = 0x05
-	UNSIGNED16     uint8 = 0x06
-	UNSIGNED32     uint8 = 0x07
-	REAL32         uint8 = 0x08
-	VISIBLE_STRING uint8 = 0x09
-	OCTET_STRING   uint8 = 0x0A
-	UNICODE_STRING uint8 = 0x0B
-	DOMAIN         uint8 = 0x0F
-	REAL64         uint8 = 0x11
-	INTEGER64      uint8 = 0x15
-	UNSIGNED64     uint8 = 0x1B
-)
-
-// Actual object type used in OD
-// Specifically, OBJ_DOMAIN is considered as an ODT_VAR
-const (
-	ODT_VAR       byte = 0x01
-	ODT_ARR       byte = 0x02
-	ODT_REC       byte = 0x03
-	ODT_TYPE_MASK byte = 0x0F
-)
-
 // Parse an EDS file
 // file can be either a path or an *os.File or []byte
 // Other file types could be supported in the future
@@ -121,13 +78,13 @@ func Parse(file any, nodeId uint8) (*ObjectDictionary, error) {
 
 			// objectType determines what type of entry we should add to dictionary : Variable, Array or Record
 			switch objectType {
-			case OBJ_VAR, OBJ_DOMAIN:
+			case ObjectTypeVAR, ObjectTypeDOMAIN:
 				variable, err := NewVariableFromSection(section, name, nodeId, index, 0)
 				if err != nil {
 					return nil, err
 				}
 				od.addVariable(index, variable)
-			case OBJ_ARR:
+			case ObjectTypeARRAY:
 				// Array objects do not allow holes in subindex numbers
 				// So pre-init slice up to subnumber
 				subNumber, err := strconv.ParseUint(section.Key("SubNumber").Value(), 0, 8)
@@ -135,7 +92,7 @@ func Parse(file any, nodeId uint8) (*ObjectDictionary, error) {
 					return nil, err
 				}
 				od.AddVariableList(index, name, NewArray(uint8(subNumber)))
-			case OBJ_RECORD:
+			case ObjectTypeRECORD:
 				// Record objects allow holes in mapping
 				// Sub-objects will be added with "append"
 				od.AddVariableList(index, name, NewRecord())
