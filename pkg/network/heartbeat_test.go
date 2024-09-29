@@ -1,6 +1,7 @@
 package network
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 )
 
 type EventHandler struct {
+	mu        sync.Mutex
 	nbTimeout int
 	nbReset   int
 	nbChanged int
@@ -18,6 +20,9 @@ type EventHandler struct {
 }
 
 func (e *EventHandler) OnEvent(event uint8, index uint8, nodeId uint8, nmtState uint8) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	switch event {
 	case heartbeat.EventTimeout:
 		e.nbTimeout++
@@ -28,15 +33,36 @@ func (e *EventHandler) OnEvent(event uint8, index uint8, nodeId uint8, nmtState 
 	case heartbeat.EventStarted:
 		e.nbStarted++
 	}
+}
 
+func (e *EventHandler) NbEventTimeout() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.nbTimeout
+}
+
+func (e *EventHandler) NbEventBoot() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.nbReset
+}
+
+func (e *EventHandler) NbEventChanged() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.nbChanged
+}
+
+func (e *EventHandler) NbEventStarted() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.nbStarted
 }
 
 const minDelayHeartbeat = 200 * time.Millisecond
 
 func TestHeartbeatEventCallback(t *testing.T) {
 	network := CreateNetworkEmptyTest()
-	err := network.Connect()
-	assert.Nil(t, err)
 	defer network.Disconnect()
 
 	// Create node that will emit heartbeats (producer)
@@ -67,7 +93,7 @@ func TestHeartbeatEventCallback(t *testing.T) {
 
 		// Wait for timeout
 		time.Sleep(minDelayHeartbeat)
-		assert.Equal(t, 1, eventHandler.nbTimeout)
+		assert.Equal(t, 1, eventHandler.NbEventTimeout())
 
 		// Enable / Disable heartbeat multiple times
 		for range 5 {
@@ -76,7 +102,7 @@ func TestHeartbeatEventCallback(t *testing.T) {
 			configProducer.WriteHeartbeatPeriod(0)
 			time.Sleep(minDelayHeartbeat)
 		}
-		assert.Equal(t, 6, eventHandler.nbTimeout)
+		assert.Equal(t, 6, eventHandler.NbEventTimeout())
 	})
 
 	t.Run("heartbeat reset & started event", func(t *testing.T) {
@@ -96,8 +122,8 @@ func TestHeartbeatEventCallback(t *testing.T) {
 		err = configProducer.WriteHeartbeatPeriod(100)
 		assert.Nil(t, err)
 		time.Sleep(minDelayHeartbeat)
-		assert.Equal(t, 1, eventHandler.nbReset)
-		assert.Equal(t, 2, eventHandler.nbStarted)
+		assert.Equal(t, 1, eventHandler.NbEventBoot())
+		assert.Equal(t, 2, eventHandler.NbEventStarted())
 	})
 
 	t.Run("heartbeat nmt changed event", func(t *testing.T) {
@@ -112,6 +138,6 @@ func TestHeartbeatEventCallback(t *testing.T) {
 		err = network.Command(0x22, nmt.CommandEnterPreOperational)
 		assert.Nil(t, err)
 		time.Sleep(minDelayHeartbeat)
-		assert.Equal(t, 1, eventHandler.nbChanged)
+		assert.Equal(t, 1, eventHandler.NbEventChanged())
 	})
 }

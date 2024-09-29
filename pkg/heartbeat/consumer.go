@@ -108,6 +108,7 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 						consumer.emcy.ErrorReport(emergency.EmHBConsumerRemoteReset, emergency.ErrHeartbeat, uint32(i))
 					}
 					// Signal reboot
+					consumer.mu.Unlock()
 					if consumer.eventCallback != nil {
 						consumer.eventCallback(
 							EventBoot,
@@ -116,9 +117,11 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 							nmt.StateInitializing,
 						)
 					}
+					consumer.mu.Lock()
 					monitoredNode.hbState = HeartbeatUnknown
 				} else {
 					// Signal Boot-up
+					consumer.mu.Unlock()
 					if monitoredNode.hbState != HeartbeatActive && consumer.eventCallback != nil {
 						consumer.eventCallback(
 							EventStarted,
@@ -127,6 +130,7 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 							nmt.StateInitializing,
 						)
 					}
+					consumer.mu.Lock()
 					// Heartbeat message
 					monitoredNode.hbState = HeartbeatActive
 					monitoredNode.timeoutTimer = 0
@@ -143,6 +147,7 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 					monitoredNode.nmtState = nmt.StateUnknown
 					monitoredNode.hbState = HeartbeatTimeout
 					// Signal timeout
+					consumer.mu.Unlock()
 					if consumer.eventCallback != nil {
 						consumer.eventCallback(
 							EventTimeout,
@@ -151,6 +156,7 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 							nmt.StateUnknown,
 						)
 					}
+					consumer.mu.Lock()
 				} else if timerNextUs != nil {
 					// Calculate when to recheck
 					diff := monitoredNode.timeUs - monitoredNode.timeoutTimer
@@ -169,6 +175,7 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 
 			if monitoredNode.nmtState != monitoredNode.nmtStatePrev {
 				// Signal NMT change
+				consumer.mu.Unlock()
 				if consumer.eventCallback != nil {
 					consumer.eventCallback(
 						EventChanged,
@@ -177,6 +184,7 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 						monitoredNode.nmtState,
 					)
 				}
+				consumer.mu.Lock()
 				monitoredNode.nmtStatePrev = monitoredNode.nmtState
 			}
 			monitoredNode.mu.Unlock()
@@ -237,6 +245,9 @@ func (consumer *HBConsumer) updateConsumerEntry(index uint8, nodeId uint8, consu
 // Callback on event for heartbeat consumer
 // Events can be : boot-up, timeout, nmt change, ...
 func (consumer *HBConsumer) OnEvent(callback HBEventCallback) {
+	consumer.mu.Lock()
+	defer consumer.mu.Unlock()
+
 	consumer.eventCallback = callback
 }
 
