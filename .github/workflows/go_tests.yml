@@ -71,6 +71,7 @@ jobs:
       - name: Run gocanopen unit tests
         run: |
           nohup ~/vcan/virtualcan --port 18888 &
+          cd pkg
           go run gotest.tools/gotestsum@latest --format testname
 
 
