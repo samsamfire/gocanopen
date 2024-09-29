@@ -233,6 +233,12 @@ func TestTimeSynchronization(t *testing.T) {
 	const slaveId = 0x66
 	network := CreateNetworkTest()
 	defer network.Disconnect()
+
+	// Set master node as time producer with interval 100ms
+	masterNode := network.nodes[NODE_ID_TEST].(*node.LocalNode)
+	masterNode.TIME.SetProducerIntervalMs(100)
+	masterNode.Configurator().ProducerDisableTIME()
+
 	// Create 10 slave nodes that will update there internal time
 	slaveNodes := make([]*node.LocalNode, 0)
 	for i := range 10 {
@@ -246,9 +252,7 @@ func TestTimeSynchronization(t *testing.T) {
 		slaveNode.TIME.SetInternalTime(time.Now().Add(24 * time.Hour))
 		slaveNodes = append(slaveNodes, slaveNode)
 	}
-	// Set master node as time producer with interval 100ms
-	masterNode := network.nodes[NODE_ID_TEST].(*node.LocalNode)
-	masterNode.TIME.SetProducerIntervalMs(100)
+
 	// Check that time difference between slaves and master is 24h
 	for _, slaveNode := range slaveNodes {
 		timeDiff := slaveNode.TIME.InternalTime().Sub(masterNode.TIME.InternalTime())
