@@ -12,8 +12,6 @@ import (
 func TestTpdo(t *testing.T) {
 	networkLocal := CreateNetworkEmptyTest()
 	networkRemote := CreateNetworkEmptyTest()
-	networkLocal.Connect()
-	networkRemote.Connect()
 	defer networkLocal.Disconnect()
 	defer networkRemote.Disconnect()
 
