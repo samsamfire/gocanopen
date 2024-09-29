@@ -16,6 +16,9 @@ func writeEntry1017(stream *od.Stream, data []byte, countWritten *uint16) error 
 	if !ok {
 		return od.ErrDevIncompat
 	}
+	nmt.mu.Lock()
+	defer nmt.mu.Unlock()
+
 	nmt.hearbeatProducerTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 1000
 	nmt.hearbeatProducerTimer = 0
 	log.Debugf("[OD][EXTENSION][NMT] updated heartbeat period to %v ms", nmt.hearbeatProducerTimeUs/1000)
