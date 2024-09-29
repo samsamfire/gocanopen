@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"encoding/binary"
 	s "sync"
 
 	canopen "github.com/samsamfire/gocanopen"
@@ -18,21 +17,21 @@ const (
 
 type SYNC struct {
 	*canopen.BusManager
-	mu                          s.Mutex
-	emcy                        *emergency.EMCY
-	rxNew                       bool
-	receiveError                uint8
-	rxToggle                    bool
-	timeoutError                uint8
-	counterOverflow             uint8
-	counter                     uint8
-	syncIsOutsideWindow         bool
-	timer                       uint32
-	rawCommunicationCyclePeriod []byte
-	rawSynchronousWindowLength  []byte
-	isProducer                  bool
-	cobId                       uint32
-	txBuffer                    canopen.Frame
+	mu                  s.Mutex
+	emcy                *emergency.EMCY
+	rxNew               bool
+	receiveError        uint8
+	rxToggle            bool
+	timeoutError        uint8
+	counterOverflow     uint8
+	counter             uint8
+	syncIsOutsideWindow bool
+	timer               uint32
+	commCyclePeriod     *od.Entry
+	syncWindowLength    *od.Entry
+	isProducer          bool
+	cobId               uint32
+	txBuffer            canopen.Frame
 }
 
 // Handle [SYNC] related RX CAN frames
@@ -86,24 +85,27 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 		sync.rxNew = false
 		status = EventRxOrTx
 	}
-	communicationCyclePeriod := binary.LittleEndian.Uint32(sync.rawCommunicationCyclePeriod)
-	if communicationCyclePeriod > 0 {
+	commCyclePeriod, err := sync.commCyclePeriod.Uint32(0)
+	if err != nil {
+		log.Warnf("[SYNC] failed to read comm cycle period : %v", err)
+	}
+	if commCyclePeriod > 0 {
 		if sync.isProducer {
-			if sync.timer >= communicationCyclePeriod {
+			if sync.timer >= commCyclePeriod {
 				status = EventRxOrTx
 				sync.mu.Unlock()
 				sync.send()
 				sync.mu.Lock()
 			}
 			if timerNextUs != nil {
-				diff := communicationCyclePeriod - sync.timer
+				diff := commCyclePeriod - sync.timer
 				if *timerNextUs > diff {
 					*timerNextUs = diff
 				}
 			}
 		} else if sync.timeoutError == 1 {
-			periodTimeout := communicationCyclePeriod + communicationCyclePeriod>>1
-			if periodTimeout < communicationCyclePeriod {
+			periodTimeout := commCyclePeriod + commCyclePeriod>>1
+			if periodTimeout < commCyclePeriod {
 				periodTimeout = 0xFFFFFFFF
 			}
 			if sync.timer > periodTimeout {
@@ -118,7 +120,10 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 			}
 		}
 	}
-	synchronousWindowLength := binary.LittleEndian.Uint32(sync.rawSynchronousWindowLength)
+	synchronousWindowLength, err := sync.syncWindowLength.Uint32(0)
+	if err != nil {
+		log.Warnf("[SYNC] failed to read sync window length : %v", err)
+	}
 	if synchronousWindowLength > 0 && sync.timer > synchronousWindowLength {
 		if !sync.syncIsOutsideWindow {
 			status = EventPassedWindow
@@ -208,22 +213,22 @@ func NewSYNC(
 		log.Errorf("[SYNC][1007] SYNCHRONOUS WINDOW LENGTH not found")
 		return nil, canopen.ErrOdParameters
 	}
-
-	entry1006.AddExtension(sync, od.ReadEntryDefault, writeEntry1006)
-	sync.rawCommunicationCyclePeriod, err = entry1006.GetRawData(0, 4)
+	commCyclePeriod, err := entry1006.Uint32(0)
 	if err != nil {
-		log.Errorf("[SYNC][%x] %v read error", entry1006.Index, entry1006.Name)
+		log.Errorf("[SYNC][%x] %v read error : %v", entry1006.Index, entry1006.Name, err)
 		return nil, canopen.ErrOdParameters
 	}
-	log.Infof("[SYNC][%x] %v : %v", entry1006.Index, entry1006.Name, binary.LittleEndian.Uint32(sync.rawCommunicationCyclePeriod))
+	sync.commCyclePeriod = entry1006
+	log.Infof("[SYNC][%x] %v : %v", entry1006.Index, entry1006.Name, commCyclePeriod)
 
 	entry1007.AddExtension(sync, od.ReadEntryDefault, writeEntry1007)
-	sync.rawSynchronousWindowLength, err = entry1007.GetRawData(0, 4)
+	syncWindowLength, err := entry1007.Uint32(0)
 	if err != nil {
-		log.Errorf("[SYNC][%x] %v read error", entry1007.Index, entry1007.Name)
+		log.Errorf("[SYNC][%x] %v read error : %v", entry1007.Index, entry1007.Name, err)
 		return nil, canopen.ErrOdParameters
 	}
-	log.Infof("[SYNC][%x] %v : %v", entry1007.Index, entry1007.Name, binary.LittleEndian.Uint32(sync.rawSynchronousWindowLength))
+	sync.syncWindowLength = entry1007
+	log.Infof("[SYNC][%x] %v : %v", entry1007.Index, entry1007.Name, syncWindowLength)
 
 	// This one is not mandatory
 	var syncCounterOverflow uint8 = 0
