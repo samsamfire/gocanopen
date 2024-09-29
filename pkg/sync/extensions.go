@@ -103,8 +103,8 @@ func writeEntry1019(stream *od.Stream, data []byte, countWritten *uint16) error 
 	if syncCounterOverflow == 1 || syncCounterOverflow > 240 {
 		return od.ErrInvalidValue
 	}
-	communicationCyclePeriod := binary.LittleEndian.Uint32(sync.rawCommunicationCyclePeriod)
-	if communicationCyclePeriod != 0 {
+	commCyclePeriod, err := sync.commCyclePeriod.Uint32(0)
+	if commCyclePeriod != 0 || err != nil {
 		return od.ErrDataDevState
 	}
 	var nbBytes = uint8(0)
