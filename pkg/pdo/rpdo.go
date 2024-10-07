@@ -72,6 +72,8 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
 
+	var buffer = make([]byte, 0, MaxPdoLength)
+
 	pdo := rpdo.pdo
 	if !pdo.Valid || !nmtIsOperational || (!syncWas && rpdo.synchronous) {
 		// not valid and op, clear can receive flags & timeouttimer
@@ -103,9 +105,11 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 	}
 	// Copy RPDO into OD variables
 	rpdoReceived := false
+	totalNbWritten := uint32(0)
+
 	for rpdo.rxNew[bufNo] {
 		rpdoReceived = true
-		dataRPDO := rpdo.rxData[bufNo][:]
+		dataRPDO := rpdo.rxData[bufNo]
 		rpdo.rxNew[bufNo] = false
 		for i := range pdo.nbMapped {
 			streamer := &pdo.streamers[i]
@@ -114,12 +118,9 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 			if dataLength > uint32(MaxPdoLength) {
 				dataLength = uint32(MaxPdoLength)
 			}
-			// Prepare for writing into OD
-			var buffer []byte
-			buffer, dataRPDO = dataRPDO[:mappedLength], dataRPDO[mappedLength:]
+			buffer = dataRPDO[totalNbWritten : totalNbWritten+mappedLength]
 			if dataLength > uint32(mappedLength) {
-				// Append zeroes up to 8 bytes
-				buffer = append(buffer, make([]byte, int(MaxPdoLength)-len(buffer))...)
+				buffer = buffer[:cap(buffer)]
 			}
 			streamer.DataOffset = 0
 			_, err := streamer.Write(buffer)
@@ -127,7 +128,7 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 				log.Warnf("[RPDO][%x] failed to write to OD on RPDO reception because %v", rpdo.pdo.configuredId, err)
 			}
 			streamer.DataOffset = mappedLength
-
+			totalNbWritten += mappedLength
 		}
 	}
 	if rpdo.timeoutTimeUs <= 0 {
