@@ -184,12 +184,10 @@ func (tpdo *TPDO) send() error {
 	pdo := tpdo.pdo
 	eventDriven := tpdo.transmissionType == TransmissionTypeSyncAcyclic || tpdo.transmissionType >= uint8(TransmissionTypeSyncEventLo)
 
-	nbRead := 0
 	totalNbRead := 0
 	var err error
 
 	for i := range pdo.nbMapped {
-		totalNbRead += nbRead
 		streamer := &pdo.streamers[i]
 		mappedLength := streamer.DataOffset
 		dataLength := int(streamer.DataLength)
@@ -198,7 +196,7 @@ func (tpdo *TPDO) send() error {
 		}
 
 		streamer.DataOffset = 0
-		nbRead, err = streamer.Read(tpdo.txBuffer.Data[totalNbRead:])
+		_, err = streamer.Read(tpdo.txBuffer.Data[totalNbRead:])
 		if err != nil {
 			log.Warnf("[TPDO]sending TPDO cob id %x failed : %v", pdo.configuredId, err)
 			return err
@@ -209,6 +207,7 @@ func (tpdo *TPDO) send() error {
 		if flagPDOByte != nil && eventDriven {
 			*flagPDOByte |= pdo.flagPDOBitmask[i]
 		}
+		totalNbRead += int(mappedLength)
 	}
 	tpdo.sendRequest = false
 	tpdo.eventTimer = tpdo.eventTimeUs
