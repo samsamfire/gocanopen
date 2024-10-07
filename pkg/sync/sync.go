@@ -213,6 +213,8 @@ func NewSYNC(
 		log.Errorf("[SYNC][1007] SYNCHRONOUS WINDOW LENGTH not found")
 		return nil, canopen.ErrOdParameters
 	}
+
+	entry1006.AddExtension(sync, od.ReadEntryDefault, writeEntry1006)
 	commCyclePeriod, err := entry1006.Uint32(0)
 	if err != nil {
 		log.Errorf("[SYNC][%x] %v read error : %v", entry1006.Index, entry1006.Name, err)
