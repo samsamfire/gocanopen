@@ -40,6 +40,23 @@ func TestSDOReadWriteLocal(t *testing.T) {
 	assert.EqualValues(t, 8989, val2)
 }
 
+var result uint64
+
+func BenchmarkSDOReadLocal(b *testing.B) {
+	b.StopTimer()
+	network := CreateNetworkTest()
+	defer network.Disconnect()
+	localNode, err := network.CreateLocalNode(0x55, od.Default())
+	assert.Nil(b, err)
+	client := localNode
+	b.StartTimer()
+	var value uint64
+	for i := 0; i < b.N; i++ {
+		value, err = client.ReadUint64(0x55, 0x201B, 0x0)
+	}
+	result = value
+}
+
 func TestSDOReadBlock(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
