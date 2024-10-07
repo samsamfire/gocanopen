@@ -1,6 +1,7 @@
 package http
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -63,44 +64,44 @@ func TestInvalidURIs(t *testing.T) {
 	assert.EqualValues(t, ErrGwRequestNotSupported, err)
 }
 
-// func TestNMTCommand(t *testing.T) {
-// 	client, gw, ts := createClient()
-// 	defer gw.Disconnect()
-// 	defer ts.Close()
-// 	commands := []string{
-// 		"start",
-// 		"stop",
-// 		"preop",
-// 		"preoperational",
-// 		"reset/node",
-// 		"reset/comm",
-// 		"reset/communication",
-// 	}
-// 	for _, command := range commands {
-// 		resp := new(GatewayResponseBase)
-// 		err := client.Do(http.MethodPut, fmt.Sprintf("/10/%s", command), nil, resp)
-// 		assert.Nil(t, err)
-// 		assert.NotNil(t, resp)
-// 	}
-// 	for _, command := range commands {
-// 		resp := new(GatewayResponseBase)
-// 		err := client.Do(http.MethodPut, fmt.Sprintf("/all/%s", command), nil, resp)
-// 		assert.Nil(t, err)
-// 		assert.NotNil(t, resp)
-// 	}
-// 	for _, command := range commands {
-// 		resp := new(GatewayResponseBase)
-// 		err := client.Do(http.MethodPut, fmt.Sprintf("/none/%s", command), nil, resp)
-// 		assert.Nil(t, err)
-// 		assert.NotNil(t, resp)
-// 	}
-// 	for _, command := range commands {
-// 		resp := new(GatewayResponseBase)
-// 		err := client.Do(http.MethodPut, fmt.Sprintf("/default/%s", command), nil, resp)
-// 		assert.Nil(t, err)
-// 		assert.NotNil(t, resp)
-// 	}
-// }
+func TestNMTCommand(t *testing.T) {
+	client, gw, ts := createClient()
+	defer gw.Disconnect()
+	defer ts.Close()
+	commands := []string{
+		"start",
+		"stop",
+		"preop",
+		"preoperational",
+		"reset/node",
+		"reset/comm",
+		"reset/communication",
+	}
+	for _, command := range commands {
+		resp := new(GatewayResponseBase)
+		err := client.Do(http.MethodPut, fmt.Sprintf("/10/%s", command), nil, resp)
+		assert.Nil(t, err)
+		assert.NotNil(t, resp)
+	}
+	for _, command := range commands {
+		resp := new(GatewayResponseBase)
+		err := client.Do(http.MethodPut, fmt.Sprintf("/all/%s", command), nil, resp)
+		assert.Nil(t, err)
+		assert.NotNil(t, resp)
+	}
+	for _, command := range commands {
+		resp := new(GatewayResponseBase)
+		err := client.Do(http.MethodPut, fmt.Sprintf("/none/%s", command), nil, resp)
+		assert.Nil(t, err)
+		assert.NotNil(t, resp)
+	}
+	for _, command := range commands {
+		resp := new(GatewayResponseBase)
+		err := client.Do(http.MethodPut, fmt.Sprintf("/default/%s", command), nil, resp)
+		assert.Nil(t, err)
+		assert.NotNil(t, resp)
+	}
+}
 
 func TestRead(t *testing.T) {
 	client, gw, ts := createClient()
