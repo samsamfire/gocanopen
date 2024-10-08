@@ -1,21 +1,3 @@
-# Introduction
-
-This package was written because I wanted an easy to use and efficient CANopen stack CiA 301
-capable of running on embedded devices using golang.
-
-This project has been inspired by two other existing projects:
-- [CANopenNode](https://github.com/CANopenNode/CANopenNode) a C implementation slave side.
-- [canopen](https://github.com/christiansandberg/canopen) a python implementation mostly for master control.
-
-This project implements both slave & master side using an efficient API.
-
-This documentation does not aim to be a tutorial on how CANopen works, a lot of information is freely available online.
-
-### Example
-
-This is a short example that connects to socketcan and performs various things on a remote node.
-
-``` golang
 package main
 
 import (
@@ -55,7 +37,3 @@ func main() {
 	}
 	fmt.Println("scanned the following nodes : ", res)
 }
-
-```
-
-Check [Network](network.md) for more info !
