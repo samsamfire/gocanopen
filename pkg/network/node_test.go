@@ -239,10 +239,15 @@ func TestTimeSynchronization(t *testing.T) {
 	masterNode.TIME.SetProducerIntervalMs(100)
 	masterNode.Configurator().ProducerDisableTIME()
 
+	time.Sleep(200 * time.Millisecond)
+
 	// Create 10 slave nodes that will update there internal time
 	slaveNodes := make([]*node.LocalNode, 0)
 	for i := range 10 {
-		slaveNode, err := network.CreateLocalNode(slaveId+uint8(i), od.Default())
+		odict := od.Default()
+		err := odict.Index(od.EntryCobIdTIME).PutUint32(0, 0x100, true)
+		assert.Nil(t, err)
+		slaveNode, err := network.CreateLocalNode(slaveId+uint8(i), odict)
 		assert.Nil(t, err)
 		err = slaveNode.Configurator().ProducerDisableTIME()
 		assert.Nil(t, err)
