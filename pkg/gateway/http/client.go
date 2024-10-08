@@ -59,7 +59,7 @@ func (client *GatewayClient) Do(method string, uri string, body io.Reader, respo
 	}
 	// Check for sequence nb mismatch
 	sequence := response.GetSequenceNb()
-	if client.currentSequenceNb != sequence || err != nil {
+	if client.currentSequenceNb != sequence {
 		log.Errorf("[HTTP][CLIENT][SEQ:%v] sequence number does not match expected value (%v)", sequence, client.currentSequenceNb)
 		return fmt.Errorf("error in sequence number")
 	}
