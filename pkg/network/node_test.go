@@ -297,7 +297,7 @@ func TestScan(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func TestDump(t *testing.T) {
+func TestExport(t *testing.T) {
 	network := CreateNetworkEmptyTest()
 	network2 := CreateNetworkEmptyTest()
 	defer network.Disconnect()
