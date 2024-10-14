@@ -1112,7 +1112,7 @@ func NewSDOClient(
 	client := &SDOClient{BusManager: bm}
 	client.od = odict
 	client.nodeId = nodeId
-	client.streamer = &od.Streamer{}
+	client.streamer = od.Streamer{}
 	client.fifo = fifo.NewFifo(BlockMaxSize * BlockSeqSize)
 	client.localBuffer = make([]byte, DefaultClientBufferSize+2)
 	client.SetTimeout(DefaultClientTimeout)
