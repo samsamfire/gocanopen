@@ -20,13 +20,18 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var ErrIdConflict = errors.New("id already exists on network, this will create conflicts")
-var ErrNotFound = errors.New("node id not found on network, add or create it first")
-var ErrInvalidNodeType = errors.New("invalid node type")
-var ErrNoNodesFound = errors.New("no nodes found on network when performing SDO scan")
+var (
+	ErrIdConflict      = errors.New("id already exists on network, this will create conflicts")
+	ErrIdRange         = errors.New("id is out of range")
+	ErrNotFound        = errors.New("node id not found on network, add or create it first")
+	ErrInvalidNodeType = errors.New("invalid node type")
+	ErrNoNodesFound    = errors.New("no nodes found on network when performing SDO scan")
+)
 
-const nodeIdMax = uint8(126)
-const nodeIdMin = uint8(1)
+const (
+	nodeIdMin = uint8(1)
+	nodeIdMax = uint8(126)
+)
 
 // A Network is the main object of this package
 // It should be created before doint anything else
@@ -259,6 +264,11 @@ func (network *Network) Command(nodeId uint8, nmtCommand nmt.Command) error {
 func (network *Network) CreateLocalNode(nodeId uint8, odict any) (*n.LocalNode, error) {
 	var odNode *od.ObjectDictionary
 	var err error
+
+	if nodeId < nodeIdMin || nodeId > nodeIdMax {
+		return nil, ErrIdRange
+	}
+
 	switch odType := odict.(type) {
 	case string:
 		odNode, err = od.Parse(odType, nodeId)
@@ -307,9 +317,11 @@ func (network *Network) CreateLocalNode(nodeId uint8, odict any) (*n.LocalNode, 
 func (network *Network) AddRemoteNode(nodeId uint8, odict any) (*n.RemoteNode, error) {
 	var odNode *od.ObjectDictionary
 	var err error
-	if nodeId < 1 || nodeId > 127 {
-		return nil, fmt.Errorf("nodeId should be between 1 and 127, value given : %v", nodeId)
+
+	if nodeId < nodeIdMin || nodeId > nodeIdMax {
+		return nil, ErrIdRange
 	}
+
 	switch odType := odict.(type) {
 	case string:
 		odNode, err = od.Parse(odType, nodeId)
