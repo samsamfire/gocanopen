@@ -17,12 +17,11 @@ func (node *BaseNode) readBytes(index any, subindex any) ([]byte, uint8, error) 
 	if err != nil {
 		return nil, 0, err
 	}
-	data := make([]byte, odVar.DataLength())
-	nbRead, err := node.ReadRaw(entry.Index, odVar.SubIndex, data)
+	n, err := node.ReadRaw(entry.Index, odVar.SubIndex, node.rxBuffer)
 	if err != nil {
 		return nil, 0, err
 	}
-	return data[:nbRead], odVar.DataType, nil
+	return node.rxBuffer[:n], odVar.DataType, nil
 }
 
 // Read an entry using a base sdo client
