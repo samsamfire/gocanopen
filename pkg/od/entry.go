@@ -138,28 +138,6 @@ func (entry *Entry) FlagPDOByte(subIndex byte) *uint8 {
 	return &entry.extension.flagsPDO[subIndex>>3]
 }
 
-// GetRawData returns the raw byte slice stored inside of OD
-func (entry *Entry) GetRawData(subIndex uint8, length uint16) ([]byte, error) {
-	streamer, err := NewStreamer(entry, subIndex, true)
-	if err != nil {
-		return nil, err
-	}
-	if int(streamer.DataLength) != int(length) && length != 0 {
-		return nil, ErrTypeMismatch
-	}
-	return streamer.Data, nil
-}
-
-// PutRawData updates the raw byte slice stored in OD
-func (entry *Entry) PutRawData(subindex uint8, data []byte) error {
-	streamer, err := NewStreamer(entry, subindex, true)
-	if err != nil {
-		return err
-	}
-	streamer.Data = data
-	return nil
-}
-
 // Uint8 reads data inside of OD as if it were and UNSIGNED8.
 // It returns an error if length is incorrect or read failed.
 func (entry *Entry) Uint8(subIndex uint8) (uint8, error) {
