@@ -11,10 +11,10 @@ import (
 )
 
 const (
-	NODE_INIT     uint8 = 0
-	NODE_RUNNING  uint8 = 1
-	NODE_RESETING uint8 = 2
-	NODE_EXIT     uint8 = 3
+	StateInit     uint8 = 0
+	StateRunning  uint8 = 1
+	StateReseting uint8 = 2
+	StateExit     uint8 = 3
 )
 
 type Node interface {
@@ -61,7 +61,7 @@ func newBaseNode(
 		wgBackground:   &sync.WaitGroup{},
 		exitBackground: make(chan bool),
 		exit:           make(chan bool),
-		state:          NODE_INIT,
+		state:          StateInit,
 		rxBuffer:       make([]byte, 1000),
 	}
 	sdoClient, err := sdo.NewSDOClient(bm, odict, nodeId, sdo.DefaultClientTimeout, nil)
