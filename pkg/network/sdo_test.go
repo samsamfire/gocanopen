@@ -47,3 +47,17 @@ func TestReaderWriter(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 2, n)
 }
+
+func BenchmarkNodeStreamerWriter(b *testing.B) {
+	b.StopTimer()
+	network := CreateNetworkTest()
+	local, err := network.Local(NODE_ID_TEST)
+	assert.Nil(b, err)
+	assert.NotNil(b, local)
+	b.StartTimer()
+	for n := 0; n < b.N; n++ {
+		value, err := local.ReadUint(0x2007, 0)
+		assert.Nil(b, err)
+		assert.NotEqual(b, 0, value)
+	}
+}

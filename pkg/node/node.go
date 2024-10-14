@@ -46,6 +46,7 @@ type BaseNode struct {
 	wgBackground   *sync.WaitGroup
 	exitBackground chan bool
 	exit           chan bool
+	rxBuffer       []byte
 }
 
 func newBaseNode(
@@ -61,6 +62,7 @@ func newBaseNode(
 		exitBackground: make(chan bool),
 		exit:           make(chan bool),
 		state:          NODE_INIT,
+		rxBuffer:       make([]byte, 1000),
 	}
 	sdoClient, err := sdo.NewSDOClient(bm, odict, nodeId, sdo.DefaultClientTimeout, nil)
 	if err != nil {

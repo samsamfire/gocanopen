@@ -106,17 +106,17 @@ func (s *Streamer) SetStream(stream Stream) {
 }
 
 // Create an object streamer for a given od entry + subindex
-func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
+func NewStreamer(entry *Entry, subIndex uint8, origin bool) (Streamer, error) {
 	if entry == nil || entry.object == nil {
-		return nil, ErrIdxNotExist
+		return Streamer{}, ErrIdxNotExist
 	}
-	streamer := &Streamer{}
+	streamer := Streamer{}
 	object := entry.object
 	// attribute, dataOrig and dataLength, depends on object type
 	switch object := object.(type) {
 	case *Variable:
 		if subIndex > 0 {
-			return nil, ErrSubNotExist
+			return Streamer{}, ErrSubNotExist
 		}
 		if object.DataType == DOMAIN && entry.extension == nil {
 			// Domain entries require extensions to be used, by default they are disabled
@@ -127,7 +127,7 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 			streamer.Subindex = subIndex
 			streamer.mu = &object.mu
 			log.Warnf("[OD][x%x] no extension has been specified for this domain object", entry.Index)
-			return streamer, nil
+			return Streamer{}, nil
 		}
 		streamer.Attribute = object.Attribute
 		streamer.Data = object.value
@@ -137,7 +137,7 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 	case *VariableList:
 		variable, err := object.GetSubObject(subIndex)
 		if err != nil {
-			return nil, err
+			return Streamer{}, err
 		}
 		streamer.Attribute = variable.Attribute
 		streamer.Data = variable.value
@@ -146,7 +146,7 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 
 	default:
 		log.Errorf("[OD][x%x] error, unknown type : %+v", entry.Index, object)
-		return nil, ErrDevIncompat
+		return Streamer{}, ErrDevIncompat
 	}
 	// Add normal reader / writer for object
 	if entry.extension == nil || origin {
@@ -178,13 +178,11 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (*Streamer, error) {
 // It Reads a value from the original OD location i.e. [Stream] object
 // And writes it inside data. It also updates the actual read count, countRead
 func ReadEntryDefault(stream *Stream, data []byte, countRead *uint16) error {
-	if stream == nil || stream.Data == nil || data == nil || countRead == nil {
+	if stream == nil || stream.Data == nil || stream.mu == nil ||
+		data == nil || countRead == nil {
 		return ErrDevIncompat
 	}
 	// Check if variable is accessible (i.e.) no write is currently being performed
-	if stream.mu == nil {
-		return ErrDevIncompat
-	}
 	// Reading will hang if entry is already being written to. This is problematic
 	// For SDO block transfers.
 	stream.mu.RLock()
@@ -220,7 +218,8 @@ func ReadEntryDefault(stream *Stream, data []byte, countRead *uint16) error {
 // It writes data to the [Stream] object
 // It also updates the number write count, countWritten
 func WriteEntryDefault(stream *Stream, data []byte, countWritten *uint16) error {
-	if stream == nil || stream.Data == nil || data == nil || countWritten == nil {
+	if stream == nil || stream.Data == nil || stream.mu == nil ||
+		data == nil || countWritten == nil {
 		return ErrDevIncompat
 	}
 	// Writing will hang if entry is already being read. This is problematic

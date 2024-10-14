@@ -15,7 +15,7 @@ type SDOServer struct {
 	*canopen.BusManager
 	mu                         sync.Mutex
 	od                         *od.ObjectDictionary
-	streamer                   *od.Streamer
+	streamer                   od.Streamer
 	nodeId                     uint8
 	txBuffer                   canopen.Frame
 	cobIdClientToServer        uint32
@@ -1000,7 +1000,7 @@ func NewSDOServer(
 		return nil, canopen.ErrIllegalArgument
 	}
 	server.od = odict
-	server.streamer = &od.Streamer{}
+	server.streamer = od.Streamer{}
 	server.buffer = make([]byte, 1000)
 	server.bufReadOffset = 0
 	server.bufWriteOffset = 0

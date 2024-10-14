@@ -25,7 +25,8 @@ type SDOClient struct {
 	*canopen.BusManager
 	mu                         sync.Mutex
 	od                         *od.ObjectDictionary
-	streamer                   *od.Streamer
+	streamer                   od.Streamer
+	rw                         *sdoRawReadWriter
 	localBuffer                []byte
 	nodeId                     uint8
 	txBuffer                   canopen.Frame
@@ -439,9 +440,10 @@ func (client *SDOClient) downloadLocal(bufferPartial bool) (ret uint8, abortCode
 	if client.streamer.Writer() == nil {
 		log.Debugf("[CLIENT][TX][x%x] LOCAL TRANSFER WRITE | x%x:x%x", client.nodeId, client.index, client.subindex)
 		streamer, err := od.NewStreamer(client.od.Index(client.index), client.subindex, false)
-		if streamer != nil {
+		if err == nil {
 			client.streamer = streamer
 		}
+
 		odErr, ok := err.(od.ODR)
 		if err != nil {
 			if !ok {
@@ -641,9 +643,10 @@ func (client *SDOClient) uploadLocal() (ret uint8, err error) {
 	if client.streamer.Reader() == nil {
 		log.Debugf("[CLIENT][RX][x%x] LOCAL TRANSFER READ | x%x:x%x", client.nodeId, client.index, client.subindex)
 		streamer, err := od.NewStreamer(client.od.Index(client.index), client.subindex, false)
-		if streamer != nil {
+		if err == nil {
 			client.streamer = streamer
 		}
+
 		odErr, ok := err.(od.ODR)
 		if err != nil {
 			if !ok {
@@ -1109,13 +1112,17 @@ func NewSDOClient(
 	client := &SDOClient{BusManager: bm}
 	client.od = odict
 	client.nodeId = nodeId
-	client.streamer = &od.Streamer{}
+	client.streamer = od.Streamer{}
 	client.fifo = fifo.NewFifo(BlockMaxSize * BlockSeqSize)
 	client.localBuffer = make([]byte, DefaultClientBufferSize+2)
 	client.SetTimeout(DefaultClientTimeout)
 	client.SetTimeoutBlockTransfer(DefaultClientTimeout)
 	client.SetBlockMaxSize(BlockMaxSize)
 	client.SetProcessingPeriod(DefaultClientProcessPeriodUs)
+	rw := &sdoRawReadWriter{
+		client: client,
+	}
+	client.rw = rw
 
 	var nodeIdServer uint8
 	var CobIdClientToServer, CobIdServerToClient uint32

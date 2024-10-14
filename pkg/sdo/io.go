@@ -9,31 +9,7 @@ import (
 )
 
 type sdoRawReadWriter struct {
-	client       *SDOClient
-	nodeId       uint8
-	index        uint16
-	subindex     uint8
-	blockEnabled bool
-	size         uint32
-}
-
-func (client *SDOClient) newRawReadWriter(nodeId uint8, index uint16, subindex uint8, blockEnabled bool, size uint32,
-) (*sdoRawReadWriter, error) {
-	rw := &sdoRawReadWriter{
-		client:       client,
-		nodeId:       nodeId,
-		index:        index,
-		subindex:     subindex,
-		blockEnabled: blockEnabled,
-		size:         size,
-	}
-	// Setup client for a new transfer
-	err := client.setupServer(
-		uint32(ClientServiceId)+uint32(nodeId),
-		uint32(ServerServiceId)+uint32(nodeId),
-		nodeId,
-	)
-	return rw, err
+	client *SDOClient
 }
 
 // Create a new raw SDO reader
@@ -43,13 +19,18 @@ func (client *SDOClient) newRawReadWriter(nodeId uint8, index uint16, subindex u
 // default to expedited / segmented transfer
 func (client *SDOClient) NewRawReader(nodeId uint8, index uint16, subindex uint8, blockEnabled bool, size uint32,
 ) (io.Reader, error) {
-	rw, err := client.newRawReadWriter(nodeId, index, subindex, blockEnabled, size)
+	// Setup client for a new transfer
+	err := client.setupServer(
+		uint32(ClientServiceId)+uint32(nodeId),
+		uint32(ServerServiceId)+uint32(nodeId),
+		nodeId,
+	)
 	if err != nil {
 		return nil, err
 	}
 	// Setup client for reading
 	err = client.uploadSetup(index, subindex, blockEnabled)
-	return rw, err
+	return client.rw, err
 }
 
 // Create a new raw SDO writer
@@ -59,13 +40,18 @@ func (client *SDOClient) NewRawReader(nodeId uint8, index uint16, subindex uint8
 // default to expedited / segmented transfer
 func (client *SDOClient) NewRawWriter(nodeId uint8, index uint16, subindex uint8, blockEnabled bool, size uint32,
 ) (io.Writer, error) {
-	rw, err := client.newRawReadWriter(nodeId, index, subindex, blockEnabled, size)
+	// Setup client for a new transfer
+	err := client.setupServer(
+		uint32(ClientServiceId)+uint32(nodeId),
+		uint32(ServerServiceId)+uint32(nodeId),
+		nodeId,
+	)
 	if err != nil {
 		return nil, err
 	}
 	// Setup client for writing
 	err = client.downloadSetup(index, subindex, size, blockEnabled)
-	return rw, err
+	return client.rw, err
 }
 
 // Implements io.Reader interface
