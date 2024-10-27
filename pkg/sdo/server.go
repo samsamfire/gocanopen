@@ -52,18 +52,28 @@ func (server *SDOServer) Handle(frame canopen.Frame) {
 	if frame.DLC != 8 {
 		return
 	}
+
 	if frame.Data[0] == 0x80 {
 		// Client abort
 		server.state = stateIdle
 		abortCode := binary.LittleEndian.Uint32(frame.Data[4:])
 		log.Warnf("[SERVER][RX] abort received from client : x%x (%v)", abortCode, Abort(abortCode))
-	} else if server.rxNew {
+		return
+	}
+
+	if server.rxNew {
 		// Ignore message if previous message not processed
 		log.Info("[SERVER][RX] ignoring message because still processing")
-	} else if server.state == stateUploadBlkEndCrsp && frame.Data[0] == 0xA1 {
+		return
+	}
+
+	if server.state == stateUploadBlkEndCrsp && frame.Data[0] == 0xA1 {
 		// Block transferred ! go to idle
 		server.state = stateIdle
-	} else if server.state == stateDownloadBlkSubblockReq {
+		return
+	}
+
+	if server.state == stateDownloadBlkSubblockReq {
 		// Condition should always pass but check
 		if int(server.bufWriteOffset) <= (len(server.buffer) - (BlockSeqSize + 2)) {
 			// Block download, copy data in handle
@@ -116,13 +126,16 @@ func (server *SDOServer) Handle(frame canopen.Frame) {
 				server.state = state
 			}
 		}
-	} else if server.state == stateDownloadBlkSubblockRsp {
-		// Ignore other server messages if response requested
-	} else {
-		// Copy data and set new flag
-		server.response.raw = frame.Data
-		server.rxNew = true
+		return
 	}
+	if server.state == stateDownloadBlkSubblockRsp {
+		// Ignore other server messages if response requested
+		return
+	}
+
+	// Copy data and set new flag
+	server.response.raw = frame.Data
+	server.rxNew = true
 }
 
 // Process [SDOServer] state machine and TX CAN frames
