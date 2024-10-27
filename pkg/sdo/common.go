@@ -30,6 +30,20 @@ const (
 )
 
 const (
+	initiateDownloadRequest  = 1 // ccs
+	initiateDownloadResponse = 3 // scs
+	downloadSegmentRequest   = 0 // ccs
+	downloadSegmentResponse  = 1 // scs
+	initiateUploadRequest    = 2 // ccs
+	initiateUploadResponse   = 2 // scs
+	uploadSegmentRequest     = 3 // ccs
+	uploadSegmentResponse    = 3 // scs
+	abortRequestResponse     = 4 // ccs / scs
+	blockDownloadRequest     = 6 // ccs
+	blockDownloadResponse    = 5 // scs
+)
+
+const (
 	stateIdle                   internalState = 0x00
 	stateAbort                  internalState = 0x01
 	stateDownloadLocalTransfer  internalState = 0x10

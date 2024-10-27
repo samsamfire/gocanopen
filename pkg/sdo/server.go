@@ -135,68 +135,45 @@ func (server *SDOServer) Process(
 ) (state uint8, err error) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
+
 	ret := waitingResponse
 	var abortCode error
+
+	// Nothing to do
 	if server.valid && server.state == stateIdle && !server.rxNew {
-		ret = success
-	} else if !nmtIsPreOrOperationnal || !server.valid {
+		return success, nil
+	}
+
+	// May have something to do but don't do it because invalid state
+	if !nmtIsPreOrOperationnal || !server.valid {
 		server.state = stateIdle
 		server.rxNew = false
-		ret = success
-	} else if server.rxNew {
+		return success, nil
+	}
+	// We have a new message to process !
+	if server.rxNew {
 		response := server.response
+
+		// If we are in idle, we need to create a streamer object to
+		// access the relevant OD entry.
+		// Determine if we need to read / write to OD.
 		if server.state == stateIdle {
 			upload := false
 			abortCode = updateStateFromRequest(response.raw[0], &server.state, &upload)
 
-			// Check object exists and accessible
+			// Check object exists and has correct attributes
 			if abortCode == nil {
-				var err error
-				server.index = response.GetIndex()
-				server.subindex = response.GetSubindex()
-				server.streamer, err = od.NewStreamer(server.od.Index(server.index), server.subindex, false)
-				if err != nil {
-					abortCode = ConvertOdToSdoAbort(err.(od.ODR))
+				abortCode = server.updateStreamer(response, upload)
+				if abortCode != nil {
 					server.state = stateAbort
-				} else {
-					if !server.streamer.HasAttribute(od.AttributeSdoRw) {
-						abortCode = AbortUnsupportedAccess
-						server.state = stateAbort
-					} else if upload && !server.streamer.HasAttribute(od.AttributeSdoR) {
-						abortCode = AbortWriteOnly
-						server.state = stateAbort
-					} else if !upload && !server.streamer.HasAttribute(od.AttributeSdoW) {
-						abortCode = AbortReadOnly
-						server.state = stateAbort
-					}
 				}
 			}
-			// Load data from OD
+			// In case of reading, we need to prepare data ASAP
 			if upload && abortCode == nil {
-				server.bufReadOffset = 0
-				server.bufWriteOffset = 0
-				server.sizeTransferred = 0
-				server.finished = false
-				abortCode = server.readObjectDictionary(BlockSeqSize, false)
-				if abortCode == nil {
-					if server.finished {
-						server.sizeIndicated = server.streamer.DataLength
-						if server.sizeIndicated == 0 {
-							server.sizeIndicated = server.bufWriteOffset
-						} else if server.sizeIndicated != server.bufWriteOffset {
-							server.errorExtraInfo = fmt.Errorf("size indicated %v != to buffer write offset %v", server.sizeIndicated, server.bufWriteOffset)
-							abortCode = AbortDeviceIncompat
-							server.state = stateAbort
-						}
-					} else {
-						if !server.streamer.HasAttribute(od.AttributeStr) {
-							server.sizeIndicated = server.streamer.DataLength
-						} else {
-							server.sizeIndicated = 0
-						}
-					}
+				abortCode = server.prepareRx()
+				if abortCode != nil {
+					server.state = stateAbort
 				}
-
 			}
 		}
 
@@ -310,6 +287,7 @@ func (server *SDOServer) Process(
 		server.rxNew = false
 	}
 
+	// Timeout handling
 	if ret == waitingResponse {
 		if server.timeoutTimer < server.timeoutTimeUs {
 			server.timeoutTimer += timeDifferenceUs
@@ -333,15 +311,11 @@ func (server *SDOServer) Process(
 			if server.timeoutTimerBlock >= server.timeoutTimeBlockTransferUs {
 				server.state = stateDownloadBlkSubblockRsp
 				server.rxNew = false
-			} else if timerNextUs != nil {
-				diff := server.timeoutTimeBlockTransferUs - server.timeoutTimerBlock
-				if *timerNextUs > diff {
-					*timerNextUs = diff
-				}
 			}
 		}
 	}
 
+	// Response handling
 	if ret == waitingResponse {
 		server.txBuffer.Data = [8]byte{0}
 
@@ -381,16 +355,11 @@ func (server *SDOServer) Process(
 			}
 
 		case stateUploadBlkEndSreq:
-			server.txBuffer.Data[0] = 0xC1 | (server.blockNoData << 2)
-			server.txBuffer.Data[1] = byte(server.blockCRC)
-			server.txBuffer.Data[2] = byte(server.blockCRC >> 8)
-			server.timeoutTimer = 0
-			log.Debugf("[SERVER][TX] BLOCK UPLOAD END | x%x:x%x %v", server.index, server.subindex, server.txBuffer.Data)
-			server.Send(server.txBuffer)
-			server.state = stateUploadBlkEndCrsp
+			server.txUploadBlockEnd()
 		}
 	}
 
+	// Error handling
 	if ret == waitingResponse {
 		switch server.state {
 		case stateAbort:
@@ -411,7 +380,7 @@ func (server *SDOServer) Process(
 			ret = blockUploadInProgress
 		}
 	}
-	return ret, abortCode
+	return 99, abortCode
 }
 
 func (server *SDOServer) initRxTx(cobIdClientToServer uint32, cobIdServerToClient uint32) error {
@@ -599,6 +568,57 @@ func updateStateFromRequest(stateReq uint8, state *internalState, upload *bool) 
 		*state = stateAbort
 		return AbortCmd
 	}
+	return nil
+}
+
+// Update streamer object with new requested entry
+func (server *SDOServer) updateStreamer(response SDOResponse, upload bool) error {
+	var err error
+	server.index = response.GetIndex()
+	server.subindex = response.GetSubindex()
+	server.streamer, err = od.NewStreamer(server.od.Index(server.index), server.subindex, false)
+	if err != nil {
+		return ConvertOdToSdoAbort(err.(od.ODR))
+	}
+	if !server.streamer.HasAttribute(od.AttributeSdoRw) {
+		return AbortUnsupportedAccess
+	}
+	if upload && !server.streamer.HasAttribute(od.AttributeSdoR) {
+		return AbortWriteOnly
+	}
+	if !upload && !server.streamer.HasAttribute(od.AttributeSdoW) {
+		return AbortReadOnly
+	}
+	return nil
+}
+
+// Prepare read transfer
+func (server *SDOServer) prepareRx() error {
+	server.bufReadOffset = 0
+	server.bufWriteOffset = 0
+	server.sizeTransferred = 0
+	server.finished = false
+	err := server.readObjectDictionary(BlockSeqSize, false)
+	if err != nil && err != od.ErrPartial {
+		return err
+	}
+
+	if server.finished {
+		server.sizeIndicated = server.streamer.DataLength
+		if server.sizeIndicated == 0 {
+			server.sizeIndicated = server.bufWriteOffset
+		} else if server.sizeIndicated != server.bufWriteOffset {
+			server.errorExtraInfo = fmt.Errorf("size indicated %v != to buffer write offset %v", server.sizeIndicated, server.bufWriteOffset)
+			return AbortDeviceIncompat
+		}
+		return nil
+	}
+
+	if !server.streamer.HasAttribute(od.AttributeStr) {
+		server.sizeIndicated = server.streamer.DataLength
+		return nil
+	}
+	server.sizeIndicated = 0
 	return nil
 }
 
