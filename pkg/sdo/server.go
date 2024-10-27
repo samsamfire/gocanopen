@@ -341,6 +341,57 @@ func (server *SDOServer) prepareRx() error {
 	return nil
 }
 
+// Update streamer object with new requested entry
+func (server *SDOServer) updateStreamer(response SDOResponse, upload bool) error {
+	var err error
+	server.index = response.GetIndex()
+	server.subindex = response.GetSubindex()
+	server.streamer, err = od.NewStreamer(server.od.Index(server.index), server.subindex, false)
+	if err != nil {
+		return ConvertOdToSdoAbort(err.(od.ODR))
+	}
+	if !server.streamer.HasAttribute(od.AttributeSdoRw) {
+		return AbortUnsupportedAccess
+	}
+	if upload && !server.streamer.HasAttribute(od.AttributeSdoR) {
+		return AbortWriteOnly
+	}
+	if !upload && !server.streamer.HasAttribute(od.AttributeSdoW) {
+		return AbortReadOnly
+	}
+	return nil
+}
+
+// Prepare read transfer
+func (server *SDOServer) prepareRx() error {
+	server.bufReadOffset = 0
+	server.bufWriteOffset = 0
+	server.sizeTransferred = 0
+	server.finished = false
+	err := server.readObjectDictionary(BlockSeqSize, false)
+	if err != nil && err != od.ErrPartial {
+		return err
+	}
+
+	if server.finished {
+		server.sizeIndicated = server.streamer.DataLength
+		if server.sizeIndicated == 0 {
+			server.sizeIndicated = server.bufWriteOffset
+		} else if server.sizeIndicated != server.bufWriteOffset {
+			server.errorExtraInfo = fmt.Errorf("size indicated %v != to buffer write offset %v", server.sizeIndicated, server.bufWriteOffset)
+			return AbortDeviceIncompat
+		}
+		return nil
+	}
+
+	if !server.streamer.HasAttribute(od.AttributeStr) {
+		server.sizeIndicated = server.streamer.DataLength
+		return nil
+	}
+	server.sizeIndicated = 0
+	return nil
+}
+
 // Create & send abort on bus
 func (server *SDOServer) SendAbort(abortCode Abort) {
 	server.mu.Lock()
