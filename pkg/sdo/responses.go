@@ -252,3 +252,69 @@ func (s *SDOServer) txUploadBlockEnd() {
 	s.Send(s.txBuffer)
 	s.state = stateUploadBlkEndCrsp
 }
+
+func (s *SDOServer) processOutgoing() {
+	var ret = waitingResponse
+	var abortCode error
+
+	if ret == waitingResponse {
+		s.txBuffer.Data = [8]byte{0}
+
+		switch s.state {
+		case stateDownloadInitiateRsp:
+			ret = s.txDownloadInitiate()
+
+		case stateDownloadSegmentRsp:
+			ret = s.txDownloadSegment()
+
+		case stateUploadInitiateRsp:
+			ret = s.txUploadInitiate()
+
+		case stateUploadSegmentRsp:
+			abortCode, ret = s.txUploadSegment()
+
+		case stateDownloadBlkInitiateRsp:
+			s.txDownloadBlockInitiate()
+
+		case stateDownloadBlkSubblockRsp:
+			abortCode = s.txDownloadBlockSubBlock()
+
+		case stateDownloadBlkEndRsp:
+			s.txBuffer.Data[0] = 0xA1
+			log.Debugf("[SERVER][TX] BLOCK DOWNLOAD END | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
+			s.Send(s.txBuffer)
+			s.state = stateIdle
+			ret = success
+
+		case stateUploadBlkInitiateRsp:
+			s.txUploadBlockInitiate()
+
+		case stateUploadBlkSubblockSreq:
+			abortCode = s.txUploadBlockSubBlock()
+			if abortCode != nil {
+				s.state = stateAbort
+			}
+
+		case stateUploadBlkEndSreq:
+			s.txUploadBlockEnd()
+		}
+	}
+
+	// Error handling
+	if ret == waitingResponse {
+		switch s.state {
+		case stateAbort:
+			if sdoAbort, ok := abortCode.(Abort); !ok {
+				log.Errorf("[SERVER][TX] Abort internal error : unknown abort code : %v", abortCode)
+				s.Abort(AbortGeneral)
+			} else {
+				s.Abort(sdoAbort)
+			}
+			s.state = stateIdle
+		case stateDownloadBlkSubblockReq:
+			ret = blockDownloadInProgress
+		case stateUploadBlkSubblockSreq:
+			ret = blockUploadInProgress
+		}
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sync"
+	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/internal/crc"
@@ -43,6 +44,8 @@ type SDOServer struct {
 	blockCRCEnabled            bool
 	blockCRC                   crc.CRC16
 	errorExtraInfo             error
+
+	rx chan canopen.Frame
 }
 
 // Handle [SDOServer] related RX CAN frames
@@ -52,90 +55,92 @@ func (server *SDOServer) Handle(frame canopen.Frame) {
 	if frame.DLC != 8 {
 		return
 	}
+	server.rx <- frame
+	return
 
-	if frame.Data[0] == 0x80 {
-		// Client abort
-		server.state = stateIdle
-		abortCode := binary.LittleEndian.Uint32(frame.Data[4:])
-		log.Warnf("[SERVER][RX] abort received from client : x%x (%v)", abortCode, Abort(abortCode))
-		return
-	}
+	// if frame.Data[0] == 0x80 {
+	// 	// Client abort
+	// 	server.state = stateIdle
+	// 	abortCode := binary.LittleEndian.Uint32(frame.Data[4:])
+	// 	log.Warnf("[SERVER][RX] abort received from client : x%x (%v)", abortCode, Abort(abortCode))
+	// 	return
+	// }
 
-	if server.rxNew {
-		// Ignore message if previous message not processed
-		log.Info("[SERVER][RX] ignoring message because still processing")
-		return
-	}
+	// if server.rxNew {
+	// 	// Ignore message if previous message not processed
+	// 	log.Info("[SERVER][RX] ignoring message because still processing")
+	// 	return
+	// }
 
-	if server.state == stateUploadBlkEndCrsp && frame.Data[0] == 0xA1 {
-		// Block transferred ! go to idle
-		server.state = stateIdle
-		return
-	}
+	// if server.state == stateUploadBlkEndCrsp && frame.Data[0] == 0xA1 {
+	// 	// Block transferred ! go to idle
+	// 	server.state = stateIdle
+	// 	return
+	// }
 
-	if server.state == stateDownloadBlkSubblockReq {
-		// Condition should always pass but check
-		if int(server.bufWriteOffset) <= (len(server.buffer) - (BlockSeqSize + 2)) {
-			// Block download, copy data in handle
-			state := stateDownloadBlkSubblockReq
-			seqno := frame.Data[0] & 0x7F
-			server.timeoutTimer = 0
-			server.timeoutTimerBlock = 0
-			// Check correct sequence number
-			if seqno <= server.blockSize && seqno == (server.blockSequenceNb+1) {
-				server.blockSequenceNb = seqno
-				// Copy data
-				copy(server.buffer[server.bufWriteOffset:], frame.Data[1:])
-				server.bufWriteOffset += BlockSeqSize
-				server.sizeTransferred += BlockSeqSize
-				// Check if last segment
-				if (frame.Data[0] & 0x80) != 0 {
-					server.finished = true
-					state = stateDownloadBlkSubblockRsp
-					log.Debugf("[SERVER][RX] BLOCK DOWNLOAD END | x%x:x%x %v", server.index, server.subindex, frame.Data)
-				} else if seqno == server.blockSize {
-					// All segments in sub block transferred
-					state = stateDownloadBlkSubblockRsp
-					log.Debugf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | x%x:x%x %v", server.index, server.subindex, frame.Data)
-				} else {
-					log.Debugf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | x%x:x%x %v", server.index, server.subindex, frame.Data)
-				}
-				// If duplicate or sequence didn't start ignore, otherwise
-				// seqno is wrong
-			} else if seqno != server.blockSequenceNb && server.blockSequenceNb != 0 {
-				state = stateDownloadBlkSubblockRsp
-				log.Warnf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | Wrong sequence number (got %v, previous %v) | x%x:x%x %v",
-					seqno,
-					server.blockSequenceNb,
-					server.index,
-					server.subindex,
-					frame.Data,
-				)
-			} else {
-				log.Warnf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | Ignoring (got %v, expecting %v) | x%x:x%x %v",
-					seqno,
-					server.blockSequenceNb+1,
-					server.index,
-					server.subindex,
-					frame.Data,
-				)
-			}
+	// if server.state == stateDownloadBlkSubblockReq {
+	// 	// Condition should always pass but check
+	// 	if int(server.bufWriteOffset) <= (len(server.buffer) - (BlockSeqSize + 2)) {
+	// 		// Block download, copy data in handle
+	// 		state := stateDownloadBlkSubblockReq
+	// 		seqno := frame.Data[0] & 0x7F
+	// 		server.timeoutTimer = 0
+	// 		server.timeoutTimerBlock = 0
+	// 		// Check correct sequence number
+	// 		if seqno <= server.blockSize && seqno == (server.blockSequenceNb+1) {
+	// 			server.blockSequenceNb = seqno
+	// 			// Copy data
+	// 			copy(server.buffer[server.bufWriteOffset:], frame.Data[1:])
+	// 			server.bufWriteOffset += BlockSeqSize
+	// 			server.sizeTransferred += BlockSeqSize
+	// 			// Check if last segment
+	// 			if (frame.Data[0] & 0x80) != 0 {
+	// 				server.finished = true
+	// 				state = stateDownloadBlkSubblockRsp
+	// 				log.Debugf("[SERVER][RX] BLOCK DOWNLOAD END | x%x:x%x %v", server.index, server.subindex, frame.Data)
+	// 			} else if seqno == server.blockSize {
+	// 				// All segments in sub block transferred
+	// 				state = stateDownloadBlkSubblockRsp
+	// 				log.Debugf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | x%x:x%x %v", server.index, server.subindex, frame.Data)
+	// 			} else {
+	// 				log.Debugf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | x%x:x%x %v", server.index, server.subindex, frame.Data)
+	// 			}
+	// 			// If duplicate or sequence didn't start ignore, otherwise
+	// 			// seqno is wrong
+	// 		} else if seqno != server.blockSequenceNb && server.blockSequenceNb != 0 {
+	// 			state = stateDownloadBlkSubblockRsp
+	// 			log.Warnf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | Wrong sequence number (got %v, previous %v) | x%x:x%x %v",
+	// 				seqno,
+	// 				server.blockSequenceNb,
+	// 				server.index,
+	// 				server.subindex,
+	// 				frame.Data,
+	// 			)
+	// 		} else {
+	// 			log.Warnf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | Ignoring (got %v, expecting %v) | x%x:x%x %v",
+	// 				seqno,
+	// 				server.blockSequenceNb+1,
+	// 				server.index,
+	// 				server.subindex,
+	// 				frame.Data,
+	// 			)
+	// 		}
 
-			if state != stateDownloadBlkSubblockReq {
-				server.rxNew = false
-				server.state = state
-			}
-		}
-		return
-	}
-	if server.state == stateDownloadBlkSubblockRsp {
-		// Ignore other server messages if response requested
-		return
-	}
+	// 		if state != stateDownloadBlkSubblockReq {
+	// 			server.rxNew = false
+	// 			server.state = state
+	// 		}
+	// 	}
+	// 	return
+	// }
+	// if server.state == stateDownloadBlkSubblockRsp {
+	// 	// Ignore other server messages if response requested
+	// 	return
+	// }
 
-	// Copy data and set new flag
-	server.response.raw = frame.Data
-	server.rxNew = true
+	// // Copy data and set new flag
+	// server.response.raw = frame.Data
+	// server.rxNew = true
 }
 
 // Process [SDOServer] state machine and TX CAN frames
@@ -146,254 +151,28 @@ func (server *SDOServer) Process(
 	timeDifferenceUs uint32,
 	timerNextUs *uint32,
 ) (state uint8, err error) {
-	server.mu.Lock()
-	defer server.mu.Unlock()
 
-	ret := waitingResponse
-	var abortCode error
-
-	// Nothing to do
-	if server.valid && server.state == stateIdle && !server.rxNew {
-		return success, nil
-	}
-
-	// May have something to do but don't do it because invalid state
-	if !nmtIsPreOrOperationnal || !server.valid {
-		server.state = stateIdle
-		server.rxNew = false
-		return success, nil
-	}
-	// We have a new message to process !
-	if server.rxNew {
-		response := server.response
-
-		// If we are in idle, we need to create a streamer object to
-		// access the relevant OD entry.
-		// Determine if we need to read / write to OD.
-		if server.state == stateIdle {
-			upload := false
-			abortCode = updateStateFromRequest(response.raw[0], &server.state, &upload)
-
-			// Check object exists and has correct attributes
-			if abortCode == nil {
-				abortCode = server.updateStreamer(response, upload)
-				if abortCode != nil {
-					server.state = stateAbort
-				}
-			}
-			// In case of reading, we need to prepare data ASAP
-			if upload && abortCode == nil {
-				abortCode = server.prepareRx()
-				if abortCode != nil {
-					server.state = stateAbort
-				}
-			}
-		}
-
-		if server.state != stateIdle && server.state != stateAbort {
-			switch server.state {
-
-			case stateDownloadInitiateReq:
-				err := server.rxDownloadInitiate(response)
-				if err != nil {
-					server.state = stateAbort
-					abortCode = err
-				}
-
-			case stateDownloadSegmentReq:
-				err := server.rxDownloadSegment(response)
-				if err != nil {
-					server.state = stateAbort
-					abortCode = err
-				} else {
-					if server.finished || (len(server.buffer)-int(server.bufWriteOffset) < (BlockSeqSize + 2)) {
-						abortCode = server.writeObjectDictionary(0, 0)
-						if abortCode != nil {
-							break
-						}
-					}
-					server.state = stateDownloadSegmentRsp
-				}
-
-			case stateUploadInitiateReq:
-				log.Debugf("[SERVER][RX] UPLOAD EXPEDITED | x%x:x%x %v", server.index, server.subindex, response.raw)
-				server.state = stateUploadInitiateRsp
-
-			case stateUploadSegmentReq:
-				err := server.rxUploadSegment(response)
-				if err != nil {
-					server.state = stateAbort
-					abortCode = err
-				}
-
-			case stateDownloadBlkInitiateReq:
-				err := server.rxDownloadBlockInitiate(response)
-				if err != nil {
-					server.state = stateAbort
-					abortCode = err
-				}
-
-			case stateDownloadBlkSubblockReq:
-				// This is done in receive handler
-
-			case stateDownloadBlkEndReq:
-				err := server.rxDownloadBlockEnd(response)
-				var crcClient = crc.CRC16(0)
-				if server.blockCRCEnabled {
-					crcClient = response.GetCRCClient()
-				}
-				if err != nil {
-					server.state = stateAbort
-					abortCode = err
-				} else {
-					abortCode = server.writeObjectDictionary(2, crcClient)
-					if abortCode != nil {
-						break
-					}
-					server.state = stateDownloadBlkEndRsp
-				}
-
-			case stateUploadBlkInitiateReq:
-				err := server.rxUploadBlockInitiate(response)
-				if err != nil {
-					server.state = stateAbort
-					abortCode = err
-				}
-
-			case stateUploadBlkInitiateReq2:
-				if response.raw[0] == 0xA3 {
-					server.blockSequenceNb = 0
-					server.state = stateUploadBlkSubblockSreq
-				} else {
-					abortCode = AbortCmd
-					server.state = stateAbort
-				}
-
-			case stateUploadBlkSubblockSreq, stateUploadBlkSubblockCrsp:
-				err := server.rxUploadSubBlock(response)
-				if err != nil {
-					server.state = stateAbort
-					abortCode = err
-				} else {
-					// Refill buffer if needed
-					abortCode = server.readObjectDictionary(uint32(server.blockSize)*BlockSeqSize, true)
-					if abortCode != nil {
-						break
-					}
-
-					if server.bufWriteOffset == server.bufReadOffset {
-						server.state = stateUploadBlkEndSreq
-					} else {
-						server.blockSequenceNb = 0
-						server.state = stateUploadBlkSubblockSreq
-					}
-				}
-
-			default:
-				abortCode = AbortCmd
-				server.state = stateAbort
-
-			}
-		}
-		server.timeoutTimer = 0
-		timeDifferenceUs = 0
-		server.rxNew = false
-	}
-
-	// Timeout handling
-	if ret == waitingResponse {
-		if server.timeoutTimer < server.timeoutTimeUs {
-			server.timeoutTimer += timeDifferenceUs
-		}
-		if server.timeoutTimer >= server.timeoutTimeUs {
-			abortCode = AbortTimeout
-			server.state = stateAbort
-			log.Errorf("[SERVER] TIMEOUT %v, State : %v", server.timeoutTimer, server.state)
-
-		} else if timerNextUs != nil {
-			diff := server.timeoutTimeUs - server.timeoutTimer
-			if *timerNextUs > diff {
-				*timerNextUs = diff
-			}
-		}
-		// Timeout for subblocks
-		if server.state == stateDownloadBlkSubblockReq {
-			if server.timeoutTimerBlock < server.timeoutTimeBlockTransferUs {
-				server.timeoutTimerBlock += timeDifferenceUs
-			}
-			if server.timeoutTimerBlock >= server.timeoutTimeBlockTransferUs {
-				server.state = stateDownloadBlkSubblockRsp
+	for {
+		select {
+		case frame := <-server.rx:
+			// New frame received, do what we need to do !
+			if !nmtIsPreOrOperationnal || !server.valid {
+				server.state = stateIdle
 				server.rxNew = false
+				return success, nil
 			}
-		}
-	}
-
-	// Response handling
-	if ret == waitingResponse {
-		server.txBuffer.Data = [8]byte{0}
-
-		switch server.state {
-		case stateDownloadInitiateRsp:
-			ret = server.txDownloadInitiate()
-
-		case stateDownloadSegmentRsp:
-			ret = server.txDownloadSegment()
-
-		case stateUploadInitiateRsp:
-			ret = server.txUploadInitiate()
-
-		case stateUploadSegmentRsp:
-			abortCode, ret = server.txUploadSegment()
-
-		case stateDownloadBlkInitiateRsp:
-			server.txDownloadBlockInitiate()
-
-		case stateDownloadBlkSubblockRsp:
-			abortCode = server.txDownloadBlockSubBlock()
-
-		case stateDownloadBlkEndRsp:
-			server.txBuffer.Data[0] = 0xA1
-			log.Debugf("[SERVER][TX] BLOCK DOWNLOAD END | x%x:x%x %v", server.index, server.subindex, server.txBuffer.Data)
-			server.Send(server.txBuffer)
-			server.state = stateIdle
-			ret = success
-
-		case stateUploadBlkInitiateRsp:
-			server.txUploadBlockInitiate()
-
-		case stateUploadBlkSubblockSreq:
-			abortCode = server.txUploadBlockSubBlock()
-			if abortCode != nil {
+			err := server.processIncoming(frame)
+			if err != nil && err != od.ErrPartial {
 				server.state = stateAbort
+				break
 			}
+			// A response is expected
+			server.processOutgoing()
 
-		case stateUploadBlkEndSreq:
-			server.txUploadBlockEnd()
+		case <-time.After(1 * time.Second):
+			fmt.Println("1 second has passed")
 		}
 	}
-
-	// Error handling
-	if ret == waitingResponse {
-		switch server.state {
-		case stateAbort:
-			if sdoAbort, ok := abortCode.(Abort); !ok {
-				log.Errorf("[SERVER][TX] Abort internal error : unknown abort code : %v", abortCode)
-				server.mu.Unlock()
-				server.Abort(AbortGeneral)
-				server.mu.Lock()
-			} else {
-				server.mu.Unlock()
-				server.Abort(sdoAbort)
-				server.mu.Lock()
-			}
-			server.state = stateIdle
-		case stateDownloadBlkSubblockReq:
-			ret = blockDownloadInProgress
-		case stateUploadBlkSubblockSreq:
-			ret = blockUploadInProgress
-		}
-	}
-	return 99, abortCode
 }
 
 func (server *SDOServer) initRxTx(cobIdClientToServer uint32, cobIdServerToClient uint32) error {
@@ -672,6 +451,7 @@ func NewSDOServer(
 	server.nodeId = nodeId
 	server.timeoutTimeUs = timeoutMs * 1000
 	server.timeoutTimeBlockTransferUs = timeoutMs * 700
+	server.rx = make(chan canopen.Frame, 1)
 	var canIdClientToServer uint16
 	var canIdServerToClient uint16
 	if entry12xx.Index == 0x1200 {
