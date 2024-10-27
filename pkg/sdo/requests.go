@@ -179,6 +179,16 @@ func (s *SDOServer) rxDownloadBlockEnd(response SDOResponse) error {
 	}
 	s.sizeTransferred -= uint32(noData)
 	s.bufWriteOffset -= uint32(noData)
+
+	var crcClient = crc.CRC16(0)
+	if s.blockCRCEnabled {
+		crcClient = response.GetCRCClient()
+	}
+	err := s.writeObjectDictionary(2, crcClient)
+	if err != nil {
+		return err
+	}
+	s.state = stateDownloadBlkEndRsp
 	return nil
 }
 
@@ -306,7 +316,6 @@ func (s *SDOServer) processIncoming(frame canopen.Frame) error {
 			}
 
 			if state != stateDownloadBlkSubblockReq {
-				s.rxNew = false
 				s.state = state
 			}
 		}
@@ -319,8 +328,6 @@ func (s *SDOServer) processIncoming(frame canopen.Frame) error {
 
 	// Copy data and set new flag
 	s.response.raw = frame.Data
-	s.rxNew = true
-
 	response := s.response
 	var abortCode error
 
@@ -329,39 +336,39 @@ func (s *SDOServer) processIncoming(frame canopen.Frame) error {
 	// Determine if we need to read / write to OD.
 	if s.state == stateIdle {
 		upload := false
-		abortCode = updateStateFromRequest(response.raw[0], &s.state, &upload)
+		err := updateStateFromRequest(response.raw[0], &s.state, &upload)
+		if err != nil {
+			return err
+		}
 
 		// Check object exists and has correct attributes
-		if abortCode == nil {
-			abortCode = s.updateStreamer(response, upload)
-			if abortCode != nil {
-				s.state = stateAbort
-			}
+		// i.e. readable or writable depending on what has been
+		// requested
+		err = s.updateStreamer(response, upload)
+		if err != nil {
+			return err
 		}
-		// In case of reading, we need to prepare data ASAP
-		if upload && abortCode == nil {
-			abortCode = s.prepareRx()
-			if abortCode != nil {
-				s.state = stateAbort
+		// In case of reading, we need to prepare data straigth
+		// away
+		if upload {
+			err = s.prepareRx()
+			if err != nil {
+				return err
 			}
 		}
 	}
 
+	var err error = nil
 	if s.state != stateIdle && s.state != stateAbort {
 		switch s.state {
 
 		case stateDownloadInitiateReq:
-			err := s.rxDownloadInitiate(response)
-			if err != nil {
-				s.state = stateAbort
-				abortCode = err
-			}
+			err = s.rxDownloadInitiate(response)
 
 		case stateDownloadSegmentReq:
-			err := s.rxDownloadSegment(response)
+			err = s.rxDownloadSegment(response)
 			if err != nil {
-				s.state = stateAbort
-				abortCode = err
+				return err
 			} else {
 				if s.finished || (len(s.buffer)-int(s.bufWriteOffset) < (BlockSeqSize + 2)) {
 					abortCode = s.writeObjectDictionary(0, 0)
@@ -377,65 +384,37 @@ func (s *SDOServer) processIncoming(frame canopen.Frame) error {
 			s.state = stateUploadInitiateRsp
 
 		case stateUploadSegmentReq:
-			err := s.rxUploadSegment(response)
-			if err != nil {
-				s.state = stateAbort
-				abortCode = err
-			}
+			err = s.rxUploadSegment(response)
 
 		case stateDownloadBlkInitiateReq:
-			err := s.rxDownloadBlockInitiate(response)
-			if err != nil {
-				s.state = stateAbort
-				abortCode = err
-			}
+			err = s.rxDownloadBlockInitiate(response)
 
 		case stateDownloadBlkSubblockReq:
 			// This is done in receive handler
 
 		case stateDownloadBlkEndReq:
-			err := s.rxDownloadBlockEnd(response)
-			var crcClient = crc.CRC16(0)
-			if s.blockCRCEnabled {
-				crcClient = response.GetCRCClient()
-			}
-			if err != nil {
-				s.state = stateAbort
-				abortCode = err
-			} else {
-				abortCode = s.writeObjectDictionary(2, crcClient)
-				if abortCode != nil {
-					break
-				}
-				s.state = stateDownloadBlkEndRsp
-			}
+			err = s.rxDownloadBlockEnd(response)
 
 		case stateUploadBlkInitiateReq:
-			err := s.rxUploadBlockInitiate(response)
-			if err != nil {
-				s.state = stateAbort
-				abortCode = err
-			}
+			err = s.rxUploadBlockInitiate(response)
 
 		case stateUploadBlkInitiateReq2:
 			if response.raw[0] == 0xA3 {
 				s.blockSequenceNb = 0
 				s.state = stateUploadBlkSubblockSreq
 			} else {
-				abortCode = AbortCmd
-				s.state = stateAbort
+				return AbortCmd
 			}
 
 		case stateUploadBlkSubblockSreq, stateUploadBlkSubblockCrsp:
-			err := s.rxUploadSubBlock(response)
+			err = s.rxUploadSubBlock(response)
 			if err != nil {
-				s.state = stateAbort
-				abortCode = err
+				return err
 			} else {
 				// Refill buffer if needed
 				abortCode = s.readObjectDictionary(uint32(s.blockSize)*BlockSeqSize, true)
 				if abortCode != nil {
-					break
+					return abortCode
 				}
 
 				if s.bufWriteOffset == s.bufReadOffset {
@@ -447,13 +426,11 @@ func (s *SDOServer) processIncoming(frame canopen.Frame) error {
 			}
 
 		default:
-			abortCode = AbortCmd
-			s.state = stateAbort
+			return AbortCmd
 
 		}
 	}
 	s.timeoutTimer = 0
-	s.rxNew = false
 
-	return nil
+	return err
 }

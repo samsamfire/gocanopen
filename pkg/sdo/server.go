@@ -163,7 +163,16 @@ func (server *SDOServer) Process(
 			}
 			err := server.processIncoming(frame)
 			if err != nil && err != od.ErrPartial {
+				// Abort straight away, nothing to send afterwards
 				server.state = stateAbort
+				if sdoAbort, ok := err.(Abort); !ok {
+					log.Println("i am here")
+					log.Errorf("[SERVER][TX] Abort internal error : unknown abort code : %v", err)
+					server.Abort(AbortGeneral)
+				} else {
+					server.Abort(sdoAbort)
+				}
+				server.state = stateIdle
 				break
 			}
 			// A response is expected

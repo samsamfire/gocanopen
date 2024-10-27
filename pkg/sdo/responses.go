@@ -2,6 +2,7 @@ package sdo
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	"github.com/samsamfire/gocanopen/internal/crc"
 	log "github.com/sirupsen/logrus"
@@ -257,47 +258,53 @@ func (s *SDOServer) processOutgoing() {
 	var ret = waitingResponse
 	var abortCode error
 
-	if ret == waitingResponse {
-		s.txBuffer.Data = [8]byte{0}
+	s.txBuffer.Data = [8]byte{0}
 
-		switch s.state {
-		case stateDownloadInitiateRsp:
-			ret = s.txDownloadInitiate()
+	switch s.state {
+	case stateDownloadInitiateRsp:
+		ret = s.txDownloadInitiate()
 
-		case stateDownloadSegmentRsp:
-			ret = s.txDownloadSegment()
+	case stateDownloadSegmentRsp:
+		ret = s.txDownloadSegment()
 
-		case stateUploadInitiateRsp:
-			ret = s.txUploadInitiate()
+	case stateUploadInitiateRsp:
+		ret = s.txUploadInitiate()
 
-		case stateUploadSegmentRsp:
-			abortCode, ret = s.txUploadSegment()
+	case stateUploadSegmentRsp:
+		abortCode, ret = s.txUploadSegment()
 
-		case stateDownloadBlkInitiateRsp:
-			s.txDownloadBlockInitiate()
+	case stateDownloadBlkInitiateRsp:
+		s.txDownloadBlockInitiate()
 
-		case stateDownloadBlkSubblockRsp:
-			abortCode = s.txDownloadBlockSubBlock()
+	case stateDownloadBlkSubblockRsp:
+		abortCode = s.txDownloadBlockSubBlock()
+		fmt.Println("abort", abortCode)
 
-		case stateDownloadBlkEndRsp:
-			s.txBuffer.Data[0] = 0xA1
-			log.Debugf("[SERVER][TX] BLOCK DOWNLOAD END | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
-			s.Send(s.txBuffer)
-			s.state = stateIdle
-			ret = success
+	case stateDownloadBlkEndRsp:
+		s.txBuffer.Data[0] = 0xA1
+		log.Debugf("[SERVER][TX] BLOCK DOWNLOAD END | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
+		s.Send(s.txBuffer)
+		s.state = stateIdle
+		ret = success
 
-		case stateUploadBlkInitiateRsp:
-			s.txUploadBlockInitiate()
+	case stateUploadBlkInitiateRsp:
+		s.txUploadBlockInitiate()
 
-		case stateUploadBlkSubblockSreq:
+	case stateUploadBlkSubblockSreq:
+		// Send block straight away
+		for {
 			abortCode = s.txUploadBlockSubBlock()
 			if abortCode != nil {
 				s.state = stateAbort
+				break
 			}
-
-		case stateUploadBlkEndSreq:
-			s.txUploadBlockEnd()
+			if s.state == stateUploadBlkSubblockCrsp {
+				break
+			}
 		}
+
+	case stateUploadBlkEndSreq:
+		s.txUploadBlockEnd()
 	}
 
 	// Error handling
