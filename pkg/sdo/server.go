@@ -202,96 +202,20 @@ func (server *SDOServer) Process(
 
 		if server.state != stateIdle && server.state != stateAbort {
 			switch server.state {
-			case stateDownloadInitiateReq:
-				if (response.raw[0] & 0x02) != 0 {
-					log.Debugf("[SERVER][RX] DOWNLOAD EXPEDITED | x%x:x%x %v", server.index, server.subindex, response.raw)
-					// Expedited 4 bytes of data max
-					varSizeInOd := server.streamer.DataLength
-					dataSizeToWrite := 4
-					if (response.raw[0] & 0x01) != 0 {
-						dataSizeToWrite -= (int(response.raw[0]) >> 2) & 0x03
-					} else if varSizeInOd > 0 && varSizeInOd < 4 {
-						dataSizeToWrite = int(varSizeInOd)
-					}
-					// Create temporary buffer
-					buf := make([]byte, 6)
-					copy(buf, response.raw[4:4+dataSizeToWrite])
-					if server.streamer.HasAttribute(od.AttributeStr) &&
-						(varSizeInOd == 0 || uint32(dataSizeToWrite) < varSizeInOd) {
-						delta := varSizeInOd - uint32(dataSizeToWrite)
-						if delta == 1 {
-							dataSizeToWrite += 1
-						} else {
-							dataSizeToWrite += 2
-						}
-						server.streamer.DataLength = uint32(dataSizeToWrite)
-					} else if varSizeInOd == 0 {
-						server.streamer.DataLength = uint32(dataSizeToWrite)
-					} else if dataSizeToWrite != int(varSizeInOd) {
-						if dataSizeToWrite > int(varSizeInOd) {
-							abortCode = AbortDataLong
-						} else {
-							abortCode = AbortDataShort
-						}
-						server.state = stateAbort
-						break
-					}
-					_, err := server.streamer.Write(buf[:dataSizeToWrite])
-					if err != nil {
-						abortCode = ConvertOdToSdoAbort(err.(od.ODR))
-						server.state = stateAbort
-						break
-					} else {
-						server.state = stateDownloadInitiateRsp
-						server.finished = true
 
-					}
-				} else {
-					if (response.raw[0] & 0x01) != 0 {
-						log.Debugf("[SERVER][RX] DOWNLOAD SEGMENTED | x%x:x%x %v", server.index, server.subindex, response.raw)
-						// Segmented transfer check if size indicated
-						sizeInOd := server.streamer.DataLength
-						server.sizeIndicated = binary.LittleEndian.Uint32(response.raw[4:])
-						// Check if size matches
-						if sizeInOd > 0 {
-							if server.sizeIndicated > uint32(sizeInOd) {
-								abortCode = AbortDataLong
-								server.state = stateAbort
-								break
-							} else if server.sizeIndicated < uint32(sizeInOd) && !server.streamer.HasAttribute(od.AttributeStr) {
-								abortCode = AbortDataShort
-								server.state = stateAbort
-								break
-							}
-						}
-					} else {
-						server.sizeIndicated = 0
-					}
-					server.state = stateDownloadInitiateRsp
-					server.finished = false
+			case stateDownloadInitiateReq:
+				err := server.rxDownloadInitiate(response)
+				if err != nil {
+					server.state = stateAbort
+					abortCode = err
 				}
 
 			case stateDownloadSegmentReq:
-				if (response.raw[0] & 0xE0) == 0x00 {
-					log.Debugf("[SERVER][RX] DOWNLOAD SEGMENT | x%x:x%x %v", server.index, server.subindex, response.raw)
-					server.finished = (response.raw[0] & 0x01) != 0
-					toggle := response.GetToggle()
-					if toggle != server.toggle {
-						abortCode = AbortToggleBit
-						server.state = stateAbort
-						break
-					}
-					// Get size and write to buffer
-					count := BlockSeqSize - ((response.raw[0] >> 1) & 0x07)
-					copy(server.buffer[server.bufWriteOffset:], response.raw[1:1+count])
-					server.bufWriteOffset += uint32(count)
-					server.sizeTransferred += uint32(count)
-
-					if server.streamer.DataLength > 0 && server.sizeTransferred > server.streamer.DataLength {
-						abortCode = AbortDataLong
-						server.state = stateAbort
-						break
-					}
+				err := server.rxDownloadSegment(response)
+				if err != nil {
+					server.state = stateAbort
+					abortCode = err
+				} else {
 					if server.finished || (len(server.buffer)-int(server.bufWriteOffset) < (BlockSeqSize + 2)) {
 						abortCode = server.writeObjectDictionary(0, 0)
 						if abortCode != nil {
@@ -299,9 +223,6 @@ func (server *SDOServer) Process(
 						}
 					}
 					server.state = stateDownloadSegmentRsp
-				} else {
-					abortCode = AbortCmd
-					server.state = stateAbort
 				}
 
 			case stateUploadInitiateReq:
@@ -309,112 +230,45 @@ func (server *SDOServer) Process(
 				server.state = stateUploadInitiateRsp
 
 			case stateUploadSegmentReq:
-				log.Debugf("[SERVER][RX] UPLOAD SEGMENTED | x%x:x%x %v", server.index, server.subindex, response.raw)
-				if (response.raw[0] & 0xEF) != 0x60 {
-					abortCode = AbortCmd
+				err := server.rxUploadSegment(response)
+				if err != nil {
 					server.state = stateAbort
-					break
+					abortCode = err
 				}
-				toggle := response.GetToggle()
-				if toggle != server.toggle {
-					abortCode = AbortToggleBit
-					server.state = stateAbort
-					break
-				}
-				server.state = stateUploadSegmentRsp
 
 			case stateDownloadBlkInitiateReq:
-				server.blockCRCEnabled = response.IsCRCEnabled()
-				// Check if size indicated
-				if (response.raw[0] & 0x02) != 0 {
-					sizeInOd := server.streamer.DataLength
-					server.sizeIndicated = binary.LittleEndian.Uint32(response.raw[4:])
-					// Check if size matches
-					if sizeInOd > 0 {
-						if server.sizeIndicated > uint32(sizeInOd) {
-							abortCode = AbortDataLong
-							server.state = stateAbort
-							break
-						} else if server.sizeIndicated < uint32(sizeInOd) && !server.streamer.HasAttribute(od.AttributeStr) {
-							abortCode = AbortDataShort
-							server.state = stateAbort
-							break
-						}
-					}
-				} else {
-					server.sizeIndicated = 0
+				err := server.rxDownloadBlockInitiate(response)
+				if err != nil {
+					server.state = stateAbort
+					abortCode = err
 				}
-				log.Debugf("[SERVER][RX] BLOCK DOWNLOAD INIT | x%x:x%x | crc enabled : %v expected size : %v | %v",
-					server.index,
-					server.subindex,
-					server.blockCRCEnabled,
-					server.sizeIndicated,
-					response.raw,
-				)
-				server.state = stateDownloadBlkInitiateRsp
-				server.finished = false
 
 			case stateDownloadBlkSubblockReq:
 				// This is done in receive handler
 
 			case stateDownloadBlkEndReq:
-				log.Debugf("[SERVER][RX] BLOCK DOWNLOAD END | x%x:x%x %v", server.index, server.subindex, response.raw)
-				if (response.raw[0] & 0xE3) != 0xC1 {
-					abortCode = AbortCmd
-					server.state = stateAbort
-					break
-				}
-				// Get number of data bytes in last segment, that do not
-				// contain data. Then reduce buffer
-				noData := (response.raw[0] >> 2) & 0x07
-				if server.bufWriteOffset <= uint32(noData) {
-					server.errorExtraInfo = fmt.Errorf("internal buffer and end of block download are inconsitent")
-					abortCode = AbortDeviceIncompat
-					server.state = stateAbort
-					break
-				}
-				server.sizeTransferred -= uint32(noData)
-				server.bufWriteOffset -= uint32(noData)
+				err := server.rxDownloadBlockEnd(response)
 				var crcClient = crc.CRC16(0)
 				if server.blockCRCEnabled {
 					crcClient = response.GetCRCClient()
 				}
-				abortCode = server.writeObjectDictionary(2, crcClient)
-				if abortCode != nil {
-					break
+				if err != nil {
+					server.state = stateAbort
+					abortCode = err
+				} else {
+					abortCode = server.writeObjectDictionary(2, crcClient)
+					if abortCode != nil {
+						break
+					}
+					server.state = stateDownloadBlkEndRsp
 				}
-				server.state = stateDownloadBlkEndRsp
 
 			case stateUploadBlkInitiateReq:
-				// If protocol switch threshold (byte 5) is larger than data
-				// size of OD var, then switch to segmented
-				if server.sizeIndicated > 0 && response.raw[5] > 0 && uint32(response.raw[5]) >= server.sizeIndicated {
-					server.state = stateUploadInitiateRsp
-					break
-				}
-				if (response.raw[0] & 0x04) != 0 {
-					server.blockCRCEnabled = true
-					server.blockCRC = crc.CRC16(0)
-					server.blockCRC.Block(server.buffer[:server.bufWriteOffset])
-				} else {
-					server.blockCRCEnabled = false
-				}
-				// Get block size and check okay
-				server.blockSize = response.GetBlockSize()
-				log.Debugf("[SERVER][RX] UPLOAD BLOCK INIT | x%x:x%x %v | crc : %v, blksize :%v", server.index, server.subindex, response.raw, server.blockCRCEnabled, server.blockSize)
-				if server.blockSize < 1 || server.blockSize > BlockMaxSize {
-					abortCode = AbortBlockSize
+				err := server.rxUploadBlockInitiate(response)
+				if err != nil {
 					server.state = stateAbort
-					break
+					abortCode = err
 				}
-
-				// Check that we have enough data for sending a complete sub-block with the requested size
-				if !server.finished && server.bufWriteOffset < uint32(server.blockSize)*BlockSeqSize {
-					abortCode = AbortBlockSize
-					server.state = stateAbort
-					break
-				}
-				server.state = stateUploadBlkInitiateRsp
 
 			case stateUploadBlkInitiateReq2:
 				if response.raw[0] == 0xA3 {
@@ -426,47 +280,23 @@ func (server *SDOServer) Process(
 				}
 
 			case stateUploadBlkSubblockSreq, stateUploadBlkSubblockCrsp:
-				if response.raw[0] != 0xA2 {
-					abortCode = AbortCmd
+				err := server.rxUploadSubBlock(response)
+				if err != nil {
 					server.state = stateAbort
-					break
-				}
-				log.Debugf("[SERVER][RX] BLOCK UPLOAD END SUB-BLOCK | blksize %v | x%x:x%x %v",
-					response.raw[2],
-					server.index,
-					server.subindex,
-					response.raw,
-				)
-				// Check block size
-				server.blockSize = response.raw[2]
-				if server.blockSize < 1 || server.blockSize > BlockMaxSize {
-					abortCode = AbortBlockSize
-					server.state = stateAbort
-					break
-				}
-				// Check number of segments
-				if response.raw[1] < server.blockSequenceNb {
-					// Some error occurd, re-transmit missing chunks
-					cntFailed := server.blockSequenceNb - response.raw[1]
-					cntFailed = cntFailed*BlockSeqSize - server.blockNoData
-					server.bufReadOffset -= uint32(cntFailed)
-					server.sizeTransferred -= uint32(cntFailed)
-				} else if response.raw[1] > server.blockSequenceNb {
-					abortCode = AbortCmd
-					server.state = stateAbort
-					break
-				}
-				// Refill buffer if needed
-				abortCode = server.readObjectDictionary(uint32(server.blockSize)*BlockSeqSize, true)
-				if abortCode != nil {
-					break
-				}
-
-				if server.bufWriteOffset == server.bufReadOffset {
-					server.state = stateUploadBlkEndSreq
+					abortCode = err
 				} else {
-					server.blockSequenceNb = 0
-					server.state = stateUploadBlkSubblockSreq
+					// Refill buffer if needed
+					abortCode = server.readObjectDictionary(uint32(server.blockSize)*BlockSeqSize, true)
+					if abortCode != nil {
+						break
+					}
+
+					if server.bufWriteOffset == server.bufReadOffset {
+						server.state = stateUploadBlkEndSreq
+					} else {
+						server.blockSequenceNb = 0
+						server.state = stateUploadBlkSubblockSreq
+					}
 				}
 
 			default:
@@ -517,172 +347,22 @@ func (server *SDOServer) Process(
 
 		switch server.state {
 		case stateDownloadInitiateRsp:
-			server.txBuffer.Data[0] = 0x60
-			server.txBuffer.Data[1] = byte(server.index)
-			server.txBuffer.Data[2] = byte(server.index >> 8)
-			server.txBuffer.Data[3] = server.subindex
-			server.timeoutTimer = 0
-			_ = server.Send(server.txBuffer)
-			if server.finished {
-				log.Debugf("[SERVER][TX] DOWNLOAD EXPEDITED | x%x:x%x %v", server.index, server.subindex, server.txBuffer.Data)
-				server.state = stateIdle
-				ret = success
-			} else {
-				log.Debugf("[SERVER][TX] DOWNLOAD SEGMENT INIT | x%x:x%x %v", server.index, server.subindex, server.txBuffer.Data)
-				server.toggle = 0x00
-				server.sizeTransferred = 0
-				server.bufWriteOffset = 0
-				server.bufReadOffset = 0
-				server.state = stateDownloadSegmentReq
-			}
+			ret = server.txDownloadInitiate()
 
 		case stateDownloadSegmentRsp:
-			server.txBuffer.Data[0] = 0x20 | server.toggle
-			server.toggle ^= 0x10
-			server.timeoutTimer = 0
-			log.Debugf("[SERVER][TX] DOWNLOAD SEGMENT | x%x:x%x %v", server.index, server.subindex, server.txBuffer.Data)
-			_ = server.Send(server.txBuffer)
-			if server.finished {
-				server.state = stateIdle
-				ret = success
-			} else {
-				server.state = stateDownloadSegmentReq
-			}
+			ret = server.txDownloadSegment()
 
 		case stateUploadInitiateRsp:
-			if server.sizeIndicated > 0 && server.sizeIndicated <= 4 {
-				server.txBuffer.Data[0] = 0x43 | ((4 - byte(server.sizeIndicated)) << 2)
-				copy(server.txBuffer.Data[4:], server.buffer[:server.sizeIndicated])
-				server.state = stateIdle
-				ret = success
-				log.Debugf("[SERVER][TX] UPLOAD EXPEDITED | x%x:x%x %v", server.index, server.subindex, server.txBuffer.Data)
-			} else {
-				// Segmented transfer
-				if server.sizeIndicated > 0 {
-					server.txBuffer.Data[0] = 0x41
-					// Add data size
-					binary.LittleEndian.PutUint32(server.txBuffer.Data[4:], server.sizeIndicated)
-
-				} else {
-					server.txBuffer.Data[0] = 0x40
-				}
-				server.toggle = 0x00
-				server.timeoutTimer = 0
-				server.state = stateUploadSegmentReq
-				log.Debugf("[SERVER][TX] UPLOAD SEGMENTED | x%x:x%x %v", server.index, server.subindex, server.txBuffer.Data)
-			}
-			server.txBuffer.Data[1] = byte(server.index)
-			server.txBuffer.Data[2] = byte(server.index >> 8)
-			server.txBuffer.Data[3] = server.subindex
-			_ = server.Send(server.txBuffer)
+			ret = server.txUploadInitiate()
 
 		case stateUploadSegmentRsp:
-			// Refill buffer if needed
-			abortCode = server.readObjectDictionary(BlockSeqSize, false)
-			if abortCode != nil {
-				break
-			}
-			server.txBuffer.Data[0] = server.toggle
-			server.toggle ^= 0x10
-			count := server.bufWriteOffset - server.bufReadOffset
-			// Check if last segment
-			if count < BlockSeqSize || (server.finished && count == BlockSeqSize) {
-				server.txBuffer.Data[0] |= (byte((BlockSeqSize - count) << 1)) | 0x01
-				server.state = stateIdle
-				ret = success
-			} else {
-				server.timeoutTimer = 0
-				server.state = stateUploadSegmentReq
-				count = BlockSeqSize
-			}
-			copy(server.txBuffer.Data[1:], server.buffer[server.bufReadOffset:server.bufReadOffset+count])
-			server.bufReadOffset += count
-			server.sizeTransferred += count
-			// Check if too shor or too large in last segment
-			if server.sizeIndicated > 0 {
-				if server.sizeTransferred > server.sizeIndicated {
-					abortCode = AbortDataLong
-					server.state = stateAbort
-					break
-				} else if ret == success && server.sizeTransferred < server.sizeIndicated {
-					abortCode = AbortDataShort
-					ret = waitingResponse
-					server.state = stateAbort
-					break
-				}
-			}
-			log.Debugf("[SERVER][TX] UPLOAD SEGMENTED | x%x:x%x %v", server.index, server.subindex, server.txBuffer.Data)
-			_ = server.Send(server.txBuffer)
+			abortCode, ret = server.txUploadSegment()
 
 		case stateDownloadBlkInitiateRsp:
-			server.txBuffer.Data[0] = 0xA4
-			server.txBuffer.Data[1] = byte(server.index)
-			server.txBuffer.Data[2] = byte(server.index >> 8)
-			server.txBuffer.Data[3] = server.subindex
-			// Calculate blocks from free space
-			count := (len(server.buffer) - 2) / BlockSeqSize
-			if count > BlockMaxSize {
-				count = BlockMaxSize
-			}
-			server.blockSize = uint8(count)
-			server.txBuffer.Data[4] = server.blockSize
-			// Reset variables
-			server.sizeTransferred = 0
-			server.finished = false
-			server.bufReadOffset = 0
-			server.bufWriteOffset = 0
-			server.blockSequenceNb = 0
-			server.blockCRC = crc.CRC16(0)
-			server.timeoutTimer = 0
-			server.timeoutTimerBlock = 0
-			server.state = stateDownloadBlkSubblockReq
-			server.rxNew = false
-			log.Debugf("[SERVER][TX] BLOCK DOWNLOAD INIT | x%x:x%x %v", server.index, server.subindex, server.txBuffer.Data)
-			server.Send(server.txBuffer)
+			server.txDownloadBlockInitiate()
 
 		case stateDownloadBlkSubblockRsp:
-			server.txBuffer.Data[0] = 0xA2
-			server.txBuffer.Data[1] = server.blockSequenceNb
-			transferShort := server.blockSequenceNb != server.blockSize
-			seqnoStart := server.blockSequenceNb
-			// Is it last segment ?
-			if server.finished {
-				server.state = stateDownloadBlkEndReq
-			} else {
-				// Calclate from free buffer space
-				count := (len(server.buffer) - 2 - int(server.bufWriteOffset)) / BlockSeqSize
-				if count > BlockMaxSize {
-					count = BlockMaxSize
-				} else if server.bufWriteOffset > 0 {
-					// Empty buffer
-					abortCode = server.writeObjectDictionary(1, 0)
-					if abortCode != nil {
-						break
-					}
-					count = (len(server.buffer) - 2 - int(server.bufWriteOffset)) / BlockSeqSize
-					if count > BlockMaxSize {
-						count = BlockMaxSize
-					}
-				}
-				server.blockSize = uint8(count)
-				server.blockSequenceNb = 0
-				server.state = stateDownloadBlkSubblockReq
-				server.rxNew = false
-			}
-			server.txBuffer.Data[2] = server.blockSize
-			server.timeoutTimerBlock = 0
-			server.Send(server.txBuffer)
-
-			if transferShort && !server.finished {
-				log.Debugf("[SERVER][TX] BLOCK DOWNLOAD RESTART seqno prev=%v, blksize=%v", seqnoStart, server.blockSize)
-			} else {
-				log.Debugf("[SERVER][TX] BLOCK DOWNLOAD SUB-BLOCK RES | x%x:x%x blksize %v %v",
-					server.index,
-					server.subindex,
-					server.blockSize,
-					server.txBuffer.Data,
-				)
-			}
+			abortCode = server.txDownloadBlockSubBlock()
 
 		case stateDownloadBlkEndRsp:
 			server.txBuffer.Data[0] = 0xA1
@@ -692,61 +372,13 @@ func (server *SDOServer) Process(
 			ret = success
 
 		case stateUploadBlkInitiateRsp:
-			server.txBuffer.Data[0] = 0xC4
-			server.txBuffer.Data[1] = byte(server.index)
-			server.txBuffer.Data[2] = byte(server.index >> 8)
-			server.txBuffer.Data[3] = server.subindex
-			// Add data size
-			if server.sizeIndicated > 0 {
-				server.txBuffer.Data[0] |= 0x02
-				binary.LittleEndian.PutUint32(server.txBuffer.Data[4:], server.sizeIndicated)
-			}
-			// Reset timer & send
-			server.timeoutTimer = 0
-			log.Debugf("[SERVER][TX] BLOCK UPLOAD INIT | x%x:x%x %v", server.index, server.subindex, server.txBuffer.Data)
-			server.Send(server.txBuffer)
-			server.state = stateUploadBlkInitiateReq2
+			server.txUploadBlockInitiate()
 
 		case stateUploadBlkSubblockSreq:
-			// Write header & gend current count
-			server.blockSequenceNb += 1
-			server.txBuffer.Data[0] = server.blockSequenceNb
-			count := server.bufWriteOffset - server.bufReadOffset
-			// Check if last segment
-			if count < BlockSeqSize || (server.finished && count == BlockSeqSize) {
-				server.txBuffer.Data[0] |= 0x80
-			} else {
-				count = BlockSeqSize
+			abortCode = server.txUploadBlockSubBlock()
+			if abortCode != nil {
+				server.state = stateAbort
 			}
-			copy(server.txBuffer.Data[1:], server.buffer[server.bufReadOffset:server.bufReadOffset+count])
-			server.bufReadOffset += count
-			server.blockNoData = byte(BlockSeqSize - count)
-			server.sizeTransferred += count
-			// Check if too short or too large in last segment
-			if server.sizeIndicated > 0 {
-				if server.sizeTransferred > server.sizeIndicated {
-					abortCode = AbortDataLong
-					server.state = stateAbort
-					break
-				} else if server.bufReadOffset == server.bufWriteOffset && server.sizeTransferred < server.sizeIndicated {
-					abortCode = AbortDataShort
-					server.state = stateAbort
-					break
-				}
-			}
-			// Check if last segment or all segments in current block transferred
-			if server.bufWriteOffset == server.bufReadOffset || server.blockSequenceNb >= server.blockSize {
-				server.state = stateUploadBlkSubblockCrsp
-				log.Debugf("[SERVER][TX] BLOCK UPLOAD END SUB-BLOCK | x%x:x%x %v", server.index, server.subindex, server.txBuffer.Data)
-			} else {
-				log.Debugf("[SERVER][TX] BLOCK UPLOAD SUB-BLOCK | x%x:x%x %v", server.index, server.subindex, server.txBuffer.Data)
-				if timerNextUs != nil {
-					*timerNextUs = 0
-				}
-			}
-			// Reset timer & send
-			server.timeoutTimer = 0
-			server.Send(server.txBuffer)
 
 		case stateUploadBlkEndSreq:
 			server.txBuffer.Data[0] = 0xC1 | (server.blockNoData << 2)
