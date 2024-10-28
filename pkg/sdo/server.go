@@ -29,15 +29,12 @@ type SDOServer struct {
 	sizeTransferred            uint32
 	state                      internalState
 	timeoutTimeUs              uint32
-	timeoutTimer               uint32
 	buffer                     []byte
 	bufWriteOffset             uint32
 	bufReadOffset              uint32
-	rxNew                      bool
 	response                   SDOResponse
 	toggle                     uint8
 	timeoutTimeBlockTransferUs uint32
-	timeoutTimerBlock          uint32
 	blockSequenceNb            uint8
 	blockSize                  uint8
 	blockNoData                uint8
@@ -56,91 +53,6 @@ func (server *SDOServer) Handle(frame canopen.Frame) {
 		return
 	}
 	server.rx <- frame
-	return
-
-	// if frame.Data[0] == 0x80 {
-	// 	// Client abort
-	// 	server.state = stateIdle
-	// 	abortCode := binary.LittleEndian.Uint32(frame.Data[4:])
-	// 	log.Warnf("[SERVER][RX] abort received from client : x%x (%v)", abortCode, Abort(abortCode))
-	// 	return
-	// }
-
-	// if server.rxNew {
-	// 	// Ignore message if previous message not processed
-	// 	log.Info("[SERVER][RX] ignoring message because still processing")
-	// 	return
-	// }
-
-	// if server.state == stateUploadBlkEndCrsp && frame.Data[0] == 0xA1 {
-	// 	// Block transferred ! go to idle
-	// 	server.state = stateIdle
-	// 	return
-	// }
-
-	// if server.state == stateDownloadBlkSubblockReq {
-	// 	// Condition should always pass but check
-	// 	if int(server.bufWriteOffset) <= (len(server.buffer) - (BlockSeqSize + 2)) {
-	// 		// Block download, copy data in handle
-	// 		state := stateDownloadBlkSubblockReq
-	// 		seqno := frame.Data[0] & 0x7F
-	// 		server.timeoutTimer = 0
-	// 		server.timeoutTimerBlock = 0
-	// 		// Check correct sequence number
-	// 		if seqno <= server.blockSize && seqno == (server.blockSequenceNb+1) {
-	// 			server.blockSequenceNb = seqno
-	// 			// Copy data
-	// 			copy(server.buffer[server.bufWriteOffset:], frame.Data[1:])
-	// 			server.bufWriteOffset += BlockSeqSize
-	// 			server.sizeTransferred += BlockSeqSize
-	// 			// Check if last segment
-	// 			if (frame.Data[0] & 0x80) != 0 {
-	// 				server.finished = true
-	// 				state = stateDownloadBlkSubblockRsp
-	// 				log.Debugf("[SERVER][RX] BLOCK DOWNLOAD END | x%x:x%x %v", server.index, server.subindex, frame.Data)
-	// 			} else if seqno == server.blockSize {
-	// 				// All segments in sub block transferred
-	// 				state = stateDownloadBlkSubblockRsp
-	// 				log.Debugf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | x%x:x%x %v", server.index, server.subindex, frame.Data)
-	// 			} else {
-	// 				log.Debugf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | x%x:x%x %v", server.index, server.subindex, frame.Data)
-	// 			}
-	// 			// If duplicate or sequence didn't start ignore, otherwise
-	// 			// seqno is wrong
-	// 		} else if seqno != server.blockSequenceNb && server.blockSequenceNb != 0 {
-	// 			state = stateDownloadBlkSubblockRsp
-	// 			log.Warnf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | Wrong sequence number (got %v, previous %v) | x%x:x%x %v",
-	// 				seqno,
-	// 				server.blockSequenceNb,
-	// 				server.index,
-	// 				server.subindex,
-	// 				frame.Data,
-	// 			)
-	// 		} else {
-	// 			log.Warnf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | Ignoring (got %v, expecting %v) | x%x:x%x %v",
-	// 				seqno,
-	// 				server.blockSequenceNb+1,
-	// 				server.index,
-	// 				server.subindex,
-	// 				frame.Data,
-	// 			)
-	// 		}
-
-	// 		if state != stateDownloadBlkSubblockReq {
-	// 			server.rxNew = false
-	// 			server.state = state
-	// 		}
-	// 	}
-	// 	return
-	// }
-	// if server.state == stateDownloadBlkSubblockRsp {
-	// 	// Ignore other server messages if response requested
-	// 	return
-	// }
-
-	// // Copy data and set new flag
-	// server.response.raw = frame.Data
-	// server.rxNew = true
 }
 
 // Process [SDOServer] state machine and TX CAN frames
@@ -160,7 +72,6 @@ func (server *SDOServer) Process(
 			// New frame received, do what we need to do !
 			if !nmtIsPreOrOperationnal || !server.valid {
 				server.state = stateIdle
-				server.rxNew = false
 				return success, nil
 			}
 			err := server.processIncoming(frame)
@@ -181,7 +92,7 @@ func (server *SDOServer) Process(
 
 		case <-time.After(timeout):
 			if server.state != stateIdle {
-				log.Errorf("[SERVER] TIMEOUT %v, State : %v", server.timeoutTimer, server.state)
+				log.Errorf("[SERVER] TIMEOUT %v, State : %v", timeout, server.state)
 				server.SendAbort(AbortTimeout)
 				server.state = stateIdle
 			}
@@ -504,7 +415,6 @@ func NewSDOServer(
 	} else {
 		return nil, canopen.ErrIllegalArgument
 	}
-	server.rxNew = false
 	server.cobIdClientToServer = 0
 	server.cobIdServerToClient = 0
 	return server, server.initRxTx(uint32(canIdClientToServer), uint32(canIdServerToClient))

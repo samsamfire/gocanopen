@@ -13,7 +13,6 @@ func (s *SDOServer) txDownloadInitiate() uint8 {
 	s.txBuffer.Data[1] = byte(s.index)
 	s.txBuffer.Data[2] = byte(s.index >> 8)
 	s.txBuffer.Data[3] = s.subindex
-	s.timeoutTimer = 0
 	_ = s.Send(s.txBuffer)
 	if s.finished {
 		log.Debugf("[SERVER][TX] DOWNLOAD EXPEDITED | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
@@ -34,7 +33,6 @@ func (s *SDOServer) txDownloadSegment() uint8 {
 	// Pepare segment
 	s.txBuffer.Data[0] = 0x20 | s.toggle
 	s.toggle ^= 0x10
-	s.timeoutTimer = 0
 	log.Debugf("[SERVER][TX] DOWNLOAD SEGMENT | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
 	_ = s.Send(s.txBuffer)
 	if s.finished {
@@ -68,7 +66,6 @@ func (s *SDOServer) txUploadInitiate() uint8 {
 		s.txBuffer.Data[0] = 0x40
 	}
 	s.toggle = 0x00
-	s.timeoutTimer = 0
 	s.state = stateUploadSegmentReq
 	log.Debugf("[SERVER][TX] UPLOAD SEGMENTED | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
 	s.txBuffer.Data[1] = byte(s.index)
@@ -95,7 +92,6 @@ func (s *SDOServer) txUploadSegment() (error, uint8) {
 		s.state = stateIdle
 		ret = success
 	} else {
-		s.timeoutTimer = 0
 		s.state = stateUploadSegmentReq
 		count = BlockSeqSize
 	}
@@ -136,10 +132,7 @@ func (s *SDOServer) txDownloadBlockInitiate() {
 	s.bufWriteOffset = 0
 	s.blockSequenceNb = 0
 	s.blockCRC = crc.CRC16(0)
-	s.timeoutTimer = 0
-	s.timeoutTimerBlock = 0
 	s.state = stateDownloadBlkSubblockReq
-	s.rxNew = false
 	log.Debugf("[SERVER][TX] BLOCK DOWNLOAD INIT | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
 	s.Send(s.txBuffer)
 }
@@ -171,10 +164,8 @@ func (s *SDOServer) txDownloadBlockSubBlock() error {
 		s.blockSize = uint8(count)
 		s.blockSequenceNb = 0
 		s.state = stateDownloadBlkSubblockReq
-		s.rxNew = false
 	}
 	s.txBuffer.Data[2] = s.blockSize
-	s.timeoutTimerBlock = 0
 	s.Send(s.txBuffer)
 
 	if transferShort && !s.finished {
@@ -209,7 +200,6 @@ func (s *SDOServer) txUploadBlockInitiate() {
 		binary.LittleEndian.PutUint32(s.txBuffer.Data[4:], s.sizeIndicated)
 	}
 	// Reset timer & send
-	s.timeoutTimer = 0
 	log.Debugf("[SERVER][TX] BLOCK UPLOAD INIT | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
 	s.Send(s.txBuffer)
 	s.state = stateUploadBlkInitiateReq2
@@ -246,7 +236,6 @@ func (s *SDOServer) txUploadBlockSubBlock() error {
 		log.Debugf("[SERVER][TX] BLOCK UPLOAD SUB-BLOCK | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
 	}
 	// Reset timer & send
-	s.timeoutTimer = 0
 	s.Send(s.txBuffer)
 	return nil
 }
@@ -255,7 +244,6 @@ func (s *SDOServer) txUploadBlockEnd() {
 	s.txBuffer.Data[0] = 0xC1 | (s.blockNoData << 2)
 	s.txBuffer.Data[1] = byte(s.blockCRC)
 	s.txBuffer.Data[2] = byte(s.blockCRC >> 8)
-	s.timeoutTimer = 0
 	log.Debugf("[SERVER][TX] BLOCK UPLOAD END | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
 	s.Send(s.txBuffer)
 	s.state = stateUploadBlkEndCrsp

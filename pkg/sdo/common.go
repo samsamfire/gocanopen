@@ -44,6 +44,14 @@ const (
 )
 
 const (
+	// Bits 7-5 depending on direction and frame
+	// type can be called "ccs" or "scs" or "cs"
+	// in CiA spec
+	MaskCommandSpecifier  = uint8(0b111_00000)
+	CommandSpecifierAbort = uint8(4) << 5
+)
+
+const (
 	stateIdle                   internalState = 0x00
 	stateAbort                  internalState = 0x01
 	stateDownloadLocalTransfer  internalState = 0x10
