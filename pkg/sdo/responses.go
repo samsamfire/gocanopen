@@ -90,14 +90,9 @@ func (s *SDOServer) processOutgoing() {
 
 	case stateDownloadBlkSubblockRsp:
 		abortCode = s.txDownloadBlockSubBlock()
-		fmt.Println("abort", abortCode)
 
 	case stateDownloadBlkEndRsp:
-		s.txBuffer.Data[0] = 0xA1
-		log.Debugf("[SERVER][TX] BLOCK DOWNLOAD END | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
-		s.Send(s.txBuffer)
-		s.state = stateIdle
-		ret = success
+		ret = s.txDownloadBlockEnd()
 
 	case stateUploadBlkInitiateRsp:
 		s.txUploadBlockInitiate()
@@ -125,9 +120,9 @@ func (s *SDOServer) processOutgoing() {
 		case stateAbort:
 			if sdoAbort, ok := abortCode.(Abort); !ok {
 				log.Errorf("[SERVER][TX] Abort internal error : unknown abort code : %v", abortCode)
-				s.Abort(AbortGeneral)
+				s.SendAbort(AbortGeneral)
 			} else {
-				s.Abort(sdoAbort)
+				s.SendAbort(sdoAbort)
 			}
 			s.state = stateIdle
 		case stateDownloadBlkSubblockReq:

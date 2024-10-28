@@ -75,6 +75,8 @@ func (server *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 	server.logger.Info("starting sdo server processing")
 	timeout := time.Duration(server.timeoutTimeUs * uint32(time.Microsecond))
 
+	timeout := time.Duration(server.timeoutTimeUs * uint32(time.Microsecond))
+
 	for {
 		server.mu.Lock()
 		nmtIsPreOrOperationnal := server.nmt == nmt.StateOperational || server.nmt == nmt.StatePreOperational
