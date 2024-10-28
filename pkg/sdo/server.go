@@ -344,7 +344,7 @@ func (server *SDOServer) prepareRx() error {
 }
 
 // Update streamer object with new requested entry
-func (server *SDOServer) updateStreamer(response SDOResponse, upload bool) error {
+func (server *SDOServer) updateStreamer(response SDOResponse) error {
 	var err error
 	server.index = response.GetIndex()
 	server.subindex = response.GetSubindex()
@@ -355,11 +355,18 @@ func (server *SDOServer) updateStreamer(response SDOResponse, upload bool) error
 	if !server.streamer.HasAttribute(od.AttributeSdoRw) {
 		return AbortUnsupportedAccess
 	}
+	upload := server.state == stateUploadBlkInitiateReq || server.state == stateUploadInitiateReq
+
 	if upload && !server.streamer.HasAttribute(od.AttributeSdoR) {
 		return AbortWriteOnly
 	}
 	if !upload && !server.streamer.HasAttribute(od.AttributeSdoW) {
 		return AbortReadOnly
+	}
+
+	// In case of reading, we need to prepare data now
+	if upload {
+		return server.prepareRx()
 	}
 	return nil
 }

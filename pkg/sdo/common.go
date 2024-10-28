@@ -103,25 +103,41 @@ const (
 )
 
 const (
-	initiateDownloadRequest  = 1 // ccs
-	initiateDownloadResponse = 3 // scs
-	downloadSegmentRequest   = 0 // ccs
-	downloadSegmentResponse  = 1 // scs
-	initiateUploadRequest    = 2 // ccs
-	initiateUploadResponse   = 2 // scs
-	uploadSegmentRequest     = 3 // ccs
-	uploadSegmentResponse    = 3 // scs
-	abortRequestResponse     = 4 // ccs / scs
-	blockDownloadRequest     = 6 // ccs
-	blockDownloadResponse    = 5 // scs
+	// Bits 7-5 depending on direction and frame
+	// type can be called "ccs" or "scs" or "cs"
+	// in CiA spec
+	MaskCSField = uint8(0b111_00000)
+	// Bit 2 "e" field, 1 is expedited, 0 is normal
+	MaskEField = uint8(0b10)
 )
 
 const (
 	// Bits 7-5 depending on direction and frame
 	// type can be called "ccs" or "scs" or "cs"
 	// in CiA spec
-	MaskCommandSpecifier  = uint8(0b111_00000)
-	CommandSpecifierAbort = uint8(4) << 5
+	csOffset                        = uint8(5)
+	MaskCS                          = uint8(0b111_00000)
+	MaskTransferType                = uint8(0b10)
+	MaskSizeIndicated               = uint8(0b1)
+	MaskClientSubcommand            = uint8(0b1)
+	MaskServerSubcommand            = uint8(0b1)
+	MaskClientSubcommandBlockUpload = uint8(0b11)
+	CSAbort                         = uint8(4) << csOffset
+	CSDownloadInitiate              = uint8(1) << csOffset
+	CSUploadInitiate                = uint8(2) << csOffset
+	CSDownloadBlockInitiate         = uint8(6) << csOffset
+	CSUploadBlockInitiate           = uint8(5) << csOffset
+)
+
+const (
+	initiateDownloadRequest = uint8(0)
+	initiateUploadRequest   = uint8(0)
+	// Transfer type (e)
+	transferExpedited = uint8(0b1) << 1
+	transferNormal    = uint8(0b0) << 1
+	// Size indicated (s)
+	sizeIndicated    = uint8(0b1)
+	sizeNotIndicated = uint8(0b0)
 )
 
 const (
