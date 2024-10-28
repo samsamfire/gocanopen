@@ -43,7 +43,7 @@ type SDOClient struct {
 	processingPeriodUs         int
 	fifo                       *fifo.Fifo
 	rxNew                      bool
-	response                   SDOResponse
+	response                   SDOMessage
 	toggle                     uint8
 	timeoutTimeUs              uint32
 	timeoutTimer               uint32

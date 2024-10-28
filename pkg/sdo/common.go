@@ -229,13 +229,13 @@ func (abort Abort) Description() string {
 	return AbortCodeDescriptionMap[AbortGeneral]
 }
 
-type SDOResponse struct {
+type SDOMessage struct {
 	raw [8]byte
 }
 
 // Checks whether response command is an expected value in the present
 // state
-func (response *SDOResponse) isResponseCommandValid(state internalState) bool {
+func (response *SDOMessage) isResponseCommandValid(state internalState) bool {
 
 	switch state {
 	case stateDownloadInitiateRsp:
@@ -285,46 +285,46 @@ func (response *SDOResponse) isResponseCommandValid(state internalState) bool {
 
 }
 
-func (response *SDOResponse) IsAbort() bool {
+func (response *SDOMessage) IsAbort() bool {
 	return response.raw[0] == 0x80
 }
 
-func (response *SDOResponse) GetAbortCode() Abort {
+func (response *SDOMessage) GetAbortCode() Abort {
 	return Abort(binary.LittleEndian.Uint32(response.raw[4:]))
 }
 
-func (response *SDOResponse) GetIndex() uint16 {
+func (response *SDOMessage) GetIndex() uint16 {
 	return binary.LittleEndian.Uint16(response.raw[1:3])
 }
 
-func (response *SDOResponse) GetSubindex() uint8 {
+func (response *SDOMessage) GetSubindex() uint8 {
 	return response.raw[3]
 }
 
-func (response *SDOResponse) GetToggle() uint8 {
+func (response *SDOMessage) GetToggle() uint8 {
 	return response.raw[0] & 0x10
 }
 
-func (response *SDOResponse) GetBlockSize() uint8 {
+func (response *SDOMessage) GetBlockSize() uint8 {
 	return response.raw[4]
 }
 
-func (response *SDOResponse) GetNumberOfSegments() uint8 {
+func (response *SDOMessage) GetNumberOfSegments() uint8 {
 	return response.raw[1]
 }
 
-func (response *SDOResponse) IsCRCEnabled() bool {
+func (response *SDOMessage) IsCRCEnabled() bool {
 	return (response.raw[0] & 0x04) != 0
 }
 
-func (response *SDOResponse) GetCRCClient() crc.CRC16 {
+func (response *SDOMessage) GetCRCClient() crc.CRC16 {
 	return crc.CRC16((binary.LittleEndian.Uint16(response.raw[1:3])))
 }
 
-func (response *SDOResponse) IsExpedited() bool {
+func (response *SDOMessage) IsExpedited() bool {
 	return response.raw[0]&MaskTransferType == transferExpedited
 }
 
-func (response *SDOResponse) IsSizeIndicated() bool {
+func (response *SDOMessage) IsSizeIndicated() bool {
 	return response.raw[0]&MaskSizeIndicated == sizeIndicated
 }
