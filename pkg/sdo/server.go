@@ -152,6 +152,8 @@ func (server *SDOServer) Process(
 	timerNextUs *uint32,
 ) (state uint8, err error) {
 
+	timeout := time.Duration(server.timeoutTimeUs * uint32(time.Microsecond))
+
 	for {
 		select {
 		case frame := <-server.rx:
@@ -166,11 +168,10 @@ func (server *SDOServer) Process(
 				// Abort straight away, nothing to send afterwards
 				server.state = stateAbort
 				if sdoAbort, ok := err.(Abort); !ok {
-					log.Println("i am here")
 					log.Errorf("[SERVER][TX] Abort internal error : unknown abort code : %v", err)
-					server.Abort(AbortGeneral)
+					server.SendAbort(AbortGeneral)
 				} else {
-					server.Abort(sdoAbort)
+					server.SendAbort(sdoAbort)
 				}
 				server.state = stateIdle
 				break
@@ -178,8 +179,12 @@ func (server *SDOServer) Process(
 			// A response is expected
 			server.processOutgoing()
 
-		case <-time.After(1 * time.Second):
-			fmt.Println("1 second has passed")
+		case <-time.After(timeout):
+			if server.state != stateIdle {
+				log.Errorf("[SERVER] TIMEOUT %v, State : %v", server.timeoutTimer, server.state)
+				server.SendAbort(AbortTimeout)
+				server.state = stateIdle
+			}
 		}
 	}
 }
@@ -424,7 +429,7 @@ func (server *SDOServer) prepareRx() error {
 }
 
 // Create & send abort on bus
-func (server *SDOServer) Abort(abortCode Abort) {
+func (server *SDOServer) SendAbort(abortCode Abort) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
 	code := uint32(abortCode)
