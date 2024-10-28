@@ -10,88 +10,192 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const (
-	sizeIndicated      = 1 << 0
-	sizeNotIndicated   = 0 << 0
-	transferExpedited  = 1 << 1
-	transferSegemented = 0 << 1
-)
+func (s *SDOServer) processIncoming(frame canopen.Frame) error {
 
-// type DownloadInitiate [8]byte
+	if frame.Data[0] == CSAbort {
+		s.state = stateIdle
+		abortCode := binary.LittleEndian.Uint32(frame.Data[4:])
+		log.Warnf("[SERVER][RX] abort received from client : x%x (%v)", abortCode, Abort(abortCode))
+		return nil
+	}
 
-// // Check if expedited or segmented type
-// // Field "e" in CiA 301
-// func (d DownloadInitiate) TransferExpedited() bool {
-// 	return (d[0] & TransferExpedited) > 0
-// }
+	// Copy data and set new flag
+	s.response.raw = frame.Data
+	response := s.response
+	header := response.raw[0]
+	var abortCode error
 
-// // Check if size indicated
-// // Field "s" in CiA 301
-// func (d DownloadInitiate) SizeIndicated()
+	// Determine if we need to read / write to OD.
+	// If we are in idle, we need to create a streamer object to
+	// access the relevant OD entry.
+	if s.state == stateIdle {
+		switch header & MaskCS {
 
-func (s *SDOServer) rxDownloadInitiate(response SDOResponse) error {
-	cmd := response.raw[0]
+		case CSDownloadInitiate:
+			s.state = stateDownloadInitiateReq
 
-	// Segmented transfer
-	if (cmd & transferExpedited) == 0 {
-		if (cmd & sizeIndicated) == 0 {
-			s.sizeIndicated = 0
-			s.state = stateDownloadInitiateRsp
-			s.finished = false
-			return nil
+		case CSUploadInitiate:
+			s.state = stateUploadInitiateReq
+
+		case CSDownloadBlockInitiate:
+			if (header & MaskClientSubcommand) == initiateDownloadRequest {
+				s.state = stateDownloadBlkInitiateReq
+			} else {
+				return AbortCmd
+			}
+
+		case CSUploadBlockInitiate:
+			if (header & MaskClientSubcommandBlockUpload) == initiateUploadRequest {
+				s.state = stateUploadBlkInitiateReq
+			} else {
+				return AbortCmd
+			}
+
+		default:
+			return AbortCmd
 		}
 
-		log.Debugf("[SERVER][RX] DOWNLOAD SEGMENTED | x%x:x%x %v", s.index, s.subindex, response.raw)
-		// Segmented transfer check if size indicated
-		sizeInOd := s.streamer.DataLength
-		s.sizeIndicated = binary.LittleEndian.Uint32(response.raw[4:])
+		// Check object exists and has correct attributes
+		// i.e. readable or writable depending on what has been
+		// requested
+		err := s.updateStreamer(response)
+		if err != nil {
+			return err
+		}
+	}
 
-		// Check if size matches
-		if sizeInOd > 0 {
-			if s.sizeIndicated > uint32(sizeInOd) {
-				return AbortDataLong
-			} else if s.sizeIndicated < uint32(sizeInOd) && !s.streamer.HasAttribute(od.AttributeStr) {
-				return AbortDataShort
+	// Process receive state machine
+	var err error = nil
+
+	switch s.state {
+
+	case stateDownloadInitiateReq:
+		err = s.rxDownloadInitiate(response)
+
+	case stateDownloadSegmentReq:
+		err = s.rxDownloadSegment(response)
+
+	case stateUploadInitiateReq:
+		log.Debugf("[SERVER][RX] UPLOAD EXPEDITED | x%x:x%x %v", s.index, s.subindex, response.raw)
+		s.state = stateUploadInitiateRsp
+
+	case stateUploadSegmentReq:
+		err = s.rxUploadSegment(response)
+
+	case stateDownloadBlkInitiateReq:
+		err = s.rxDownloadBlockInitiate(response)
+
+	case stateDownloadBlkSubblockReq:
+		err = s.rxDownloadBlockSubBlock(response)
+
+	case stateDownloadBlkEndReq:
+		err = s.rxDownloadBlockEnd(response)
+
+	case stateUploadBlkInitiateReq:
+		err = s.rxUploadBlockInitiate(response)
+
+	case stateUploadBlkInitiateReq2:
+		if response.raw[0] == 0xA3 {
+			s.blockSequenceNb = 0
+			s.state = stateUploadBlkSubblockSreq
+		} else {
+			return AbortCmd
+		}
+
+	case stateUploadBlkSubblockSreq, stateUploadBlkSubblockCrsp:
+		err = s.rxUploadSubBlock(response)
+		if err != nil {
+			return err
+		} else {
+			// Refill buffer if needed
+			abortCode = s.readObjectDictionary(uint32(s.blockSize)*BlockSeqSize, true)
+			if abortCode != nil {
+				return abortCode
+			}
+
+			if s.bufWriteOffset == s.bufReadOffset {
+				s.state = stateUploadBlkEndSreq
+			} else {
+				s.blockSequenceNb = 0
+				s.state = stateUploadBlkSubblockSreq
 			}
 		}
+	case stateUploadBlkEndCrsp:
+		if frame.Data[0] == 0xA1 {
+			// Block transferred ! go to idle
+			s.state = stateIdle
+			return nil
+		} else {
+			return AbortCmd
+		}
+
+	default:
+		return AbortCmd
+
+	}
+
+	return err
+}
+
+func (s *SDOServer) rxDownloadInitiate(response SDOResponse) error {
+
+	// Segmented transfer type
+	if !response.IsExpedited() {
+		log.Debugf("[SERVER][RX] DOWNLOAD SEGMENTED | x%x:x%x %v", s.index, s.subindex, response.raw)
+
+		// If size is indicated, we need to check coherence
+		// Between size in OD and requested size
+		if response.IsSizeIndicated() {
+
+			sizeInOd := s.streamer.DataLength
+			s.sizeIndicated = binary.LittleEndian.Uint32(response.raw[4:])
+			// Check if size matches
+			if sizeInOd > 0 {
+				if s.sizeIndicated > uint32(sizeInOd) {
+					return AbortDataLong
+				} else if s.sizeIndicated < uint32(sizeInOd) && !s.streamer.HasAttribute(od.AttributeStr) {
+					return AbortDataShort
+				}
+			}
+		}
+
 		s.state = stateDownloadInitiateRsp
 		s.finished = false
 		return nil
 	}
 
-	// Expedited transfer
+	// Expedited transfer type, we write directly inside OD
 	log.Debugf("[SERVER][RX] DOWNLOAD EXPEDITED | x%x:x%x %v", s.index, s.subindex, response.raw)
 
-	// Expedited 4 bytes of data max
 	sizeInOd := s.streamer.DataLength
-	dataSizeToWrite := 4
-	if (cmd & sizeIndicated) != 0 {
-		dataSizeToWrite -= (int(response.raw[0]) >> 2) & 0x03
+	nbToWrite := 4
+	// Determine number of bytes to write, depending on size flag
+	// either undetermined or 4-n
+	if response.IsSizeIndicated() {
+		nbToWrite -= (int(response.raw[0]) >> 2) & 0x03
 	} else if sizeInOd > 0 && sizeInOd < 4 {
-		dataSizeToWrite = int(sizeInOd)
+		nbToWrite = int(sizeInOd)
 	}
-	// Create temporary buffer
-	buf := make([]byte, 6)
-	copy(buf, response.raw[4:4+dataSizeToWrite])
+
 	if s.streamer.HasAttribute(od.AttributeStr) &&
-		(sizeInOd == 0 || uint32(dataSizeToWrite) < sizeInOd) {
-		delta := sizeInOd - uint32(dataSizeToWrite)
+		(sizeInOd == 0 || uint32(nbToWrite) < sizeInOd) {
+		delta := sizeInOd - uint32(nbToWrite)
 		if delta == 1 {
-			dataSizeToWrite += 1
+			nbToWrite += 1
 		} else {
-			dataSizeToWrite += 2
+			nbToWrite += 2
 		}
-		s.streamer.DataLength = uint32(dataSizeToWrite)
+		s.streamer.DataLength = uint32(nbToWrite)
 	} else if sizeInOd == 0 {
-		s.streamer.DataLength = uint32(dataSizeToWrite)
-	} else if dataSizeToWrite != int(sizeInOd) {
-		if dataSizeToWrite > int(sizeInOd) {
+		s.streamer.DataLength = uint32(nbToWrite)
+	} else if nbToWrite != int(sizeInOd) {
+		if nbToWrite > int(sizeInOd) {
 			return AbortDataLong
 		} else {
 			return AbortDataShort
 		}
 	}
-	_, err := s.streamer.Write(buf[:dataSizeToWrite])
+	_, err := s.streamer.Write(response.raw[4 : 4+nbToWrite])
 	if err != nil {
 		return ConvertOdToSdoAbort(err.(od.ODR))
 	}
@@ -120,6 +224,15 @@ func (s *SDOServer) rxDownloadSegment(response SDOResponse) error {
 	if s.streamer.DataLength > 0 && s.sizeTransferred > s.streamer.DataLength {
 		return AbortDataLong
 	}
+
+	if s.finished || (len(s.buffer)-int(s.bufWriteOffset) < (BlockSeqSize + 2)) {
+		err := s.writeObjectDictionary(0, 0)
+		if err != nil {
+			return nil
+		}
+	}
+	s.state = stateDownloadSegmentRsp
+
 	return nil
 }
 
@@ -305,135 +418,4 @@ func (s *SDOServer) rxUploadSubBlock(response SDOResponse) error {
 		return AbortCmd
 	}
 	return nil
-}
-
-// Process an incoming request from client
-// Depending on request type, determine if a response is expected
-// from s
-func (s *SDOServer) processIncoming(frame canopen.Frame) error {
-
-	if frame.Data[0] == CommandSpecifierAbort {
-		s.state = stateIdle
-		abortCode := binary.LittleEndian.Uint32(frame.Data[4:])
-		log.Warnf("[SERVER][RX] abort received from client : x%x (%v)", abortCode, Abort(abortCode))
-		return nil
-	}
-
-	// if s.state == stateDownloadBlkSubblockRsp {
-	// 	// Ignore other messages if response requested
-	// 	return nil
-	// }
-
-	// Copy data and set new flag
-	s.response.raw = frame.Data
-	response := s.response
-	var abortCode error
-
-	// If we are in idle, we need to create a streamer object to
-	// access the relevant OD entry.
-	// Determine if we need to read / write to OD.
-	if s.state == stateIdle {
-		upload := false
-		err := updateStateFromRequest(response.raw[0], &s.state, &upload)
-		if err != nil {
-			return err
-		}
-
-		// Check object exists and has correct attributes
-		// i.e. readable or writable depending on what has been
-		// requested
-		err = s.updateStreamer(response, upload)
-		if err != nil {
-			return err
-		}
-		// In case of reading, we need to prepare data straigth
-		// away
-		if upload {
-			err = s.prepareRx()
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	var err error = nil
-	if s.state != stateIdle && s.state != stateAbort {
-		switch s.state {
-
-		case stateDownloadInitiateReq:
-			err = s.rxDownloadInitiate(response)
-
-		case stateDownloadSegmentReq:
-			err = s.rxDownloadSegment(response)
-			if err != nil {
-				return err
-			} else {
-				if s.finished || (len(s.buffer)-int(s.bufWriteOffset) < (BlockSeqSize + 2)) {
-					abortCode = s.writeObjectDictionary(0, 0)
-					if abortCode != nil {
-						break
-					}
-				}
-				s.state = stateDownloadSegmentRsp
-			}
-
-		case stateUploadInitiateReq:
-			log.Debugf("[SERVER][RX] UPLOAD EXPEDITED | x%x:x%x %v", s.index, s.subindex, response.raw)
-			s.state = stateUploadInitiateRsp
-
-		case stateUploadSegmentReq:
-			err = s.rxUploadSegment(response)
-
-		case stateDownloadBlkInitiateReq:
-			err = s.rxDownloadBlockInitiate(response)
-
-		case stateDownloadBlkSubblockReq:
-			err = s.rxDownloadBlockSubBlock(response)
-
-		case stateDownloadBlkEndReq:
-			err = s.rxDownloadBlockEnd(response)
-
-		case stateUploadBlkInitiateReq:
-			err = s.rxUploadBlockInitiate(response)
-
-		case stateUploadBlkInitiateReq2:
-			if response.raw[0] == 0xA3 {
-				s.blockSequenceNb = 0
-				s.state = stateUploadBlkSubblockSreq
-			} else {
-				return AbortCmd
-			}
-
-		case stateUploadBlkSubblockSreq, stateUploadBlkSubblockCrsp:
-			err = s.rxUploadSubBlock(response)
-			if err != nil {
-				return err
-			} else {
-				// Refill buffer if needed
-				abortCode = s.readObjectDictionary(uint32(s.blockSize)*BlockSeqSize, true)
-				if abortCode != nil {
-					return abortCode
-				}
-
-				if s.bufWriteOffset == s.bufReadOffset {
-					s.state = stateUploadBlkEndSreq
-				} else {
-					s.blockSequenceNb = 0
-					s.state = stateUploadBlkSubblockSreq
-				}
-			}
-		case stateUploadBlkEndCrsp:
-			if frame.Data[0] == 0xA1 {
-				// Block transferred ! go to idle
-				s.state = stateIdle
-				return nil
-			}
-			return AbortCmd
-
-		default:
-			return AbortCmd
-
-		}
-	}
-	return err
 }
