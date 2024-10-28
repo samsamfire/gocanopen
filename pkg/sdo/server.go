@@ -16,6 +16,7 @@ type SDOServer struct {
 	*canopen.BusManager
 	mu                         sync.Mutex
 	od                         *od.ObjectDictionary
+	rx                         chan SDOMessage
 	streamer                   od.Streamer
 	nodeId                     uint8
 	txBuffer                   canopen.Frame
@@ -40,8 +41,6 @@ type SDOServer struct {
 	blockCRCEnabled            bool
 	blockCRC                   crc.CRC16
 	errorExtraInfo             error
-
-	rx chan SDOMessage
 }
 
 // Handle [SDOServer] related RX CAN frames
@@ -69,13 +68,13 @@ func (server *SDOServer) Process(
 
 	for {
 		select {
-		case frame := <-server.rx:
+		case rx := <-server.rx:
 			// New frame received, do what we need to do !
 			if !nmtIsPreOrOperationnal || !server.valid {
 				server.state = stateIdle
-				return success, nil
+				break
 			}
-			err := server.processIncoming(frame)
+			err := server.processIncoming(rx)
 			if err != nil && err != od.ErrPartial {
 				// Abort straight away, nothing to send afterwards
 				server.txAbort(err)
@@ -261,26 +260,6 @@ func (server *SDOServer) readObjectDictionary(countMinimum uint32, calculateCRC 
 
 	}
 
-	return nil
-}
-
-func updateStateFromRequest(stateReq uint8, state *internalState, upload *bool) error {
-	*upload = false
-
-	if (stateReq & 0xF0) == 0x20 {
-		*state = stateDownloadInitiateReq
-	} else if stateReq == 0x40 {
-		*upload = true
-		*state = stateUploadInitiateReq
-	} else if (stateReq & 0xF9) == 0xC0 {
-		*state = stateDownloadBlkInitiateReq
-	} else if (stateReq & 0xFB) == 0xA0 {
-		*upload = true
-		*state = stateUploadBlkInitiateReq
-	} else {
-		*state = stateAbort
-		return AbortCmd
-	}
 	return nil
 }
 

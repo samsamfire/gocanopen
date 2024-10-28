@@ -134,18 +134,18 @@ func (s *SDOServer) processIncoming(rx SDOMessage) error {
 	return err
 }
 
-func (s *SDOServer) rxDownloadInitiate(response SDOMessage) error {
+func (s *SDOServer) rxDownloadInitiate(rx SDOMessage) error {
 
 	// Segmented transfer type
-	if !response.IsExpedited() {
-		log.Debugf("[SERVER][RX] DOWNLOAD SEGMENTED | x%x:x%x %v", s.index, s.subindex, response.raw)
+	if !rx.IsExpedited() {
+		log.Debugf("[SERVER][RX] DOWNLOAD SEGMENTED | x%x:x%x %v", s.index, s.subindex, rx.raw)
 
 		// If size is indicated, we need to check coherence
 		// Between size in OD and requested size
-		if response.IsSizeIndicated() {
+		if rx.IsSizeIndicated() {
 
 			sizeInOd := s.streamer.DataLength
-			s.sizeIndicated = binary.LittleEndian.Uint32(response.raw[4:])
+			s.sizeIndicated = binary.LittleEndian.Uint32(rx.raw[4:])
 			// Check if size matches
 			if sizeInOd > 0 {
 				if s.sizeIndicated > uint32(sizeInOd) {
@@ -162,14 +162,14 @@ func (s *SDOServer) rxDownloadInitiate(response SDOMessage) error {
 	}
 
 	// Expedited transfer type, we write directly inside OD
-	log.Debugf("[SERVER][RX] DOWNLOAD EXPEDITED | x%x:x%x %v", s.index, s.subindex, response.raw)
+	log.Debugf("[SERVER][RX] DOWNLOAD EXPEDITED | x%x:x%x %v", s.index, s.subindex, rx.raw)
 
 	sizeInOd := s.streamer.DataLength
 	nbToWrite := 4
 	// Determine number of bytes to write, depending on size flag
 	// either undetermined or 4-n
-	if response.IsSizeIndicated() {
-		nbToWrite -= (int(response.raw[0]) >> 2) & 0x03
+	if rx.IsSizeIndicated() {
+		nbToWrite -= (int(rx.raw[0]) >> 2) & 0x03
 	} else if sizeInOd > 0 && sizeInOd < 4 {
 		nbToWrite = int(sizeInOd)
 	}
@@ -192,7 +192,7 @@ func (s *SDOServer) rxDownloadInitiate(response SDOMessage) error {
 			return AbortDataShort
 		}
 	}
-	_, err := s.streamer.Write(response.raw[4 : 4+nbToWrite])
+	_, err := s.streamer.Write(rx.raw[4 : 4+nbToWrite])
 	if err != nil {
 		return ConvertOdToSdoAbort(err.(od.ODR))
 	}
@@ -201,20 +201,20 @@ func (s *SDOServer) rxDownloadInitiate(response SDOMessage) error {
 	return nil
 }
 
-func (s *SDOServer) rxDownloadSegment(response SDOMessage) error {
-	if (response.raw[0] & 0xE0) != 0x00 {
+func (s *SDOServer) rxDownloadSegment(rx SDOMessage) error {
+	if (rx.raw[0] & 0xE0) != 0x00 {
 		return AbortCmd
 	}
 
-	log.Debugf("[SERVER][RX] DOWNLOAD SEGMENT | x%x:x%x %v", s.index, s.subindex, response.raw)
-	s.finished = (response.raw[0] & 0x01) != 0
-	toggle := response.GetToggle()
+	log.Debugf("[SERVER][RX] DOWNLOAD SEGMENT | x%x:x%x %v", s.index, s.subindex, rx.raw)
+	s.finished = (rx.raw[0] & 0x01) != 0
+	toggle := rx.GetToggle()
 	if toggle != s.toggle {
 		return AbortToggleBit
 	}
 	// Get size and write to buffer
-	count := BlockSeqSize - ((response.raw[0] >> 1) & 0x07)
-	copy(s.buffer[s.bufWriteOffset:], response.raw[1:1+count])
+	count := BlockSeqSize - ((rx.raw[0] >> 1) & 0x07)
+	copy(s.buffer[s.bufWriteOffset:], rx.raw[1:1+count])
 	s.bufWriteOffset += uint32(count)
 	s.sizeTransferred += uint32(count)
 
@@ -233,12 +233,12 @@ func (s *SDOServer) rxDownloadSegment(response SDOMessage) error {
 	return nil
 }
 
-func (s *SDOServer) rxUploadSegment(response SDOMessage) error {
-	log.Debugf("[SERVER][RX] UPLOAD SEGMENTED | x%x:x%x %v", s.index, s.subindex, response.raw)
-	if (response.raw[0] & 0xEF) != 0x60 {
+func (s *SDOServer) rxUploadSegment(rx SDOMessage) error {
+	log.Debugf("[SERVER][RX] UPLOAD SEGMENTED | x%x:x%x %v", s.index, s.subindex, rx.raw)
+	if (rx.raw[0] & 0xEF) != 0x60 {
 		return AbortCmd
 	}
-	toggle := response.GetToggle()
+	toggle := rx.GetToggle()
 	if toggle != s.toggle {
 		return AbortToggleBit
 	}
@@ -246,12 +246,12 @@ func (s *SDOServer) rxUploadSegment(response SDOMessage) error {
 	return nil
 }
 
-func (s *SDOServer) rxDownloadBlockInitiate(response SDOMessage) error {
-	s.blockCRCEnabled = response.IsCRCEnabled()
+func (s *SDOServer) rxDownloadBlockInitiate(rx SDOMessage) error {
+	s.blockCRCEnabled = rx.IsCRCEnabled()
 	// Check if size indicated
-	if (response.raw[0] & 0x02) != 0 {
+	if (rx.raw[0] & 0x02) != 0 {
 		sizeInOd := s.streamer.DataLength
-		s.sizeIndicated = binary.LittleEndian.Uint32(response.raw[4:])
+		s.sizeIndicated = binary.LittleEndian.Uint32(rx.raw[4:])
 		// Check if size matches
 		if sizeInOd > 0 {
 			if s.sizeIndicated > uint32(sizeInOd) {
@@ -268,45 +268,45 @@ func (s *SDOServer) rxDownloadBlockInitiate(response SDOMessage) error {
 		s.subindex,
 		s.blockCRCEnabled,
 		s.sizeIndicated,
-		response.raw,
+		rx.raw,
 	)
 	s.state = stateDownloadBlkInitiateRsp
 	s.finished = false
 	return nil
 }
 
-func (s *SDOServer) rxDownloadBlockSubBlock(response SDOMessage) error {
+func (s *SDOServer) rxDownloadBlockSubBlock(rx SDOMessage) error {
 	// Condition should always pass but still check just in case
 	if int(s.bufWriteOffset) > (len(s.buffer) - (BlockSeqSize + 2)) {
 		return AbortGeneral
 	}
 
 	// Block download, copy data in handle
-	seqno := response.raw[0] & 0x7F
+	seqno := rx.raw[0] & 0x7F
 
 	// Check correct sequence number
 	if seqno <= s.blockSize && seqno == (s.blockSequenceNb+1) {
 		s.blockSequenceNb = seqno
 		// Copy data
-		copy(s.buffer[s.bufWriteOffset:], response.raw[1:])
+		copy(s.buffer[s.bufWriteOffset:], rx.raw[1:])
 		s.bufWriteOffset += BlockSeqSize
 		s.sizeTransferred += BlockSeqSize
 
 		// Check if last block
-		if (response.raw[0] & 0x80) != 0 {
+		if (rx.raw[0] & 0x80) != 0 {
 			s.finished = true
 			s.state = stateDownloadBlkSubblockRsp
-			log.Debugf("[SERVER][RX] BLOCK DOWNLOAD END | x%x:x%x %v", s.index, s.subindex, response.raw)
+			log.Debugf("[SERVER][RX] BLOCK DOWNLOAD END | x%x:x%x %v", s.index, s.subindex, rx.raw)
 			return nil
 		}
 		// Check if end of sub-block
 		if seqno == s.blockSize {
 			s.state = stateDownloadBlkSubblockRsp
-			log.Debugf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | x%x:x%x %v", s.index, s.subindex, response.raw)
+			log.Debugf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | x%x:x%x %v", s.index, s.subindex, rx.raw)
 			return nil
 		}
 		// Regular sub-block
-		log.Debugf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | x%x:x%x %v", s.index, s.subindex, response.raw)
+		log.Debugf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | x%x:x%x %v", s.index, s.subindex, rx.raw)
 
 	}
 	// If duplicate or sequence didn't start ignore, otherwise
@@ -318,7 +318,7 @@ func (s *SDOServer) rxDownloadBlockSubBlock(response SDOMessage) error {
 			s.blockSequenceNb,
 			s.index,
 			s.subindex,
-			response.raw,
+			rx.raw,
 		)
 		return nil
 	}
@@ -328,19 +328,19 @@ func (s *SDOServer) rxDownloadBlockSubBlock(response SDOMessage) error {
 		s.blockSequenceNb+1,
 		s.index,
 		s.subindex,
-		response.raw,
+		rx.raw,
 	)
 	return nil
 }
 
-func (s *SDOServer) rxDownloadBlockEnd(response SDOMessage) error {
-	log.Debugf("[SERVER][RX] BLOCK DOWNLOAD END | x%x:x%x %v", s.index, s.subindex, response.raw)
-	if (response.raw[0] & 0xE3) != 0xC1 {
+func (s *SDOServer) rxDownloadBlockEnd(rx SDOMessage) error {
+	log.Debugf("[SERVER][RX] BLOCK DOWNLOAD END | x%x:x%x %v", s.index, s.subindex, rx.raw)
+	if (rx.raw[0] & 0xE3) != 0xC1 {
 		return AbortCmd
 	}
 	// Get number of data bytes in last segment, that do not
 	// contain data. Then reduce buffer
-	noData := (response.raw[0] >> 2) & 0x07
+	noData := (rx.raw[0] >> 2) & 0x07
 	if s.bufWriteOffset <= uint32(noData) {
 		s.errorExtraInfo = fmt.Errorf("internal buffer and end of block download are inconsitent")
 		return AbortDeviceIncompat
@@ -350,7 +350,7 @@ func (s *SDOServer) rxDownloadBlockEnd(response SDOMessage) error {
 
 	var crcClient = crc.CRC16(0)
 	if s.blockCRCEnabled {
-		crcClient = response.GetCRCClient()
+		crcClient = rx.GetCRCClient()
 	}
 	err := s.writeObjectDictionary(2, crcClient)
 	if err != nil {
@@ -360,14 +360,14 @@ func (s *SDOServer) rxDownloadBlockEnd(response SDOMessage) error {
 	return nil
 }
 
-func (s *SDOServer) rxUploadBlockInitiate(response SDOMessage) error {
+func (s *SDOServer) rxUploadBlockInitiate(rx SDOMessage) error {
 	// If protocol switch threshold (byte 5) is larger than data
 	// size of OD var, then switch to segmented
-	if s.sizeIndicated > 0 && response.raw[5] > 0 && uint32(response.raw[5]) >= s.sizeIndicated {
+	if s.sizeIndicated > 0 && rx.raw[5] > 0 && uint32(rx.raw[5]) >= s.sizeIndicated {
 		s.state = stateUploadInitiateRsp
 		return nil
 	}
-	if (response.raw[0] & 0x04) != 0 {
+	if (rx.raw[0] & 0x04) != 0 {
 		s.blockCRCEnabled = true
 		s.blockCRC = crc.CRC16(0)
 		s.blockCRC.Block(s.buffer[:s.bufWriteOffset])
@@ -375,8 +375,8 @@ func (s *SDOServer) rxUploadBlockInitiate(response SDOMessage) error {
 		s.blockCRCEnabled = false
 	}
 	// Get block size and check okay
-	s.blockSize = response.GetBlockSize()
-	log.Debugf("[SERVER][RX] UPLOAD BLOCK INIT | x%x:x%x %v | crc : %v, blksize :%v", s.index, s.subindex, response.raw, s.blockCRCEnabled, s.blockSize)
+	s.blockSize = rx.GetBlockSize()
+	log.Debugf("[SERVER][RX] UPLOAD BLOCK INIT | x%x:x%x %v | crc : %v, blksize :%v", s.index, s.subindex, rx.raw, s.blockCRCEnabled, s.blockSize)
 	if s.blockSize < 1 || s.blockSize > BlockMaxSize {
 		return AbortBlockSize
 	}
@@ -389,29 +389,29 @@ func (s *SDOServer) rxUploadBlockInitiate(response SDOMessage) error {
 	return nil
 }
 
-func (s *SDOServer) rxUploadSubBlock(response SDOMessage) error {
-	if response.raw[0] != 0xA2 {
+func (s *SDOServer) rxUploadSubBlock(rx SDOMessage) error {
+	if rx.raw[0] != 0xA2 {
 		return AbortCmd
 	}
 	log.Debugf("[SERVER][RX] BLOCK UPLOAD END SUB-BLOCK | blksize %v | x%x:x%x %v",
-		response.raw[2],
+		rx.raw[2],
 		s.index,
 		s.subindex,
-		response.raw,
+		rx.raw,
 	)
 	// Check block size
-	s.blockSize = response.raw[2]
+	s.blockSize = rx.raw[2]
 	if s.blockSize < 1 || s.blockSize > BlockMaxSize {
 		return AbortBlockSize
 	}
 	// Check number of segments
-	if response.raw[1] < s.blockSequenceNb {
+	if rx.raw[1] < s.blockSequenceNb {
 		// Some error occurd, re-transmit missing chunks
-		cntFailed := s.blockSequenceNb - response.raw[1]
+		cntFailed := s.blockSequenceNb - rx.raw[1]
 		cntFailed = cntFailed*BlockSeqSize - s.blockNoData
 		s.bufReadOffset -= uint32(cntFailed)
 		s.sizeTransferred -= uint32(cntFailed)
-	} else if response.raw[1] > s.blockSequenceNb {
+	} else if rx.raw[1] > s.blockSequenceNb {
 		return AbortCmd
 	}
 	return nil
