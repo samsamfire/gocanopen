@@ -116,78 +116,18 @@ func (s *SDOServer) processIncoming(rx SDOMessage) error {
 // Depending on request type, determine if a response is expected
 // from s
 func (s *SDOServer) processIncoming(frame canopen.Frame) error {
-	if frame.Data[0] == 0x80 {
-		// Client abort
+
+	if frame.Data[0] == CommandSpecifierAbort {
 		s.state = stateIdle
 		abortCode := binary.LittleEndian.Uint32(frame.Data[4:])
 		log.Warnf("[SERVER][RX] abort received from client : x%x (%v)", abortCode, Abort(abortCode))
 		return nil
 	}
 
-	if s.state == stateUploadBlkEndCrsp && frame.Data[0] == 0xA1 {
-		// Block transferred ! go to idle
-		s.state = stateIdle
-		return nil
-	}
-
-	if s.state == stateDownloadBlkSubblockReq {
-		// Condition should always pass but check
-		if int(s.bufWriteOffset) <= (len(s.buffer) - (BlockSeqSize + 2)) {
-			// Block download, copy data in handle
-			state := stateDownloadBlkSubblockReq
-			seqno := frame.Data[0] & 0x7F
-			s.timeoutTimer = 0
-			s.timeoutTimerBlock = 0
-			// Check correct sequence number
-			if seqno <= s.blockSize && seqno == (s.blockSequenceNb+1) {
-				s.blockSequenceNb = seqno
-				// Copy data
-				copy(s.buffer[s.bufWriteOffset:], frame.Data[1:])
-				s.bufWriteOffset += BlockSeqSize
-				s.sizeTransferred += BlockSeqSize
-				// Check if last segment
-				if (frame.Data[0] & 0x80) != 0 {
-					s.finished = true
-					state = stateDownloadBlkSubblockRsp
-					log.Debugf("[SERVER][RX] BLOCK DOWNLOAD END | x%x:x%x %v", s.index, s.subindex, frame.Data)
-				} else if seqno == s.blockSize {
-					// All segments in sub block transferred
-					state = stateDownloadBlkSubblockRsp
-					log.Debugf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | x%x:x%x %v", s.index, s.subindex, frame.Data)
-				} else {
-					log.Debugf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | x%x:x%x %v", s.index, s.subindex, frame.Data)
-				}
-				// If duplicate or sequence didn't start ignore, otherwise
-				// seqno is wrong
-			} else if seqno != s.blockSequenceNb && s.blockSequenceNb != 0 {
-				state = stateDownloadBlkSubblockRsp
-				log.Warnf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | Wrong sequence number (got %v, previous %v) | x%x:x%x %v",
-					seqno,
-					s.blockSequenceNb,
-					s.index,
-					s.subindex,
-					frame.Data,
-				)
-			} else {
-				log.Warnf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | Ignoring (got %v, expecting %v) | x%x:x%x %v",
-					seqno,
-					s.blockSequenceNb+1,
-					s.index,
-					s.subindex,
-					frame.Data,
-				)
-			}
-
-			if state != stateDownloadBlkSubblockReq {
-				s.state = state
-			}
-		}
-		return nil
-	}
-	if s.state == stateDownloadBlkSubblockRsp {
-		// Ignore other s messages if response requested
-		return nil
-	}
+	// if s.state == stateDownloadBlkSubblockRsp {
+	// 	// Ignore other messages if response requested
+	// 	return nil
+	// }
 
 	// Copy data and set new flag
 	s.response.raw = frame.Data
@@ -253,7 +193,7 @@ func (s *SDOServer) processIncoming(frame canopen.Frame) error {
 			err = s.rxDownloadBlockInitiate(response)
 
 		case stateDownloadBlkSubblockReq:
-			// This is done in receive handler
+			err = s.rxDownloadBlockSubBlock(response)
 
 		case stateDownloadBlkEndReq:
 			err = s.rxDownloadBlockEnd(response)
@@ -287,13 +227,18 @@ func (s *SDOServer) processIncoming(frame canopen.Frame) error {
 					s.state = stateUploadBlkSubblockSreq
 				}
 			}
+		case stateUploadBlkEndCrsp:
+			if frame.Data[0] == 0xA1 {
+				// Block transferred ! go to idle
+				s.state = stateIdle
+				return nil
+			}
+			return AbortCmd
 
 		default:
 			return AbortCmd
 
 		}
 	}
-	s.timeoutTimer = 0
-
 	return err
 }

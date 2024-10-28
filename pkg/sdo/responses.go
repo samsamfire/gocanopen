@@ -60,7 +60,6 @@ func (s *SDOServer) txUploadBlockEnd() {
 	s.txBuffer.Data[0] = 0xC1 | (s.blockNoData << 2)
 	s.txBuffer.Data[1] = byte(s.blockCRC)
 	s.txBuffer.Data[2] = byte(s.blockCRC >> 8)
-	s.timeoutTimer = 0
 	log.Debugf("[SERVER][TX] BLOCK UPLOAD END | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
 	s.Send(s.txBuffer)
 	s.state = stateUploadBlkEndCrsp
