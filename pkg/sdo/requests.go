@@ -20,7 +20,6 @@ func (s *SDOServer) processIncoming(rx SDOMessage) error {
 
 	// Copy data and set new flag
 	header := rx.raw[0]
-	var abortCode error
 
 	// Determine if we need to read / write to OD.
 	// If we are in idle, we need to create a streamer object to
@@ -101,22 +100,7 @@ func (s *SDOServer) processIncoming(rx SDOMessage) error {
 
 	case stateUploadBlkSubblockSreq, stateUploadBlkSubblockCrsp:
 		err = s.rxUploadSubBlock(rx)
-		if err != nil {
-			return err
-		} else {
-			// Refill buffer if needed
-			abortCode = s.readObjectDictionary(uint32(s.blockSize)*BlockSeqSize, true)
-			if abortCode != nil {
-				return abortCode
-			}
 
-			if s.bufWriteOffset == s.bufReadOffset {
-				s.state = stateUploadBlkEndSreq
-			} else {
-				s.blockSequenceNb = 0
-				s.state = stateUploadBlkSubblockSreq
-			}
-		}
 	case stateUploadBlkEndCrsp:
 		if rx.raw[0] == 0xA1 {
 			// Block transferred ! go to idle
@@ -413,6 +397,18 @@ func (s *SDOServer) rxUploadSubBlock(rx SDOMessage) error {
 		s.sizeTransferred -= uint32(cntFailed)
 	} else if rx.raw[1] > s.blockSequenceNb {
 		return AbortCmd
+	}
+	// Refill buffer if needed
+	err := s.readObjectDictionary(uint32(s.blockSize)*BlockSeqSize, true)
+	if err != nil {
+		return err
+	}
+
+	if s.bufWriteOffset == s.bufReadOffset {
+		s.state = stateUploadBlkEndSreq
+	} else {
+		s.blockSequenceNb = 0
+		s.state = stateUploadBlkSubblockSreq
 	}
 	return nil
 }
