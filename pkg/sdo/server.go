@@ -344,7 +344,7 @@ func (server *SDOServer) prepareRx() error {
 }
 
 // Update streamer object with new requested entry
-func (server *SDOServer) updateStreamer(response SDOResponse) error {
+func (server *SDOServer) updateStreamer(response SDOMessage) error {
 	var err error
 	server.index = response.GetIndex()
 	server.subindex = response.GetSubindex()
