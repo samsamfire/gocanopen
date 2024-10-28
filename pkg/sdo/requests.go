@@ -4,25 +4,22 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/internal/crc"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	log "github.com/sirupsen/logrus"
 )
 
-func (s *SDOServer) processIncoming(frame canopen.Frame) error {
+func (s *SDOServer) processIncoming(rx SDOMessage) error {
 
-	if frame.Data[0] == CSAbort {
+	if rx.raw[0] == CSAbort {
 		s.state = stateIdle
-		abortCode := binary.LittleEndian.Uint32(frame.Data[4:])
+		abortCode := binary.LittleEndian.Uint32(rx.raw[4:])
 		log.Warnf("[SERVER][RX] abort received from client : x%x (%v)", abortCode, Abort(abortCode))
 		return nil
 	}
 
 	// Copy data and set new flag
-	s.response.raw = frame.Data
-	response := s.response
-	header := response.raw[0]
+	header := rx.raw[0]
 	var abortCode error
 
 	// Determine if we need to read / write to OD.
@@ -58,7 +55,7 @@ func (s *SDOServer) processIncoming(frame canopen.Frame) error {
 		// Check object exists and has correct attributes
 		// i.e. readable or writable depending on what has been
 		// requested
-		err := s.updateStreamer(response)
+		err := s.updateStreamer(rx)
 		if err != nil {
 			return err
 		}
@@ -70,32 +67,32 @@ func (s *SDOServer) processIncoming(frame canopen.Frame) error {
 	switch s.state {
 
 	case stateDownloadInitiateReq:
-		err = s.rxDownloadInitiate(response)
+		err = s.rxDownloadInitiate(rx)
 
 	case stateDownloadSegmentReq:
-		err = s.rxDownloadSegment(response)
+		err = s.rxDownloadSegment(rx)
 
 	case stateUploadInitiateReq:
-		log.Debugf("[SERVER][RX] UPLOAD EXPEDITED | x%x:x%x %v", s.index, s.subindex, response.raw)
+		log.Debugf("[SERVER][RX] UPLOAD EXPEDITED | x%x:x%x %v", s.index, s.subindex, rx.raw)
 		s.state = stateUploadInitiateRsp
 
 	case stateUploadSegmentReq:
-		err = s.rxUploadSegment(response)
+		err = s.rxUploadSegment(rx)
 
 	case stateDownloadBlkInitiateReq:
-		err = s.rxDownloadBlockInitiate(response)
+		err = s.rxDownloadBlockInitiate(rx)
 
 	case stateDownloadBlkSubblockReq:
-		err = s.rxDownloadBlockSubBlock(response)
+		err = s.rxDownloadBlockSubBlock(rx)
 
 	case stateDownloadBlkEndReq:
-		err = s.rxDownloadBlockEnd(response)
+		err = s.rxDownloadBlockEnd(rx)
 
 	case stateUploadBlkInitiateReq:
-		err = s.rxUploadBlockInitiate(response)
+		err = s.rxUploadBlockInitiate(rx)
 
 	case stateUploadBlkInitiateReq2:
-		if response.raw[0] == 0xA3 {
+		if rx.raw[0] == 0xA3 {
 			s.blockSequenceNb = 0
 			s.state = stateUploadBlkSubblockSreq
 		} else {
@@ -103,7 +100,7 @@ func (s *SDOServer) processIncoming(frame canopen.Frame) error {
 		}
 
 	case stateUploadBlkSubblockSreq, stateUploadBlkSubblockCrsp:
-		err = s.rxUploadSubBlock(response)
+		err = s.rxUploadSubBlock(rx)
 		if err != nil {
 			return err
 		} else {
@@ -121,7 +118,7 @@ func (s *SDOServer) processIncoming(frame canopen.Frame) error {
 			}
 		}
 	case stateUploadBlkEndCrsp:
-		if frame.Data[0] == 0xA1 {
+		if rx.raw[0] == 0xA1 {
 			// Block transferred ! go to idle
 			s.state = stateIdle
 			return nil
@@ -137,7 +134,7 @@ func (s *SDOServer) processIncoming(frame canopen.Frame) error {
 	return err
 }
 
-func (s *SDOServer) rxDownloadInitiate(response SDOResponse) error {
+func (s *SDOServer) rxDownloadInitiate(response SDOMessage) error {
 
 	// Segmented transfer type
 	if !response.IsExpedited() {
@@ -204,7 +201,7 @@ func (s *SDOServer) rxDownloadInitiate(response SDOResponse) error {
 	return nil
 }
 
-func (s *SDOServer) rxDownloadSegment(response SDOResponse) error {
+func (s *SDOServer) rxDownloadSegment(response SDOMessage) error {
 	if (response.raw[0] & 0xE0) != 0x00 {
 		return AbortCmd
 	}
@@ -236,7 +233,7 @@ func (s *SDOServer) rxDownloadSegment(response SDOResponse) error {
 	return nil
 }
 
-func (s *SDOServer) rxUploadSegment(response SDOResponse) error {
+func (s *SDOServer) rxUploadSegment(response SDOMessage) error {
 	log.Debugf("[SERVER][RX] UPLOAD SEGMENTED | x%x:x%x %v", s.index, s.subindex, response.raw)
 	if (response.raw[0] & 0xEF) != 0x60 {
 		return AbortCmd
@@ -249,7 +246,7 @@ func (s *SDOServer) rxUploadSegment(response SDOResponse) error {
 	return nil
 }
 
-func (s *SDOServer) rxDownloadBlockInitiate(response SDOResponse) error {
+func (s *SDOServer) rxDownloadBlockInitiate(response SDOMessage) error {
 	s.blockCRCEnabled = response.IsCRCEnabled()
 	// Check if size indicated
 	if (response.raw[0] & 0x02) != 0 {
@@ -278,7 +275,7 @@ func (s *SDOServer) rxDownloadBlockInitiate(response SDOResponse) error {
 	return nil
 }
 
-func (s *SDOServer) rxDownloadBlockSubBlock(response SDOResponse) error {
+func (s *SDOServer) rxDownloadBlockSubBlock(response SDOMessage) error {
 	// Condition should always pass but still check just in case
 	if int(s.bufWriteOffset) > (len(s.buffer) - (BlockSeqSize + 2)) {
 		return AbortGeneral
@@ -336,7 +333,7 @@ func (s *SDOServer) rxDownloadBlockSubBlock(response SDOResponse) error {
 	return nil
 }
 
-func (s *SDOServer) rxDownloadBlockEnd(response SDOResponse) error {
+func (s *SDOServer) rxDownloadBlockEnd(response SDOMessage) error {
 	log.Debugf("[SERVER][RX] BLOCK DOWNLOAD END | x%x:x%x %v", s.index, s.subindex, response.raw)
 	if (response.raw[0] & 0xE3) != 0xC1 {
 		return AbortCmd
@@ -363,7 +360,7 @@ func (s *SDOServer) rxDownloadBlockEnd(response SDOResponse) error {
 	return nil
 }
 
-func (s *SDOServer) rxUploadBlockInitiate(response SDOResponse) error {
+func (s *SDOServer) rxUploadBlockInitiate(response SDOMessage) error {
 	// If protocol switch threshold (byte 5) is larger than data
 	// size of OD var, then switch to segmented
 	if s.sizeIndicated > 0 && response.raw[5] > 0 && uint32(response.raw[5]) >= s.sizeIndicated {
@@ -392,7 +389,7 @@ func (s *SDOServer) rxUploadBlockInitiate(response SDOResponse) error {
 	return nil
 }
 
-func (s *SDOServer) rxUploadSubBlock(response SDOResponse) error {
+func (s *SDOServer) rxUploadSubBlock(response SDOMessage) error {
 	if response.raw[0] != 0xA2 {
 		return AbortCmd
 	}

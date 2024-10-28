@@ -7,7 +7,50 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func (s *SDOServer) txDownloadInitiate() uint8 {
+func (s *SDOServer) processOutgoing() error {
+	var err error
+
+	s.txBuffer.Data = [8]byte{0}
+
+	switch s.state {
+	case stateDownloadInitiateRsp:
+		s.txDownloadInitiate()
+
+	case stateDownloadSegmentRsp:
+		s.txDownloadSegment()
+
+	case stateUploadInitiateRsp:
+		s.txUploadInitiate()
+
+	case stateUploadSegmentRsp:
+		err = s.txUploadSegment()
+
+	case stateDownloadBlkInitiateRsp:
+		s.txDownloadBlockInitiate()
+
+	case stateDownloadBlkSubblockRsp:
+		err = s.txDownloadBlockSubBlock()
+
+	case stateDownloadBlkEndRsp:
+		s.txDownloadBlockEnd()
+
+	case stateUploadBlkInitiateRsp:
+		s.txUploadBlockInitiate()
+
+	case stateUploadBlkSubblockSreq:
+		err = s.txUploadBlockSubBlock()
+		if err != nil {
+			return err
+		}
+		s.processOutgoing()
+
+	case stateUploadBlkEndSreq:
+		s.txUploadBlockEnd()
+	}
+	return err
+}
+
+func (s *SDOServer) txDownloadInitiate() {
 	// Prepare response packet
 	s.txBuffer.Data[0] = 0x60
 	s.txBuffer.Data[1] = byte(s.index)
@@ -17,7 +60,7 @@ func (s *SDOServer) txDownloadInitiate() uint8 {
 	if s.finished {
 		log.Debugf("[SERVER][TX] DOWNLOAD EXPEDITED | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
 		s.state = stateIdle
-		return success
+		return
 	}
 
 	log.Debugf("[SERVER][TX] DOWNLOAD SEGMENT INIT | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
@@ -26,10 +69,9 @@ func (s *SDOServer) txDownloadInitiate() uint8 {
 	s.bufWriteOffset = 0
 	s.bufReadOffset = 0
 	s.state = stateDownloadSegmentReq
-	return waitingResponse
 }
 
-func (s *SDOServer) txDownloadSegment() uint8 {
+func (s *SDOServer) txDownloadSegment() {
 	// Pepare segment
 	s.txBuffer.Data[0] = 0x20 | s.toggle
 	s.toggle ^= 0x10
@@ -37,13 +79,12 @@ func (s *SDOServer) txDownloadSegment() uint8 {
 	_ = s.Send(s.txBuffer)
 	if s.finished {
 		s.state = stateIdle
-		return success
+		return
 	}
 	s.state = stateDownloadSegmentReq
-	return waitingResponse
 }
 
-func (s *SDOServer) txUploadInitiate() uint8 {
+func (s *SDOServer) txUploadInitiate() {
 	if s.sizeIndicated > 0 && s.sizeIndicated <= 4 {
 		s.txBuffer.Data[0] = 0x43 | ((4 - byte(s.sizeIndicated)) << 2)
 		copy(s.txBuffer.Data[4:], s.buffer[:s.sizeIndicated])
@@ -53,7 +94,7 @@ func (s *SDOServer) txUploadInitiate() uint8 {
 		s.txBuffer.Data[3] = s.subindex
 		_ = s.Send(s.txBuffer)
 		log.Debugf("[SERVER][TX] UPLOAD EXPEDITED | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
-		return success
+		return
 
 	}
 	// Segmented transfer
@@ -72,15 +113,13 @@ func (s *SDOServer) txUploadInitiate() uint8 {
 	s.txBuffer.Data[2] = byte(s.index >> 8)
 	s.txBuffer.Data[3] = s.subindex
 	_ = s.Send(s.txBuffer)
-	return waitingResponse
 }
 
-func (s *SDOServer) txUploadSegment() (error, uint8) {
-	ret := waitingResponse
+func (s *SDOServer) txUploadSegment() error {
 	// Refill buffer if needed
 	err := s.readObjectDictionary(BlockSeqSize, false)
 	if err != nil {
-		return err, waitingResponse
+		return err
 	}
 	s.txBuffer.Data[0] = s.toggle
 	s.toggle ^= 0x10
@@ -90,7 +129,6 @@ func (s *SDOServer) txUploadSegment() (error, uint8) {
 	if count < BlockSeqSize || (s.finished && count == BlockSeqSize) {
 		s.txBuffer.Data[0] |= (byte((BlockSeqSize - count) << 1)) | 0x01
 		s.state = stateIdle
-		ret = success
 	} else {
 		s.state = stateUploadSegmentReq
 		count = BlockSeqSize
@@ -98,19 +136,19 @@ func (s *SDOServer) txUploadSegment() (error, uint8) {
 	copy(s.txBuffer.Data[1:], s.buffer[s.bufReadOffset:s.bufReadOffset+count])
 	s.bufReadOffset += count
 	s.sizeTransferred += count
-	// Check if too shor or too large in last segment
+	// Check if too short or too large in last segment
 	if s.sizeIndicated > 0 {
 		if s.sizeTransferred > s.sizeIndicated {
 			s.state = stateAbort
-			return AbortDataLong, ret
-		} else if ret == success && s.sizeTransferred < s.sizeIndicated {
+			return AbortDataLong
+		} else if s.state == stateIdle && s.sizeTransferred < s.sizeIndicated {
 			s.state = stateAbort
-			return AbortDataShort, waitingResponse
+			return AbortDataShort
 		}
 	}
 	log.Debugf("[SERVER][TX] UPLOAD SEGMENTED | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
 	_ = s.Send(s.txBuffer)
-	return nil, ret
+	return nil
 }
 
 func (s *SDOServer) txDownloadBlockInitiate() {
@@ -181,12 +219,11 @@ func (s *SDOServer) txDownloadBlockSubBlock() error {
 	return nil
 }
 
-func (s *SDOServer) txDownloadBlockEnd() uint8 {
+func (s *SDOServer) txDownloadBlockEnd() {
 	s.txBuffer.Data[0] = 0xA1
 	log.Debugf("[SERVER][TX] BLOCK DOWNLOAD END | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
 	s.Send(s.txBuffer)
 	s.state = stateIdle
-	return success
 }
 
 func (s *SDOServer) txUploadBlockInitiate() {
@@ -249,69 +286,12 @@ func (s *SDOServer) txUploadBlockEnd() {
 	s.state = stateUploadBlkEndCrsp
 }
 
-func (s *SDOServer) processOutgoing() {
-	var ret = waitingResponse
-	var abortCode error
-
-	s.txBuffer.Data = [8]byte{0}
-
-	switch s.state {
-	case stateDownloadInitiateRsp:
-		ret = s.txDownloadInitiate()
-
-	case stateDownloadSegmentRsp:
-		ret = s.txDownloadSegment()
-
-	case stateUploadInitiateRsp:
-		ret = s.txUploadInitiate()
-
-	case stateUploadSegmentRsp:
-		abortCode, ret = s.txUploadSegment()
-
-	case stateDownloadBlkInitiateRsp:
-		s.txDownloadBlockInitiate()
-
-	case stateDownloadBlkSubblockRsp:
-		abortCode = s.txDownloadBlockSubBlock()
-
-	case stateDownloadBlkEndRsp:
-		ret = s.txDownloadBlockEnd()
-
-	case stateUploadBlkInitiateRsp:
-		s.txUploadBlockInitiate()
-
-	case stateUploadBlkSubblockSreq:
-		// Send block straight away
-		for {
-			abortCode = s.txUploadBlockSubBlock()
-			if abortCode != nil {
-				s.state = stateAbort
-				break
-			}
-			if s.state == stateUploadBlkSubblockCrsp {
-				break
-			}
-		}
-
-	case stateUploadBlkEndSreq:
-		s.txUploadBlockEnd()
+func (s *SDOServer) txAbort(err error) {
+	if sdoAbort, ok := err.(Abort); !ok {
+		log.Errorf("[SERVER][TX] Abort internal error : unknown abort code : %v", err)
+		s.SendAbort(AbortGeneral)
+	} else {
+		s.SendAbort(sdoAbort)
 	}
-
-	// Error handling
-	if ret == waitingResponse {
-		switch s.state {
-		case stateAbort:
-			if sdoAbort, ok := abortCode.(Abort); !ok {
-				log.Errorf("[SERVER][TX] Abort internal error : unknown abort code : %v", abortCode)
-				s.SendAbort(AbortGeneral)
-			} else {
-				s.SendAbort(sdoAbort)
-			}
-			s.state = stateIdle
-		case stateDownloadBlkSubblockReq:
-			ret = blockDownloadInProgress
-		case stateUploadBlkSubblockSreq:
-			ret = blockUploadInProgress
-		}
-	}
+	s.state = stateIdle
 }

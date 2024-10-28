@@ -32,7 +32,6 @@ type SDOServer struct {
 	buffer                     []byte
 	bufWriteOffset             uint32
 	bufReadOffset              uint32
-	response                   SDOResponse
 	toggle                     uint8
 	timeoutTimeBlockTransferUs uint32
 	blockSequenceNb            uint8
@@ -42,7 +41,7 @@ type SDOServer struct {
 	blockCRC                   crc.CRC16
 	errorExtraInfo             error
 
-	rx chan canopen.Frame
+	rx chan SDOMessage
 }
 
 // Handle [SDOServer] related RX CAN frames
@@ -52,7 +51,9 @@ func (server *SDOServer) Handle(frame canopen.Frame) {
 	if frame.DLC != 8 {
 		return
 	}
-	server.rx <- frame
+	rx := SDOMessage{}
+	rx.raw = frame.Data
+	server.rx <- rx
 }
 
 // Process [SDOServer] state machine and TX CAN frames
@@ -77,24 +78,18 @@ func (server *SDOServer) Process(
 			err := server.processIncoming(frame)
 			if err != nil && err != od.ErrPartial {
 				// Abort straight away, nothing to send afterwards
-				server.state = stateAbort
-				if sdoAbort, ok := err.(Abort); !ok {
-					log.Errorf("[SERVER][TX] Abort internal error : unknown abort code : %v", err)
-					server.SendAbort(AbortGeneral)
-				} else {
-					server.SendAbort(sdoAbort)
-				}
-				server.state = stateIdle
+				server.txAbort(err)
 				break
 			}
 			// A response is expected
-			server.processOutgoing()
+			err = server.processOutgoing()
+			if err != nil {
+				server.txAbort(err)
+			}
 
 		case <-time.After(timeout):
 			if server.state != stateIdle {
-				log.Errorf("[SERVER] TIMEOUT %v, State : %v", timeout, server.state)
-				server.SendAbort(AbortTimeout)
-				server.state = stateIdle
+				server.txAbort(AbortTimeout)
 			}
 		}
 	}
@@ -290,7 +285,7 @@ func updateStateFromRequest(stateReq uint8, state *internalState, upload *bool) 
 }
 
 // Update streamer object with new requested entry
-func (server *SDOServer) updateStreamer(response SDOResponse) error {
+func (server *SDOServer) updateStreamer(response SDOMessage) error {
 	var err error
 	server.index = response.GetIndex()
 	server.subindex = response.GetSubindex()
@@ -384,7 +379,7 @@ func NewSDOServer(
 	server.nodeId = nodeId
 	server.timeoutTimeUs = timeoutMs * 1000
 	server.timeoutTimeBlockTransferUs = timeoutMs * 700
-	server.rx = make(chan canopen.Frame, 1)
+	server.rx = make(chan SDOMessage, 1)
 	var canIdClientToServer uint16
 	var canIdServerToClient uint16
 	if entry12xx.Index == 0x1200 {
