@@ -383,32 +383,53 @@ func (s *SDOServer) rxUploadSubBlock(rx SDOMessage) error {
 		s.subindex,
 		rx.raw,
 	)
+	ackseq := rx.raw[1]
+
 	// Check block size
 	s.blockSize = rx.raw[2]
 	if s.blockSize < 1 || s.blockSize > BlockMaxSize {
 		return AbortBlockSize
 	}
-	// Check number of segments
-	if rx.raw[1] < s.blockSequenceNb {
-		// Some error occurd, re-transmit missing chunks
-		cntFailed := s.blockSequenceNb - rx.raw[1]
-		cntFailed = cntFailed*BlockSeqSize - s.blockNoData
-		s.bufReadOffset -= uint32(cntFailed)
-		s.sizeTransferred -= uint32(cntFailed)
-	} else if rx.raw[1] > s.blockSequenceNb {
+
+	// If server acknowledges more than what was sent, error straight away
+	if ackseq > s.blockSequenceNb {
+		log.Debugf("[SERVER][RX] BLOCK UPLOAD END SUB-BLOCK error | blksize %v | x%x:x%x %v",
+			rx.raw[2],
+			s.index,
+			s.subindex,
+			rx.raw,
+		)
 		return AbortCmd
 	}
-	// Refill buffer if needed
+
+	// Check client acknowledged all packets sent
+	if ackseq < s.blockSequenceNb {
+		log.Debugf("[SERVER][RX] BLOCK UPLOAD END SUB-BLOCK error, retransmitting | blksize %v | x%x:x%x %v",
+			rx.raw[2],
+			s.index,
+			s.subindex,
+			rx.raw,
+		)
+		// We go back to the last acknowledged packet
+		nbFailed := (s.blockSequenceNb-ackseq)*BlockSeqSize - s.blockNoData
+		s.bufReadOffset -= uint32(nbFailed)
+		s.sizeTransferred -= uint32(nbFailed)
+	}
+
+	// Refill buffer for next block
 	err := s.readObjectDictionary(uint32(s.blockSize)*BlockSeqSize, true)
 	if err != nil {
 		return err
 	}
 
+	// We are done
 	if s.bufWriteOffset == s.bufReadOffset {
 		s.state = stateUploadBlkEndSreq
-	} else {
-		s.blockSequenceNb = 0
-		s.state = stateUploadBlkSubblockSreq
+		return nil
 	}
+
+	// Proceed to send the block
+	s.blockSequenceNb = 0
+	s.state = stateUploadBlkSubblockSreq
 	return nil
 }

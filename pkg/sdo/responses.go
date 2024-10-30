@@ -247,16 +247,19 @@ func (s *SDOServer) txUploadBlockSubBlock() error {
 	s.blockSequenceNb += 1
 	s.txBuffer.Data[0] = s.blockSequenceNb
 	count := s.bufWriteOffset - s.bufReadOffset
-	// Check if last segment
+
+	// Check if last segment (can be less that BlockSeqSize)
 	if count < BlockSeqSize || (s.finished && count == BlockSeqSize) {
 		s.txBuffer.Data[0] |= 0x80
 	} else {
 		count = BlockSeqSize
 	}
+
 	copy(s.txBuffer.Data[1:], s.buffer[s.bufReadOffset:s.bufReadOffset+count])
 	s.bufReadOffset += count
 	s.blockNoData = byte(BlockSeqSize - count)
 	s.sizeTransferred += count
+
 	// Check if too short or too large in last segment
 	if s.sizeIndicated > 0 {
 		if s.sizeTransferred > s.sizeIndicated {
@@ -265,6 +268,7 @@ func (s *SDOServer) txUploadBlockSubBlock() error {
 			return AbortDataShort
 		}
 	}
+
 	// Check if last segment or all segments in current block transferred
 	if s.bufWriteOffset == s.bufReadOffset || s.blockSequenceNb >= s.blockSize {
 		s.state = stateUploadBlkSubblockCrsp
@@ -272,7 +276,6 @@ func (s *SDOServer) txUploadBlockSubBlock() error {
 	} else {
 		log.Debugf("[SERVER][TX] BLOCK UPLOAD SUB-BLOCK | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
 	}
-	// Reset timer & send
 	s.Send(s.txBuffer)
 	return nil
 }

@@ -1,6 +1,7 @@
 package sdo
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"sync"
@@ -23,6 +24,8 @@ type SDOServer struct {
 	cobIdClientToServer        uint32
 	cobIdServerToClient        uint32
 	valid                      bool
+	running                    bool
+	buffer2                    *bytes.Buffer
 	index                      uint16
 	subindex                   uint8
 	finished                   bool
@@ -60,20 +63,23 @@ func (server *SDOServer) Handle(frame canopen.Frame) {
 // This should be called periodically
 func (server *SDOServer) Process(
 	nmtIsPreOrOperationnal bool,
-	timeDifferenceUs uint32,
-	timerNextUs *uint32,
 ) (state uint8, err error) {
-
+	log.Info("[SERVER] starting sdo server")
 	timeout := time.Duration(server.timeoutTimeUs * uint32(time.Microsecond))
+	server.running = true
+	defer func() {
+		server.running = false
+	}()
 
 	for {
+		if !server.valid || !nmtIsPreOrOperationnal {
+			server.state = stateIdle
+			log.Info("[SERVER] exiting sdo server because not valid or not in correct nmt state")
+			return
+		}
 		select {
 		case rx := <-server.rx:
 			// New frame received, do what we need to do !
-			if !nmtIsPreOrOperationnal || !server.valid {
-				server.state = stateIdle
-				break
-			}
 			err := server.processIncoming(rx)
 			if err != nil && err != od.ErrPartial {
 				// Abort straight away, nothing to send afterwards
@@ -95,7 +101,6 @@ func (server *SDOServer) Process(
 }
 
 func (server *SDOServer) initRxTx(cobIdClientToServer uint32, cobIdServerToClient uint32) error {
-	var ret error
 	// Only proceed if parameters change (i.e. different client)
 	if cobIdServerToClient == server.cobIdServerToClient && cobIdClientToServer == server.cobIdClientToServer {
 		return nil
@@ -123,13 +128,18 @@ func (server *SDOServer) initRxTx(cobIdClientToServer uint32, cobIdServerToClien
 		server.valid = false
 	}
 	// Configure buffers, if initializing then insert in buffer, otherwise, update
-	ret = server.Subscribe(uint32(CanIdC2S), 0x7FF, false, server)
-	if ret != nil {
+	err := server.Subscribe(uint32(CanIdC2S), 0x7FF, false, server)
+	if err != nil {
 		server.valid = false
-		return ret
+		return err
 	}
 	server.txBuffer = canopen.NewFrame(uint32(CanIdS2C), 0, 8)
-	return ret
+
+	if server.valid && !server.running {
+		go server.Process(true)
+	}
+
+	return nil
 }
 
 func (server *SDOServer) writeObjectDictionary(crcOperation uint, crcClient crc.CRC16) error {
@@ -207,59 +217,59 @@ func (server *SDOServer) writeObjectDictionary(crcOperation uint, crcClient crc.
 
 func (server *SDOServer) readObjectDictionary(countMinimum uint32, calculateCRC bool) error {
 	buffered := server.bufWriteOffset - server.bufReadOffset
-	if !server.finished && buffered < countMinimum {
-		// Move buffered bytes to beginning
-		copy(server.buffer, server.buffer[server.bufReadOffset:server.bufReadOffset+buffered])
-		server.bufReadOffset = 0
-		server.bufWriteOffset = buffered
 
-		// Read from OD into the buffer
-		countRd, err := server.streamer.Read(server.buffer[buffered:])
+	if server.finished || buffered >= countMinimum {
+		return nil
+	}
+	// Move buffered bytes to beginning
+	copy(server.buffer, server.buffer[server.bufReadOffset:server.bufReadOffset+buffered])
+	server.bufReadOffset = 0
+	server.bufWriteOffset = buffered
 
-		if err != nil && err != od.ErrPartial {
-			server.state = stateAbort
-			return ConvertOdToSdoAbort(err.(od.ODR))
-		}
+	// Read from OD into the buffer
+	countRd, err := server.streamer.Read(server.buffer[buffered:])
 
-		// Stop sending at null termination if string
-		if countRd > 0 && server.streamer.HasAttribute(od.AttributeStr) {
-			server.buffer[countRd+int(buffered)] = 0
-			countStr := int(server.streamer.DataLength)
-			for i, v := range server.buffer[buffered:] {
-				if v == 0 {
-					countStr = i
-					break
-				}
-			}
-			if countStr == 0 {
-				countStr = 1
-			}
-			if countStr < countRd {
-				// String terminator found
-				countRd = countStr
-				err = nil
-				server.streamer.DataLength = server.sizeTransferred + uint32(countRd)
-			}
-		}
-
-		server.bufWriteOffset = buffered + uint32(countRd) // Move offset write by countRd (number of read bytes)
-		if server.bufWriteOffset == 0 || err == od.ErrPartial {
-			server.finished = false
-			if server.bufWriteOffset < countMinimum {
-				server.state = stateAbort
-				server.errorExtraInfo = fmt.Errorf("buffer offset write %v is less than the minimum count %v", server.bufWriteOffset, countMinimum)
-				return AbortDeviceIncompat
-			}
-		} else {
-			server.finished = true
-		}
-		if calculateCRC && server.blockCRCEnabled {
-			// Calculate CRC for the read data
-			server.blockCRC.Block(server.buffer[buffered:server.bufWriteOffset])
-		}
-
+	if err != nil && err != od.ErrPartial {
+		server.state = stateAbort
+		return ConvertOdToSdoAbort(err.(od.ODR))
 	}
 
+	// Stop sending at null termination if string
+	if countRd > 0 && server.streamer.HasAttribute(od.AttributeStr) {
+		server.buffer[countRd+int(buffered)] = 0
+		countStr := int(server.streamer.DataLength)
+		for i, v := range server.buffer[buffered:] {
+			if v == 0 {
+				countStr = i
+				break
+			}
+		}
+		if countStr == 0 {
+			countStr = 1
+		}
+		if countStr < countRd {
+			// String terminator found
+			countRd = countStr
+			err = nil
+			server.streamer.DataLength = server.sizeTransferred + uint32(countRd)
+		}
+	}
+
+	server.bufWriteOffset = buffered + uint32(countRd) // Move offset write by countRd (number of read bytes)
+	if server.bufWriteOffset == 0 || err == od.ErrPartial {
+		server.finished = false
+		if server.bufWriteOffset < countMinimum {
+			server.state = stateAbort
+			server.errorExtraInfo = fmt.Errorf("buffer offset write %v is less than the minimum count %v", server.bufWriteOffset, countMinimum)
+			return AbortDeviceIncompat
+		}
+	} else {
+		server.finished = true
+	}
+	if calculateCRC && server.blockCRCEnabled {
+		// Calculate CRC for the read data
+		server.blockCRC.Block(server.buffer[buffered:server.bufWriteOffset])
+	}
 	return nil
 }
 
@@ -359,6 +369,7 @@ func NewSDOServer(
 	server.timeoutTimeUs = timeoutMs * 1000
 	server.timeoutTimeBlockTransferUs = timeoutMs * 700
 	server.rx = make(chan SDOMessage, 1)
+	server.buffer2 = bytes.NewBuffer(make([]byte, 1000))
 	var canIdClientToServer uint16
 	var canIdServerToClient uint16
 	if entry12xx.Index == 0x1200 {
