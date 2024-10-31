@@ -234,6 +234,7 @@ func (server *SDOServer) readObjectDictionary(countMinimum uint32, size int, cal
 		return nil
 	}
 
+	buf2 := make([]byte, 1000)
 	// Read from OD into the buffer
 	countRd, err := server.streamer.Read(server.intermediateBuf)
 	if err != nil && err != od.ErrPartial || size >= countRd {
@@ -373,21 +374,24 @@ func (server *SDOServer) updateStreamer(response SDOMessage) error {
 
 // Prepare read transfer
 func (server *SDOServer) prepareRx() error {
-	server.bufReadOffset = 0
-	server.bufWriteOffset = 0
+	server.buf.Reset()
 	server.sizeTransferred = 0
 	server.finished = false
+
+	// Load data from OD now
 	err := server.readObjectDictionary(BlockSeqSize, false)
 	if err != nil && err != od.ErrPartial {
 		return err
 	}
 
+	// For small transfers (e.g. expedited), we might finish straight away
 	if server.finished {
 		server.sizeIndicated = server.streamer.DataLength
 		if server.sizeIndicated == 0 {
-			server.sizeIndicated = server.bufWriteOffset
-		} else if server.sizeIndicated != server.bufWriteOffset {
-			server.errorExtraInfo = fmt.Errorf("size indicated %v != to buffer write offset %v", server.sizeIndicated, server.bufWriteOffset)
+			server.sizeIndicated = uint32(server.buf.Len())
+		} else if server.sizeIndicated != uint32(server.buf.Len()) {
+			// Because we have finished, we should have exactly sizeIndicated bytes in buffer
+			server.errorExtraInfo = fmt.Errorf("size indicated %v != to buffer write offset %v", server.sizeIndicated, server.buf.Len())
 			return AbortDeviceIncompat
 		}
 		return nil

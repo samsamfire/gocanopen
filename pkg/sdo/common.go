@@ -122,11 +122,18 @@ const (
 	MaskClientSubcommand            = uint8(0b1)
 	MaskServerSubcommand            = uint8(0b1)
 	MaskClientSubcommandBlockUpload = uint8(0b11)
-	CSAbort                         = uint8(4) << csOffset
-	CSDownloadInitiate              = uint8(1) << csOffset
-	CSUploadInitiate                = uint8(2) << csOffset
-	CSDownloadBlockInitiate         = uint8(6) << csOffset
-	CSUploadBlockInitiate           = uint8(5) << csOffset
+	MaskClientCRCSupported          = uint8(0b100)
+	MaskServerCRCSupported          = uint8(0b1000)
+	MaskSeqno                       = 0x7F
+	MaskSegmentsRemaining           = 0x80
+
+	CSAbort                     = uint8(4) << csOffset
+	CSDownloadInitiate          = uint8(1) << csOffset
+	CSUploadInitiate            = uint8(2) << csOffset
+	CSDownloadBlockInitiate     = uint8(6) << csOffset
+	CSDownloadBlockInitiateResp = uint8(5) << csOffset
+	CSDownloadSubBlockResp      = uint8(2) << csOffset
+	CSUploadBlockInitiate       = uint8(5) << csOffset
 )
 
 const (
@@ -138,6 +145,20 @@ const (
 	// Size indicated (s)
 	sizeIndicated    = uint8(0b1)
 	sizeNotIndicated = uint8(0b0)
+	// Size indicated block (s)
+	sizeIndicatedBlock    = uint8(0b1) << 1
+	sizeNotIndicatedBlock = uint8(0b0) << 1
+	// Client CRC support (cc)
+	clientCRCSupported    = uint8(0b1) << 2
+	clientCRCNotSupported = uint8(0b0) << 2
+	// Server CRC support (cc)
+	serverCRCSupported    = uint8(0b1) << 3
+	serverCRCNotSupported = uint8(0b0) << 3
+	// Segment remaining (c)
+	segmentRemaining    = uint8(0b1) << 7
+	segmentNotRemaining = uint8(0b0) << 7
+	// Server subcommand (ss)
+	serverSubCommandBlockDownloadResp = uint8(0b10)
 )
 
 const (
