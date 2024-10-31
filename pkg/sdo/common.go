@@ -60,14 +60,22 @@ const (
 	MaskCS                          = uint8(0b111_00000)
 	MaskTransferType                = uint8(0b10)
 	MaskSizeIndicated               = uint8(0b1)
+	MaskSizeIndicatedBlock          = uint8(0b10)
 	MaskClientSubcommand            = uint8(0b1)
 	MaskServerSubcommand            = uint8(0b1)
 	MaskClientSubcommandBlockUpload = uint8(0b11)
-	CSAbort                         = uint8(4) << csOffset
-	CSDownloadInitiate              = uint8(1) << csOffset
-	CSUploadInitiate                = uint8(2) << csOffset
-	CSDownloadBlockInitiate         = uint8(6) << csOffset
-	CSUploadBlockInitiate           = uint8(5) << csOffset
+	MaskClientCRCSupported          = uint8(0b100)
+	MaskServerCRCSupported          = uint8(0b1000)
+	MaskSeqno                       = 0x7F
+	MaskSegmentsRemaining           = 0x80
+
+	CSAbort                     = uint8(4) << csOffset
+	CSDownloadInitiate          = uint8(1) << csOffset
+	CSUploadInitiate            = uint8(2) << csOffset
+	CSDownloadBlockInitiate     = uint8(6) << csOffset
+	CSDownloadBlockInitiateResp = uint8(5) << csOffset
+	CSDownloadSubBlockResp      = uint8(2) << csOffset
+	CSUploadBlockInitiate       = uint8(5) << csOffset
 )
 
 const (
@@ -79,6 +87,20 @@ const (
 	// Size indicated (s)
 	sizeIndicated    = uint8(0b1)
 	sizeNotIndicated = uint8(0b0)
+	// Size indicated block (s)
+	sizeIndicatedBlock    = uint8(0b1) << 1
+	sizeNotIndicatedBlock = uint8(0b0) << 1
+	// Client CRC support (cc)
+	clientCRCSupported    = uint8(0b1) << 2
+	clientCRCNotSupported = uint8(0b0) << 2
+	// Server CRC support (cc)
+	serverCRCSupported    = uint8(0b1) << 3
+	serverCRCNotSupported = uint8(0b0) << 3
+	// Segment remaining (c)
+	segmentRemaining    = uint8(0b1) << 7
+	segmentNotRemaining = uint8(0b0) << 7
+	// Server subcommand (ss)
+	serverSubCommandBlockDownloadResp = uint8(0b10)
 )
 
 const (
@@ -92,6 +114,7 @@ const (
 	stateUploadLocalTransfer    internalState = 0x20
 	stateUploadInitiateReq      internalState = 0x21
 	stateUploadInitiateRsp      internalState = 0x22
+	stateUploadExpeditedRsp     internalState = 0x25
 	stateUploadSegmentReq       internalState = 0x23
 	stateUploadSegmentRsp       internalState = 0x24
 	stateDownloadBlkInitiateReq internalState = 0x51
@@ -327,4 +350,20 @@ func (response *SDOMessage) IsExpedited() bool {
 
 func (response *SDOMessage) IsSizeIndicated() bool {
 	return response.raw[0]&MaskSizeIndicated == sizeIndicated
+}
+
+func (response *SDOMessage) IsSizeIndicatedBlock() bool {
+	return response.raw[0]&MaskSizeIndicatedBlock == sizeIndicatedBlock
+}
+
+func (response *SDOMessage) SizeIndicated() uint32 {
+	return binary.LittleEndian.Uint32(response.raw[4:])
+}
+
+func (response *SDOMessage) Seqno() uint8 {
+	return response.raw[0] & MaskSeqno
+}
+
+func (response *SDOMessage) SegmentRemaining() bool {
+	return response.raw[0]&MaskSegmentsRemaining == segmentRemaining
 }
