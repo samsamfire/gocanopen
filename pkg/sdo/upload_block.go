@@ -80,36 +80,24 @@ func (s *SDOServer) rxUploadSubBlock(rx SDOMessage) error {
 			s.blockSequenceNb,
 		)
 		// We go back to the last acknowledged packet
+		// Because some data might still be in buffer, we must first remove it
 		nbFailed := uint32(s.blockSequenceNb-ackseq)*BlockSeqSize - uint32(s.blockNoData)
+		nbPending := uint32(s.buf.Len())
 		s.sizeTransferred -= uint32(nbFailed)
-
-		// buf := make([]byte, 1000)
-		// Remaining data
-		// n, _ := s.buf.Read(buf)
-		// Remaining unread bytes, but crc already calculated
-		available := s.buf.Len()
+		s.streamer.DataOffset -= (nbFailed + nbPending)
 		s.buf.Reset()
 
-		log.Infof("remaining in buffer is %v", s.buf.Len())
-		log.Infof("data offset is %v", s.streamer.DataOffset)
-		s.streamer.DataOffset -= (nbFailed + uint32(available))
-		log.Infof("data offset is %v", s.streamer.DataOffset)
 		// Refill buffer for next block, without re-calculating CRC (already done)
-		err := s.readObjectDictionary(nbFailed+uint32(available), int(nbFailed)+available, false)
+		err := s.readObjectDictionary(nbFailed+nbPending, int(nbPending)+int(nbFailed), false)
 		if err != nil {
 			return err
 		}
-		// Refill buffer for next block
-		err = s.readObjectDictionary(uint32(s.blockSize)*BlockSeqSize, 0, true)
-		if err != nil {
-			return err
-		}
-	} else {
-		// Refill buffer for next block
-		err := s.readObjectDictionary(uint32(s.blockSize)*BlockSeqSize, 0, true)
-		if err != nil {
-			return err
-		}
+	}
+
+	// Refill buffer for next block
+	err := s.readObjectDictionary(uint32(s.blockSize)*BlockSeqSize, 0, true)
+	if err != nil {
+		return err
 	}
 
 	// No more data to be read
