@@ -33,6 +33,19 @@ func ReadEntryFileObject(stream *Stream, data []byte, countRead *uint16) error {
 		if err != nil {
 			return ErrDevIncompat
 		}
+	} else {
+		// Re-adjust file cursor depending on datoffset
+		offset, err := fileObject.File.Seek(0, io.SeekCurrent)
+		if err == nil {
+			log.Info("we are now at %v", offset)
+		}
+		offset, err = fileObject.File.Seek(int64(stream.DataOffset), 0)
+		if err == nil {
+			log.Info("we are now at %v", offset)
+		}
+		if err != nil {
+			return ErrDevIncompat
+		}
 	}
 	countReadInt, err := io.ReadFull(fileObject.File, data)
 

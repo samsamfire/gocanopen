@@ -97,8 +97,8 @@ const (
 	serverCRCSupported    = uint8(0b1) << 3
 	serverCRCNotSupported = uint8(0b0) << 3
 	// Segment remaining (c)
-	segmentRemaining    = uint8(0b1) << 7
-	segmentNotRemaining = uint8(0b0) << 7
+	segmentRemaining    = uint8(0b0) << 7
+	segmentNotRemaining = uint8(0b1) << 7
 	// Server subcommand (ss)
 	serverSubCommandBlockDownloadResp = uint8(0b10)
 )

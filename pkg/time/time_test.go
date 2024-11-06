@@ -27,7 +27,7 @@ func TestSetInternalTime(t *testing.T) {
 }
 
 func TestSetProducerIntervalMs(t *testing.T) {
-	timeInstance := &TIME{}
+	timeInstance := &TIME{logger: slog.Default()}
 	timeInstance.SetProducerIntervalMs(1000)
 	assert.Equal(t, timeInstance.producerIntervalMs, uint32(1000))
 }

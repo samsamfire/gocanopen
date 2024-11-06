@@ -27,6 +27,7 @@ type SDOServer struct {
 	valid               bool
 	running             bool
 	buf                 *bytes.Buffer
+	intermediateBuf     []byte
 	index               uint16
 	subindex            uint8
 	sizeIndicated       uint32
@@ -82,6 +83,7 @@ func (server *SDOServer) Process(
 			err := server.processIncoming(rx)
 			if err != nil && err != od.ErrPartial {
 				// Abort straight away, nothing to send afterwards
+				log.Info("sent here state", server.state)
 				server.txAbort(err)
 				break
 			}
@@ -216,20 +218,18 @@ func (server *SDOServer) writeObjectDictionary(crcOperation uint, crcClient crc.
 	return nil
 }
 
-func (server *SDOServer) readObjectDictionary(countMinimum uint32, calculateCRC bool) error {
+// Read from OD into buffer & calculate CRC if needed
+// Depending on the transfer type, this might have to be called multiple times
+func (server *SDOServer) readObjectDictionary(countMinimum uint32, size int, calculateCRC bool) error {
 
-	buf := server.buf
-
-	unread := buf.Len()
+	unread := server.buf.Len()
 	if server.finished || unread >= int(countMinimum) {
 		return nil
 	}
 
-	buf2 := make([]byte, 1000)
 	// Read from OD into the buffer
-	countRd, err := server.streamer.Read(buf2)
-
-	if err != nil && err != od.ErrPartial {
+	countRd, err := server.streamer.Read(server.intermediateBuf)
+	if err != nil && err != od.ErrPartial || size >= countRd {
 		server.state = stateAbort
 		return ConvertOdToSdoAbort(err.(od.ODR))
 	}
@@ -237,7 +237,7 @@ func (server *SDOServer) readObjectDictionary(countMinimum uint32, calculateCRC 
 	// Stop sending at null termination if string
 	if countRd > 0 && server.streamer.HasAttribute(od.AttributeStr) {
 		countStr := int(server.streamer.DataLength)
-		for i, v := range buf2 {
+		for i, v := range server.intermediateBuf {
 			if v == 0 {
 				countStr = i
 				break
@@ -253,7 +253,11 @@ func (server *SDOServer) readObjectDictionary(countMinimum uint32, calculateCRC 
 			server.streamer.DataLength = server.sizeTransferred + uint32(countRd)
 		}
 	}
-	buf.Write(buf2[:countRd])
+	// Calculate CRC for the read data
+	if size > 0 {
+		countRd = size
+	}
+	server.buf.Write(server.intermediateBuf[:countRd])
 
 	if err == od.ErrPartial {
 		server.finished = false
@@ -266,8 +270,7 @@ func (server *SDOServer) readObjectDictionary(countMinimum uint32, calculateCRC 
 		server.finished = true
 	}
 	if calculateCRC && server.blockCRCEnabled {
-		// Calculate CRC for the read data
-		server.blockCRC.Block(buf2[:countRd])
+		server.blockCRC.Block(server.intermediateBuf[:countRd])
 	}
 	return nil
 }
@@ -307,7 +310,7 @@ func (server *SDOServer) prepareRx() error {
 	server.finished = false
 
 	// Load data from OD now
-	err := server.readObjectDictionary(BlockSeqSize, false)
+	err := server.readObjectDictionary(BlockSeqSize, 0, false)
 	if err != nil && err != od.ErrPartial {
 		return err
 	}
@@ -369,6 +372,7 @@ func NewSDOServer(
 	server.blockTimeout = timeoutMs * 700
 	server.rx = make(chan SDOMessage, 1)
 	server.buf = bytes.NewBuffer(make([]byte, 0, 1000))
+	server.intermediateBuf = make([]byte, 1000)
 	var canIdClientToServer uint16
 	var canIdServerToClient uint16
 	if entry12xx.Index == 0x1200 {
@@ -415,14 +419,19 @@ func NewSDOServer(
 
 // Check consistency between indicated size & transferred size
 func (s *SDOServer) checkSizeConsitency() error {
-	if s.sizeIndicated > 0 {
-		if s.sizeTransferred > s.sizeIndicated {
-			s.state = stateAbort
-			return AbortDataLong
-		} else if s.state == stateIdle && s.sizeTransferred < s.sizeIndicated {
-			s.state = stateAbort
-			return AbortDataShort
-		}
+	if s.sizeIndicated == 0 {
+		return nil
 	}
+
+	if s.sizeTransferred > s.sizeIndicated {
+		s.state = stateAbort
+		return AbortDataLong
+	}
+
+	if s.state == stateIdle && s.sizeTransferred < s.sizeIndicated {
+		s.state = stateAbort
+		return AbortDataShort
+	}
+
 	return nil
 }
