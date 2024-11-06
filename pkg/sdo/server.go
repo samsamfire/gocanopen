@@ -94,6 +94,7 @@ func (server *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 			err := server.processIncoming(rx)
 			if err != nil && err != od.ErrPartial {
 				// Abort straight away, nothing to send afterwards
+				log.Info("sent here state", server.state)
 				server.txAbort(err)
 				break
 			}
@@ -234,7 +235,6 @@ func (server *SDOServer) readObjectDictionary(countMinimum uint32, size int, cal
 		return nil
 	}
 
-	buf2 := make([]byte, 1000)
 	// Read from OD into the buffer
 	countRd, err := server.streamer.Read(server.intermediateBuf)
 	if err != nil && err != od.ErrPartial || size >= countRd {
@@ -379,7 +379,7 @@ func (server *SDOServer) prepareRx() error {
 	server.finished = false
 
 	// Load data from OD now
-	err := server.readObjectDictionary(BlockSeqSize, false)
+	err := server.readObjectDictionary(BlockSeqSize, 0, false)
 	if err != nil && err != od.ErrPartial {
 		return err
 	}
