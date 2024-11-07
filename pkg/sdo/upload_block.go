@@ -87,7 +87,7 @@ func (s *SDOServer) rxUploadSubBlock(rx SDOMessage) error {
 		s.streamer.DataOffset -= (nbFailed + nbPending)
 		s.buf.Reset()
 
-		// Refill buffer for next block, without re-calculating CRC (already done)
+		// Refill buffer with preivous data without re-calculating CRC (already done)
 		err := s.readObjectDictionary(nbFailed+nbPending, int(nbPending)+int(nbFailed), false)
 		if err != nil {
 			return err
@@ -129,7 +129,6 @@ func (s *SDOServer) txUploadBlockInitiate() {
 }
 
 func (s *SDOServer) txUploadBlockSubBlock() error {
-	// Write header & gend current count
 	s.blockSequenceNb += 1
 	s.txBuffer.Data[0] = s.blockSequenceNb
 
