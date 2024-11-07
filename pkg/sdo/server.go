@@ -20,7 +20,7 @@ type SDOServer struct {
 	od                  *od.ObjectDictionary
 	nodeId              uint8
 	rx                  chan SDOMessage
-	streamer            od.Streamer
+	streamer            *od.Streamer
 	txBuffer            canopen.Frame
 	cobIdClientToServer uint32
 	cobIdServerToClient uint32
@@ -200,7 +200,7 @@ func (server *SDOServer) writeObjectDictionary(crcOperation uint, crcClient crc.
 	}
 
 	// Transfer from buffer to OD
-	_, err := io.Copy(&server.streamer, server.buf)
+	_, err := io.Copy(server.streamer, server.buf)
 	if err != nil && err != od.ErrPartial {
 		server.state = stateAbort
 		return ConvertOdToSdoAbort(err.(od.ODR))
@@ -280,7 +280,7 @@ func (server *SDOServer) updateStreamer(response SDOMessage) error {
 	var err error
 	server.index = response.GetIndex()
 	server.subindex = response.GetSubindex()
-	server.streamer, err = od.NewStreamer(server.od.Index(server.index), server.subindex, false)
+	server.streamer, err = server.od.Streamer(server.index, server.subindex, false)
 	if err != nil {
 		return ConvertOdToSdoAbort(err.(od.ODR))
 	}
@@ -366,7 +366,7 @@ func NewSDOServer(
 		return nil, canopen.ErrIllegalArgument
 	}
 	server.od = odict
-	server.streamer = od.Streamer{}
+	server.streamer = &od.Streamer{}
 	server.nodeId = nodeId
 	server.timeoutTimeUs = timeoutMs * 1000
 	server.blockTimeout = timeoutMs * 700
