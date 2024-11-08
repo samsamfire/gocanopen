@@ -77,6 +77,8 @@ func (server *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 
 	timeout := time.Duration(server.timeoutTimeUs * uint32(time.Microsecond))
 
+	nmtIsPreOrOperationnal := true
+
 	for {
 		server.mu.Lock()
 		nmtIsPreOrOperationnal := server.nmt == nmt.StateOperational || server.nmt == nmt.StatePreOperational
@@ -94,7 +96,6 @@ func (server *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 			err := server.processIncoming(rx)
 			if err != nil && err != od.ErrPartial {
 				// Abort straight away, nothing to send afterwards
-				log.Info("sent here state", server.state)
 				server.txAbort(err)
 				break
 			}
