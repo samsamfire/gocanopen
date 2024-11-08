@@ -5,17 +5,18 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log/slog"
 	"sync"
 	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/internal/crc"
 	"github.com/samsamfire/gocanopen/pkg/od"
-	log "github.com/sirupsen/logrus"
 )
 
 type SDOServer struct {
 	*canopen.BusManager
+	logger              *slog.Logger
 	mu                  sync.Mutex
 	od                  *od.ObjectDictionary
 	nodeId              uint8
@@ -61,21 +62,21 @@ func (server *SDOServer) Handle(frame canopen.Frame) {
 // Process [SDOServer] state machine and TX CAN frames
 // It returns the global server state and error if any
 // This should be called periodically
-func (server *SDOServer) Process(
-	nmtIsPreOrOperationnal bool,
-) (state uint8, err error) {
-	log.Info("[SERVER] starting sdo server")
+func (server *SDOServer) Process(ch chan struct{}) (state uint8, err error) {
+	server.logger.Info("starting sdo server processing")
 	timeout := time.Duration(server.timeoutTimeUs * uint32(time.Microsecond))
 	server.running = true
 	defer func() {
 		server.running = false
 	}()
 
+	nmtIsPreOrOperationnal := true
+
 	for {
 		if !server.valid || !nmtIsPreOrOperationnal {
 			server.state = stateIdle
-			log.Info("[SERVER] exiting sdo server because not valid or not in correct nmt state")
-			return
+			time.Sleep(100 * time.Millisecond)
+			continue
 		}
 		select {
 		case rx := <-server.rx:
@@ -83,7 +84,6 @@ func (server *SDOServer) Process(
 			err := server.processIncoming(rx)
 			if err != nil && err != od.ErrPartial {
 				// Abort straight away, nothing to send afterwards
-				log.Info("sent here state", server.state)
 				server.txAbort(err)
 				break
 			}
@@ -97,6 +97,9 @@ func (server *SDOServer) Process(
 			if server.state != stateIdle {
 				server.txAbort(AbortTimeout)
 			}
+		case <-ch:
+			server.logger.Info("exiting sdo server process")
+			return
 		}
 	}
 }
@@ -135,11 +138,6 @@ func (server *SDOServer) initRxTx(cobIdClientToServer uint32, cobIdServerToClien
 		return err
 	}
 	server.txBuffer = canopen.NewFrame(uint32(CanIdS2C), 0, 8)
-
-	if server.valid && !server.running {
-		go server.Process(true)
-	}
-
 	return nil
 }
 
@@ -156,7 +154,6 @@ func (server *SDOServer) writeObjectDictionary(crcOperation uint, crcClient crc.
 	if server.finished {
 		// Check transfer size is not smaller than indicated
 		if server.sizeIndicated > 0 && server.sizeTransferred < server.sizeIndicated {
-			log.Info("transferred indicated ", server.sizeTransferred, server.sizeIndicated)
 			server.state = stateAbort
 			return AbortDataShort
 		}
@@ -347,15 +344,18 @@ func (server *SDOServer) SendAbort(abortCode Abort) {
 	server.txBuffer.Data[3] = server.subindex
 	binary.LittleEndian.PutUint32(server.txBuffer.Data[4:], code)
 	server.Send(server.txBuffer)
-	log.Warnf("[SERVER][TX] SERVER ABORT | x%x:x%x | %v (x%x)", server.index, server.subindex, abortCode, code)
-	if server.errorExtraInfo != nil {
-		log.Warnf("[SERVER][TX] SERVER ABORT | %v", server.errorExtraInfo)
-		server.errorExtraInfo = nil
-	}
+	server.logger.Warn("[TX] server abort",
+		"index", fmt.Sprintf("x%x", server.index),
+		"subindex", fmt.Sprintf("x%x", server.subindex),
+		"code", code,
+		"description", abortCode,
+		"extraInfo", server.errorExtraInfo,
+	)
 }
 
 func NewSDOServer(
 	bm *canopen.BusManager,
+	logger *slog.Logger,
 	odict *od.ObjectDictionary,
 	nodeId uint8,
 	timeoutMs uint32,
@@ -365,6 +365,10 @@ func NewSDOServer(
 	if odict == nil || bm == nil || entry12xx == nil {
 		return nil, canopen.ErrIllegalArgument
 	}
+	if logger == nil {
+		logger = slog.Default()
+	}
+	server.logger = logger.With("service", "[SERVER]")
 	server.od = odict
 	server.streamer = &od.Streamer{}
 	server.nodeId = nodeId
@@ -378,7 +382,7 @@ func NewSDOServer(
 	if entry12xx.Index == 0x1200 {
 		// Default channels
 		if nodeId < 1 || nodeId > BlockMaxSize {
-			log.Errorf("SDO server node id is not valid : %x", nodeId)
+			server.logger.Error("node id is not valid", "nodeId", nodeId)
 			return nil, canopen.ErrIllegalArgument
 		}
 		canIdClientToServer = ClientServiceId + uint16(nodeId)
@@ -393,7 +397,11 @@ func NewSDOServer(
 		cobIdServerToClient32, err2 := entry12xx.Uint32(2)
 		if err0 != nil || (maxSubIndex != 2 && maxSubIndex != 3) ||
 			err1 != nil || err2 != nil {
-			log.Errorf("Error when retreiving sdo server parameters : %v, %v, %v, %v", err0, err1, err2, maxSubIndex)
+			server.logger.Error("error getting server params",
+				"err0", err0,
+				"err1", err1,
+				"err2", err2,
+				"maxSubindex", maxSubIndex)
 			return nil, canopen.ErrOdParameters
 		}
 		if (cobIdClientToServer32 & 0x80000000) == 0 {

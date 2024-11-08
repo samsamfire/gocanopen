@@ -2,9 +2,9 @@ package sdo
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	"github.com/samsamfire/gocanopen/internal/crc"
-	log "github.com/sirupsen/logrus"
 )
 
 func (s *SDOServer) rxUploadBlockInitiate(rx SDOMessage) error {
@@ -26,7 +26,13 @@ func (s *SDOServer) rxUploadBlockInitiate(rx SDOMessage) error {
 
 	// Get block size and check okay
 	s.blockSize = rx.GetBlockSize()
-	log.Debugf("[SERVER][RX] UPLOAD BLOCK INIT | x%x:x%x %v | crc : %v, blksize :%v", s.index, s.subindex, rx.raw, s.blockCRCEnabled, s.blockSize)
+	s.logger.Debug("[RX] block init req",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"crc", s.blockCRCEnabled,
+		"blksize", s.blockSize,
+		"raw", rx.raw,
+	)
 	if s.blockSize < 1 || s.blockSize > BlockMaxSize {
 		return AbortBlockSize
 	}
@@ -44,12 +50,14 @@ func (s *SDOServer) rxUploadSubBlock(rx SDOMessage) error {
 		return AbortCmd
 	}
 	ackseq := rx.raw[1]
-	log.Debugf("[SERVER][RX] BLOCK UPLOAD END SUB-BLOCK | blksize %v ackseq %v | x%x:x%x %v",
-		rx.raw[2],
-		ackseq,
-		s.index,
-		s.subindex,
-		rx.raw,
+
+	s.logger.Debug("[RX] block upload sub-block req",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"blksize", rx.raw[2],
+		"ackseq", ackseq,
+		"seqno", s.blockSequenceNb,
+		"raw", rx.raw,
 	)
 
 	// Check block size
@@ -60,25 +68,13 @@ func (s *SDOServer) rxUploadSubBlock(rx SDOMessage) error {
 
 	// If server acknowledges more than what was sent, error straight away
 	if ackseq > s.blockSequenceNb {
-		log.Debugf("[SERVER][RX] BLOCK UPLOAD END SUB-BLOCK error | blksize %v | x%x:x%x %v",
-			rx.raw[2],
-			s.index,
-			s.subindex,
-			rx.raw,
-		)
+		s.logger.Debug("[RX] server acked more than sent, will abort")
 		return AbortCmd
 	}
 
 	// Check client acknowledged all packets sent
 	if ackseq < s.blockSequenceNb {
-		log.Debugf("[SERVER][RX] BLOCK UPLOAD END SUB-BLOCK error, retransmitting | blksize %v | x%x:x%x %v | ackseq %v | seqno %v",
-			rx.raw[2],
-			s.index,
-			s.subindex,
-			rx.raw,
-			ackseq,
-			s.blockSequenceNb,
-		)
+		s.logger.Debug("server acked less than sent, will retransmit")
 		// We go back to the last acknowledged packet
 		// Because some data might still be in buffer, we must first remove it
 		nbFailed := uint32(s.blockSequenceNb-ackseq)*BlockSeqSize - uint32(s.blockNoData)
@@ -123,7 +119,11 @@ func (s *SDOServer) txUploadBlockInitiate() {
 		binary.LittleEndian.PutUint32(s.txBuffer.Data[4:], s.sizeIndicated)
 	}
 	// Reset timer & send
-	log.Debugf("[SERVER][TX] BLOCK UPLOAD INIT | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
+	s.logger.Debug("[TX] block upload init resp",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"raw", s.txBuffer.Data,
+	)
 	s.Send(s.txBuffer)
 	s.state = stateUploadBlkInitiateReq2
 }
@@ -157,9 +157,17 @@ func (s *SDOServer) txUploadBlockSubBlock() error {
 	// Check if last segment or all segments in current block transferred
 	if s.buf.Len() == 0 || s.blockSequenceNb >= s.blockSize {
 		s.state = stateUploadBlkSubblockCrsp
-		log.Debugf("[SERVER][TX] BLOCK UPLOAD END SUB-BLOCK | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
+		s.logger.Debug("[TX] block upload sub-block end req",
+			"index", fmt.Sprintf("x%x", s.index),
+			"subindex", fmt.Sprintf("x%x", s.subindex),
+			"raw", s.txBuffer.Data,
+		)
 	} else {
-		log.Debugf("[SERVER][TX] BLOCK UPLOAD SUB-BLOCK | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
+		s.logger.Debug("[TX] block upload sub-block segment",
+			"index", fmt.Sprintf("x%x", s.index),
+			"subindex", fmt.Sprintf("x%x", s.subindex),
+			"raw", s.txBuffer.Data,
+		)
 	}
 	s.Send(s.txBuffer)
 	return nil
@@ -169,7 +177,13 @@ func (s *SDOServer) txUploadBlockEnd() {
 	s.txBuffer.Data[0] = 0xC1 | (s.blockNoData << 2)
 	s.txBuffer.Data[1] = byte(s.blockCRC)
 	s.txBuffer.Data[2] = byte(s.blockCRC >> 8)
-	log.Debugf("[SERVER][TX] BLOCK UPLOAD END | x%x:x%x %v | size %v | crc %v", s.index, s.subindex, s.txBuffer.Data, s.sizeTransferred, s.blockCRC)
+	s.logger.Debug("[TX] block upload end resp",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"size", s.sizeTransferred,
+		"crc", s.blockCRC,
+		"raw", s.txBuffer.Data,
+	)
 	s.Send(s.txBuffer)
 	s.state = stateUploadBlkEndCrsp
 }

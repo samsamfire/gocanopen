@@ -90,10 +90,6 @@ func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, 
 	// Update NMTisPreOrOperational
 	NMTisPreOrOperational = (NMTState == nmt.StatePreOperational) || (NMTState == nmt.StateOperational)
 
-	// Process SDO servers
-	for _, server := range node.SDOServers {
-		server.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
-	}
 	node.HBConsumer.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
 
 	if node.TIME != nil {
@@ -272,7 +268,7 @@ func NewLocalNode(
 	if entry1200 == nil {
 		logger.Warn("no [SDOServer] initialized")
 	} else {
-		server, err := sdo.NewSDOServer(bm, odict, nodeId, sdoServerTimeoutMs, entry1200)
+		server, err := sdo.NewSDOServer(bm, logger, odict, nodeId, sdoServerTimeoutMs, entry1200)
 		if err != nil {
 			logger.Error("init failed [SDOServer]", "error", err)
 			return nil, err
