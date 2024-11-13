@@ -5,7 +5,6 @@ import (
 
 	"github.com/samsamfire/gocanopen/internal/crc"
 	"github.com/samsamfire/gocanopen/pkg/od"
-	log "github.com/sirupsen/logrus"
 )
 
 func (s *SDOServer) rxDownloadBlockInitiate(rx SDOMessage) error {
@@ -26,12 +25,12 @@ func (s *SDOServer) rxDownloadBlockInitiate(rx SDOMessage) error {
 			}
 		}
 	}
-	log.Debugf("[SERVER][RX] BLOCK DOWNLOAD INIT | x%x:x%x | crc enabled : %v expected size : %v | %v",
-		s.index,
-		s.subindex,
-		s.blockCRCEnabled,
-		s.sizeIndicated,
-		rx.raw,
+	s.logger.Debug("[RX] block download init",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"crc", s.blockCRCEnabled,
+		"size", s.sizeIndicated,
+		"raw", rx.raw,
 	)
 	s.state = stateDownloadBlkInitiateRsp
 	s.finished = false
@@ -54,19 +53,34 @@ func (s *SDOServer) rxDownloadBlockSubBlock(rx SDOMessage) error {
 		if !rx.SegmentRemaining() {
 			s.finished = true
 			s.state = stateDownloadBlkSubblockRsp
-			log.Debugf("[SERVER][RX] BLOCK DOWNLOAD END | x%x:x%x %v", s.index, s.subindex, rx.raw)
+			s.logger.Debug("[RX] block download end",
+				"index", fmt.Sprintf("x%x", s.index),
+				"subindex", fmt.Sprintf("x%x", s.subindex),
+				"raw", rx.raw,
+			)
 			return nil
 		}
 
 		// Check if end of a segment
 		if seqno == s.blockSize {
 			s.state = stateDownloadBlkSubblockRsp
-			log.Debugf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | x%x:x%x %v", s.index, s.subindex, rx.raw)
+			s.logger.Debug("[RX] block download segment end",
+				"index", fmt.Sprintf("x%x", s.index),
+				"subindex", fmt.Sprintf("x%x", s.subindex),
+				"blksize", s.blockSize,
+				"raw", rx.raw,
+			)
 			return nil
 		}
 
 		// Regular frame of a segment
-		log.Debugf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | x%x:x%x %v", s.index, s.subindex, rx.raw)
+		s.logger.Debug("[RX] block download segment",
+			"index", fmt.Sprintf("x%x", s.index),
+			"subindex", fmt.Sprintf("x%x", s.subindex),
+			"seqno", seqno,
+			"blksize", s.blockSize,
+			"raw", rx.raw,
+		)
 		return nil
 
 	}
@@ -75,30 +89,33 @@ func (s *SDOServer) rxDownloadBlockSubBlock(rx SDOMessage) error {
 	// seqno is wrong
 	if seqno != s.blockSequenceNb && s.blockSequenceNb != 0 {
 		s.state = stateDownloadBlkSubblockRsp
-		log.Warnf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | Wrong sequence number (got %v, previous %v) | x%x:x%x %v",
-			seqno,
-			s.blockSequenceNb,
-			s.index,
-			s.subindex,
-			rx.raw,
+		s.logger.Warn("[RX] block download segment error",
+			"index", fmt.Sprintf("x%x", s.index),
+			"subindex", fmt.Sprintf("x%x", s.subindex),
+			"seqno", seqno,
+			"ackseq", s.blockSequenceNb,
+			"blksize", s.blockSize,
+			"raw", rx.raw,
 		)
 		return nil
 	}
 
 	// If an error occurs, client can continue sending frames before it sees that
 	// there is a problem. So ignore frames in the meantime
-	log.Warnf("[SERVER][RX] BLOCK DOWNLOAD SUB-BLOCK | Ignoring (got %v, expecting %v) | x%x:x%x %v",
-		seqno,
-		s.blockSequenceNb+1,
-		s.index,
-		s.subindex,
-		rx.raw,
+	s.logger.Debug("[RX] block download segment (ignoring, error occured)",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"raw", rx.raw,
 	)
 	return nil
 }
 
 func (s *SDOServer) rxDownloadBlockEnd(rx SDOMessage) error {
-	log.Debugf("[SERVER][RX] BLOCK DOWNLOAD END | x%x:x%x %v", s.index, s.subindex, rx.raw)
+	s.logger.Debug("[RX] block download end",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"raw", rx.raw,
+	)
 	if (rx.raw[0] & 0xE3) != 0xC1 {
 		return AbortCmd
 	}
@@ -111,7 +128,6 @@ func (s *SDOServer) rxDownloadBlockEnd(rx SDOMessage) error {
 		return AbortDeviceIncompat
 	}
 	s.sizeTransferred -= uint32(noData)
-	//s.bufWriteOffset -= uint32(noData)
 	s.buf.Truncate(s.buf.Len() - int(noData))
 
 	var crcClient = crc.CRC16(0)
@@ -148,8 +164,12 @@ func (s *SDOServer) txDownloadBlockInitiate() {
 	s.txBuffer.Data[4] = s.blockSize
 
 	s.state = stateDownloadBlkSubblockReq
-	log.Debugf("[SERVER][TX] BLOCK DOWNLOAD INIT | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
-	s.Send(s.txBuffer)
+	s.logger.Debug("[TX] block download init",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"raw", s.txBuffer.Data,
+	)
+	_ = s.Send(s.txBuffer)
 }
 
 func (s *SDOServer) txDownloadBlockSubBlock() error {
@@ -164,12 +184,12 @@ func (s *SDOServer) txDownloadBlockSubBlock() error {
 	// Check if last segment to send
 	if s.finished {
 		s.state = stateDownloadBlkEndReq
-		s.Send(s.txBuffer)
-		log.Debugf("[SERVER][TX] BLOCK DOWNLOAD SUB-BLOCK RES | x%x:x%x blksize %v %v",
-			s.index,
-			s.subindex,
-			s.blockSize,
-			s.txBuffer.Data,
+		_ = s.Send(s.txBuffer)
+		s.logger.Debug("[TX] block download segment",
+			"index", fmt.Sprintf("x%x", s.index),
+			"subindex", fmt.Sprintf("x%x", s.subindex),
+			"blksize", s.blockSize,
+			"raw", s.txBuffer.Data,
 		)
 		return nil
 	}
@@ -196,26 +216,35 @@ func (s *SDOServer) txDownloadBlockSubBlock() error {
 	s.blockSequenceNb = 0
 	s.txBuffer.Data[2] = s.blockSize
 	s.state = stateDownloadBlkSubblockReq
-	s.Send(s.txBuffer)
+	_ = s.Send(s.txBuffer)
 
 	if retransmit {
-		log.Debugf("[SERVER][TX] BLOCK DOWNLOAD RESTART seqno prev=%v, blksize=%v", seqnoStart, s.blockSize)
+		s.logger.Debug("[TX] block download restart",
+			"index", fmt.Sprintf("x%x", s.index),
+			"subindex", fmt.Sprintf("x%x", s.subindex),
+			"seqno prev", seqnoStart,
+			"blksize", s.blockSize,
+			"raw", s.txBuffer.Data,
+		)
 		return nil
 	}
 
-	log.Debugf("[SERVER][TX] BLOCK DOWNLOAD SUB-BLOCK RES | x%x:x%x blksize %v %v",
-		s.index,
-		s.subindex,
-		s.blockSize,
-		s.txBuffer.Data,
+	s.logger.Debug("[TX] block download segment",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"blksize", s.blockSize,
+		"raw", s.txBuffer.Data,
 	)
-
 	return nil
 }
 
 func (s *SDOServer) txDownloadBlockEnd() {
 	s.txBuffer.Data[0] = 0xA1
-	log.Debugf("[SERVER][TX] BLOCK DOWNLOAD END | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
-	s.Send(s.txBuffer)
+	s.logger.Debug("[TX] block download end",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"raw", s.txBuffer.Data,
+	)
+	_ = s.Send(s.txBuffer)
 	s.state = stateIdle
 }

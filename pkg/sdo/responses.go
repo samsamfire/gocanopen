@@ -1,9 +1,5 @@
 package sdo
 
-import (
-	log "github.com/sirupsen/logrus"
-)
-
 func (s *SDOServer) processOutgoing() error {
 	var err error
 
@@ -52,7 +48,7 @@ func (s *SDOServer) processOutgoing() error {
 
 func (s *SDOServer) txAbort(err error) {
 	if sdoAbort, ok := err.(Abort); !ok {
-		log.Errorf("[SERVER][TX] Abort internal error : unknown abort code : %v", err)
+		s.logger.Error("[TX] Abort internal error : unknown abort code", "err", err)
 		s.SendAbort(AbortGeneral)
 	} else {
 		s.SendAbort(sdoAbort)

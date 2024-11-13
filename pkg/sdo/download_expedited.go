@@ -2,16 +2,20 @@ package sdo
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	"github.com/samsamfire/gocanopen/pkg/od"
-	log "github.com/sirupsen/logrus"
 )
 
 func (s *SDOServer) rxDownloadInitiate(rx SDOMessage) error {
 
 	// Segmented transfer type
 	if !rx.IsExpedited() {
-		log.Debugf("[SERVER][RX] DOWNLOAD SEGMENTED | x%x:x%x %v", s.index, s.subindex, rx.raw)
+		s.logger.Debug("[RX] segmented download",
+			"index", fmt.Sprintf("x%x", s.index),
+			"subindex", fmt.Sprintf("x%x", s.subindex),
+			"raw", s.txBuffer.Data,
+		)
 
 		// If size is indicated, we need to check coherence
 		// Between size in OD and requested size
@@ -35,8 +39,11 @@ func (s *SDOServer) rxDownloadInitiate(rx SDOMessage) error {
 	}
 
 	// Expedited transfer type, we write directly inside OD
-	log.Debugf("[SERVER][RX] DOWNLOAD EXPEDITED | x%x:x%x %v", s.index, s.subindex, rx.raw)
-
+	s.logger.Debug("[RX] expedited download",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"raw", s.txBuffer.Data,
+	)
 	sizeInOd := s.streamer.DataLength
 	nbToWrite := 4
 	// Determine number of bytes to write, depending on size flag
@@ -82,12 +89,19 @@ func (s *SDOServer) txDownloadInitiate() {
 	s.txBuffer.Data[3] = s.subindex
 	_ = s.Send(s.txBuffer)
 	if s.finished {
-		log.Debugf("[SERVER][TX] DOWNLOAD EXPEDITED | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
+		s.logger.Debug("[TX] expedited download",
+			"index", fmt.Sprintf("x%x", s.index),
+			"subindex", fmt.Sprintf("x%x", s.subindex),
+			"raw", s.txBuffer.Data,
+		)
 		s.state = stateIdle
 		return
 	}
-
-	log.Debugf("[SERVER][TX] DOWNLOAD SEGMENT INIT | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
+	s.logger.Debug("[TX] segmented download init",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"raw", s.txBuffer.Data,
+	)
 	s.toggle = 0x00
 	s.sizeTransferred = 0
 	s.buf.Reset()

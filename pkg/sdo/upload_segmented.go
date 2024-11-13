@@ -2,12 +2,15 @@ package sdo
 
 import (
 	"encoding/binary"
-
-	log "github.com/sirupsen/logrus"
+	"fmt"
 )
 
 func (s *SDOServer) rxUploadSegment(rx SDOMessage) error {
-	log.Debugf("[SERVER][RX] UPLOAD SEGMENTED | x%x:x%x %v", s.index, s.subindex, rx.raw)
+	s.logger.Debug("[RX] segmented upload req",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"raw", rx.raw,
+	)
 	if (rx.raw[0] & 0xEF) != 0x60 {
 		return AbortCmd
 	}
@@ -21,21 +24,18 @@ func (s *SDOServer) rxUploadSegment(rx SDOMessage) error {
 
 func (s *SDOServer) txUploadInitiate() {
 
-	if s.sizeIndicated > 0 {
-		s.txBuffer.Data[0] = 0x41
-		// Add data size
-		binary.LittleEndian.PutUint32(s.txBuffer.Data[4:], s.sizeIndicated)
-
-	} else {
-		s.txBuffer.Data[0] = 0x40
-	}
 	s.toggle = 0x00
-
 	s.state = stateUploadSegmentReq
-	log.Debugf("[SERVER][TX] UPLOAD SEGMENTED | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
+	s.logger.Debug("[TX] segmented upload initiate resp",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"raw", s.txBuffer.Data,
+	)
+	s.txBuffer.Data[0] = byte(s.sizeIndicated&0b1) + 0x40
 	s.txBuffer.Data[1] = byte(s.index)
 	s.txBuffer.Data[2] = byte(s.index >> 8)
 	s.txBuffer.Data[3] = s.subindex
+	binary.LittleEndian.PutUint32(s.txBuffer.Data[4:], s.sizeIndicated)
 	_ = s.Send(s.txBuffer)
 }
 
@@ -71,7 +71,11 @@ func (s *SDOServer) txUploadSegment() error {
 		return err
 	}
 
-	log.Debugf("[SERVER][TX] UPLOAD SEGMENTED | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
+	s.logger.Debug("[TX] segmented upload",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"raw", s.txBuffer.Data,
+	)
 	_ = s.Send(s.txBuffer)
 	return nil
 }

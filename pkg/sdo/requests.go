@@ -2,8 +2,6 @@ package sdo
 
 import (
 	"encoding/binary"
-
-	log "github.com/sirupsen/logrus"
 )
 
 func (s *SDOServer) processIncoming(rx SDOMessage) error {
@@ -11,11 +9,11 @@ func (s *SDOServer) processIncoming(rx SDOMessage) error {
 	if rx.raw[0] == CSAbort {
 		s.state = stateIdle
 		abortCode := binary.LittleEndian.Uint32(rx.raw[4:])
-		log.Warnf("[SERVER][RX] abort received from client : x%x (%v)", abortCode, Abort(abortCode))
+		s.logger.Warn("[RX] abort received from client", "code", abortCode, "description", Abort(abortCode))
 		return nil
 	}
 
-	// Copy data and set new flag
+	// Copy data
 	header := rx.raw[0]
 
 	// Determine if we need to read / write to OD.

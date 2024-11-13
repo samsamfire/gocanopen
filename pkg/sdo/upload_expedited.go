@@ -1,11 +1,15 @@
 package sdo
 
 import (
-	log "github.com/sirupsen/logrus"
+	"fmt"
 )
 
 func (s *SDOServer) rxUploadInitiate(rx SDOMessage) error {
-	log.Debugf("[SERVER][RX] UPLOAD EXPEDITED | x%x:x%x %v", s.index, s.subindex, rx.raw)
+	s.logger.Debug("[RX] expedited upload initiate req",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"raw", rx.raw,
+	)
 	// Expedited transfer
 	if s.sizeIndicated > 0 && s.sizeIndicated <= 4 {
 		s.state = stateUploadExpeditedRsp
@@ -24,5 +28,9 @@ func (s *SDOServer) txUploadExpedited() {
 	s.txBuffer.Data[2] = byte(s.index >> 8)
 	s.txBuffer.Data[3] = s.subindex
 	_ = s.Send(s.txBuffer)
-	log.Debugf("[SERVER][TX] UPLOAD EXPEDITED | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
+	s.logger.Debug("[TX] expedited upload resp",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"raw", s.txBuffer.Data,
+	)
 }

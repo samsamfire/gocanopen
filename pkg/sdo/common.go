@@ -7,7 +7,6 @@ import (
 
 	"github.com/samsamfire/gocanopen/internal/crc"
 	"github.com/samsamfire/gocanopen/pkg/od"
-	log "github.com/sirupsen/logrus"
 )
 
 var ErrWrongClientReturnValue = errors.New("wrong client return value")
@@ -303,7 +302,6 @@ func (response *SDOMessage) isResponseCommandValid(state internalState) bool {
 		}
 
 	}
-	log.Errorf("Invalid response received, with code : %x", response.raw[0])
 	return false
 
 }

@@ -1,13 +1,20 @@
 package sdo
 
-import log "github.com/sirupsen/logrus"
+import (
+	"fmt"
+)
 
 func (s *SDOServer) rxDownloadSegment(rx SDOMessage) error {
 	if (rx.raw[0] & 0xE0) != 0x00 {
 		return AbortCmd
 	}
 
-	log.Debugf("[SERVER][RX] DOWNLOAD SEGMENT | x%x:x%x %v", s.index, s.subindex, rx.raw)
+	s.logger.Debug("[RX] segmented download",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"raw", s.txBuffer.Data,
+	)
+
 	s.finished = (rx.raw[0] & 0x01) != 0
 	toggle := rx.GetToggle()
 	if toggle != s.toggle {
@@ -41,7 +48,11 @@ func (s *SDOServer) txDownloadSegment() {
 	// Pepare segment
 	s.txBuffer.Data[0] = 0x20 | s.toggle
 	s.toggle ^= 0x10
-	log.Debugf("[SERVER][TX] DOWNLOAD SEGMENT | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
+	s.logger.Debug("[TX] segmented download",
+		"index", fmt.Sprintf("x%x", s.index),
+		"subindex", fmt.Sprintf("x%x", s.subindex),
+		"raw", s.txBuffer.Data,
+	)
 	_ = s.Send(s.txBuffer)
 	if s.finished {
 		s.state = stateIdle
