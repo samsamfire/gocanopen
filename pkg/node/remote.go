@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 
@@ -34,6 +35,10 @@ type RemoteNode struct {
 	tpdos    []*pdo.TPDO          // Local TPDOs (corresponds to remote RPDOs)
 	sync     *sync.SYNC           // Sync consumer (for synchronous PDOs)
 	emcy     *emergency.EMCY      // Emergency consumer (fake producer for logging internal errors)
+}
+
+func (node *RemoteNode) Process(context.Context) {
+
 }
 
 func (node *RemoteNode) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {

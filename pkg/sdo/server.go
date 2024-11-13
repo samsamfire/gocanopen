@@ -2,6 +2,7 @@ package sdo
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/internal/crc"
+	"github.com/samsamfire/gocanopen/pkg/nmt"
 	"github.com/samsamfire/gocanopen/pkg/od"
 )
 
@@ -45,6 +47,8 @@ type SDOServer struct {
 	blockCRC        crc.CRC16
 	blockTimeout    uint32
 	errorExtraInfo  error
+
+	nmt uint8
 }
 
 // Handle [SDOServer] related RX CAN frames
@@ -56,28 +60,32 @@ func (server *SDOServer) Handle(frame canopen.Frame) {
 	}
 	rx := SDOMessage{}
 	rx.raw = frame.Data
-	server.rx <- rx
+	select {
+	case server.rx <- rx:
+	default:
+		// Drop frame
+	}
+
 }
 
 // Process [SDOServer] state machine and TX CAN frames
 // It returns the global server state and error if any
 // This should be called periodically
-func (server *SDOServer) Process(ch chan struct{}) (state uint8, err error) {
+func (server *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 	server.logger.Info("starting sdo server processing")
 	timeout := time.Duration(server.timeoutTimeUs * uint32(time.Microsecond))
-	server.running = true
-	defer func() {
-		server.running = false
-	}()
-
-	nmtIsPreOrOperationnal := true
 
 	for {
+		server.mu.Lock()
+		nmtIsPreOrOperationnal := server.nmt == nmt.StateOperational || server.nmt == nmt.StatePreOperational
+		server.mu.Unlock()
+
 		if !server.valid || !nmtIsPreOrOperationnal {
 			server.state = stateIdle
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
+
 		select {
 		case rx := <-server.rx:
 			// New frame received, do what we need to do !
@@ -97,7 +105,7 @@ func (server *SDOServer) Process(ch chan struct{}) (state uint8, err error) {
 			if server.state != stateIdle {
 				server.txAbort(AbortTimeout)
 			}
-		case <-ch:
+		case <-ctx.Done():
 			server.logger.Info("exiting sdo server process")
 			return
 		}
@@ -353,6 +361,13 @@ func (server *SDOServer) SendAbort(abortCode Abort) {
 	)
 }
 
+// Set internal nmt state
+func (server *SDOServer) SetNMTState(state uint8) {
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	server.nmt = state
+}
+
 func NewSDOServer(
 	bm *canopen.BusManager,
 	logger *slog.Logger,
@@ -374,7 +389,7 @@ func NewSDOServer(
 	server.nodeId = nodeId
 	server.timeoutTimeUs = timeoutMs * 1000
 	server.blockTimeout = timeoutMs * 700
-	server.rx = make(chan SDOMessage, 1)
+	server.rx = make(chan SDOMessage, 2)
 	server.buf = bytes.NewBuffer(make([]byte, 0, 1000))
 	server.intermediateBuf = make([]byte, 1000)
 	var canIdClientToServer uint16

@@ -3,10 +3,12 @@ package node
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
@@ -15,11 +17,11 @@ import (
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/pdo"
 	"github.com/samsamfire/gocanopen/pkg/sdo"
-	"github.com/samsamfire/gocanopen/pkg/sync"
-	"github.com/samsamfire/gocanopen/pkg/time"
+	s "github.com/samsamfire/gocanopen/pkg/sync"
+	t "github.com/samsamfire/gocanopen/pkg/time"
 )
 
-// A LocalNode is a CiA 301 compliant CANopen node
+// A [LocalNode] is a CiA 301 compliant CANopen node
 // It supports all the standard CANopen objects.
 // These objects will be loaded depending on the given EDS file.
 // For configuration of the different CANopen objects see [NodeConfigurator].
@@ -32,9 +34,91 @@ type LocalNode struct {
 	SDOServers         []*sdo.SDOServer
 	TPDOs              []*pdo.TPDO
 	RPDOs              []*pdo.RPDO
-	SYNC               *sync.SYNC
+	SYNC               *s.SYNC
 	EMCY               *emergency.EMCY
-	TIME               *time.TIME
+	TIME               *t.TIME
+}
+
+// Run CANopen stack for this node, this is blocking
+func (node *LocalNode) Run() error {
+	return nil
+}
+
+// Node internal state machine
+func (node *LocalNode) Process(ctx context.Context) {
+	current := time.Now()
+	backCtx, backCancel := context.WithCancel(ctx)
+
+	for {
+		elapsed := time.Since(current)
+		current = time.Now()
+
+		select {
+		case <-ctx.Done():
+			node.logger.Info("node main process cancelled")
+			backCancel()
+			node.wgBackground.Wait()
+			node.logger.Info("node process exit")
+			return
+
+		case <-time.After(10 * time.Millisecond):
+
+			switch node.state {
+			case StateInit:
+				node.wgBackground.Add(1)
+				node.logger.Info("node lauching background tasks")
+				// Start all necessary go routines
+				backCtx, backCancel = context.WithCancel(ctx)
+				go func() {
+					defer node.wgBackground.Done()
+					node.background(backCtx)
+				}()
+
+				for _, server := range node.SDOServers {
+					node.wgBackground.Add(1)
+					go func() {
+						defer node.wgBackground.Done()
+						server.Process(backCtx)
+					}()
+
+				}
+				node.state = StateRunning
+
+			case StateRunning:
+				state := node.ProcessMain(false, uint32(elapsed.Microseconds()), nil)
+				if state == nmt.ResetApp || state == nmt.ResetComm {
+					node.state = StateReseting
+				}
+
+			case StateReseting:
+				// Perform cleanup if necessary
+				node.logger.Info("node reset")
+				node.state = StateInit
+				backCancel()
+				node.wgBackground.Wait()
+			}
+		}
+	}
+}
+
+func (node *LocalNode) background(ctx context.Context) {
+	startBackground := time.Now()
+	backgroundPeriod := time.Duration(10 * time.Millisecond)
+	for {
+		select {
+		case <-ctx.Done():
+			node.logger.Info("exiting background task")
+			return
+		default:
+			elapsed := time.Since(startBackground)
+			startBackground = time.Now()
+			timeDifferenceUs := uint32(elapsed.Microseconds())
+			syncWas := node.ProcessSYNC(timeDifferenceUs, nil)
+			node.ProcessTPDO(syncWas, timeDifferenceUs, nil)
+			node.ProcessRPDO(syncWas, timeDifferenceUs, nil)
+			time.Sleep(backgroundPeriod)
+		}
+	}
 }
 
 func (node *LocalNode) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
@@ -59,17 +143,17 @@ func (node *LocalNode) ProcessRPDO(syncWas bool, timeDifferenceUs uint32, timerN
 
 func (node *LocalNode) ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32) bool {
 	syncWas := false
-	s := node.SYNC
-	if !node.NodeIdUnconfigured && s != nil {
+	sy := node.SYNC
+	if !node.NodeIdUnconfigured && sy != nil {
 
 		nmtState := node.NMT.GetInternalState()
 		nmtIsPreOrOperational := nmtState == nmt.StatePreOperational || nmtState == nmt.StateOperational
-		syncProcess := s.Process(nmtIsPreOrOperational, timeDifferenceUs, timerNextUs)
+		syncProcess := sy.Process(nmtIsPreOrOperational, timeDifferenceUs, timerNextUs)
 
 		switch syncProcess {
-		case sync.EventRxOrTx:
+		case s.EventRxOrTx:
 			syncWas = true
-		case sync.EventPassedWindow:
+		case s.EventPassedWindow:
 		default:
 		}
 	}
@@ -82,6 +166,10 @@ func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, 
 	// Process all objects
 	NMTState := node.NMT.GetInternalState()
 	NMTisPreOrOperational := (NMTState == nmt.StatePreOperational) || (NMTState == nmt.StateOperational)
+	// Propagate NMT state to server
+	for _, server := range node.SDOServers {
+		server.SetNMTState(NMTState)
+	}
 
 	node.BusManager.Process()
 	node.EMCY.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
@@ -298,7 +386,7 @@ func NewLocalNode(
 	}
 
 	// Initialize TIME
-	time, err := time.NewTIME(bm, logger, odict.Index(od.EntryCobIdTIME), 1000) // hardcoded for now
+	time, err := t.NewTIME(bm, logger, odict.Index(od.EntryCobIdTIME), 1000) // hardcoded for now
 	if err != nil {
 		node.logger.Error("init failed [TIME]", "error", err)
 	} else {
@@ -306,7 +394,7 @@ func NewLocalNode(
 	}
 
 	// Initialize SYNC
-	sync, err := sync.NewSYNC(
+	sync, err := s.NewSYNC(
 		bm,
 		logger,
 		emcy,
