@@ -73,31 +73,31 @@ func NewBus(channel string) (canopen.Bus, error) {
 }
 
 // "Connect" implementation of Bus interface
-func (s *Bus) Connect(...any) error {
+func (b *Bus) Connect(...any) error {
 	var ctx context.Context
-	ctx, s.cancel = context.WithCancel(context.Background())
-	s.f = os.NewFile(uintptr(s.fd), fmt.Sprintf("fd %d", s.fd))
-	s.wg.Add(1)
+	ctx, b.cancel = context.WithCancel(context.Background())
+	b.f = os.NewFile(uintptr(b.fd), fmt.Sprintf("fd %d", b.fd))
+	b.wg.Add(1)
 	go func() {
-		defer s.wg.Done()
-		s.processIncoming(ctx)
+		defer b.wg.Done()
+		b.processIncoming(ctx)
 	}()
 	return nil
 }
 
 // "Disconnect" implementation of Bus interface
-func (s *Bus) Disconnect() error {
-	if s.cancel == nil {
+func (b *Bus) Disconnect() error {
+	if b.cancel == nil {
 		return nil
 	}
-	s.cancel()
-	s.wg.Wait()
-	s.f.Close()
+	b.cancel()
+	b.wg.Wait()
+	b.f.Close()
 	return nil
 }
 
 // "Send" implementation of Bus interface
-func (s *Bus) Send(frame canopen.Frame) error {
+func (b *Bus) Send(frame canopen.Frame) error {
 	canFrame := &CANframe{}
 	canFrame.id = frame.ID
 	canFrame.dlc = frame.DLC
@@ -105,7 +105,7 @@ func (s *Bus) Send(frame canopen.Frame) error {
 	canFrame.data = frame.Data
 
 	rawData := (*(*[16]byte)(unsafe.Pointer(canFrame)))[:]
-	n, err := s.f.Write(rawData)
+	n, err := b.f.Write(rawData)
 	if n != 16 || err != nil {
 		return err
 	}
@@ -113,22 +113,22 @@ func (s *Bus) Send(frame canopen.Frame) error {
 }
 
 // process incoming frames. This is meant to be run inside of a goroutine
-func (s *Bus) processIncoming(ctx context.Context) {
+func (b *Bus) processIncoming(ctx context.Context) {
 	frame := &CANframe{}
 	canopenFrame := canopen.Frame{}
 	rxFrame := make([]byte, SocketCANFrameSize)
 	for {
 		select {
 		case <-ctx.Done():
-			s.logger.Info("exiting CAN bus reception, closed")
+			b.logger.Info("exiting CAN bus reception, closed")
 			return
 		default:
-			n, err := s.f.Read(rxFrame)
+			n, err := b.f.Read(rxFrame)
 			if errors.Is(err, syscall.EAGAIN) {
 				continue
 			}
 			if n != 16 || err != nil {
-				s.logger.Info("exiting CAN bus reception", "error", err)
+				b.logger.Info("exiting CAN bus reception", "error", err)
 				return
 			}
 			// Direct translation in CANFrame
@@ -138,31 +138,31 @@ func (s *Bus) processIncoming(ctx context.Context) {
 			canopenFrame.DLC = frame.dlc
 			canopenFrame.Flags = frame.pad
 			canopenFrame.Data = frame.data
-			if s.rxCallback != nil {
-				s.rxCallback.Handle(canopenFrame)
+			if b.rxCallback != nil {
+				b.rxCallback.Handle(canopenFrame)
 			}
 		}
 	}
 }
 
 // "Subscribe" implementation of Bus interface
-func (s *Bus) Subscribe(rxCallback canopen.FrameListener) error {
-	s.rxCallback = rxCallback
+func (b *Bus) Subscribe(rxCallback canopen.FrameListener) error {
+	b.rxCallback = rxCallback
 	return nil
 }
 
 // Enable own reception on the bus. CAN be useful when testing for example
-func (s *Bus) SetReceiveOwn(enabled bool) error {
+func (b *Bus) SetReceiveOwn(enabled bool) error {
 	enabledInt := 0
 	if enabled {
 		enabledInt = 1
 	}
-	s.logger.Info("setting option 'CAN_RAW_RECV_OWN_MSGS'", "fd", s.fd, "enabled", enabled)
-	return unix.SetsockoptInt(s.fd, unix.SOL_CAN_RAW, unix.CAN_RAW_RECV_OWN_MSGS, enabledInt)
+	b.logger.Info("setting option 'CAN_RAW_RECV_OWN_MSGS'", "fd", b.fd, "enabled", enabled)
+	return unix.SetsockoptInt(b.fd, unix.SOL_CAN_RAW, unix.CAN_RAW_RECV_OWN_MSGS, enabledInt)
 }
 
 // Add some filtering to CAN bus
-func (s *Bus) SetFilters(filters []unix.CanFilter) error {
-	s.logger.Info("setting option 'CAN_RAW_FILTER'", "fd", s.fd, "filters", filters)
-	return unix.SetsockoptCanRawFilter(s.fd, unix.SOL_CAN_RAW, unix.CAN_RAW_FILTER, filters)
+func (b *Bus) SetFilters(filters []unix.CanFilter) error {
+	b.logger.Info("setting option 'CAN_RAW_FILTER'", "fd", b.fd, "filters", filters)
+	return unix.SetsockoptCanRawFilter(b.fd, unix.SOL_CAN_RAW, unix.CAN_RAW_FILTER, filters)
 }
