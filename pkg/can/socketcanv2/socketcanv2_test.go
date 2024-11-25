@@ -9,16 +9,16 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func createSocketCanBus() *SocketcanBus {
-	sock, _ := NewSocketCanBus("vcan0")
-	socketcanbus := sock.(*SocketcanBus)
+func createSocketCanBus() *Bus {
+	sock, _ := NewBus("vcan0")
+	socketcanbus := sock.(*Bus)
 	socketcanbus.Connect()
 	socketcanbus.SetReceiveOwn(true)
 	return socketcanbus
 }
 
 func TestConnectDisconnect(t *testing.T) {
-	sock, err := NewSocketCanBus("vcan0")
+	sock, err := NewBus("vcan0")
 	assert.Nil(t, err)
 	err = sock.Connect()
 	assert.Nil(t, err)
@@ -33,7 +33,7 @@ func TestConnectDisconnect(t *testing.T) {
 }
 
 func TestDisconnect(t *testing.T) {
-	sock, err := NewSocketCanBus("vcan0")
+	sock, err := NewBus("vcan0")
 	assert.Nil(t, err)
 	err = sock.Disconnect()
 	assert.Nil(t, err)
@@ -58,18 +58,18 @@ func TestSendReceive(t *testing.T) {
 	for range 500 {
 		can0.Send(canopen.NewFrame(0x100, 0, 8))
 	}
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	assert.Len(t, listener.frames, 500)
 
 }
 
 func TestSendReceiveWithReceiveOwn(t *testing.T) {
 	listener := &frameListener{frames: make([]canopen.Frame, 0)}
-	sock, err := NewSocketCanBus("vcan0")
+	sock, err := NewBus("vcan0")
 	err = sock.Connect()
 	defer sock.Disconnect()
 	assert.Nil(t, err)
-	socketcanbus := sock.(*SocketcanBus)
+	socketcanbus := sock.(*Bus)
 	assert.Nil(t, err)
 	err = sock.Send(canopen.NewFrame(0x100, 0, 0))
 	assert.Nil(t, err)
@@ -86,7 +86,7 @@ func TestSendReceiveWithReceiveOwn(t *testing.T) {
 		err := sock.Send(canopen.NewFrame(0x122, 0, 8))
 		assert.Nil(t, err)
 	}
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	assert.Len(t, listener.frames, 500)
 
 	// Disable own reception
