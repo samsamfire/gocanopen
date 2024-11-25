@@ -1,6 +1,8 @@
 package network
 
 import (
+	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/samsamfire/gocanopen/pkg/can/virtual"
@@ -15,6 +17,7 @@ func CreateNetworkEmptyTest() *Network {
 	bus := canBus.(*virtual.Bus)
 	bus.SetReceiveOwn(true)
 	network := NewNetwork(bus)
+	network.SetLogger(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	e := network.Connect()
 	if e != nil {
 		panic(e)
