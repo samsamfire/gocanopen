@@ -21,7 +21,7 @@ const NODE_ID_TEST = uint8(0x66)
 
 func createNetworkEmpty() *network.Network {
 	canBus, _ := network.NewBus("virtual", "localhost:18888", 0)
-	bus := canBus.(*virtual.VirtualCanBus)
+	bus := canBus.(*virtual.Bus)
 	bus.SetReceiveOwn(true)
 	network := network.NewNetwork(bus)
 	e := network.Connect()
