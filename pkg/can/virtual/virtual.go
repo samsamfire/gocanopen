@@ -23,6 +23,22 @@ func init() {
 	can.RegisterInterface("virtualcan", NewVirtualCanBus)
 }
 
+type Bus struct {
+	mu            sync.Mutex
+	channel       string
+	conn          net.Conn
+	receiveOwn    bool
+	framehandler  canopen.FrameListener
+	stopChan      chan bool
+	wg            sync.WaitGroup
+	isRunning     bool
+	errSubscriber bool
+}
+
+func NewVirtualCanBus(channel string) (canopen.Bus, error) {
+	return &Bus{channel: channel, stopChan: make(chan bool), isRunning: false}, nil
+}
+
 // Helper function for serializing a CAN frame into the expected binary format
 func serializeFrame(frame canopen.Frame) ([]byte, error) {
 	buffer := new(bytes.Buffer)
@@ -48,25 +64,13 @@ func deserializeFrame(buffer []byte) (*canopen.Frame, error) {
 	return &frame, nil
 }
 
-type VirtualCanBus struct {
-	mu            sync.Mutex
-	channel       string
-	conn          net.Conn
-	receiveOwn    bool
-	framehandler  canopen.FrameListener
-	stopChan      chan bool
-	wg            sync.WaitGroup
-	isRunning     bool
-	errSubscriber bool
-}
-
 // "Connect" to server e.g. localhost:18000
-func (client *VirtualCanBus) Connect(...any) error {
-	conn, err := net.Dial("tcp", client.channel)
+func (b *Bus) Connect(...any) error {
+	conn, err := net.Dial("tcp", b.channel)
 	if err != nil {
 		return err
 	}
-	client.conn = conn
+	b.conn = conn
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		err := tcpConn.SetNoDelay(true)
 		if err != nil {
@@ -77,63 +81,63 @@ func (client *VirtualCanBus) Connect(...any) error {
 }
 
 // "Disconnect" from server
-func (client *VirtualCanBus) Disconnect() error {
-	client.mu.Lock()
-	defer client.mu.Unlock()
-	if !client.errSubscriber && client.isRunning {
-		client.stopChan <- true
-		client.wg.Wait()
+func (b *Bus) Disconnect() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !b.errSubscriber && b.isRunning {
+		b.stopChan <- true
+		b.wg.Wait()
 	}
-	if client.conn != nil {
-		return client.conn.Close()
+	if b.conn != nil {
+		return b.conn.Close()
 	}
 	return nil
 }
 
 // "Send" implementation of Bus interface
-func (client *VirtualCanBus) Send(frame canopen.Frame) error {
+func (b *Bus) Send(frame canopen.Frame) error {
 	// Local loopback
-	if client.receiveOwn && client.framehandler != nil {
-		client.framehandler.Handle(frame)
-	} else if client.conn == nil {
+	if b.receiveOwn && b.framehandler != nil {
+		b.framehandler.Handle(frame)
+	} else if b.conn == nil {
 		return errors.New("error : no active connection, abort send")
 	}
-	if client.conn != nil {
+	if b.conn != nil {
 		frameBytes, err := serializeFrame(frame)
 		if err != nil {
 			return err
 		}
-		_ = client.conn.SetWriteDeadline(time.Now().Add(10 * time.Millisecond))
-		_, err = client.conn.Write(frameBytes)
+		_ = b.conn.SetWriteDeadline(time.Now().Add(10 * time.Millisecond))
+		_, err = b.conn.Write(frameBytes)
 		return err
 	}
 	return nil
 }
 
 // "Subscribe" implementation of Bus interface
-func (client *VirtualCanBus) Subscribe(framehandler canopen.FrameListener) error {
-	client.mu.Lock()
-	defer client.mu.Unlock()
-	client.framehandler = framehandler
-	if client.isRunning {
+func (b *Bus) Subscribe(framehandler canopen.FrameListener) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.framehandler = framehandler
+	if b.isRunning {
 		return nil
 	}
 	// Start go routine that receives incoming traffic and passes it to frameHandler
-	client.wg.Add(1)
-	client.isRunning = true
-	client.errSubscriber = false
-	go client.handleReception()
+	b.wg.Add(1)
+	b.isRunning = true
+	b.errSubscriber = false
+	go b.handleReception()
 	return nil
 }
 
 // Receive new CAN message
-func (client *VirtualCanBus) Recv() (*canopen.Frame, error) {
-	if client.conn == nil {
+func (b *Bus) Recv() (*canopen.Frame, error) {
+	if b.conn == nil {
 		return nil, fmt.Errorf("error : no active connection, abort receive")
 	}
-	_ = client.conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	_ = b.conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 	headerBytes := make([]byte, 4)
-	n, err := client.conn.Read(headerBytes)
+	n, err := b.conn.Read(headerBytes)
 	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 		return nil, err
 	}
@@ -142,8 +146,8 @@ func (client *VirtualCanBus) Recv() (*canopen.Frame, error) {
 	}
 	length := binary.BigEndian.Uint32(headerBytes)
 	frameBytes := make([]byte, length)
-	_ = client.conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
-	n, err = client.conn.Read(frameBytes)
+	_ = b.conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	n, err = b.conn.Read(frameBytes)
 	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 		return nil, err
 	}
@@ -158,7 +162,7 @@ func (client *VirtualCanBus) Recv() (*canopen.Frame, error) {
 }
 
 // Handle incoming traffic
-func (client *VirtualCanBus) handleReception() {
+func (client *Bus) handleReception() {
 	defer func() {
 		client.isRunning = false
 		client.wg.Done()
@@ -189,10 +193,6 @@ func (client *VirtualCanBus) handleReception() {
 	}
 }
 
-func (client *VirtualCanBus) SetReceiveOwn(receiveOwn bool) {
-	client.receiveOwn = receiveOwn
-}
-
-func NewVirtualCanBus(channel string) (canopen.Bus, error) {
-	return &VirtualCanBus{channel: channel, stopChan: make(chan bool), isRunning: false}, nil
+func (b *Bus) SetReceiveOwn(receiveOwn bool) {
+	b.receiveOwn = receiveOwn
 }

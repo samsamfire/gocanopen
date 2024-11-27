@@ -13,9 +13,9 @@ import (
 
 var VCAN_CHANNEL string = "localhost:18888"
 
-func newVcan(channel string) *VirtualCanBus {
+func newVcan(channel string) *Bus {
 	canBus, _ := NewVirtualCanBus(channel)
-	vcan, _ := canBus.(*VirtualCanBus)
+	vcan, _ := canBus.(*Bus)
 	return vcan
 }
 

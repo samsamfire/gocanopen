@@ -3,7 +3,6 @@ module github.com/samsamfire/gocanopen
 go 1.22
 
 require (
-	github.com/brutella/can v0.0.2
 	github.com/sirupsen/logrus v1.9.0
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8
