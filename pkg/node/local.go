@@ -186,7 +186,7 @@ func NewLocalNode(
 	node.exitBackground = make(chan bool)
 	node.exit = make(chan bool)
 	node.id = nodeId
-	node.state = NODE_INIT
+	node.state = NodeInit
 
 	if emcy == nil {
 		emergency, err := emergency.NewEMCY(

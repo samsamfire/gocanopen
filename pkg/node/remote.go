@@ -37,7 +37,7 @@ type RemoteNode struct {
 }
 
 func (node *RemoteNode) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
-	if node.GetState() == NODE_RUNNING {
+	if node.GetState() == NodeRunning {
 		node.mu.Lock()
 		defer node.mu.Unlock()
 		for _, tpdo := range node.tpdos {
@@ -47,7 +47,7 @@ func (node *RemoteNode) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timer
 }
 
 func (node *RemoteNode) ProcessRPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
-	if node.GetState() == NODE_RUNNING {
+	if node.GetState() == NodeRunning {
 		node.mu.Lock()
 		defer node.mu.Unlock()
 		for _, rpdo := range node.rpdos {
@@ -60,7 +60,7 @@ func (node *RemoteNode) ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32
 	syncWas := false
 	s := node.sync
 	if s != nil {
-		syncProcess := s.Process(node.GetState() == NODE_RUNNING, timeDifferenceUs, timerNextUs)
+		syncProcess := s.Process(node.GetState() == NodeRunning, timeDifferenceUs, timerNextUs)
 
 		switch syncProcess {
 		case sync.EventNone, sync.EventRxOrTx:

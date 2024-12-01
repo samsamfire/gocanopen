@@ -138,7 +138,7 @@ func (network *Network) launchNodeProcess(node n.Node) {
 		mainPeriod := time.Duration(1 * time.Millisecond)
 		for {
 			switch node.GetState() {
-			case n.NODE_INIT:
+			case n.NodeInit:
 				log.Infof("[NETWORK][x%x] starting node background process", node.GetID())
 				node.Wg().Add(1)
 				go func() {
@@ -159,9 +159,9 @@ func (network *Network) launchNodeProcess(node n.Node) {
 						}
 					}
 				}()
-				node.SetState(n.NODE_RUNNING)
+				node.SetState(n.NodeRunning)
 
-			case n.NODE_RUNNING:
+			case n.NodeRunning:
 				elapsed := time.Since(startMain)
 				startMain = time.Now()
 				timeDifferenceUs := uint32(elapsed.Microseconds())
@@ -169,20 +169,20 @@ func (network *Network) launchNodeProcess(node n.Node) {
 				node.MainCallback()
 				time.Sleep(mainPeriod)
 				if state == nmt.ResetApp || state == nmt.ResetComm {
-					node.SetState(n.NODE_RESETING)
+					node.SetState(n.NodeReseting)
 				}
 				select {
 				case <-node.GetExit():
 					log.Infof("[NETWORK][x%x] received exit request", node.GetID())
-					node.SetState(n.NODE_EXIT)
+					node.SetState(n.NodeExit)
 				default:
 
 				}
-			case n.NODE_RESETING:
+			case n.NodeReseting:
 				node.SetExitBackground(true)
-				node.SetState(n.NODE_INIT)
+				node.SetState(n.NodeInit)
 
-			case n.NODE_EXIT:
+			case n.NodeExit:
 				node.SetExitBackground(true)
 				node.Wg().Wait()
 				log.Infof("[NETWORK][x%x] complete exit", node.GetID())
