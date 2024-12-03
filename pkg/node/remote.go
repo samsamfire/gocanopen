@@ -37,32 +37,29 @@ type RemoteNode struct {
 }
 
 func (node *RemoteNode) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
-	if node.GetState() == NODE_RUNNING {
-		node.mu.Lock()
-		defer node.mu.Unlock()
-		for _, tpdo := range node.tpdos {
-			tpdo.Process(timeDifferenceUs, timerNextUs, true, syncWas)
-		}
+
+	node.mu.Lock()
+	defer node.mu.Unlock()
+	for _, tpdo := range node.tpdos {
+		tpdo.Process(timeDifferenceUs, timerNextUs, true, syncWas)
 	}
+
 }
 
 func (node *RemoteNode) ProcessRPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
-	if node.GetState() == NODE_RUNNING {
-		node.mu.Lock()
-		defer node.mu.Unlock()
-		for _, rpdo := range node.rpdos {
-			rpdo.Process(timeDifferenceUs, timerNextUs, true, syncWas)
-		}
+	node.mu.Lock()
+	defer node.mu.Unlock()
+	for _, rpdo := range node.rpdos {
+		rpdo.Process(timeDifferenceUs, timerNextUs, true, syncWas)
 	}
 }
 
 func (node *RemoteNode) ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32) bool {
 	syncWas := false
-	s := node.sync
-	if s != nil {
-		syncProcess := s.Process(node.GetState() == NODE_RUNNING, timeDifferenceUs, timerNextUs)
+	if node.sync != nil {
+		event := node.sync.Process(true, timeDifferenceUs, timerNextUs)
 
-		switch syncProcess {
+		switch event {
 		case sync.EventNone, sync.EventRxOrTx:
 			syncWas = true
 		case sync.EventPassedWindow:
