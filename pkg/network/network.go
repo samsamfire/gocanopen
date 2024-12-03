@@ -3,11 +3,11 @@ package network
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"slices"
 	"sync"
-	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	can "github.com/samsamfire/gocanopen/pkg/can"
@@ -35,8 +35,7 @@ const nodeIdMin = uint8(1)
 type Network struct {
 	*canopen.BusManager
 	*sdo.SDOClient
-	nodes     map[uint8]n.Node
-	wgProcess sync.WaitGroup
+	controllers map[uint8]*n.NodeProcessor
 	// Network has an its own SDOClient
 	odMap map[uint8]*ObjectDictionaryInformation
 }
@@ -63,9 +62,9 @@ func NewBus(canInterfaceName string, channel string, bitrate int) (canopen.Bus, 
 // Create a new Network using the given CAN bus
 func NewNetwork(bus canopen.Bus) Network {
 	return Network{
-		nodes:      map[uint8]n.Node{},
-		BusManager: canopen.NewBusManager(bus),
-		odMap:      map[uint8]*ObjectDictionaryInformation{},
+		controllers: map[uint8]*n.NodeProcessor{},
+		BusManager:  canopen.NewBusManager(bus),
+		odMap:       map[uint8]*ObjectDictionaryInformation{},
 	}
 }
 
@@ -118,78 +117,16 @@ func (network *Network) Connect(args ...any) error {
 // Disconnects from the CAN bus and stops processing
 // of CANopen stack
 func (network *Network) Disconnect() {
-	for _, node := range network.nodes {
-		node.SetExit(true)
+	// Stop processing for everyone then wait for everyone
+	// This is done in two steps because there can be a delay
+	// between stop & wait.
+	for _, controller := range network.controllers {
+		controller.Stop()
 	}
-	network.wgProcess.Wait()
+	for _, controller := range network.controllers {
+		controller.Wait()
+	}
 	_ = network.BusManager.Bus().Disconnect()
-}
-
-// Launch goroutine that handles CANopen stack processing of a node
-func (network *Network) launchNodeProcess(node n.Node) {
-	log.Infof("[NETWORK][x%x] adding node to nodes being processed %T", node.GetID(), node)
-	network.wgProcess.Add(1)
-	go func(node n.Node) {
-		defer network.wgProcess.Done()
-		// These are timer values and can be adjusted
-		startBackground := time.Now()
-		backgroundPeriod := time.Duration(10 * time.Millisecond)
-		startMain := time.Now()
-		mainPeriod := time.Duration(1 * time.Millisecond)
-		for {
-			switch node.GetState() {
-			case n.NodeInit:
-				log.Infof("[NETWORK][x%x] starting node background process", node.GetID())
-				node.Wg().Add(1)
-				go func() {
-					defer node.Wg().Done()
-					for {
-						select {
-						case <-node.GetExitBackground():
-							log.Infof("[NETWORK][x%x] exited node background process", node.GetID())
-							return
-						default:
-							elapsed := time.Since(startBackground)
-							startBackground = time.Now()
-							timeDifferenceUs := uint32(elapsed.Microseconds())
-							syncWas := node.ProcessSYNC(timeDifferenceUs, nil)
-							node.ProcessTPDO(syncWas, timeDifferenceUs, nil)
-							node.ProcessRPDO(syncWas, timeDifferenceUs, nil)
-							time.Sleep(backgroundPeriod)
-						}
-					}
-				}()
-				node.SetState(n.NodeRunning)
-
-			case n.NodeRunning:
-				elapsed := time.Since(startMain)
-				startMain = time.Now()
-				timeDifferenceUs := uint32(elapsed.Microseconds())
-				state := node.ProcessMain(false, timeDifferenceUs, nil)
-				node.MainCallback()
-				time.Sleep(mainPeriod)
-				if state == nmt.ResetApp || state == nmt.ResetComm {
-					node.SetState(n.NodeReseting)
-				}
-				select {
-				case <-node.GetExit():
-					log.Infof("[NETWORK][x%x] received exit request", node.GetID())
-					node.SetState(n.NodeExit)
-				default:
-
-				}
-			case n.NodeReseting:
-				node.SetExitBackground(true)
-				node.SetState(n.NodeInit)
-
-			case n.NodeExit:
-				node.SetExitBackground(true)
-				node.Wg().Wait()
-				log.Infof("[NETWORK][x%x] complete exit", node.GetID())
-				return
-			}
-		}
-	}(node)
 }
 
 // Get OD for a specific node id
@@ -199,9 +136,9 @@ func (network *Network) GetOD(nodeId uint8) (*od.ObjectDictionary, error) {
 		return network.odMap[nodeId].od, nil
 	}
 	// Look in local nodes
-	_, odLoaded = network.nodes[nodeId]
+	_, odLoaded = network.controllers[nodeId]
 	if odLoaded {
-		return network.nodes[nodeId].GetOD(), nil
+		return network.controllers[nodeId].GetNode().GetOD(), nil
 	}
 	return nil, od.ErrOdMissing
 }
@@ -252,7 +189,7 @@ func (network *Network) Command(nodeId uint8, nmtCommand nmt.Command) error {
 }
 
 // Create a [LocalNode] a CiA 301 compliant node with a given OD
-// od can be either a string : path to OD or an OD object.
+// OD can be either a string : path to OD or an OD object.
 // Processing is started immediately after creating the node.
 // By default, node automatically goes to operational state if no errors are detected.
 // First heartbeat, if enabled is started after 500ms
@@ -289,12 +226,16 @@ func (network *Network) CreateLocalNode(nodeId uint8, odict any) (*n.LocalNode, 
 	if err != nil {
 		return nil, err
 	}
-	// Add to network, launch routine
-	if _, ok := network.nodes[nodeId]; ok {
-		return nil, ErrIdConflict
+	// Add to network, launch routine for managing this node
+	// Automatically
+	controller, err := network.AddNode(node)
+	if err != nil {
+		return nil, err
 	}
-	network.nodes[nodeId] = node
-	network.launchNodeProcess(node)
+	err = controller.Start(context.Background())
+	if err != nil {
+		return nil, err
+	}
 	return node, nil
 }
 
@@ -334,34 +275,55 @@ func (network *Network) AddRemoteNode(nodeId uint8, odict any) (*n.RemoteNode, e
 	if err != nil {
 		return nil, err
 	}
-	if _, ok := network.nodes[nodeId]; ok {
+
+	// Add to network, launch routine for managing this node
+	// Automatically
+	controller, err := network.AddNode(node)
+	if err != nil {
+		return nil, err
+	}
+	err = controller.Start(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	return node, nil
+}
+
+// Add any node to the network and return a node controller which can be used
+// To control high level node behaviour (starting, stopping the node)
+func (network *Network) AddNode(node n.Node) (*n.NodeProcessor, error) {
+	controller := n.NewNodeController(node)
+	_, ok := network.controllers[node.GetID()]
+	if ok {
 		return nil, ErrIdConflict
 	}
-	network.nodes[nodeId] = node
-	network.launchNodeProcess(node)
-	return node, nil
+	network.controllers[node.GetID()] = controller
+	return controller, nil
 }
 
 // RemoveNode gracefully exits any running go routine for this node
 // It also removes any object associated with the node, including OD
 func (network *Network) RemoveNode(nodeId uint8) error {
-	node, ok := network.nodes[nodeId]
+	node, ok := network.controllers[nodeId]
 	if !ok {
 		return ErrNotFound
 	}
-	node.SetExit(true)
-	node.Wg().Wait()
-	delete(network.nodes, nodeId)
+	err := node.Stop()
+	if err != nil {
+		return err
+	}
+	node.Wait()
+	delete(network.controllers, nodeId)
 	return nil
 }
 
 // Get a remote node object in network, based on its id
 func (network *Network) Remote(nodeId uint8) (*n.RemoteNode, error) {
-	node, ok := network.nodes[nodeId]
+	ctrl, ok := network.controllers[nodeId]
 	if !ok {
 		return nil, ErrNotFound
 	}
-	remote, ok := node.(*n.RemoteNode)
+	remote, ok := ctrl.GetNode().(*n.RemoteNode)
 	if !ok {
 		return nil, ErrInvalidNodeType
 	}
@@ -370,11 +332,11 @@ func (network *Network) Remote(nodeId uint8) (*n.RemoteNode, error) {
 
 // Get a local node object in network, based on its id
 func (network *Network) Local(nodeId uint8) (*n.LocalNode, error) {
-	node, ok := network.nodes[nodeId]
+	ctrl, ok := network.controllers[nodeId]
 	if !ok {
 		return nil, ErrNotFound
 	}
-	remote, ok := node.(*n.LocalNode)
+	remote, ok := ctrl.GetNode().(*n.LocalNode)
 	if !ok {
 		return nil, ErrInvalidNodeType
 	}

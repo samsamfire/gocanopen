@@ -79,15 +79,15 @@ func TestAddRemoveNodes(t *testing.T) {
 		err = network.RemoveNode(NODE_ID_TEST)
 		assert.Nil(t, err)
 		_, err = network.CreateLocalNode(NODE_ID_TEST, od.Default())
-		assert.Len(t, network.nodes, 1)
+		assert.Len(t, network.controllers, 1)
 		assert.Nil(t, err)
 		err = network.RemoveNode(NODE_ID_TEST)
 		assert.Nil(t, err)
-		assert.Len(t, network.nodes, 0)
+		assert.Len(t, network.controllers, 0)
 	})
 	t.Run("add node", func(t *testing.T) {
 		// Test creating multiple nodes with same id
-		assert.Len(t, network.nodes, 0)
+		assert.Len(t, network.controllers, 0)
 		_, err := network.CreateLocalNode(NODE_ID_TEST, od.Default())
 		assert.Nil(t, err)
 		_, err = network.CreateLocalNode(NODE_ID_TEST, od.Default())

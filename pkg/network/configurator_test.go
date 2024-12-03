@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/samsamfire/gocanopen/pkg/config"
-	"github.com/samsamfire/gocanopen/pkg/node"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/sdo"
 	log "github.com/sirupsen/logrus"
@@ -142,7 +141,7 @@ func emCallback(ident uint16, errorCode uint16, errorRegister byte, errorBit byt
 func TestHBConfigurator(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
-	node := network.nodes[NODE_ID_TEST].(*node.LocalNode)
+	node, _ := network.Local(NODE_ID_TEST)
 	node.EMCY.SetCallback(emCallback)
 	config := network.Configurator(NODE_ID_TEST)
 	err := config.WriteMonitoredNode(1, 0x25, 100)
@@ -173,7 +172,7 @@ func TestTimeConfigurator(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
 	conf := network.Configurator(NODE_ID_TEST)
-	node := network.nodes[NODE_ID_TEST].(*node.LocalNode)
+	node, _ := network.Local(NODE_ID_TEST)
 	err := conf.ProducerEnableTIME()
 	assert.Nil(t, err)
 	assert.Equal(t, true, node.TIME.Producer())
