@@ -183,10 +183,7 @@ func NewLocalNode(
 	node := &LocalNode{BaseNode: base}
 	node.NodeIdUnconfigured = false
 	node.od = odict
-	node.exitBackground = make(chan bool)
-	node.exit = make(chan bool)
 	node.id = nodeId
-	node.state = NODE_INIT
 
 	if emcy == nil {
 		emergency, err := emergency.NewEMCY(
