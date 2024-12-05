@@ -4,8 +4,9 @@ This package was written because I wanted an easy to use and efficient CANopen s
 capable of running on embedded devices using golang.
 
 This project has been inspired by two other existing projects:
-- [CANopenNode](https://github.com/CANopenNode/CANopenNode) a C implementation slave side.
-- [canopen](https://github.com/christiansandberg/canopen) a python implementation mostly for master control.
+
+* [CANopenNode](https://github.com/CANopenNode/CANopenNode) a C implementation slave side.
+* [canopen](https://github.com/christiansandberg/canopen) a python implementation mostly for master control.
 
 This project implements both slave & master side using an efficient API.
 
