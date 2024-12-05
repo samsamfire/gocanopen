@@ -1,12 +1,13 @@
 package sync
 
 import (
+	"fmt"
+	"log/slog"
 	s "sync"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
 	"github.com/samsamfire/gocanopen/pkg/od"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -17,6 +18,7 @@ const (
 
 type SYNC struct {
 	*canopen.BusManager
+	logger              *slog.Logger
 	mu                  s.Mutex
 	emcy                *emergency.EMCY
 	rxNew               bool
@@ -87,7 +89,7 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 	}
 	commCyclePeriod, err := sync.commCyclePeriod.Uint32(0)
 	if err != nil {
-		log.Warnf("[SYNC] failed to read comm cycle period : %v", err)
+		sync.logger.Warn("failed to read comm cycle period", "error", err)
 	}
 	if commCyclePeriod > 0 {
 		if sync.isProducer {
@@ -110,7 +112,7 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 			}
 			if sync.timer > periodTimeout {
 				sync.emcy.Error(true, emergency.EmSyncTimeOut, emergency.ErrCommunication, sync.timer)
-				log.Warnf("[SYNC] time out error : %v", sync.timer)
+				sync.logger.Warn("timeout error", "timer", sync.timer, "period", periodTimeout)
 				sync.timeoutError = 2
 			} else if timerNextUs != nil {
 				diff := periodTimeout - sync.timer
@@ -122,7 +124,7 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 	}
 	synchronousWindowLength, err := sync.syncWindowLength.Uint32(0)
 	if err != nil {
-		log.Warnf("[SYNC] failed to read sync window length : %v", err)
+		sync.logger.Warn("failed to read sync window length", "error", err)
 	}
 	if synchronousWindowLength > 0 && sync.timer > synchronousWindowLength {
 		if !sync.syncIsOutsideWindow {
@@ -136,13 +138,13 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 	// Check reception errors in handler
 	if sync.receiveError != 0 {
 		sync.emcy.Error(true, emergency.EmSyncLength, emergency.ErrSyncDataLength, sync.timer)
-		log.Warnf("[SYNC] receive error : %v", sync.receiveError)
+		sync.logger.Warn("reception error", "error", sync.receiveError, "timer", sync.timer)
 		sync.receiveError = 0
 	}
 	if status == EventRxOrTx {
 		if sync.timeoutError == 2 {
 			sync.emcy.Error(false, emergency.EmSyncTimeOut, 0, 0)
-			log.Warnf("[SYNC] reset error")
+			sync.logger.Warn("reset error")
 		}
 		sync.timeoutError = 1
 	}
@@ -188,6 +190,7 @@ func (sync *SYNC) CounterOverflow() uint8 {
 
 func NewSYNC(
 	bm *canopen.BusManager,
+	logger *slog.Logger,
 	emergency *emergency.EMCY,
 	entry1005 *od.Entry,
 	entry1006 *od.Entry,
@@ -195,49 +198,61 @@ func NewSYNC(
 	entry1019 *od.Entry,
 ) (*SYNC, error) {
 
-	sync := &SYNC{BusManager: bm}
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	sync := &SYNC{BusManager: bm, logger: logger.With("service", "[SYNC]")}
 	if entry1005 == nil {
 		return nil, canopen.ErrIllegalArgument
 	}
+
 	cobIdSync, err := entry1005.Uint32(0)
 	if err != nil {
-		log.Errorf("[SYNC][%x] %v read error", entry1005.Index, entry1005.Name)
+		sync.logger.Error("error reading COB-ID",
+			"index", fmt.Sprintf("x%x", entry1005.Index),
+			"name", entry1005.Name,
+		)
 		return nil, canopen.ErrOdParameters
 	}
 	entry1005.AddExtension(sync, od.ReadEntryDefault, writeEntry1005)
 
 	if entry1006 == nil {
-		log.Errorf("[SYNC][1006] COMM CYCLE PERIOD not found")
+		sync.logger.Error("not found", "index", "x1006", "name", "COMM CYCLE PERIOD")
 		return nil, canopen.ErrOdParameters
 	} else if entry1007 == nil {
-		log.Errorf("[SYNC][1007] SYNCHRONOUS WINDOW LENGTH not found")
+		sync.logger.Error("not found", "index", "x1007", "name", "SYNCHRONOUS WINDOW LENGTH not found")
 		return nil, canopen.ErrOdParameters
 	}
 
 	entry1006.AddExtension(sync, od.ReadEntryDefault, writeEntry1006)
 	commCyclePeriod, err := entry1006.Uint32(0)
 	if err != nil {
-		log.Errorf("[SYNC][%x] %v read error : %v", entry1006.Index, entry1006.Name, err)
+		sync.logger.Error("read error", "index", "x1006", "name", entry1006.Name, "error", err)
 		return nil, canopen.ErrOdParameters
 	}
 	sync.commCyclePeriod = entry1006
-	log.Infof("[SYNC][%x] %v : %v", entry1006.Index, entry1006.Name, commCyclePeriod)
+	sync.logger.Info("communication cycle period", "index", "x1006", "period", commCyclePeriod)
 
 	entry1007.AddExtension(sync, od.ReadEntryDefault, writeEntry1007)
 	syncWindowLength, err := entry1007.Uint32(0)
 	if err != nil {
-		log.Errorf("[SYNC][%x] %v read error : %v", entry1007.Index, entry1007.Name, err)
+		sync.logger.Error("read error", "index", "x1007", "name", entry1007.Name, "error", err)
 		return nil, canopen.ErrOdParameters
 	}
 	sync.syncWindowLength = entry1007
-	log.Infof("[SYNC][%x] %v : %v", entry1007.Index, entry1007.Name, syncWindowLength)
+	sync.logger.Info("sync window length",
+		"index", "x1007",
+		"name", entry1007.Name,
+		"window length", syncWindowLength,
+	)
 
 	// This one is not mandatory
 	var syncCounterOverflow uint8 = 0
 	if entry1019 != nil {
 		syncCounterOverflow, err = entry1019.Uint8(0)
 		if err != nil {
-			log.Errorf("[SYNC][%x] %v read error", entry1019.Index, entry1019.Name)
+			sync.logger.Error("read error", "index", "x1019", "name", entry1019.Name)
 			return nil, canopen.ErrOdParameters
 		}
 		if syncCounterOverflow == 1 {
@@ -246,7 +261,11 @@ func NewSYNC(
 			syncCounterOverflow = 240
 		}
 		entry1019.AddExtension(sync, od.ReadEntryDefault, writeEntry1019)
-		log.Infof("[SYNC][%x] %v : %v", entry1019.Index, entry1019.Name, syncCounterOverflow)
+		sync.logger.Info("sync counter overflow",
+			"index", "x1019",
+			"name", entry1019.Name,
+			"counter overflow", syncCounterOverflow,
+		)
 	}
 	sync.counterOverflow = syncCounterOverflow
 	sync.emcy = emergency
@@ -262,6 +281,6 @@ func NewSYNC(
 		frameSize = 1
 	}
 	sync.txBuffer = canopen.NewFrame(sync.cobId, 0, frameSize)
-	log.Infof("[SYNC] Initialisation finished")
+	sync.logger.Info("initialization finished")
 	return sync, nil
 }

@@ -2,6 +2,7 @@ package node
 
 import (
 	"errors"
+	"log/slog"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/config"
@@ -11,7 +12,6 @@ import (
 	"github.com/samsamfire/gocanopen/pkg/pdo"
 	"github.com/samsamfire/gocanopen/pkg/sdo"
 	"github.com/samsamfire/gocanopen/pkg/sync"
-	log "github.com/sirupsen/logrus"
 )
 
 // A RemoteNode is a bit different from a [LocalNode].
@@ -81,6 +81,7 @@ func (node *RemoteNode) MainCallback() {
 // Create a remote node
 func NewRemoteNode(
 	bm *canopen.BusManager,
+	logger *slog.Logger,
 	remoteOd *od.ObjectDictionary,
 	remoteNodeId uint8,
 ) (*RemoteNode, error) {
@@ -90,7 +91,11 @@ func NewRemoteNode(
 	if remoteOd == nil {
 		remoteOd = od.NewOD()
 	}
-	base, err := newBaseNode(bm, remoteOd, remoteNodeId)
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger = logger.With("id", remoteNodeId)
+	base, err := newBaseNode(bm, logger, remoteOd, remoteNodeId)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +106,7 @@ func NewRemoteNode(
 	// Create a new SDO client for the remote node & for local access
 	client, err := sdo.NewSDOClient(bm, remoteOd, 0, sdo.DefaultClientTimeout, nil)
 	if err != nil {
-		log.Errorf("[NODE][SDO CLIENT] error when initializing SDO client object %v", err)
+		logger.Error("error when initializing SDO client object", "error", err)
 		return nil, err
 	}
 	node.client = client
@@ -110,6 +115,7 @@ func NewRemoteNode(
 	// Initialize SYNC
 	sync, err := sync.NewSYNC(
 		bm,
+		logger,
 		nil,
 		node.od.Index(0x1005),
 		node.od.Index(0x1006),
@@ -117,7 +123,7 @@ func NewRemoteNode(
 		node.od.Index(0x1019),
 	)
 	if err != nil {
-		log.Errorf("[NODE][SYNC] error when initialising SYNC object %v", err)
+		logger.Error("error when initialising SYNC object", "error", err)
 		return nil, err
 	}
 	node.sync = sync
@@ -136,12 +142,12 @@ func (node *RemoteNode) StartPDOs(useLocal bool) error {
 
 	var conf *config.NodeConfigurator
 
-	localConf := config.NewNodeConfigurator(0, node.client)
+	localConf := config.NewNodeConfigurator(0, node.logger, node.client)
 
 	if useLocal {
 		conf = localConf
 	} else {
-		conf = config.NewNodeConfigurator(node.id, node.client)
+		conf = config.NewNodeConfigurator(node.id, node.logger, node.client)
 	}
 
 	rpdos, tpdos, err := conf.ReadConfigurationAllPDO()
@@ -166,6 +172,7 @@ func (node *RemoteNode) StartPDOs(useLocal bool) error {
 		}
 		rpdo, err := pdo.NewRPDO(
 			node.BusManager,
+			node.logger,
 			node.od,
 			node.emcy, // Empty emergency object used for logging
 			node.sync,
@@ -179,7 +186,7 @@ func (node *RemoteNode) StartPDOs(useLocal bool) error {
 		node.rpdos = append(node.rpdos, rpdo)
 		err = localConf.EnablePDO(uint16(i) + 1) // This can fail but not critical
 		if err != nil {
-			log.Warnf("[NODE] failed to initialize RPDO %v : %v", uint16(i)+1, err)
+			node.logger.Warn("failed to initialize RPDO", "nb", uint16(i)+1, "error", err)
 		}
 	}
 
@@ -200,6 +207,7 @@ func (node *RemoteNode) StartPDOs(useLocal bool) error {
 		}
 		tpdo, err := pdo.NewTPDO(
 			node.BusManager,
+			node.logger,
 			node.od,
 			node.emcy, // Empty emergency object used for logging
 			node.sync,
@@ -213,7 +221,7 @@ func (node *RemoteNode) StartPDOs(useLocal bool) error {
 		node.tpdos = append(node.tpdos, tpdo)
 		err = localConf.EnablePDO(uint16(i) + 1 + pdo.MaxRpdoNumber) // This can fail but not critical
 		if err != nil {
-			log.Warnf("[NODE] failed to initialize RPDO %v : %v", uint16(i)+1, err)
+			node.logger.Warn("failed to initialize RPDO", "nb", uint16(i)+1, "error", err)
 		}
 	}
 

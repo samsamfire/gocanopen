@@ -3,11 +3,11 @@ package od
 import (
 	"encoding/binary"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"runtime"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
 )
 
@@ -22,6 +22,7 @@ import (
 // If the Object is an ARRAY or a RECORD it can hold also multiple sub entries.
 // sub entries are always of type VAR, for simplicity.
 type Entry struct {
+	logger *slog.Logger
 	// The OD index e.g. x1006
 	Index uint16
 	// The OD name inside of EDS
@@ -32,6 +33,18 @@ type Entry struct {
 	object            any
 	extension         *extension
 	subEntriesNameMap map[string]uint8
+}
+
+// Create a new [Entry]
+func NewEntry(logger *slog.Logger, index uint16, name string, object any, objectType uint8) *Entry {
+	return &Entry{
+		logger:            logger.With("index", fmt.Sprintf("x%x", index), "name", name),
+		Index:             index,
+		Name:              name,
+		object:            object,
+		ObjectType:        objectType,
+		subEntriesNameMap: map[string]uint8{},
+	}
 }
 
 // Subindex returns the [Variable] at a given subindex.
@@ -105,10 +118,9 @@ func (entry *Entry) addSectionMember(section *ini.Section, name string, nodeId u
 // Implementation of the default StreamReader & StreamWriter for a regular OD entry
 // can be found here [ReadEntryDefault] & [WriteEntryDefault].
 func (entry *Entry) AddExtension(object any, read StreamReader, write StreamWriter) {
-	log.Debugf("[OD][EXTENSION][x%x] added OD extension : %v, %v",
-		entry.Index,
-		getFunctionName(read),
-		getFunctionName(write),
+	entry.logger.Debug("added extension",
+		"read", getFunctionName(read),
+		"write", getFunctionName(write),
 	)
 	extension := &extension{object: object, read: read, write: write}
 	entry.extension = extension
@@ -125,7 +137,7 @@ func (entry *Entry) SubCount() int {
 		return len(object.Variables)
 	default:
 		// This is not normal
-		log.Errorf("The entry %v has an invalid type %T", entry, entry)
+		entry.logger.Error("invalid entry", "type", fmt.Sprintf("%T", entry))
 		return 1
 	}
 }

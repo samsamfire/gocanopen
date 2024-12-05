@@ -7,14 +7,13 @@ import (
 	"github.com/samsamfire/gocanopen/pkg/config"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/sdo"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestSyncConfigurator(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
-	conf := network.Configurator(NODE_ID_TEST)
+	conf := network.Configurator(NodeIdTest)
 
 	// Test Sync update producer cob id & possible errors
 	err := conf.ProducerEnableSYNC()
@@ -61,7 +60,7 @@ func TestPDOConfiguratorCommon(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
 
-	conf := network.Configurator(NODE_ID_TEST)
+	conf := network.Configurator(NodeIdTest)
 
 	t.Run("pdo configurations", func(t *testing.T) {
 		for _, pdoNb := range pdos {
@@ -121,7 +120,7 @@ func TestPDOConfiguratorNotCommon(t *testing.T) {
 
 	network := CreateNetworkTest()
 	defer network.Disconnect()
-	conf := network.Configurator(NODE_ID_TEST)
+	conf := network.Configurator(NodeIdTest)
 	err := conf.WriteInhibitTime(1, 2222)
 	assert.Nil(t, err)
 	err = conf.WriteInhibitTime(257, 2222)
@@ -134,16 +133,15 @@ func TestPDOConfiguratorNotCommon(t *testing.T) {
 var receivedErrorCodes []uint16
 
 func emCallback(ident uint16, errorCode uint16, errorRegister byte, errorBit byte, infoCode uint32) {
-	log.Debug("received emergency")
 	receivedErrorCodes = append(receivedErrorCodes, errorCode)
 }
 
 func TestHBConfigurator(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
-	node, _ := network.Local(NODE_ID_TEST)
+	node, _ := network.Local(NodeIdTest)
 	node.EMCY.SetCallback(emCallback)
-	config := network.Configurator(NODE_ID_TEST)
+	config := network.Configurator(NodeIdTest)
 	err := config.WriteMonitoredNode(1, 0x25, 100)
 	assert.Nil(t, err)
 	// Test duplicate entry
@@ -171,8 +169,8 @@ func TestHBConfigurator(t *testing.T) {
 func TestTimeConfigurator(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
-	conf := network.Configurator(NODE_ID_TEST)
-	node, _ := network.Local(NODE_ID_TEST)
+	conf := network.Configurator(NodeIdTest)
+	node, _ := network.Local(NodeIdTest)
 	err := conf.ProducerEnableTIME()
 	assert.Nil(t, err)
 	assert.Equal(t, true, node.TIME.Producer())
@@ -196,7 +194,7 @@ func TestTimeConfigurator(t *testing.T) {
 func TestGeneralObjects(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
-	conf := network.Configurator(NODE_ID_TEST)
+	conf := network.Configurator(NodeIdTest)
 	name, err := conf.ReadManufacturerDeviceName()
 	assert.Nil(t, err)
 	assert.Equal(t, "DUT", name)

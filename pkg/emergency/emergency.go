@@ -2,11 +2,11 @@ package emergency
 
 import (
 	"encoding/binary"
+	"log/slog"
 	"sync"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/od"
-	log "github.com/sirupsen/logrus"
 )
 
 const EmergencyErrorStatusBits = 80
@@ -256,8 +256,9 @@ type EMCYRxCallback func(ident uint16, errorCode uint16, errorRegister byte, err
 
 // Emergency object for receiving & transmitting emergencies
 type EMCY struct {
-	mu sync.Mutex
 	*canopen.BusManager
+	logger          *slog.Logger
+	mu              sync.Mutex
 	nodeId          byte
 	errorStatusBits [EmergencyErrorStatusBits / 8]byte
 	errorRegister   *byte
@@ -473,21 +474,20 @@ func (emcy *EMCY) Error(setError bool, errorBit byte, errorCode uint16, infoCode
 }
 
 func (emcy *EMCY) ErrorReport(errorBit byte, errorCode uint16, infoCode uint32) {
-	log.Warnf("[EMERGENCY][TX][ERROR] %v (x%x) | %v (x%x) | infoCode %v",
-		getErrorCodeDescription(int(errorCode)),
-		errorCode,
-		getErrorStatusDescription(errorBit),
-		errorBit,
-		infoCode,
+	emcy.logger.Info("report emergency",
+		"code description", getErrorCodeDescription(int(errorCode)),
+		"errorCode", errorCode,
+		"bit description", getErrorStatusDescription(errorBit),
+		"infoCode", infoCode,
 	)
 	emcy.Error(true, errorBit, errorCode, infoCode)
 }
 
 func (emcy *EMCY) ErrorReset(errorBit byte, infoCode uint32) {
-	log.Infof("[EMERGENCY][TX][RESET] reset emergency %v (x%x) | infoCode %v",
-		getErrorStatusDescription(errorBit),
-		errorBit,
-		infoCode,
+	emcy.logger.Info("reset emergency",
+		"description", getErrorStatusDescription(errorBit),
+		"errorBit", errorBit,
+		"infoCode", infoCode,
 	)
 	emcy.Error(false, errorBit, ErrNoError, infoCode)
 }
@@ -527,6 +527,7 @@ func (emcy *EMCY) SetCallback(callback EMCYRxCallback) {
 
 func NewEMCY(
 	bm *canopen.BusManager,
+	logger *slog.Logger,
 	nodeId uint8,
 	entry1001 *od.Entry,
 	entry1014 *od.Entry,
@@ -540,7 +541,11 @@ func NewEMCY(
 		return nil, canopen.ErrIllegalArgument
 
 	}
-	emcy := &EMCY{BusManager: bm}
+
+	if logger == nil {
+		logger = slog.Default()
+	}
+	emcy := &EMCY{BusManager: bm, logger: logger.With("service", "[EMCY]")}
 	// TODO handle error register ptr
 	// emergency.errorRegister
 	fifoSize := entry1003.SubCount()

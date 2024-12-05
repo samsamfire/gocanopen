@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
@@ -16,7 +17,6 @@ import (
 	"github.com/samsamfire/gocanopen/pkg/sdo"
 	"github.com/samsamfire/gocanopen/pkg/sync"
 	"github.com/samsamfire/gocanopen/pkg/time"
-	log "github.com/sirupsen/logrus"
 )
 
 // A LocalNode is a CiA 301 compliant CANopen node
@@ -128,9 +128,18 @@ func (node *LocalNode) initPDO() error {
 		pdoOffset := i % 4
 		nodeIdOffset := i / 4
 		preDefinedIdent = 0x200 + pdoOffset*0x100 + uint16(node.id) + nodeIdOffset
-		rpdo, err := pdo.NewRPDO(node.BusManager, node.GetOD(), node.EMCY, node.SYNC, entry14xx, entry16xx, preDefinedIdent)
+		rpdo, err := pdo.NewRPDO(
+			node.BusManager,
+			node.logger,
+			node.GetOD(),
+			node.EMCY,
+			node.SYNC,
+			entry14xx,
+			entry16xx,
+			preDefinedIdent,
+		)
 		if err != nil {
-			log.Warnf("[NODE][RPDO] no more RPDO after RPDO %v", i-1)
+			node.logger.Warn("no more RPDO after", "nb", i-1)
 			break
 		} else {
 			node.RPDOs = append(node.RPDOs, rpdo)
@@ -144,9 +153,18 @@ func (node *LocalNode) initPDO() error {
 		pdoOffset := i % 4
 		nodeIdOffset := i / 4
 		preDefinedIdent = 0x180 + pdoOffset*0x100 + uint16(node.id) + nodeIdOffset
-		tpdo, err := pdo.NewTPDO(node.BusManager, node.GetOD(), node.EMCY, node.SYNC, entry18xx, entry1Axx, preDefinedIdent)
+		tpdo, err := pdo.NewTPDO(
+			node.BusManager,
+			node.logger,
+			node.GetOD(),
+			node.EMCY,
+			node.SYNC,
+			entry18xx,
+			entry1Axx,
+			preDefinedIdent,
+		)
 		if err != nil {
-			log.Warnf("[NODE][TPDO] no more TPDO after TPDO %v", i-1)
+			node.logger.Warn("no more TPDO after", "nb", i-1)
 			break
 		} else {
 			node.TPDOs = append(node.TPDOs, tpdo)
@@ -160,6 +178,7 @@ func (node *LocalNode) initPDO() error {
 // Create a new local node
 func NewLocalNode(
 	bm *canopen.BusManager,
+	logger *slog.Logger,
 	odict *od.ObjectDictionary,
 	nm *nmt.NMT,
 	emcy *emergency.EMCY,
@@ -176,7 +195,11 @@ func NewLocalNode(
 	if bm == nil || odict == nil {
 		return nil, errors.New("need at least busManager and od parameters")
 	}
-	base, err := newBaseNode(bm, odict, nodeId)
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger = logger.With("id", nodeId)
+	base, err := newBaseNode(bm, logger, odict, nodeId)
 	if err != nil {
 		return nil, err
 	}
@@ -188,6 +211,7 @@ func NewLocalNode(
 	if emcy == nil {
 		emergency, err := emergency.NewEMCY(
 			bm,
+			logger,
 			nodeId,
 			odict.Index(od.EntryErrorRegister),
 			odict.Index(od.EntryCobIdEMCY),
@@ -196,7 +220,7 @@ func NewLocalNode(
 			nil,
 		)
 		if err != nil {
-			log.Errorf("[NODE][EMERGENCY producer] error when initializing emergency producer %v", err)
+			logger.Error("init failed [EMCY] producer", "error", err)
 			return nil, canopen.ErrOdParameters
 		}
 		node.EMCY = emergency
@@ -209,6 +233,7 @@ func NewLocalNode(
 	if nm == nil {
 		nmt, err := nmt.NewNMT(
 			bm,
+			logger,
 			emcy,
 			nodeId,
 			nmtControl,
@@ -219,42 +244,42 @@ func NewLocalNode(
 			odict.Index(od.EntryProducerHeartbeatTime),
 		)
 		if err != nil {
-			log.Errorf("[NODE][NMT] error when initializing NMT object %v", err)
+			logger.Error("init failed [NMT]", "error", err)
 			return nil, err
 		} else {
 			node.NMT = nmt
-			log.Infof("[NODE][NMT] initialized from OD for node x%x", nodeId)
+			logger.Info("[NMT] initialized from OD")
 		}
 	} else {
 		node.NMT = nm
-		log.Infof("[NODE][NMT] initialized for node x%x", nodeId)
+		logger.Info("[NMT] initialized from parameters")
 	}
 
 	// Initialize HB consumer
-	hbCons, err := heartbeat.NewHBConsumer(bm, emcy, odict.Index(od.EntryConsumerHeartbeatTime))
+	hbCons, err := heartbeat.NewHBConsumer(bm, logger, emcy, odict.Index(od.EntryConsumerHeartbeatTime))
 	if err != nil {
-		log.Errorf("[NODE][HB Consumer] error when initializing HB consummers %v", err)
+		logger.Error("init failed [HBConsumer]", "error", err)
 		return nil, err
 	} else {
 		node.HBConsumer = hbCons
 	}
-	log.Infof("[NODE][HB Consumer] initialized for node x%x", nodeId)
+	logger.Info("[HBConsumer] initialized")
 
 	// Initialize SDO server
 	// For now only one server
 	entry1200 := odict.Index(od.EntrySDOServerParameter)
 	sdoServers := make([]*sdo.SDOServer, 0)
 	if entry1200 == nil {
-		log.Warnf("[NODE][SDO SERVER] no sdo servers initialized for node x%x", nodeId)
+		logger.Warn("no [SDOServer] initialized")
 	} else {
 		server, err := sdo.NewSDOServer(bm, odict, nodeId, sdoServerTimeoutMs, entry1200)
 		if err != nil {
-			log.Errorf("[NODE][SDO SERVER] error when initializing SDO server object %v", err)
+			logger.Error("init failed [SDOServer]", "error", err)
 			return nil, err
 		} else {
 			sdoServers = append(sdoServers, server)
 			node.SDOServers = sdoServers
-			log.Infof("[NODE][SDO SERVER] initialized for node x%x", nodeId)
+			logger.Info("[SDOServer] initialized")
 		}
 	}
 
@@ -263,23 +288,23 @@ func NewLocalNode(
 	entry1280 := odict.Index(od.EntrySDOClientParameter)
 	sdoClients := make([]*sdo.SDOClient, 0)
 	if entry1280 == nil {
-		log.Info("[NODE][SDO CLIENT] no SDO clients initialized for node")
+		logger.Warn("no [SDOClient] initialized")
 	} else {
 
 		client, err := sdo.NewSDOClient(bm, odict, nodeId, sdoClientTimeoutMs, entry1280)
 		if err != nil {
-			log.Errorf("[NODE][SDO CLIENT] error when initializing SDO client object %v", err)
+			logger.Error("init failed [SDOClient]", "error", err)
 		} else {
 			sdoClients = append(sdoClients, client)
-			log.Infof("[NODE][SDO CLIENT] initialized for node x%x", nodeId)
+			logger.Info("[SDOClient] initialized")
 		}
 		node.SDOclients = sdoClients
 	}
 
 	// Initialize TIME
-	time, err := time.NewTIME(bm, odict.Index(od.EntryCobIdTIME), 1000) // hardcoded for now
+	time, err := time.NewTIME(bm, logger, odict.Index(od.EntryCobIdTIME), 1000) // hardcoded for now
 	if err != nil {
-		log.Errorf("[NODE][TIME] error when initializing TIME object %v", err)
+		node.logger.Error("init failed [TIME]", "error", err)
 	} else {
 		node.TIME = time
 	}
@@ -287,6 +312,7 @@ func NewLocalNode(
 	// Initialize SYNC
 	sync, err := sync.NewSYNC(
 		bm,
+		logger,
 		emcy,
 		odict.Index(od.EntryCobIdSYNC),
 		odict.Index(od.EntryCommunicationCyclePeriod),
@@ -294,7 +320,7 @@ func NewLocalNode(
 		odict.Index(od.EntrySynchronousCounterOverflow),
 	)
 	if err != nil {
-		log.Errorf("[NODE][SYNC] error when initialising SYNC object %v", err)
+		node.logger.Error("init failed [SYNC]", "error", err)
 	} else {
 		node.SYNC = sync
 	}
@@ -310,24 +336,24 @@ func NewLocalNode(
 		} else {
 			format, err = edsFormat.Uint8(0)
 			if err != nil {
-				log.Warnf("[NODE][EDS] error reading format for node x%x, default to ASCII, %v", nodeId, err)
+				node.logger.Warn("error reading EDS format, default to ASCII", "error", err)
 				format = 0
 			}
 		}
 		switch format {
 		case od.FormatEDSAscii:
-			log.Info("[NODE][EDS] EDS is downloadable via object 0x1021 in ASCII format")
+			node.logger.Info("EDS is downloadable via object 0x1021 in ASCII format")
 			odict.AddReader(edsStore.Index, edsStore.Name, odict.Reader)
 		case od.FormatEDSZipped:
-			log.Info("[NODE][EDS] EDS is downloadable via object 0x1021 in Zipped format")
+			node.logger.Info("EDS is downloadable via object 0x1021 in Zipped format")
 			compressed, err := createInMemoryZip("compressed.eds", odict.Reader)
 			if err != nil {
-				log.Errorf("[NODE][EDS] Failed to compress EDS %v", err)
+				node.logger.Error("failed to compress EDS", "error", err)
 				return nil, err
 			}
 			odict.AddReader(edsStore.Index, edsStore.Name, bytes.NewReader(compressed))
 		default:
-			return nil, fmt.Errorf("invalid eds storage format %v", format)
+			return nil, fmt.Errorf("invalid EDS storage format %v", format)
 		}
 	}
 	err = node.initPDO()

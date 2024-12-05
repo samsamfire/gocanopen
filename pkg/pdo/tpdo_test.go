@@ -17,7 +17,7 @@ func BenchmarkXxx(b *testing.B) {
 	assert.Nil(b, err)
 	bm := canopen.NewBusManager(bus)
 	od := od.Default()
-	tpdo, err := NewTPDO(bm, od, &emergency.EMCY{}, nil, od.Index(0x1801), od.Index(0x1A01), 0)
+	tpdo, err := NewTPDO(bm, nil, od, &emergency.EMCY{}, nil, od.Index(0x1801), od.Index(0x1A01), 0)
 	assert.Nil(b, err)
 	b.StartTimer()
 	for n := 0; n < b.N; n++ {

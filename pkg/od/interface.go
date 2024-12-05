@@ -3,16 +3,19 @@ package od
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
 )
+
+var _logger = slog.Default()
 
 // ObjectDictionary is used for storing all entries of a CANopen node
 // according to CiA 301. This is the internal representation of an EDS file
 type ObjectDictionary struct {
 	Reader              io.ReadSeeker
+	logger              *slog.Logger
 	iniFile             *ini.File
 	entriesByIndexValue map[uint16]*Entry
 	entriesByIndexName  map[string]*Entry
@@ -22,22 +25,16 @@ type ObjectDictionary struct {
 func (od *ObjectDictionary) addEntry(entry *Entry) {
 	_, entryIndexValueExists := od.entriesByIndexValue[entry.Index]
 	if entryIndexValueExists {
-		log.Warnf("[OD] overwritting entry index x%x", entry.Index)
+		entry.logger.Warn("overwritting entry")
 	}
 	od.entriesByIndexValue[entry.Index] = entry
 	od.entriesByIndexName[entry.Name] = entry
-	log.Debugf("[OD] adding %v | %v at %x", OBJ_NAME_MAP[entry.ObjectType], entry.Name, entry.Index)
+	entry.logger.Debug("adding entry", "objectType", OBJ_NAME_MAP[entry.ObjectType])
 }
 
 // Add a variable type entry to OD with given variable, existing entry will be
 func (od *ObjectDictionary) addVariable(index uint16, variable *Variable) *Entry {
-	entry := &Entry{
-		Index:             index,
-		Name:              variable.Name,
-		object:            variable,
-		ObjectType:        ObjectTypeVAR,
-		extension:         nil,
-		subEntriesNameMap: map[string]uint8{}}
+	entry := NewEntry(od.logger, index, variable.Name, variable, ObjectTypeVAR)
 	od.addEntry(entry)
 	return entry
 }
@@ -63,14 +60,7 @@ func (od *ObjectDictionary) AddVariableType(
 
 // AddVariableList adds an entry of type ARRAY or RECORD depending on [VariableList]
 func (od *ObjectDictionary) AddVariableList(index uint16, name string, varList *VariableList) *Entry {
-	entry := &Entry{
-		Index:             index,
-		Name:              name,
-		object:            varList,
-		ObjectType:        varList.objectType,
-		extension:         nil,
-		subEntriesNameMap: map[string]uint8{}}
-
+	entry := NewEntry(od.logger, index, name, varList, varList.objectType)
 	od.addEntry(entry)
 	return entry
 }
@@ -79,16 +69,16 @@ func (od *ObjectDictionary) AddVariableList(index uint16, name string, varList *
 // readMode and writeMode should be given to determine what type of access to the file is allowed
 // e.g. os.O_RDONLY if only reading is allowed
 func (od *ObjectDictionary) AddFile(index uint16, indexName string, filePath string, readMode int, writeMode int) {
-	log.Infof("[OD] adding file object entry : %v at x%x", filePath, index)
 	fileObject := &FileObject{FilePath: filePath, ReadMode: readMode, WriteMode: writeMode}
 	entry, _ := od.AddVariableType(index, indexName, DOMAIN, AttributeSdoRw, "") // Cannot error
+	entry.logger.Info("adding extension file i/o", "path", filePath)
 	entry.AddExtension(fileObject, ReadEntryFileObject, WriteEntryFileObject)
 }
 
 // AddReader adds an io.Reader object, of type DOMAIN to OD
 func (od *ObjectDictionary) AddReader(index uint16, indexName string, reader io.Reader) {
-	log.Infof("[OD] adding a reader entry : %v at x%x", indexName, index)
 	entry, _ := od.AddVariableType(index, indexName, DOMAIN, AttributeSdoR, "") // Cannot error
+	entry.logger.Info("adding extension reader")
 	entry.AddExtension(reader, ReadEntryReader, WriteEntryDisabled)
 }
 
@@ -117,8 +107,7 @@ func (od *ObjectDictionary) addPDO(pdoNb uint16, isRPDO bool) error {
 		pdoMap.AddSubObject(i+1, fmt.Sprintf("Application object %d", i+1), UNSIGNED32, AttributeSdoRw, "0x0")
 	}
 	od.AddVariableList(EntryRPDOMappingStart+indexOffset, fmt.Sprintf("%s mapping parameter", pdoType), pdoMap)
-
-	log.Infof("[OD] Added new PDO object to OD : %s%v", pdoType, pdoNb)
+	od.logger.Info("added new PDO oject to OD", "type", pdoType, "nb", pdoNb)
 	return nil
 }
 
@@ -152,7 +141,7 @@ func (od *ObjectDictionary) AddSYNC() {
 	od.AddVariableType(0x1006, "Communication cycle period", UNSIGNED32, AttributeSdoRw, "0x0")
 	od.AddVariableType(0x1007, "Synchronous window length", UNSIGNED32, AttributeSdoRw, "0x0")
 	od.AddVariableType(0x1019, "Synchronous counter overflow value", UNSIGNED8, AttributeSdoRw, "0x0")
-	log.Infof("[OD] Added new SYNC object to OD")
+	od.logger.Info("added new SYNC object to OD")
 }
 
 // Index returns an OD entry at the specified index.
@@ -265,7 +254,10 @@ func (rec *VariableList) AddSubObject(
 	}
 	if rec.objectType == ObjectTypeARRAY {
 		if int(subindex) >= len(rec.Variables) {
-			log.Error("[OD] trying to add a sub object to array but out of bounds")
+			_logger.Error("trying to add a sub-object to array but ouf of bounds",
+				"subindex", subindex,
+				"length", len(rec.Variables),
+			)
 			return nil, ErrSubNotExist
 		}
 		variable, err := NewVariable(subindex, name, datatype, attribute, value)

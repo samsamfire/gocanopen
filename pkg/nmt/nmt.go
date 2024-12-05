@@ -1,12 +1,13 @@
 package nmt
 
 import (
+	"fmt"
+	"log/slog"
 	"sync"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
 	"github.com/samsamfire/gocanopen/pkg/od"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -69,6 +70,7 @@ var CommandDescription = map[Command]string{
 // NMT object for processing NMT behaviour, slave or master
 type NMT struct {
 	*canopen.BusManager
+	logger                 *slog.Logger
 	mu                     sync.Mutex
 	emcy                   *emergency.EMCY
 	operatingState         uint8
@@ -156,7 +158,7 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 
 		}
 		if resetCommand != ResetNot {
-			log.Debugf("[NMT][RX] reset command %v this should be handled by user", CommandDescription[nmt.internalCommand])
+			nmt.logger.Debug("this reset command should be handled by user", "command", CommandDescription[nmt.internalCommand])
 		}
 		nmt.internalCommand = CommandEmpty
 	}
@@ -185,11 +187,13 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 
 	// Callback on change
 	if nmt.operatingStatePrev != nmtStateCopy || nmtInit {
+		prev := ""
 		if nmtInit {
-			log.Debugf("[NMT][RX] state changed | INITIALIZING ==> %v", stateMap[nmtStateCopy])
+			prev = stateMap[StateInitializing]
 		} else {
-			log.Debugf("[NMT][RX] state changed | %v ==> %v", stateMap[nmt.operatingStatePrev], stateMap[nmtStateCopy])
+			prev = stateMap[nmt.operatingStatePrev]
 		}
+		nmt.logger.Info("nmt state changed", "previous", prev, "new", stateMap[nmtStateCopy])
 		if nmt.callback != nil {
 			nmt.callback(nmtStateCopy)
 		}
@@ -246,6 +250,7 @@ func (nmt *NMT) SendCommand(command Command, nodeId uint8) error {
 
 func NewNMT(
 	bm *canopen.BusManager,
+	logger *slog.Logger,
 	emergency *emergency.EMCY,
 	nodeId uint8,
 	control uint16,
@@ -256,7 +261,11 @@ func NewNMT(
 	entry1017 *od.Entry,
 ) (*NMT, error) {
 
-	nmt := &NMT{BusManager: bm}
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	nmt := &NMT{BusManager: bm, logger: logger.With("service", "[NMT]")}
 	if entry1017 == nil || bm == nil {
 		return nil, canopen.ErrIllegalArgument
 	}
@@ -270,7 +279,11 @@ func NewNMT(
 
 	hbProdTimeMs, err := entry1017.Uint16(0)
 	if err != nil {
-		log.Errorf("[NMT][%x|%x] reading producer heartbeat failed : %v", 0x1017, 0x0, err)
+		nmt.logger.Error("reading producer heartbeat failed",
+			"index", fmt.Sprintf("x%x", 0x1017),
+			"subindex", 0,
+			"error", err,
+		)
 		return nil, canopen.ErrOdParameters
 	}
 	nmt.hearbeatProducerTimeUs = uint32(hbProdTimeMs) * 1000

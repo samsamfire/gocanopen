@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
 )
 
@@ -64,14 +63,22 @@ func NewVariableFromSection(
 	if highLimit, err := section.GetKey("HighLimit"); err == nil {
 		variable.highLimit, err = EncodeFromString(highLimit.Value(), variable.DataType, 0)
 		if err != nil {
-			log.Warnf("[OD] error parsing HighLimit at x%x|x%x : %v", index, subindex, err)
+			_logger.Warn("error parsing HighLimit",
+				"index", fmt.Sprintf("x%x", index),
+				"subindex", fmt.Sprintf("x%x", subindex),
+				"error", err,
+			)
 		}
 	}
 
 	if lowLimit, err := section.GetKey("LowLimit"); err == nil {
 		variable.lowLimit, err = EncodeFromString(lowLimit.Value(), variable.DataType, 0)
 		if err != nil {
-			log.Warnf("[OD] error parsing LowLimit at x%x|x%x : %v", index, subindex, err)
+			_logger.Warn("error parsing LowLimit",
+				"index", fmt.Sprintf("x%x", index),
+				"subindex", fmt.Sprintf("x%x", subindex),
+				"error", err,
+			)
 		}
 	}
 

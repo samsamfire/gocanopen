@@ -1,9 +1,8 @@
 package od
 
 import (
+	"fmt"
 	"sync"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // A Stream object is used for streaming data from / to an OD entry.
@@ -126,7 +125,7 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (Streamer, error) {
 			streamer.DataOffset = 0
 			streamer.Subindex = subIndex
 			streamer.mu = &object.mu
-			log.Warnf("[OD][x%x] no extension has been specified for this domain object", entry.Index)
+			entry.logger.Warn("no extension has been specified for this domain object")
 			return Streamer{}, nil
 		}
 		streamer.Attribute = object.Attribute
@@ -145,7 +144,9 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (Streamer, error) {
 		streamer.mu = &variable.mu
 
 	default:
-		log.Errorf("[OD][x%x] error, unknown type : %+v", entry.Index, object)
+		entry.logger.Error("error, unknown type",
+			"type", fmt.Sprintf("%T", object),
+		)
 		return Streamer{}, ErrDevIncompat
 	}
 	// Add normal reader / writer for object

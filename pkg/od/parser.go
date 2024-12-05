@@ -177,6 +177,7 @@ func DefaultEDSFormatHandler(nodeId uint8, formatType uint8, reader io.Reader) (
 
 func NewOD() *ObjectDictionary {
 	return &ObjectDictionary{
+		logger:              _logger.With("service", "[OD]"),
 		entriesByIndexValue: make(map[uint16]*Entry),
 		entriesByIndexName:  make(map[string]*Entry),
 	}

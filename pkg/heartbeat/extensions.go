@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 
 	"github.com/samsamfire/gocanopen/pkg/od"
-	log "github.com/sirupsen/logrus"
 )
 
 // [HBConsumer] update heartbeat consumer
@@ -25,7 +24,6 @@ func writeEntry1016(stream *od.Stream, data []byte, countWritten *uint16) error 
 	hbConsValue := binary.LittleEndian.Uint32(data)
 	nodeId := uint8(hbConsValue >> 16)
 	periodMs := uint16(hbConsValue & 0xFFFF)
-	log.Debugf("[OD][EXTENSION][HB CONSUMER] will monitor x%x with period %v ms", nodeId, periodMs)
 	err := consumer.updateConsumerEntry(stream.Subindex-1, nodeId, periodMs)
 	if err != nil {
 		return od.ErrParIncompat

@@ -13,7 +13,7 @@ func TestSDOReadExpedited(t *testing.T) {
 	defer network.Disconnect()
 	data := make([]byte, 10)
 	for i := range 8 {
-		_, err := network.ReadRaw(NODE_ID_TEST, 0x2001+uint16(i), 0, data)
+		_, err := network.ReadRaw(NodeIdTest, 0x2001+uint16(i), 0, data)
 		assert.Nil(t, err)
 	}
 }
@@ -60,7 +60,7 @@ func BenchmarkSDOReadLocal(b *testing.B) {
 func TestSDOReadBlock(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
-	_, err := network.ReadAll(NODE_ID_TEST, 0x1021, 0)
+	_, err := network.ReadAll(NodeIdTest, 0x1021, 0)
 	assert.Nil(t, err)
 
 }
@@ -69,11 +69,11 @@ func TestSDOWriteBlock(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
 	data := []byte("some random string some random string some random string some random string some random string some random string some random string")
-	node := network.controllers[NODE_ID_TEST].GetNode()
+	node := network.controllers[NodeIdTest].GetNode()
 	file, err := os.CreateTemp("", "filename")
 	assert.Nil(t, err)
 	node.GetOD().AddFile(0x3333, "File entry", file.Name(), os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
 	assert.Nil(t, err)
-	err = network.WriteRaw(NODE_ID_TEST, 0x3333, 0, data, false)
+	err = network.WriteRaw(NodeIdTest, 0x3333, 0, data, false)
 	assert.Nil(t, err)
 }
