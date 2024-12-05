@@ -1,6 +1,9 @@
 site_name: Gocanopen
 theme:
   name: material
+  icon : 
+    logo: material/file-document
+    favicon: material/file-document
   palette:
     primary: "light green"
     accent: "orange"
