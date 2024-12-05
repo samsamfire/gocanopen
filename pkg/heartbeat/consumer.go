@@ -1,13 +1,14 @@
 package heartbeat
 
 import (
+	"fmt"
+	"log/slog"
 	"sync"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
 	"github.com/samsamfire/gocanopen/pkg/nmt"
 	"github.com/samsamfire/gocanopen/pkg/od"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -41,6 +42,7 @@ type hbConsumerEntry struct {
 // Hearbeat consumer object for monitoring node hearbeats
 type HBConsumer struct {
 	*canopen.BusManager
+	logger                    *slog.Logger
 	mu                        sync.Mutex
 	emcy                      *emergency.EMCY
 	entries                   []*hbConsumerEntry
@@ -236,7 +238,7 @@ func (consumer *HBConsumer) updateConsumerEntry(index uint8, nodeId uint8, consu
 
 	// Configure RX buffer for hearbeat reception
 	if entry.hbState != HeartbeatUnconfigured {
-		log.Debugf("[HB CONSUMER] will monitor x%x | timeout %v us", entry.nodeId, entry.timeUs)
+		consumer.logger.Info("will monitor", "monitoredId", entry.nodeId, "timeoutMs", entry.timeUs/1000)
 		return consumer.Subscribe(uint32(entry.cobId), 0x7FF, false, entry)
 	}
 	return nil
@@ -251,31 +253,41 @@ func (consumer *HBConsumer) OnEvent(callback HBEventCallback) {
 	consumer.eventCallback = callback
 }
 
-func NewHBConsumer(bm *canopen.BusManager, emcy *emergency.EMCY, entry1016 *od.Entry) (*HBConsumer, error) {
+func NewHBConsumer(bm *canopen.BusManager, logger *slog.Logger, emcy *emergency.EMCY, entry1016 *od.Entry) (*HBConsumer, error) {
 
 	if entry1016 == nil || bm == nil || emcy == nil {
 		return nil, canopen.ErrIllegalArgument
 	}
-	consumer := &HBConsumer{BusManager: bm, emcy: emcy}
+
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	consumer := &HBConsumer{BusManager: bm, logger: logger.With("service", "[HB]"), emcy: emcy}
 
 	// Get number of nodes to monitor and create a monitor for each node
 	nbEntries := uint8(entry1016.SubCount() - 1)
-	log.Debugf("[HB CONSUMER] %v possible entries for nodes to monitor", nbEntries)
+	consumer.logger.Info("number of entries to monitor nodes", "nb", nbEntries)
 	consumer.entries = make([]*hbConsumerEntry, nbEntries)
 	for i := range consumer.entries {
 		consumer.entries[i] = &hbConsumerEntry{}
 	}
 
 	// For each entry, get expected heartbeat period and node id to monitor
-	for index := 0; index < int(nbEntries); index++ {
-		hbConsValue, err := entry1016.Uint32(uint8(index) + 1)
+	for i := 0; i < int(nbEntries); i++ {
+		hbConsValue, err := entry1016.Uint32(uint8(i) + 1)
 		if err != nil {
-			log.Errorf("[HB CONSUMER][%x|%x] reading %v failed : %v", entry1016.Index, index+1, entry1016.Name, err)
+			consumer.logger.Error("reading failed",
+				"name", entry1016.Name,
+				"index", fmt.Sprintf("x%x", entry1016.Index),
+				"subindex", fmt.Sprintf("x%x", i+1),
+				"error", err,
+			)
 			return nil, canopen.ErrOdParameters
 		}
 		nodeId := uint8(hbConsValue >> 16)
 		time := uint16(hbConsValue & 0xFFFF)
-		err = consumer.updateConsumerEntry(uint8(index), nodeId, time)
+		err = consumer.updateConsumerEntry(uint8(i), nodeId, time)
 		if err != nil {
 			return nil, err
 		}

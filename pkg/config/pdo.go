@@ -6,7 +6,6 @@ import (
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/pdo"
 	"github.com/samsamfire/gocanopen/pkg/sdo"
-	log "github.com/sirupsen/logrus"
 )
 
 type PDOMappingParameter struct {
@@ -118,7 +117,11 @@ func (config *NodeConfigurator) ReadConfigurationPDO(pdoNb uint16) (PDOConfigura
 	// Optional
 	conf.EventTimer, _ = config.ReadEventTimer(pdoNb)
 	conf.Mappings, err = config.ReadMappings(pdoNb)
-	log.Debugf("[CONFIGURATOR][%s%v] read configuration : %+v", config.getType(pdoNb), pdoNb, conf)
+	config.logger.Debug("read configuration",
+		"type", config.getType(pdoNb),
+		"pdoNb", pdoNb,
+		"conf", conf,
+	)
 	return conf, err
 }
 
@@ -134,10 +137,17 @@ func (config *NodeConfigurator) ReadConfigurationRangePDO(
 	for pdoNb := pdoStartNb; pdoNb <= pdoEndNb; pdoNb++ {
 		conf, err := config.ReadConfigurationPDO(pdoNb)
 		if err != nil && err == sdo.AbortNotExist {
-			log.Debugf("[CONFIGURATOR][%s%v] no more RPDO", config.getType(pdoNb), pdoNb)
+			config.logger.Debug("no more pdo",
+				"type", config.getType(pdoNb),
+				"pdoNb", pdoNb,
+			)
 			break
 		} else if err != nil {
-			log.Errorf("[CONFIGURATOR][%s%v] unable to read configuration : %v", config.getType(pdoNb), pdoNb, err)
+			config.logger.Error("failed to read configuration",
+				"type", config.getType(pdoNb),
+				"pdoNb", pdoNb,
+				"error", err,
+			)
 			return pdos, err
 		}
 		pdos = append(pdos, conf)
@@ -252,7 +262,11 @@ func (config *NodeConfigurator) WriteMappings(pdoNb uint16, mappings []PDOMappin
 
 // Update hole configuration
 func (config *NodeConfigurator) WriteConfigurationPDO(pdoNb uint16, conf PDOConfigurationParameter) error {
-	log.Debugf("[CONFIGURATOR][%s%v] updating configuration : %+v", config.getType(pdoNb), pdoNb, conf)
+	config.logger.Debug("updating configuration",
+		"type", config.getType(pdoNb),
+		"pdoNb", pdoNb,
+		"conf", conf,
+	)
 	err := config.WriteCanIdPDO(pdoNb, conf.CanId)
 	if err != nil {
 		return err

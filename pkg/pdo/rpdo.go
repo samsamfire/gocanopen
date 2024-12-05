@@ -1,13 +1,14 @@
 package pdo
 
 import (
+	"fmt"
+	"log/slog"
 	s "sync"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/sync"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -125,7 +126,10 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 			streamer.DataOffset = 0
 			_, err := streamer.Write(buffer)
 			if err != nil {
-				log.Warnf("[RPDO][%x] failed to write to OD on RPDO reception because %v", rpdo.pdo.configuredId, err)
+				rpdo.pdo.logger.Warn("failed to write to OD on RPDO reception",
+					"configured id", rpdo.pdo.configuredId,
+					"error", err,
+				)
 			}
 			streamer.DataOffset = mappedLength
 			totalNbWritten += mappedLength
@@ -159,9 +163,13 @@ func (rpdo *RPDO) configureCOBID(entry14xx *od.Entry, predefinedIdent uint32, er
 	defer rpdo.mu.Unlock()
 
 	pdo := rpdo.pdo
-	cobId, ret := entry14xx.Uint32(1)
-	if ret != nil {
-		log.Errorf("[RPDO][%x|%x] reading %v failed : %v", entry14xx.Index, 1, entry14xx.Name, ret)
+	cobId, err := entry14xx.Uint32(1)
+	if err != nil {
+		rpdo.pdo.logger.Error("reading failed",
+			"index", fmt.Errorf("x%x", entry14xx.Index),
+			"subindex", 2,
+			"error", err,
+		)
 		return 0, canopen.ErrOdParameters
 	}
 	valid := (cobId & 0x80000000) == 0
@@ -186,9 +194,9 @@ func (rpdo *RPDO) configureCOBID(entry14xx *od.Entry, predefinedIdent uint32, er
 	if canId != 0 && canId == (predefinedIdent&0xFF80) {
 		canId = predefinedIdent
 	}
-	ret = rpdo.Subscribe(canId, 0x7FF, false, rpdo)
-	if ret != nil {
-		return 0, ret
+	err = rpdo.Subscribe(canId, 0x7FF, false, rpdo)
+	if err != nil {
+		return 0, err
 	}
 	pdo.Valid = valid
 	return canId, nil
@@ -196,6 +204,7 @@ func (rpdo *RPDO) configureCOBID(entry14xx *od.Entry, predefinedIdent uint32, er
 
 func NewRPDO(
 	bm *canopen.BusManager,
+	logger *slog.Logger,
 	odict *od.ObjectDictionary,
 	emcy *emergency.EMCY,
 	sync *sync.SYNC,
@@ -209,7 +218,7 @@ func NewRPDO(
 	rpdo := &RPDO{BusManager: bm}
 	// Configure mapping parameters
 	erroneousMap := uint32(0)
-	pdo, err := NewPDO(odict, entry16xx, true, emcy, &erroneousMap)
+	pdo, err := NewPDO(odict, logger, entry16xx, true, emcy, &erroneousMap)
 	if err != nil {
 		return nil, err
 	}
@@ -220,18 +229,26 @@ func NewRPDO(
 		return nil, err
 	}
 	// Configure transmission type
-	transmissionType, ret := entry14xx.Uint8(2)
-	if ret != nil {
-		log.Errorf("[RPDO][%x|%x] reading transmission type failed : %v", entry14xx.Index, 2, ret)
+	transmissionType, err := entry14xx.Uint8(2)
+	if err != nil {
+		rpdo.pdo.logger.Error("reading transmission type failed",
+			"index", fmt.Errorf("x%x", entry14xx.Index),
+			"subindex", 2,
+			"error", err,
+		)
 		return nil, canopen.ErrOdParameters
 	}
 	rpdo.sync = sync
 	rpdo.synchronous = transmissionType <= TransmissionTypeSync240
 
 	// Configure event timer
-	eventTime, ret := entry14xx.Uint16(5)
-	if ret != nil {
-		log.Warnf("[RPDO][%x|%x] reading event timer failed : %v", entry14xx.Index, 5, ret)
+	eventTime, err := entry14xx.Uint16(5)
+	if err != nil {
+		rpdo.pdo.logger.Error("reading event timer failed",
+			"index", fmt.Errorf("x%x", entry14xx.Index),
+			"subindex", 5,
+			"error", err,
+		)
 	}
 	rpdo.timeoutTimeUs = uint32(eventTime) * 1000
 	pdo.IsRPDO = true
@@ -240,12 +257,11 @@ func NewRPDO(
 	pdo.configuredId = uint16(canId)
 	entry14xx.AddExtension(rpdo, readEntry14xxOr18xx, writeEntry14xx)
 	entry16xx.AddExtension(rpdo, od.ReadEntryDefault, writeEntry16xxOr1Axx)
-	log.Debugf("[RPDO][%x] Finished initializing | canId : %v | valid : %v | event timer : %v | synchronous : %v",
-		entry14xx.Index,
-		canId,
-		pdo.Valid,
-		eventTime,
-		rpdo.synchronous,
+	rpdo.pdo.logger.Debug("finished initializing",
+		"canId", canId,
+		"valid", pdo.Valid,
+		"event time", eventTime,
+		"synchronous", rpdo.synchronous,
 	)
 	return rpdo, nil
 }

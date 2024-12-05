@@ -1,6 +1,10 @@
 package config
 
-import "github.com/samsamfire/gocanopen/pkg/sdo"
+import (
+	"log/slog"
+
+	"github.com/samsamfire/gocanopen/pkg/sdo"
+)
 
 // NodeConfigurator provides helper methods for
 // reading / updating CANopen reserved configuration objects
@@ -8,12 +12,16 @@ import "github.com/samsamfire/gocanopen/pkg/sdo"
 // No EDS files need to be loaded for configuring these parameters
 // This uses an SDO client to access the different objects
 type NodeConfigurator struct {
+	logger *slog.Logger
 	client *sdo.SDOClient
 	nodeId uint8
 }
 
 // Create a new [NodeConfigurator] for given ID and SDOClient
-func NewNodeConfigurator(nodeId uint8, client *sdo.SDOClient) *NodeConfigurator {
-	configurator := NodeConfigurator{client: client, nodeId: nodeId}
+func NewNodeConfigurator(nodeId uint8, logger *slog.Logger, client *sdo.SDOClient) *NodeConfigurator {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	configurator := NodeConfigurator{logger: logger.With("service", "[CONFIG]"), client: client, nodeId: nodeId}
 	return &configurator
 }

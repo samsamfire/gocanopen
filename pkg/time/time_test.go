@@ -1,6 +1,7 @@
 package time
 
 import (
+	"log/slog"
 	"math"
 	"testing"
 	"time"
@@ -12,7 +13,7 @@ func TestSetInternalTime(t *testing.T) {
 	now := time.Now()
 	// Check that reading and setting time is precise
 	now = now.Round(1 * time.Millisecond)
-	timeInstance := &TIME{}
+	timeInstance := &TIME{logger: slog.Default()}
 	timeInstance.SetInternalTime(now)
 	expectedDays := uint16(time.Since(timestampOrigin).Hours() / 24)
 	assert.Equal(t, timeInstance.days, expectedDays)

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"sync"
 
@@ -17,16 +18,20 @@ import (
 	n "github.com/samsamfire/gocanopen/pkg/node"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/sdo"
-	log "github.com/sirupsen/logrus"
 )
 
-var ErrIdConflict = errors.New("id already exists on network, this will create conflicts")
-var ErrNotFound = errors.New("node id not found on network, add or create it first")
-var ErrInvalidNodeType = errors.New("invalid node type")
-var ErrNoNodesFound = errors.New("no nodes found on network when performing SDO scan")
+var (
+	ErrIdConflict      = errors.New("id already exists on network, this will create conflicts")
+	ErrIdRange         = errors.New("id is out of range")
+	ErrNotFound        = errors.New("node id not found on network, add or create it first")
+	ErrInvalidNodeType = errors.New("invalid node type")
+	ErrNoNodesFound    = errors.New("no nodes found on network when performing SDO scan")
+)
 
-const nodeIdMax = uint8(126)
-const nodeIdMin = uint8(1)
+const (
+	nodeIdMin = uint8(1)
+	nodeIdMax = uint8(126)
+)
 
 // A Network is the main object of this package
 // It should be created before doint anything else
@@ -37,7 +42,8 @@ type Network struct {
 	*sdo.SDOClient
 	controllers map[uint8]*n.NodeProcessor
 	// Network has an its own SDOClient
-	odMap map[uint8]*ObjectDictionaryInformation
+	odMap  map[uint8]*ObjectDictionaryInformation
+	logger *slog.Logger
 }
 
 type ObjectDictionaryInformation struct {
@@ -65,6 +71,7 @@ func NewNetwork(bus canopen.Bus) Network {
 		controllers: map[uint8]*n.NodeProcessor{},
 		BusManager:  canopen.NewBusManager(bus),
 		odMap:       map[uint8]*ObjectDictionaryInformation{},
+		logger:      slog.Default(),
 	}
 }
 
@@ -156,7 +163,7 @@ func (network *Network) ReadEDS(nodeId uint8, edsFormatHandler od.EDSFormatHandl
 	edsFormat, err := network.ReadUint8(nodeId, 0x1022, 0)
 	if err != nil {
 		// Don't fail if format is not specified, consider it to be ASCII
-		log.Warnf("[NETWORK][x%x] read EDS format failed, defaulting to ASCII", nodeId)
+		network.logger.Warn("read EDS format failed, defaulting to ASCII", "id", nodeId, "error", err)
 		edsFormat = 0
 	}
 	// Use ascii format handler as default if non given
@@ -184,7 +191,7 @@ func (network *Network) Command(nodeId uint8, nmtCommand nmt.Command) error {
 	frame := canopen.NewFrame(uint32(nmt.ServiceId), 0, 2)
 	frame.Data[0] = uint8(nmtCommand)
 	frame.Data[1] = nodeId
-	log.Debugf("[NMT][TX] nmt command : %v to node(s) %v (x%x)", nmt.CommandDescription[nmtCommand], nodeId, nodeId)
+	network.logger.Info("[TX] nmt command to node(s)", "command", nmt.CommandDescription[nmtCommand], "id", nodeId)
 	return network.Send(frame)
 }
 
@@ -196,6 +203,11 @@ func (network *Network) Command(nodeId uint8, nmtCommand nmt.Command) error {
 func (network *Network) CreateLocalNode(nodeId uint8, odict any) (*n.LocalNode, error) {
 	var odNode *od.ObjectDictionary
 	var err error
+
+	if nodeId < nodeIdMin || nodeId > nodeIdMax {
+		return nil, ErrIdRange
+	}
+
 	switch odType := odict.(type) {
 	case string:
 		odNode, err = od.Parse(odType, nodeId)
@@ -212,6 +224,7 @@ func (network *Network) CreateLocalNode(nodeId uint8, odict any) (*n.LocalNode, 
 	// Create and initialize a "local" CANopen node
 	node, err := n.NewLocalNode(
 		network.BusManager,
+		network.logger,
 		odNode,
 		nil, // Use definition from OD
 		nil, // Use definition from OD
@@ -248,9 +261,11 @@ func (network *Network) CreateLocalNode(nodeId uint8, odict any) (*n.LocalNode, 
 func (network *Network) AddRemoteNode(nodeId uint8, odict any) (*n.RemoteNode, error) {
 	var odNode *od.ObjectDictionary
 	var err error
-	if nodeId < 1 || nodeId > 127 {
-		return nil, fmt.Errorf("nodeId should be between 1 and 127, value given : %v", nodeId)
+
+	if nodeId < nodeIdMin || nodeId > nodeIdMax {
+		return nil, ErrIdRange
 	}
+
 	switch odType := odict.(type) {
 	case string:
 		odNode, err = od.Parse(odType, nodeId)
@@ -271,7 +286,7 @@ func (network *Network) AddRemoteNode(nodeId uint8, odict any) (*n.RemoteNode, e
 		return nil, fmt.Errorf("expecting string or ObjectDictionary got : %T", odict)
 	}
 
-	node, err := n.NewRemoteNode(network.BusManager, odNode, nodeId)
+	node, err := n.NewRemoteNode(network.BusManager, network.logger, odNode, nodeId)
 	if err != nil {
 		return nil, err
 	}
@@ -346,7 +361,7 @@ func (network *Network) Local(nodeId uint8) (*n.LocalNode, error) {
 // Configurator creates a [NodeConfigurator] object for a given id
 // using the networks internal sdo client
 func (network *Network) Configurator(nodeId uint8) *config.NodeConfigurator {
-	return config.NewNodeConfigurator(nodeId, network.SDOClient)
+	return config.NewNodeConfigurator(nodeId, network.logger, network.SDOClient)
 }
 
 // NodeInformation contains manufacturer information and identity object
@@ -380,7 +395,7 @@ func (network *Network) Scan(timeoutMs uint32) (map[uint8]NodeInformation, error
 		nodeId := uint8(i + 1)
 		go func(client *sdo.SDOClient) {
 			defer wg.Done()
-			config := config.NewNodeConfigurator(nodeId, client)
+			config := config.NewNodeConfigurator(nodeId, network.logger, client)
 			identity, err := config.ReadIdentity()
 			if err != nil {
 				// Failure to respond to ReadIdentity means node doesn't exist
@@ -399,4 +414,8 @@ func (network *Network) Scan(timeoutMs uint32) (map[uint8]NodeInformation, error
 	}
 	wg.Wait()
 	return scan, nil
+}
+
+func (network *Network) SetLogger(logger *slog.Logger) {
+	network.logger = logger
 }

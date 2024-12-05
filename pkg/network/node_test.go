@@ -6,7 +6,6 @@ import (
 
 	"github.com/samsamfire/gocanopen/pkg/node"
 	"github.com/samsamfire/gocanopen/pkg/od"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,26 +28,31 @@ var SDO_FLOAT_READ_MAP = map[string]float64{
 	"REAL64 value": float64(0.55),
 }
 
-func init() {
-	log.SetLevel(log.DebugLevel)
-}
-
-func TestCreateRemoteNode(t *testing.T) {
+func TestAddRemoteNode(t *testing.T) {
 	network := CreateNetworkTest()
 	networkRemote := CreateNetworkEmptyTest()
 	defer network.Disconnect()
 	defer networkRemote.Disconnect()
-	node, err := networkRemote.AddRemoteNode(NODE_ID_TEST, od.Default())
+	node, err := networkRemote.AddRemoteNode(NodeIdTest, od.Default())
 	assert.Nil(t, err)
 	assert.NotNil(t, node)
 	err = node.StartPDOs(true)
 	assert.Nil(t, err, err)
 }
 
+func TestCreateLocalNode(t *testing.T) {
+	network := CreateNetworkTest()
+	networkRemote := CreateNetworkEmptyTest()
+	defer network.Disconnect()
+	defer networkRemote.Disconnect()
+	_, err := networkRemote.CreateLocalNode(0x90, od.Default())
+	assert.Equal(t, ErrIdRange, err)
+}
+
 func TestReadLocal(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
-	local, err := network.Local(NODE_ID_TEST)
+	local, err := network.Local(NodeIdTest)
 	assert.Nil(t, err)
 	t.Run("Read any", func(t *testing.T) {
 		for indexName, key := range SDO_UNSIGNED_READ_MAP {
@@ -121,7 +125,7 @@ func TestReadRemote(t *testing.T) {
 	defer network.Disconnect()
 	network2 := CreateNetworkEmptyTest()
 	defer network2.Disconnect()
-	remote, err := network2.AddRemoteNode(NODE_ID_TEST, od.Default())
+	remote, err := network2.AddRemoteNode(NodeIdTest, od.Default())
 	assert.Nil(t, err)
 	t.Run("Read any", func(t *testing.T) {
 		for indexName, key := range SDO_UNSIGNED_READ_MAP {
@@ -174,7 +178,7 @@ func TestReadRemote(t *testing.T) {
 	t.Run("Write any", func(t *testing.T) {
 		network2 := CreateNetworkEmptyTest()
 		defer network2.Disconnect()
-		remote, err := network2.AddRemoteNode(NODE_ID_TEST, od.Default())
+		remote, err := network2.AddRemoteNode(NodeIdTest, od.Default())
 		assert.Nil(t, err)
 		err = remote.Write("REAL32 value", "", float32(1500.1))
 		assert.Nil(t, err)
@@ -189,12 +193,12 @@ func TestRemoteNodeRPDO(t *testing.T) {
 	networkRemote := CreateNetworkEmptyTest()
 	defer network.Disconnect()
 	defer networkRemote.Disconnect()
-	remoteNode, err := networkRemote.AddRemoteNode(NODE_ID_TEST, od.Default())
-	configurator := network.Configurator(NODE_ID_TEST)
+	remoteNode, err := networkRemote.AddRemoteNode(NodeIdTest, od.Default())
+	configurator := network.Configurator(NodeIdTest)
 	configurator.EnablePDO(1 + 256)
 	assert.Nil(t, err)
 	assert.NotNil(t, remoteNode)
-	err = network.WriteRaw(NODE_ID_TEST, 0x2002, 0, []byte{10}, false)
+	err = network.WriteRaw(NodeIdTest, 0x2002, 0, []byte{10}, false)
 	assert.Nil(t, err)
 	time.Sleep(500 * time.Millisecond)
 	read := make([]byte, 1)
@@ -208,18 +212,18 @@ func TestRemoteNodeRPDOUsingRemote(t *testing.T) {
 	networkRemote := CreateNetworkEmptyTest()
 	defer network.Disconnect()
 	defer networkRemote.Disconnect()
-	remoteNode, err := networkRemote.AddRemoteNode(NODE_ID_TEST, od.Default())
+	remoteNode, err := networkRemote.AddRemoteNode(NodeIdTest, od.Default())
 	assert.Nil(t, err)
 	// Setup remote node PDOs by reading configuration from remote
 	err = remoteNode.StartPDOs(false)
 	assert.Nil(t, err)
 	// Enable real node TPDO nb 1
-	configurator := network.Configurator(NODE_ID_TEST)
+	configurator := network.Configurator(NodeIdTest)
 	err = configurator.EnablePDO(1 + 256)
 	assert.Nil(t, err)
 	assert.NotNil(t, remoteNode)
 	// Write value to remote node
-	err = network.WriteRaw(NODE_ID_TEST, 0x2002, 0, []byte{10}, false)
+	err = network.WriteRaw(NodeIdTest, 0x2002, 0, []byte{10}, false)
 	assert.Nil(t, err)
 	time.Sleep(1000 * time.Millisecond)
 	read := make([]byte, 1)
@@ -235,7 +239,7 @@ func TestTimeSynchronization(t *testing.T) {
 	defer network.Disconnect()
 
 	// Set master node as time producer with interval 100ms
-	masterNode, _ := network.Local(NODE_ID_TEST)
+	masterNode, _ := network.Local(NodeIdTest)
 	masterNode.TIME.SetProducerIntervalMs(100)
 	masterNode.Configurator().ProducerDisableTIME()
 

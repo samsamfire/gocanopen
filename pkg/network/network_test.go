@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const NODE_ID_TEST uint8 = 0x30
+const NodeIdTest uint8 = 0x30
 
 func CreateNetworkEmptyTest() *Network {
 	canBus, _ := NewBus("virtual", "localhost:18888", 0)
@@ -24,7 +24,7 @@ func CreateNetworkEmptyTest() *Network {
 
 func CreateNetworkTest() *Network {
 	network := CreateNetworkEmptyTest()
-	_, err := network.CreateLocalNode(NODE_ID_TEST, od.Default())
+	_, err := network.CreateLocalNode(NodeIdTest, od.Default())
 	if err != nil {
 		panic(err)
 	}
@@ -36,36 +36,36 @@ func TestReadEDS(t *testing.T) {
 	network2 := CreateNetworkEmptyTest()
 	defer network2.Disconnect()
 	defer network.Disconnect()
-	_, err := network.CreateLocalNode(NODE_ID_TEST+1, "../../testdata/test_zipped_format.eds")
+	_, err := network.CreateLocalNode(NodeIdTest+1, "../../testdata/test_zipped_format.eds")
 	assert.Nil(t, err)
 
 	t.Run("local node ascii format", func(t *testing.T) {
-		od, err := network.ReadEDS(NODE_ID_TEST, od.DefaultEDSFormatHandler)
+		od, err := network.ReadEDS(NodeIdTest, od.DefaultEDSFormatHandler)
 		assert.Nil(t, err)
 		assert.NotNil(t, od.Index(0x1021))
 	})
 	t.Run("local node zipped format local", func(t *testing.T) {
 		assert.Nil(t, err)
-		od, err := network.ReadEDS(NODE_ID_TEST+1, od.DefaultEDSFormatHandler)
+		od, err := network.ReadEDS(NodeIdTest+1, od.DefaultEDSFormatHandler)
 		assert.Nil(t, err)
 		assert.NotNil(t, od.Index(0x1021))
 	})
 	t.Run("local node zipped format remote", func(t *testing.T) {
-		od, err := network2.ReadEDS(NODE_ID_TEST+1, od.DefaultEDSFormatHandler)
+		od, err := network2.ReadEDS(NodeIdTest+1, od.DefaultEDSFormatHandler)
 		assert.Nil(t, err)
 		assert.NotNil(t, od.Index(0x1021))
 	})
 	t.Run("remote node", func(t *testing.T) {
-		od, err := network2.ReadEDS(NODE_ID_TEST, nil)
+		od, err := network2.ReadEDS(NodeIdTest, nil)
 		assert.Nil(t, err)
 		assert.NotNil(t, od.Index(0x1021))
 	})
 	t.Run("with invalid format handler", func(t *testing.T) {
-		local, _ := network.Local(NODE_ID_TEST)
+		local, _ := network.Local(NodeIdTest)
 		// Replace EDS format with another value
 		_, err := local.GetOD().AddVariableType(0x1022, "Storage Format", od.UNSIGNED8, od.AttributeSdoRw, "0x10")
 		assert.Nil(t, err)
-		_, err = network2.ReadEDS(NODE_ID_TEST, nil)
+		_, err = network2.ReadEDS(NodeIdTest, nil)
 		assert.Equal(t, od.ErrEdsFormat, err)
 	})
 }
@@ -76,24 +76,24 @@ func TestAddRemoveNodes(t *testing.T) {
 	t.Run("remove node", func(t *testing.T) {
 		err := network.RemoveNode(0x12)
 		assert.Equal(t, ErrNotFound, err)
-		err = network.RemoveNode(NODE_ID_TEST)
+		err = network.RemoveNode(NodeIdTest)
 		assert.Nil(t, err)
-		_, err = network.CreateLocalNode(NODE_ID_TEST, od.Default())
+		_, err = network.CreateLocalNode(NodeIdTest, od.Default())
 		assert.Len(t, network.controllers, 1)
 		assert.Nil(t, err)
-		err = network.RemoveNode(NODE_ID_TEST)
+		err = network.RemoveNode(NodeIdTest)
 		assert.Nil(t, err)
 		assert.Len(t, network.controllers, 0)
 	})
 	t.Run("add node", func(t *testing.T) {
 		// Test creating multiple nodes with same id
 		assert.Len(t, network.controllers, 0)
-		_, err := network.CreateLocalNode(NODE_ID_TEST, od.Default())
+		_, err := network.CreateLocalNode(NodeIdTest, od.Default())
 		assert.Nil(t, err)
-		_, err = network.CreateLocalNode(NODE_ID_TEST, od.Default())
+		_, err = network.CreateLocalNode(NodeIdTest, od.Default())
 		assert.Equal(t, ErrIdConflict, err)
 		// Test adding multiple nodes with same id
-		_, err = network.AddRemoteNode(NODE_ID_TEST, od.Default())
+		_, err = network.AddRemoteNode(NodeIdTest, od.Default())
 		assert.NotEmpty(t, ErrIdConflict, err)
 	})
 

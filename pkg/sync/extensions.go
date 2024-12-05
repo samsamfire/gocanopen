@@ -5,7 +5,6 @@ import (
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/od"
-	log "github.com/sirupsen/logrus"
 )
 
 // [SYNC] update cob id & if should be producer
@@ -21,7 +20,7 @@ func writeEntry1005(stream *od.Stream, data []byte, countWritten *uint16) error 
 	defer sync.mu.Unlock()
 
 	cobIdSync := binary.LittleEndian.Uint32(data)
-	log.Debugf("[OD][EXTENSION][SYNC] updating COB-ID SYNC : %x", cobIdSync)
+	sync.logger.Info("udpating COB-ID", "cobId", cobIdSync)
 	canId := uint16(cobIdSync & 0x7FF)
 	isProducer := (cobIdSync & 0x40000000) != 0
 	if (cobIdSync&0xBFFFF800) != 0 || canopen.IsIDRestricted(canId) || (sync.isProducer && isProducer && canId != uint16(sync.cobId)) {
@@ -37,18 +36,18 @@ func writeEntry1005(stream *od.Stream, data []byte, countWritten *uint16) error 
 		if sync.counterOverflow != 0 {
 			frameSize = 1
 		}
-		log.Debugf("[OD][EXTENSION][SYNC] updated COB-ID SYNC to x%x (prev x%x)", canId, sync.cobId)
+		sync.logger.Info("udpating COB-ID", "prev", sync.cobId, "new", canId)
 		sync.txBuffer = canopen.NewFrame(uint32(canId), 0, frameSize)
 		sync.cobId = uint32(canId)
 	}
 	// Reset in case sync is producer
 	sync.isProducer = isProducer
 	if isProducer {
-		log.Debug("[OD][EXTENSION][SYNC] SYNC is producer")
+		sync.logger.Info("is producer")
 		sync.counter = 0
 		sync.timer = 0
 	} else {
-		log.Debug("[OD][EXTENSION][SYNC] SYNC is not producer")
+		sync.logger.Info("not producer")
 	}
 	return od.WriteEntryDefault(stream, data, countWritten)
 }
@@ -66,7 +65,7 @@ func writeEntry1006(stream *od.Stream, data []byte, countWritten *uint16) error 
 	defer sync.mu.Unlock()
 
 	cyclePeriodUs := binary.LittleEndian.Uint32(data)
-	log.Debugf("[OD][EXTENSION][SYNC] updating communication cycle period to %v us (%v ms)", cyclePeriodUs, cyclePeriodUs/1000)
+	sync.logger.Info("updating communication cycle", "periodMs", cyclePeriodUs/1000)
 	return od.WriteEntryDefault(stream, data, countWritten)
 }
 
@@ -80,7 +79,7 @@ func writeEntry1007(stream *od.Stream, data []byte, countWritten *uint16) error 
 		return od.ErrDevIncompat
 	}
 	windowLengthUs := binary.LittleEndian.Uint32(data)
-	log.Debugf("[OD][EXTENSION][SYNC] updating synchronous window length to %v us (%v ms)", windowLengthUs, windowLengthUs/1000)
+	sync.logger.Info("updating synchronous window length", "lengthMs", windowLengthUs/1000)
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
 
@@ -113,6 +112,6 @@ func writeEntry1019(stream *od.Stream, data []byte, countWritten *uint16) error 
 	}
 	sync.txBuffer = canopen.NewFrame(sync.cobId, 0, nbBytes)
 	sync.counterOverflow = syncCounterOverflow
-	log.Debugf("[OD][EXTENSION][SYNC] updated synchronous counter overflow to %v", syncCounterOverflow)
+	sync.logger.Info("updating synchronous counter overflow", "overflow", syncCounterOverflow)
 	return od.WriteEntryDefault(stream, data, countWritten)
 }

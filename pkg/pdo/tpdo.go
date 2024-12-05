@@ -1,13 +1,14 @@
 package pdo
 
 import (
+	"fmt"
+	"log/slog"
 	s "sync"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/sync"
-	log "github.com/sirupsen/logrus"
 )
 
 type TPDO struct {
@@ -126,9 +127,13 @@ func (tpdo *TPDO) configureTransmissionType(entry18xx *od.Entry) error {
 	tpdo.mu.Lock()
 	defer tpdo.mu.Unlock()
 
-	transmissionType, ret := entry18xx.Uint8(2)
-	if ret != nil {
-		log.Errorf("[TPDO][%x|%x] reading %v failed : %v", entry18xx.Index, 2, entry18xx.Name, ret)
+	transmissionType, err := entry18xx.Uint8(2)
+	if err != nil {
+		tpdo.pdo.logger.Error("reading failed",
+			"index", fmt.Errorf("x%x", entry18xx.Index),
+			"subindex", 2,
+			"error", err,
+		)
 		return canopen.ErrOdParameters
 	}
 	if transmissionType < TransmissionTypeSyncEventLo && transmissionType > TransmissionTypeSync240 {
@@ -144,9 +149,13 @@ func (tpdo *TPDO) configureCOBID(entry18xx *od.Entry, predefinedIdent uint16, er
 	defer tpdo.mu.Unlock()
 
 	pdo := tpdo.pdo
-	cobId, ret := entry18xx.Uint32(1)
-	if ret != nil {
-		log.Errorf("[TPDO][%x|%x] reading %v failed : %v", entry18xx.Index, 1, entry18xx.Name, ret)
+	cobId, err := entry18xx.Uint32(1)
+	if err != nil {
+		tpdo.pdo.logger.Error("reading failed",
+			"index", fmt.Errorf("x%x", entry18xx.Index),
+			"subindex", 1,
+			"error", err,
+		)
 		return 0, canopen.ErrOdParameters
 	}
 	valid := (cobId & 0x80000000) == 0
@@ -198,7 +207,7 @@ func (tpdo *TPDO) send() error {
 		streamer.DataOffset = 0
 		_, err = streamer.Read(tpdo.txBuffer.Data[totalNbRead:])
 		if err != nil {
-			log.Warnf("[TPDO]sending TPDO cob id %x failed : %v", pdo.configuredId, err)
+			tpdo.pdo.logger.Warn("failed to send", "cobId", pdo.configuredId, "error", err)
 			return err
 		}
 		streamer.DataOffset = mappedLength
@@ -218,6 +227,7 @@ func (tpdo *TPDO) send() error {
 // Create a new TPDO
 func NewTPDO(
 	bm *canopen.BusManager,
+	logger *slog.Logger,
 	odict *od.ObjectDictionary,
 	emcy *emergency.EMCY,
 	sync *sync.SYNC,
@@ -229,10 +239,11 @@ func NewTPDO(
 	if odict == nil || entry18xx == nil || entry1Axx == nil || bm == nil || emcy == nil {
 		return nil, canopen.ErrIllegalArgument
 	}
+
 	tpdo := &TPDO{BusManager: bm}
 	// Configure mapping parameters
 	erroneousMap := uint32(0)
-	pdo, err := NewPDO(odict, entry1Axx, false, emcy, &erroneousMap)
+	pdo, err := NewPDO(odict, logger, entry1Axx, false, emcy, &erroneousMap)
 	if err != nil {
 		return nil, err
 	}
@@ -250,21 +261,34 @@ func NewTPDO(
 	// Configure inhibit time (not mandatory)
 	inhibitTime, err := entry18xx.Uint16(3)
 	if err != nil {
-		log.Warnf("[TPDO][%x|%x] reading inhibit time failed : %v", entry18xx.Index, 3, err)
+		tpdo.pdo.logger.Warn("reading inhibit time failed",
+			"index", fmt.Sprintf("x%x", entry18xx.Index),
+			"subindex", 3,
+			"error", err,
+		)
 	}
 	tpdo.inhibitTimeUs = uint32(inhibitTime) * 100
 
 	// Configure event timer (not mandatory)
 	eventTime, err := entry18xx.Uint16(5)
 	if err != nil {
-		log.Warnf("[TPDO][%x|%x] reading event timer failed : %v", entry18xx.Index, 5, err)
+		tpdo.pdo.logger.Warn("reading event timer failed",
+			"index", entry18xx.Index,
+			"subindex", 5,
+			"error", err,
+		)
+
 	}
 	tpdo.eventTimeUs = uint32(eventTime) * 1000
 
 	// Configure sync start value (not mandatory)
 	tpdo.syncStartValue, err = entry18xx.Uint8(6)
 	if err != nil {
-		log.Warnf("[TPDO][%x|%x] reading sync start failed : %v", entry18xx.Index, 6, err)
+		tpdo.pdo.logger.Warn("reading sync start failed",
+			"index", entry18xx.Index,
+			"subindex", 6,
+			"error", err,
+		)
 	}
 	tpdo.sync = sync
 	tpdo.syncCounter = 255
@@ -275,15 +299,12 @@ func NewTPDO(
 	pdo.configuredId = canId
 	entry18xx.AddExtension(tpdo, readEntry14xxOr18xx, writeEntry18xx)
 	entry1Axx.AddExtension(tpdo, od.ReadEntryDefault, writeEntry16xxOr1Axx)
-
-	log.Debugf("[TPDO][%x] Finished initializing | canId : %v | valid : %v | inhibit : %v | event timer : %v | transmission type : %v",
-		entry18xx.Index,
-		canId,
-		pdo.Valid,
-		inhibitTime,
-		eventTime,
-		tpdo.transmissionType,
+	tpdo.pdo.logger.Debug("finished initializing",
+		"canId", canId,
+		"valid", pdo.Valid,
+		"inhibit time", inhibitTime,
+		"event time", eventTime,
+		"transmission type", tpdo.transmissionType,
 	)
 	return tpdo, nil
-
 }

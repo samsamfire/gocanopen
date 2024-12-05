@@ -2,12 +2,13 @@ package time
 
 import (
 	"encoding/binary"
+	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/od"
-	log "github.com/sirupsen/logrus"
 )
 
 // time origin is 1st of jan 1984
@@ -15,6 +16,7 @@ var timestampOrigin = time.Date(1984, time.January, 1, 0, 0, 0, 0, time.Local)
 
 type TIME struct {
 	*canopen.BusManager
+	logger             *slog.Logger
 	mu                 sync.Mutex
 	rawTimestamp       [6]byte
 	ms                 uint32 // Milliseconds after midnight
@@ -97,8 +99,8 @@ func (t *TIME) SetInternalTime(internalTime time.Time) {
 	t.residualUs = 0
 	t.ms = uint32(ms)
 	t.days = days
-	log.Infof("[TIME] setting the date to %v", internalTime)
-	log.Infof("[TIME] days since 01/01/1984 : %v | ms since 00:00 : %v", days, ms)
+	t.logger.Info("setting date", "internal time", internalTime)
+	t.logger.Info("since 01/01/1984|00:00:00", "days", days, "ms", ms)
 }
 
 // Update the producer interval time in milliseconds
@@ -127,15 +129,29 @@ func (t *TIME) Consumer() bool {
 	return t.isConsumer
 }
 
-func NewTIME(bm *canopen.BusManager, entry1012 *od.Entry, producerIntervalMs uint32) (*TIME, error) {
+func NewTIME(
+	bm *canopen.BusManager,
+	logger *slog.Logger,
+	entry1012 *od.Entry,
+	producerIntervalMs uint32,
+) (*TIME, error) {
 	if entry1012 == nil || bm == nil {
 		return nil, canopen.ErrIllegalArgument
 	}
-	t := &TIME{BusManager: bm}
+
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	t := &TIME{BusManager: bm, logger: logger.With("service", "[TIME]")}
 	// Read param from OD
 	cobId, err := entry1012.Uint32(0)
 	if err != nil {
-		log.Errorf("[TIME][%x|%x] reading cob id timestamp failed : %v", entry1012.Index, 0x0, err)
+		t.logger.Error("reading cob id timestamp failed",
+			"index", fmt.Sprintf("x%x", entry1012.Index),
+			"subindex", "0x0",
+			"error", err,
+		)
 		return nil, canopen.ErrOdParameters
 	}
 	entry1012.AddExtension(t, od.ReadEntryDefault, writeEntry1012)
@@ -151,9 +167,9 @@ func NewTIME(bm *canopen.BusManager, entry1012 *od.Entry, producerIntervalMs uin
 	t.SetInternalTime(time.Now())
 	t.producerIntervalMs = producerIntervalMs
 	t.producerTimerMs = producerIntervalMs
-	log.Infof("[TIME] initialized time object | producer : %v, consumer : %v", t.isProducer, t.isConsumer)
+	t.logger.Info("initialized time object", "producer", t.isProducer, "consumer", t.isConsumer)
 	if t.isProducer {
-		log.Infof("[TIME] publish period is %v ms", producerIntervalMs)
+		t.logger.Info("publish period", "ms", producerIntervalMs)
 	}
 	return t, err
 }

@@ -1,6 +1,7 @@
 package node
 
 import (
+	"log/slog"
 	"sync"
 
 	canopen "github.com/samsamfire/gocanopen"
@@ -32,14 +33,17 @@ type Node interface {
 type BaseNode struct {
 	*canopen.BusManager
 	*sdo.SDOClient
+	logger       *slog.Logger
 	mu           sync.Mutex
 	od           *od.ObjectDictionary
 	mainCallback func(node Node)
 	id           uint8
+	rxBuffer     []byte
 }
 
 func newBaseNode(
 	bm *canopen.BusManager,
+	logger *slog.Logger,
 	odict *od.ObjectDictionary,
 	nodeId uint8,
 ) (*BaseNode, error) {
@@ -53,6 +57,12 @@ func newBaseNode(
 		return nil, err
 	}
 	base.SDOClient = sdoClient
+	if logger == nil {
+		base.logger = slog.Default()
+	} else {
+		base.logger = logger
+	}
+	base.rxBuffer = make([]byte, 1000)
 	return base, nil
 }
 
@@ -68,7 +78,7 @@ func (node *BaseNode) SetMainCallback(mainCallback func(node Node)) {
 }
 
 func (node *BaseNode) Configurator() *config.NodeConfigurator {
-	return config.NewNodeConfigurator(node.id, node.SDOClient)
+	return config.NewNodeConfigurator(node.id, node.logger, node.SDOClient)
 }
 
 // Export EDS file with current state
