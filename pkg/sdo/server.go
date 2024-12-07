@@ -72,12 +72,9 @@ func (server *SDOServer) Handle(frame canopen.Frame) {
 // It returns the global server state and error if any
 // This should be called periodically
 func (server *SDOServer) Process(ctx context.Context) (state uint8, err error) {
+
 	server.logger.Info("starting sdo server processing")
 	timeout := time.Duration(server.timeoutTimeUs * uint32(time.Microsecond))
-
-	timeout := time.Duration(server.timeoutTimeUs * uint32(time.Microsecond))
-
-	nmtIsPreOrOperationnal := true
 
 	for {
 		server.mu.Lock()
@@ -290,67 +287,6 @@ func (server *SDOServer) updateStreamer(response SDOMessage) error {
 	server.index = response.GetIndex()
 	server.subindex = response.GetSubindex()
 	server.streamer, err = server.od.Streamer(server.index, server.subindex, false)
-	if err != nil {
-		return ConvertOdToSdoAbort(err.(od.ODR))
-	}
-	if !server.streamer.HasAttribute(od.AttributeSdoRw) {
-		return AbortUnsupportedAccess
-	}
-	upload := server.state == stateUploadBlkInitiateReq || server.state == stateUploadInitiateReq
-
-	if upload && !server.streamer.HasAttribute(od.AttributeSdoR) {
-		return AbortWriteOnly
-	}
-	if !upload && !server.streamer.HasAttribute(od.AttributeSdoW) {
-		return AbortReadOnly
-	}
-
-	// In case of reading, we need to prepare data now
-	if upload {
-		return server.prepareRx()
-	}
-	return nil
-}
-
-// Prepare read transfer
-func (server *SDOServer) prepareRx() error {
-	server.buf.Reset()
-	server.sizeTransferred = 0
-	server.finished = false
-
-	// Load data from OD now
-	err := server.readObjectDictionary(BlockSeqSize, 0, false)
-	if err != nil && err != od.ErrPartial {
-		return err
-	}
-
-	// For small transfers (e.g. expedited), we might finish straight away
-	if server.finished {
-		server.sizeIndicated = server.streamer.DataLength
-		if server.sizeIndicated == 0 {
-			server.sizeIndicated = uint32(server.buf.Len())
-		} else if server.sizeIndicated != uint32(server.buf.Len()) {
-			// Because we have finished, we should have exactly sizeIndicated bytes in buffer
-			server.errorExtraInfo = fmt.Errorf("size indicated %v != to buffer write offset %v", server.sizeIndicated, server.buf.Len())
-			return AbortDeviceIncompat
-		}
-		return nil
-	}
-
-	if !server.streamer.HasAttribute(od.AttributeStr) {
-		server.sizeIndicated = server.streamer.DataLength
-		return nil
-	}
-	server.sizeIndicated = 0
-	return nil
-}
-
-// Update streamer object with new requested entry
-func (server *SDOServer) updateStreamer(response SDOMessage) error {
-	var err error
-	server.index = response.GetIndex()
-	server.subindex = response.GetSubindex()
-	server.streamer, err = od.NewStreamer(server.od.Index(server.index), server.subindex, false)
 	if err != nil {
 		return ConvertOdToSdoAbort(err.(od.ODR))
 	}

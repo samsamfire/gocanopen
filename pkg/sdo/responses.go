@@ -55,22 +55,3 @@ func (s *SDOServer) txAbort(err error) {
 	}
 	s.state = stateIdle
 }
-
-func (s *SDOServer) txUploadBlockEnd() {
-	s.txBuffer.Data[0] = 0xC1 | (s.blockNoData << 2)
-	s.txBuffer.Data[1] = byte(s.blockCRC)
-	s.txBuffer.Data[2] = byte(s.blockCRC >> 8)
-	log.Debugf("[SERVER][TX] BLOCK UPLOAD END | x%x:x%x %v", s.index, s.subindex, s.txBuffer.Data)
-	s.Send(s.txBuffer)
-	s.state = stateUploadBlkEndCrsp
-}
-
-func (s *SDOServer) txAbort(err error) {
-	if sdoAbort, ok := err.(Abort); !ok {
-		log.Errorf("[SERVER][TX] Abort internal error : unknown abort code : %v", err)
-		s.SendAbort(AbortGeneral)
-	} else {
-		s.SendAbort(sdoAbort)
-	}
-	s.state = stateIdle
-}

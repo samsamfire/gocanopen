@@ -3,12 +3,10 @@ package node
 import (
 	"archive/zip"
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
-	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
@@ -37,88 +35,6 @@ type LocalNode struct {
 	SYNC               *s.SYNC
 	EMCY               *emergency.EMCY
 	TIME               *t.TIME
-}
-
-// Run CANopen stack for this node, this is blocking
-func (node *LocalNode) Run() error {
-	return nil
-}
-
-// Node internal state machine
-func (node *LocalNode) Process(ctx context.Context) {
-	current := time.Now()
-	backCtx, backCancel := context.WithCancel(ctx)
-
-	for {
-		elapsed := time.Since(current)
-		current = time.Now()
-
-		select {
-		case <-ctx.Done():
-			node.logger.Info("node main process cancelled")
-			backCancel()
-			node.wgBackground.Wait()
-			node.logger.Info("node process exit")
-			return
-
-		case <-time.After(10 * time.Millisecond):
-
-			switch node.state {
-			case StateInit:
-				node.wgBackground.Add(1)
-				node.logger.Info("node lauching background tasks")
-				// Start all necessary go routines
-				backCtx, backCancel = context.WithCancel(ctx)
-				go func() {
-					defer node.wgBackground.Done()
-					node.background(backCtx)
-				}()
-
-				for _, server := range node.SDOServers {
-					node.wgBackground.Add(1)
-					go func() {
-						defer node.wgBackground.Done()
-						server.Process(backCtx)
-					}()
-
-				}
-				node.state = StateRunning
-
-			case StateRunning:
-				state := node.ProcessMain(false, uint32(elapsed.Microseconds()), nil)
-				if state == nmt.ResetApp || state == nmt.ResetComm {
-					node.state = StateReseting
-				}
-
-			case StateReseting:
-				// Perform cleanup if necessary
-				node.logger.Info("node reset")
-				node.state = StateInit
-				backCancel()
-				node.wgBackground.Wait()
-			}
-		}
-	}
-}
-
-func (node *LocalNode) background(ctx context.Context) {
-	startBackground := time.Now()
-	backgroundPeriod := time.Duration(10 * time.Millisecond)
-	for {
-		select {
-		case <-ctx.Done():
-			node.logger.Info("exiting background task")
-			return
-		default:
-			elapsed := time.Since(startBackground)
-			startBackground = time.Now()
-			timeDifferenceUs := uint32(elapsed.Microseconds())
-			syncWas := node.ProcessSYNC(timeDifferenceUs, nil)
-			node.ProcessTPDO(syncWas, timeDifferenceUs, nil)
-			node.ProcessRPDO(syncWas, timeDifferenceUs, nil)
-			time.Sleep(backgroundPeriod)
-		}
-	}
 }
 
 func (node *LocalNode) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
@@ -186,12 +102,6 @@ func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, 
 
 	return reset
 
-}
-
-func (node *LocalNode) MainCallback() {
-	if node.mainCallback != nil {
-		node.mainCallback(node)
-	}
 }
 
 // Initialize all PDOs

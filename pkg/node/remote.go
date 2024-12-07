@@ -1,10 +1,8 @@
 package node
 
 import (
-	"context"
 	"errors"
 	"log/slog"
-	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/config"
@@ -36,73 +34,6 @@ type RemoteNode struct {
 	tpdos    []*pdo.TPDO          // Local TPDOs (corresponds to remote RPDOs)
 	sync     *sync.SYNC           // Sync consumer (for synchronous PDOs)
 	emcy     *emergency.EMCY      // Emergency consumer (fake producer for logging internal errors)
-}
-
-func (node *RemoteNode) Process(ctx context.Context) {
-	current := time.Now()
-	backCtx, backCancel := context.WithCancel(ctx)
-
-	for {
-		elapsed := time.Since(current)
-		current = time.Now()
-
-		select {
-		case <-ctx.Done():
-			node.logger.Info("node main process cancelled")
-			backCancel()
-			node.wgBackground.Wait()
-			node.logger.Info("node process exit")
-			return
-
-		case <-time.After(10 * time.Millisecond):
-
-			switch node.state {
-			case StateInit:
-				node.wgBackground.Add(1)
-				node.logger.Info("node lauching background tasks")
-				// Start all necessary go routines
-				backCtx, backCancel = context.WithCancel(ctx)
-				go func() {
-					defer node.wgBackground.Done()
-					node.background(backCtx)
-				}()
-				node.state = StateRunning
-
-			case StateRunning:
-				state := node.ProcessMain(false, uint32(elapsed.Microseconds()), nil)
-				if state == nmt.ResetApp || state == nmt.ResetComm {
-					node.state = StateReseting
-				}
-
-			case StateReseting:
-				// Perform cleanup if necessary
-				node.logger.Info("node reset")
-				node.state = StateInit
-				backCancel()
-				node.wgBackground.Wait()
-			}
-		}
-	}
-}
-
-func (node *RemoteNode) background(ctx context.Context) {
-	startBackground := time.Now()
-	backgroundPeriod := time.Duration(10 * time.Millisecond)
-	for {
-		select {
-		case <-ctx.Done():
-			node.logger.Info("exiting background task")
-			return
-		default:
-			elapsed := time.Since(startBackground)
-			startBackground = time.Now()
-			timeDifferenceUs := uint32(elapsed.Microseconds())
-			syncWas := node.ProcessSYNC(timeDifferenceUs, nil)
-			node.ProcessTPDO(syncWas, timeDifferenceUs, nil)
-			node.ProcessRPDO(syncWas, timeDifferenceUs, nil)
-			time.Sleep(backgroundPeriod)
-		}
-	}
 }
 
 func (node *RemoteNode) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
@@ -139,12 +70,6 @@ func (node *RemoteNode) ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32
 
 func (node *RemoteNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
 	return nmt.ResetNot
-}
-
-func (node *RemoteNode) MainCallback() {
-	if node.mainCallback != nil {
-		node.mainCallback(node)
-	}
 }
 
 // Create a remote node
