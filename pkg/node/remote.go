@@ -72,10 +72,8 @@ func (node *RemoteNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32,
 	return nmt.ResetNot
 }
 
-func (node *RemoteNode) MainCallback() {
-	if node.mainCallback != nil {
-		node.mainCallback(node)
-	}
+func (node *RemoteNode) Servers() []*sdo.SDOServer {
+	return nil
 }
 
 // Create a remote node

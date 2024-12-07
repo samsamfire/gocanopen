@@ -163,6 +163,13 @@ func (od *ObjectDictionary) Index(index any) *Entry {
 	}
 }
 
+// Creates new OD object streamer at the specified index and subindex
+func (od *ObjectDictionary) Streamer(index uint16, subindex uint8, origin bool) (*Streamer, error) {
+	entry := od.Index(index)
+	streamer, err := NewStreamer(entry, subindex, origin)
+	return &streamer, err
+}
+
 // Entries returns map of indexes and entries
 func (od *ObjectDictionary) Entries() map[uint16]*Entry {
 	return od.entriesByIndexValue

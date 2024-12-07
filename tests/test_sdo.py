@@ -95,10 +95,12 @@ def test_sdo_segmented_upload_download_string(node: canopen.RemoteNode):
         assert node.sdo["VISIBLE STRING value"].raw == value
 
 
-def test_sdo_segmented_force_download_upload_uint8(node: canopen.RemoteNode):
+def test_sdo_segmented_force_download_upload(node: canopen.RemoteNode):
     DATA = b"A"
-    node.sdo.download(0x2005, 0x0, DATA, force_segment=True)
-    assert node.sdo.upload(0x2005, 0x0) == DATA
+    node.sdo.download(0x2005, 0x0, b"A", force_segment=True)
+    assert node.sdo.upload(0x2005, 0x0) == b"A"
+    node.sdo.download(0x2006, 0x0, b"AB", force_segment=True)
+    assert node.sdo.upload(0x2006, 0x0) == b"AB"
 
 
 def test_sdo_access_read_only(node: canopen.RemoteNode):
@@ -155,7 +157,7 @@ def test_sdo_block_download(node: canopen.RemoteNode):
             f.write(LINE)
 
 
-def test_sdo_block_upload(node: canopen.RemoteNode):
+def test_sdo_block_upload_bye(node: canopen.RemoteNode):
     with node.sdo["DOMAIN value"].open(
         mode="rb",
         block_transfer=True,
@@ -262,7 +264,7 @@ def test_sdo_block_download_retransmit(node: canopen.RemoteNode):
     stream.close()
 
 
-def test_sdo_segmented_download_timeout(node: canopen.RemoteNode):
+def test_sdo_segmented_timeout(node: canopen.RemoteNode):
     def mock_close():
         return None
 
@@ -278,8 +280,17 @@ def test_sdo_segmented_download_timeout(node: canopen.RemoteNode):
         while True:
             response = f.raw.sdo_client.read_response()
 
+    f = node.sdo["UNSIGNED64 value"].open(
+        mode="wb", block_transfer=False, request_crc_support=True
+    )
+    f.raw.close = mock_close
+    time.sleep(1.1)
+    with pytest.raises(canopen.SdoAbortedError, match="Timeout"):
+        while True:
+            response = f.raw.sdo_client.read_response()
 
-def test_sdo_block_download_timeout(node: canopen.RemoteNode):
+
+def test_sdo_block_timeout(node: canopen.RemoteNode):
     from canopen.sdo.client import SdoClient
 
     SdoClient.RESPONSE_TIMEOUT = 1.5
@@ -292,6 +303,15 @@ def test_sdo_block_download_timeout(node: canopen.RemoteNode):
     # This starts a block download and hangs on purpose
     f = node.sdo["DOMAIN value"].open(
         mode="wb", block_transfer=True, request_crc_support=True, size=1000
+    )
+    f.raw.close = mock_close
+    time.sleep(2.0)
+    with pytest.raises(canopen.SdoAbortedError, match="Timeout"):
+        while True:
+            _ = f.raw.sdo_client.read_response()
+
+    f = node.sdo["DOMAIN value"].open(
+        mode="rb", block_transfer=True, request_crc_support=True, size=1000
     )
     f.raw.close = mock_close
     time.sleep(2.0)
@@ -330,7 +350,7 @@ def test_sdo_block_upload_crc_invalid(node: canopen.RemoteNode):
         while stream._done != True:
             counter += 1
             stream.read(7)
-            if counter == 11:
+            if counter == 1:
                 # Mess up CRC
                 stream._crc.process(b"randomdata")
             stream.close()
@@ -342,22 +362,27 @@ def test_sdo_block_upload_crc_invalid(node: canopen.RemoteNode):
         assert node.sdo["UNSIGNED8 value"].od.data_type == datatypes.UNSIGNED8
 
 
-# def test_sdo_block_upload_retransmit(node: canopen.RemoteNode):
-#     from canopen.sdo.client import BlockUploadStream
+def test_sdo_block_upload_retransmit(node: canopen.RemoteNode):
+    from canopen.sdo.client import BlockUploadStream
 
-#     stream = BlockUploadStream(
-#         node.sdo, index=0x200F, subindex=0x0, request_crc_support=True
-#     )
-#     counter = 0
-#     while stream._done != True:
-#         counter += 1
-#         stream.read(7)
-#         # Mess up sequence number in order to trigger retransmit
-#         if stream._ackseq == 15 and counter > 200:
-#             request = bytearray(8)
-#             request[0] = stream._ackseq - 3
-#             node.network.send_message(0x580 + node.id, request)
-#     stream.close()
+    stream = BlockUploadStream(
+        node.sdo, index=0x200F, subindex=0x0, request_crc_support=True
+    )
+    counter = 0
+    done = False
+
+    while stream._done != True:
+
+        # Mess up sequence number in order to trigger retransmit
+        if not done and stream._ackseq >= 50:
+            # Patch read function fake a wrong block to trigger retransmit
+            stream.sdo_client.responses.get()
+            stream.sdo_client.responses.put(
+                bytes([80, 255, 255, 255, 255, 255, 255, 255])
+            )
+            done = True
+        counter += 1
+        stream.read(7)
 
 
 def test_sdo_block_download_upload(node: canopen.RemoteNode):
@@ -374,6 +399,7 @@ def test_sdo_block_download_upload(node: canopen.RemoteNode):
     ) as f:
         f.write(STRING_BINARY)
     READ_BINARY = b""
+
     with node.sdo["DOMAIN value"].open(
         mode="rb",
         block_transfer=True,
@@ -382,3 +408,10 @@ def test_sdo_block_download_upload(node: canopen.RemoteNode):
     ) as f:
         READ_BINARY = f.read()
     assert READ_BINARY == STRING_BINARY
+
+    with node.sdo["DOMAIN value"].open(
+        mode="rb",
+        block_transfer=True,
+        request_crc_support=True,
+    ) as f:
+        READ_BINARY = f.read()

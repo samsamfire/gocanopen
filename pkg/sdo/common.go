@@ -7,7 +7,6 @@ import (
 
 	"github.com/samsamfire/gocanopen/internal/crc"
 	"github.com/samsamfire/gocanopen/pkg/od"
-	log "github.com/sirupsen/logrus"
 )
 
 var ErrWrongClientReturnValue = errors.New("wrong client return value")
@@ -30,6 +29,66 @@ const (
 )
 
 const (
+	// Bits 7-5 depending on direction and frame
+	// type can be called "ccs" or "scs" or "cs"
+	// in CiA spec
+	MaskCSField = uint8(0b111_00000)
+	// Bit 2 "e" field, 1 is expedited, 0 is normal
+	MaskEField = uint8(0b10)
+)
+
+const (
+	// Bits 7-5 depending on direction and frame
+	// type can be called "ccs" or "scs" or "cs"
+	// in CiA spec
+	csOffset                        = uint8(5)
+	MaskCS                          = uint8(0b111_00000)
+	MaskTransferType                = uint8(0b10)
+	MaskSizeIndicated               = uint8(0b1)
+	MaskSizeIndicatedBlock          = uint8(0b10)
+	MaskClientSubcommand            = uint8(0b1)
+	MaskServerSubcommand            = uint8(0b1)
+	MaskClientSubcommandBlockUpload = uint8(0b11)
+	MaskClientCRCSupported          = uint8(0b100)
+	MaskServerCRCSupported          = uint8(0b1000)
+	MaskSeqno                       = 0x7F
+	MaskSegmentsRemaining           = 0x80
+
+	CSAbort                     = uint8(4) << csOffset
+	CSDownloadInitiate          = uint8(1) << csOffset
+	CSUploadInitiate            = uint8(2) << csOffset
+	CSDownloadBlockInitiate     = uint8(6) << csOffset
+	CSDownloadBlockInitiateResp = uint8(5) << csOffset
+	CSDownloadSubBlockResp      = uint8(2) << csOffset
+	CSUploadBlockInitiate       = uint8(5) << csOffset
+)
+
+const (
+	initiateDownloadRequest = uint8(0)
+	initiateUploadRequest   = uint8(0)
+	// Transfer type (e)
+	transferExpedited = uint8(0b1) << 1
+	transferNormal    = uint8(0b0) << 1
+	// Size indicated (s)
+	sizeIndicated    = uint8(0b1)
+	sizeNotIndicated = uint8(0b0)
+	// Size indicated block (s)
+	sizeIndicatedBlock    = uint8(0b1) << 1
+	sizeNotIndicatedBlock = uint8(0b0) << 1
+	// Client CRC support (cc)
+	clientCRCSupported    = uint8(0b1) << 2
+	clientCRCNotSupported = uint8(0b0) << 2
+	// Server CRC support (cc)
+	serverCRCSupported    = uint8(0b1) << 3
+	serverCRCNotSupported = uint8(0b0) << 3
+	// Segment remaining (c)
+	segmentRemaining    = uint8(0b0) << 7
+	segmentNotRemaining = uint8(0b1) << 7
+	// Server subcommand (ss)
+	serverSubCommandBlockDownloadResp = uint8(0b10)
+)
+
+const (
 	stateIdle                   internalState = 0x00
 	stateAbort                  internalState = 0x01
 	stateDownloadLocalTransfer  internalState = 0x10
@@ -40,6 +99,7 @@ const (
 	stateUploadLocalTransfer    internalState = 0x20
 	stateUploadInitiateReq      internalState = 0x21
 	stateUploadInitiateRsp      internalState = 0x22
+	stateUploadExpeditedRsp     internalState = 0x25
 	stateUploadSegmentReq       internalState = 0x23
 	stateUploadSegmentRsp       internalState = 0x24
 	stateDownloadBlkInitiateReq internalState = 0x51
@@ -177,13 +237,13 @@ func (abort Abort) Description() string {
 	return AbortCodeDescriptionMap[AbortGeneral]
 }
 
-type SDOResponse struct {
+type SDOMessage struct {
 	raw [8]byte
 }
 
 // Checks whether response command is an expected value in the present
 // state
-func (response *SDOResponse) isResponseCommandValid(state internalState) bool {
+func (response *SDOMessage) isResponseCommandValid(state internalState) bool {
 
 	switch state {
 	case stateDownloadInitiateRsp:
@@ -228,43 +288,66 @@ func (response *SDOResponse) isResponseCommandValid(state internalState) bool {
 		}
 
 	}
-	log.Errorf("Invalid response received, with code : %x", response.raw[0])
 	return false
 
 }
 
-func (response *SDOResponse) IsAbort() bool {
+func (response *SDOMessage) IsAbort() bool {
 	return response.raw[0] == 0x80
 }
 
-func (response *SDOResponse) GetAbortCode() Abort {
+func (response *SDOMessage) GetAbortCode() Abort {
 	return Abort(binary.LittleEndian.Uint32(response.raw[4:]))
 }
 
-func (response *SDOResponse) GetIndex() uint16 {
+func (response *SDOMessage) GetIndex() uint16 {
 	return binary.LittleEndian.Uint16(response.raw[1:3])
 }
 
-func (response *SDOResponse) GetSubindex() uint8 {
+func (response *SDOMessage) GetSubindex() uint8 {
 	return response.raw[3]
 }
 
-func (response *SDOResponse) GetToggle() uint8 {
+func (response *SDOMessage) GetToggle() uint8 {
 	return response.raw[0] & 0x10
 }
 
-func (response *SDOResponse) GetBlockSize() uint8 {
+func (response *SDOMessage) GetBlockSize() uint8 {
 	return response.raw[4]
 }
 
-func (response *SDOResponse) GetNumberOfSegments() uint8 {
+func (response *SDOMessage) GetNumberOfSegments() uint8 {
 	return response.raw[1]
 }
 
-func (response *SDOResponse) IsCRCEnabled() bool {
+func (response *SDOMessage) IsCRCEnabled() bool {
 	return (response.raw[0] & 0x04) != 0
 }
 
-func (response *SDOResponse) GetCRCClient() crc.CRC16 {
+func (response *SDOMessage) GetCRCClient() crc.CRC16 {
 	return crc.CRC16((binary.LittleEndian.Uint16(response.raw[1:3])))
+}
+
+func (response *SDOMessage) IsExpedited() bool {
+	return response.raw[0]&MaskTransferType == transferExpedited
+}
+
+func (response *SDOMessage) IsSizeIndicated() bool {
+	return response.raw[0]&MaskSizeIndicated == sizeIndicated
+}
+
+func (response *SDOMessage) IsSizeIndicatedBlock() bool {
+	return response.raw[0]&MaskSizeIndicatedBlock == sizeIndicatedBlock
+}
+
+func (response *SDOMessage) SizeIndicated() uint32 {
+	return binary.LittleEndian.Uint32(response.raw[4:])
+}
+
+func (response *SDOMessage) Seqno() uint8 {
+	return response.raw[0] & MaskSeqno
+}
+
+func (response *SDOMessage) SegmentRemaining() bool {
+	return response.raw[0]&MaskSegmentsRemaining == segmentRemaining
 }
