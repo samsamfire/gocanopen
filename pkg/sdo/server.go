@@ -63,6 +63,7 @@ func (server *SDOServer) Handle(frame canopen.Frame) {
 	select {
 	case server.rx <- rx:
 	default:
+		server.logger.Warn("dropped SDO server RX frame")
 		// Drop frame
 	}
 
@@ -239,7 +240,7 @@ func (server *SDOServer) readObjectDictionary(countMinimum uint32, size int, cal
 
 	// Read from OD into the buffer
 	countRd, err := server.streamer.Read(server.intermediateBuf)
-	if err != nil && err != od.ErrPartial || size >= countRd {
+	if err != nil && err != od.ErrPartial {
 		server.state = stateAbort
 		return ConvertOdToSdoAbort(err.(od.ODR))
 	}
@@ -394,7 +395,7 @@ func NewSDOServer(
 	server.nodeId = nodeId
 	server.timeoutTimeUs = timeoutMs * 1000
 	server.blockTimeout = timeoutMs * 700
-	server.rx = make(chan SDOMessage, 2)
+	server.rx = make(chan SDOMessage, 127)
 	server.buf = bytes.NewBuffer(make([]byte, 0, 1000))
 	server.intermediateBuf = make([]byte, 1000)
 	var canIdClientToServer uint16
