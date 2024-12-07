@@ -79,16 +79,28 @@ func (c *NodeProcessor) Start(ctx context.Context) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 	c.cancel = cancel
+
 	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
 		c.background(ctx)
 	}()
+
 	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
 		c.main(ctx)
 	}()
+
+	for _, server := range c.node.Servers() {
+		c.wg.Add(1)
+		go func() {
+			defer c.wg.Done()
+			log.Info("start sdo server processing")
+			server.Process(ctx)
+			log.Info("stop sdo server processing")
+		}()
+	}
 	return nil
 }
 

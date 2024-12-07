@@ -79,6 +79,7 @@ func (node *LocalNode) ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32)
 // Process canopen objects that are not RT
 // Does not process SYNC and PDOs
 func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
+
 	// Process all objects
 	NMTState := node.NMT.GetInternalState()
 	NMTisPreOrOperational := (NMTState == nmt.StatePreOperational) || (NMTState == nmt.StateOperational)
@@ -102,6 +103,10 @@ func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, 
 
 	return reset
 
+}
+
+func (node *LocalNode) Servers() []*sdo.SDOServer {
+	return node.SDOServers
 }
 
 // Initialize all PDOs

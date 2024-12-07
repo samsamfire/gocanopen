@@ -81,10 +81,17 @@ func (server *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 		nmtIsPreOrOperationnal := server.nmt == nmt.StateOperational || server.nmt == nmt.StatePreOperational
 		server.mu.Unlock()
 
-		if !server.valid || !nmtIsPreOrOperationnal {
-			server.state = stateIdle
-			time.Sleep(100 * time.Millisecond)
-			continue
+		select {
+		case <-ctx.Done():
+			server.logger.Info("exiting sdo server process")
+			return
+		default:
+			if !server.valid || !nmtIsPreOrOperationnal {
+				server.state = stateIdle
+				// Sleep to avoid huge CPU load when idling
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
 		}
 
 		select {
@@ -106,9 +113,6 @@ func (server *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 			if server.state != stateIdle {
 				server.txAbort(AbortTimeout)
 			}
-		case <-ctx.Done():
-			server.logger.Info("exiting sdo server process")
-			return
 		}
 	}
 }

@@ -72,6 +72,10 @@ func (node *RemoteNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32,
 	return nmt.ResetNot
 }
 
+func (node *RemoteNode) Servers() []*sdo.SDOServer {
+	return nil
+}
+
 // Create a remote node
 func NewRemoteNode(
 	bm *canopen.BusManager,
