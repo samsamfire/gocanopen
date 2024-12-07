@@ -34,7 +34,7 @@ const (
 )
 
 // A Network is the main object of this package
-// It should be created before doint anything else
+// It should be created before doing anything else
 // It acts as scheduler for locally created CANopen nodes
 // But can also be used for controlling remote CANopen nodes
 type Network struct {

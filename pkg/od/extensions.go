@@ -33,6 +33,12 @@ func ReadEntryFileObject(stream *Stream, data []byte, countRead *uint16) error {
 		if err != nil {
 			return ErrDevIncompat
 		}
+	} else {
+		// Re-adjust file cursor depending on datoffset
+		_, err := fileObject.File.Seek(int64(stream.DataOffset), 0)
+		if err != nil {
+			return ErrDevIncompat
+		}
 	}
 	countReadInt, err := io.ReadFull(fileObject.File, data)
 
@@ -69,6 +75,12 @@ func WriteEntryFileObject(stream *Stream, data []byte, countWritten *uint16) err
 		var err error
 		log.Infof("[OD][EXTENSION][FILE] opening %v for writing", fileObject.FilePath)
 		fileObject.File, err = os.OpenFile(fileObject.FilePath, fileObject.WriteMode, 0644)
+		if err != nil {
+			return ErrDevIncompat
+		}
+	} else {
+		// Re-adjust file cursor depending on datoffset
+		_, err := fileObject.File.Seek(int64(stream.DataOffset), 0)
 		if err != nil {
 			return ErrDevIncompat
 		}

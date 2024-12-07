@@ -17,6 +17,7 @@ type BusManager struct {
 
 // Implements the FrameListener interface
 // This handles all received CAN frames from Bus
+// [listener.Handle] should not be blocking !
 func (bm *BusManager) Handle(frame Frame) {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()

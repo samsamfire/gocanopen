@@ -77,3 +77,20 @@ func TestSDOWriteBlock(t *testing.T) {
 	err = network.WriteRaw(NodeIdTest, 0x3333, 0, data, false)
 	assert.Nil(t, err)
 }
+
+func TestSDOReadWriteBlock(t *testing.T) {
+	network := CreateNetworkTest()
+	defer network.Disconnect()
+	data := []byte("some random string some random string some random string some random string some random string some random string some random string")
+	node, err := network.Local(NodeIdTest)
+	assert.Nil(t, err)
+	file, err := os.CreateTemp("", "filename")
+	assert.Nil(t, err)
+	node.GetOD().AddFile(0x3333, "File entry", file.Name(), os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
+	assert.Nil(t, err)
+	err = network.WriteRaw(NodeIdTest, 0x3333, 0, data, false)
+	assert.Nil(t, err)
+	data2, err := network.ReadAll(NodeIdTest, 0x3333, 0)
+	assert.Nil(t, err)
+	assert.Equal(t, data, data2)
+}

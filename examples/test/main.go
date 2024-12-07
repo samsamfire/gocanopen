@@ -3,6 +3,7 @@ package main
 // Demo used for automated testing
 
 import (
+	"log/slog"
 	"os"
 
 	"net/http"
@@ -34,7 +35,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	network.SetLogger(logger)
 	// Load node EDS, this will be used to generate all the CANopen objects
 	// Basic template can be found in the current directory
 	node, err := network.CreateLocalNode(uint8(DEFAULT_NODE_ID), od.Default())

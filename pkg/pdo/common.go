@@ -84,7 +84,7 @@ func (pdo *PDOCommon) configureMap(mapParam uint32, mapIndex uint32, isRPDO bool
 	}
 	// Get entry in OD
 	entry := pdo.od.Index(index)
-	streamerCopy, err := od.NewStreamer(entry, subIndex, false)
+	streamerCopy, err := pdo.od.Streamer(index, subIndex, false)
 	if err != nil {
 		pdo.logger.Warn("mapping failed",
 			"index", fmt.Sprintf("x%x", index),
