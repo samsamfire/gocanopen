@@ -4,16 +4,29 @@ package od
 
 import (
 	"io"
+	"log/slog"
 	"os"
-
-	log "github.com/sirupsen/logrus"
 )
 
 type FileObject struct {
+	logger    *slog.Logger
 	FilePath  string
 	WriteMode int
 	ReadMode  int
 	File      *os.File
+}
+
+func NewFileObject(path string, logger *slog.Logger, writeMode int, readMode int) *FileObject {
+
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	return &FileObject{
+		logger:    logger.With("extension", "[FILE]"),
+		FilePath:  path,
+		WriteMode: writeMode,
+		ReadMode:  readMode}
 }
 
 // [SDO] Custom function for reading a file like object
@@ -28,7 +41,7 @@ func ReadEntryFileObject(stream *Stream, data []byte, countRead *uint16) error {
 	}
 	if stream.DataOffset == 0 {
 		var err error
-		log.Infof("[OD][EXTENSION][FILE] opening %v for reading", fileObject.FilePath)
+		fileObject.logger.Info("opening file for reading", "path", fileObject.FilePath)
 		fileObject.File, err = os.OpenFile(fileObject.FilePath, fileObject.ReadMode, 0644)
 		if err != nil {
 			return ErrDevIncompat
@@ -49,12 +62,12 @@ func ReadEntryFileObject(stream *Stream, data []byte, countRead *uint16) error {
 		return ErrPartial
 	case io.EOF, io.ErrUnexpectedEOF:
 		*countRead = uint16(countReadInt)
-		log.Infof("[OD][EXTENSION][FILE] finished reading %v", fileObject.FilePath)
+		fileObject.logger.Info("finished reading", "path", fileObject.FilePath)
 		fileObject.File.Close()
 		return nil
 	default:
 		// unexpected error
-		log.Errorf("[OD][EXTENSION][FILE] error reading file %v", err)
+		fileObject.logger.Warn("error reading", "path", fileObject.FilePath, "err", err)
 		fileObject.File.Close()
 		return ErrDevIncompat
 
@@ -73,7 +86,7 @@ func WriteEntryFileObject(stream *Stream, data []byte, countWritten *uint16) err
 	}
 	if stream.DataOffset == 0 {
 		var err error
-		log.Infof("[OD][EXTENSION][FILE] opening %v for writing", fileObject.FilePath)
+		fileObject.logger.Info("opening file for writing", "path", fileObject.FilePath)
 		fileObject.File, err = os.OpenFile(fileObject.FilePath, fileObject.WriteMode, 0644)
 		if err != nil {
 			return ErrDevIncompat
@@ -91,14 +104,14 @@ func WriteEntryFileObject(stream *Stream, data []byte, countWritten *uint16) err
 		*countWritten = uint16(countWrittenInt)
 		stream.DataOffset += uint32(countWrittenInt)
 		if stream.DataLength == stream.DataOffset {
-			log.Infof("[OD][EXTENSION][FILE] finished writing %v", fileObject.FilePath)
+			fileObject.logger.Info("finished writing", "path", fileObject.FilePath)
 			fileObject.File.Close()
 			return nil
 		} else {
 			return ErrPartial
 		}
 	} else {
-		log.Errorf("[OD][EXTENSION][FILE] error writing file %v", err)
+		fileObject.logger.Warn("error writing", "path", fileObject.FilePath, "err", err)
 		fileObject.File.Close()
 		return ErrDevIncompat
 	}
@@ -132,11 +145,8 @@ func ReadEntryReader(stream *Stream, data []byte, countRead *uint16) error {
 		return ErrPartial
 	case io.EOF, io.ErrUnexpectedEOF:
 		*countRead = uint16(countReadInt)
-		log.Infof("[OD][EXTENSION][FILE] finished reading")
 		return nil
 	default:
-		log.Errorf("[OD][EXTENSION][FILE] error reading file %v", err)
 		return ErrDevIncompat
-
 	}
 }
