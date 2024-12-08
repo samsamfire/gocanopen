@@ -4,3 +4,4 @@ __pycache__/
 *.vscode
 node_modules
 *.code-workspace
+site
