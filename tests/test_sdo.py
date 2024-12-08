@@ -1,7 +1,8 @@
 import pytest
 import canopen
+import struct
 from canopen.objectdictionary import datatypes
-from canopen.sdo.client import BlockDownloadStream
+from canopen.sdo.client import BlockDownloadStream, SdoCommunicationError
 import time
 
 import logging
@@ -362,8 +363,27 @@ def test_sdo_block_upload_crc_invalid(node: canopen.RemoteNode):
         assert node.sdo["UNSIGNED8 value"].od.data_type == datatypes.UNSIGNED8
 
 
-def test_sdo_block_upload_retransmit(node: canopen.RemoteNode):
+def _retransmit(self):
+    logger.info(
+        "Only %d sequences were received. Requesting retransmission", self._ackseq
+    )
+    end_time = time.time() + self.sdo_client.RESPONSE_TIMEOUT
+    self._ack_block()
+    while time.time() < end_time:
+        response = self.sdo_client.read_response()
+        (res_command,) = struct.unpack_from("B", response)
+        seqno = res_command & 0x7F
+        if seqno == 1:
+            # We should be back in sync
+            self._ackseq = seqno
+            return response
+    raise SdoCommunicationError("Some data were lost and could not be retransmitted")
+
+
+def test_sdo_block_upload_retransmit(node: canopen.RemoteNode, monkeypatch):
     from canopen.sdo.client import BlockUploadStream
+
+    monkeypatch.setattr(BlockUploadStream, "_retransmit", _retransmit)
 
     stream = BlockUploadStream(
         node.sdo, index=0x200F, subindex=0x0, request_crc_support=True
