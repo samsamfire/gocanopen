@@ -95,6 +95,8 @@ The following table lists the available objects, and the ones that are currently
 | 1021  | Store EDS                     | yes         |
 | 1022  | Storage Format                | yes         |
 
+Check [configuration](configuration.md) on how to access these entries.
+
 These entries are different than regular OD entries as they use special extensions
 that can perform various operations on the running CANopen node.
 You can define your own CANopen extensions for this, you need to create two functions :
@@ -116,15 +118,4 @@ Some pre-made extensions are available :
 odict := od.Parse("../testdata/base.eds", 0x20)
 // this will create a file on disk that will be accessible by SDO block transfer
 entry := odict.AddFile(0x3333, "File entry", "./path_to_file.txt", os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
-```
-
-Some helper methods are also available for reading or configuring these objects. The
-following are non-exhaustive examples :
-
-```go
-config := net.Configurator(0x20) // create a NodeConfigurator object for node 0x20
-config.HB.WriteHeartbeatPeriod(500) // update heartbeat period of node 0x20 to 500ms
-config.SYNC.ProducerDisable() // disable sync transmission (if this node is the one sending the SYNC)
-mappings, err := config.PDO.ReadMappings(1) // read pdo mapping parameter of 1st RPDO
-config, err := config.PDO.ReadConfiguration(1) // read pdo configuration parameter of 1st RPDO
 ```
