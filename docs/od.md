@@ -95,7 +95,7 @@ The following table lists the available objects, and the ones that are currently
 | 1021  | Store EDS                     | yes         |
 | 1022  | Storage Format                | yes         |
 
-Check [configuration](configuration.md) on how to access these entries.
+Check [configuration](configurator.md) on how to access these entries.
 
 These entries are different than regular OD entries as they use special extensions
 that can perform various operations on the running CANopen node.
