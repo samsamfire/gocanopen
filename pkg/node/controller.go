@@ -2,24 +2,30 @@ package node
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/samsamfire/gocanopen/pkg/nmt"
-	log "github.com/sirupsen/logrus"
 )
 
 // [NodeProcessor] is responsible for handling the node
 // internal CANopen stack processing.
 type NodeProcessor struct {
+	logger       *slog.Logger
 	node         Node
 	cancel       context.CancelFunc
 	resetHandler func(node Node, cmd uint8) error
 	wg           *sync.WaitGroup
 }
 
-func NewNodeController(n Node) *NodeProcessor {
-	return &NodeProcessor{node: n, wg: &sync.WaitGroup{}}
+func NewNodeProcessor(n Node, logger *slog.Logger) *NodeProcessor {
+
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	return &NodeProcessor{logger: logger.With("service", "[CTRLR]", "id", n.GetID()), node: n, wg: &sync.WaitGroup{}}
 }
 
 // background processing for [SYNC],[TPDO],[RPDO] services
@@ -27,11 +33,11 @@ func (c *NodeProcessor) background(ctx context.Context) {
 
 	const PeriodUs = 10_000
 	ticker := time.NewTicker(PeriodUs * time.Microsecond)
-	log.Infof("[NETWORK][x%x] starting node background process", c.node.GetID())
+	c.logger.Info("starting node background process")
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("[NETWORK][x%x] exited node background process", c.node.GetID())
+			c.logger.Info("exited node background process")
 			ticker.Stop()
 			return
 		case <-ticker.C:
@@ -47,24 +53,25 @@ func (c *NodeProcessor) main(ctx context.Context) {
 
 	const PeriodUs = 1_000
 	ticker := time.NewTicker(PeriodUs * time.Microsecond)
-	log.Infof("[NETWORK][x%x] starting node main process", c.node.GetID())
+	c.logger.Info("starting node main process")
 	for {
 		select {
 		case <-ctx.Done():
-			log.Infof("[NETWORK][x%x] exited node main process", c.node.GetID())
+			c.logger.Info("exited node main process")
 			ticker.Stop()
 			return
 		case <-ticker.C:
 			// Process main
 			state := c.node.ProcessMain(false, PeriodUs, nil)
 			if state == nmt.ResetApp || state == nmt.ResetComm {
+				c.logger.Info("node reset requested")
 				if c.resetHandler != nil {
 					err := c.resetHandler(c.node, state)
 					if err != nil {
-						log.Warn("failed to reset node")
+						c.logger.Info("failed to reset node", "error", err)
 					}
 				} else {
-					log.Warn("no reset handler for node")
+					c.logger.Warn("no reset handler registered")
 				}
 			}
 		}
@@ -96,9 +103,7 @@ func (c *NodeProcessor) Start(ctx context.Context) error {
 		c.wg.Add(1)
 		go func() {
 			defer c.wg.Done()
-			log.Info("start sdo server processing")
 			server.Process(ctx)
-			log.Info("stop sdo server processing")
 		}()
 	}
 	return nil

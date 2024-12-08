@@ -307,7 +307,7 @@ func (network *Network) AddRemoteNode(nodeId uint8, odict any) (*n.RemoteNode, e
 // Add any node to the network and return a node controller which can be used
 // To control high level node behaviour (starting, stopping the node)
 func (network *Network) AddNode(node n.Node) (*n.NodeProcessor, error) {
-	controller := n.NewNodeController(node)
+	controller := n.NewNodeProcessor(node, network.logger)
 	_, ok := network.controllers[node.GetID()]
 	if ok {
 		return nil, ErrIdConflict

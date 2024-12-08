@@ -69,10 +69,10 @@ func (od *ObjectDictionary) AddVariableList(index uint16, name string, varList *
 // readMode and writeMode should be given to determine what type of access to the file is allowed
 // e.g. os.O_RDONLY if only reading is allowed
 func (od *ObjectDictionary) AddFile(index uint16, indexName string, filePath string, readMode int, writeMode int) {
-	fileObject := &FileObject{FilePath: filePath, ReadMode: readMode, WriteMode: writeMode}
+	f := NewFileObject(filePath, od.logger, writeMode, readMode)
 	entry, _ := od.AddVariableType(index, indexName, DOMAIN, AttributeSdoRw, "") // Cannot error
 	entry.logger.Info("adding extension file i/o", "path", filePath)
-	entry.AddExtension(fileObject, ReadEntryFileObject, WriteEntryFileObject)
+	entry.AddExtension(f, ReadEntryFileObject, WriteEntryFileObject)
 }
 
 // AddReader adds an io.Reader object, of type DOMAIN to OD
