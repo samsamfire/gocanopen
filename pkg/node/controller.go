@@ -18,7 +18,7 @@ type NodeProcessor struct {
 	wg           *sync.WaitGroup
 }
 
-func NewNodeController(n Node) *NodeProcessor {
+func NewNodeProcessor(n Node) *NodeProcessor {
 	return &NodeProcessor{node: n, wg: &sync.WaitGroup{}}
 }
 
