@@ -1,6 +1,7 @@
 package node
 
 import (
+	"fmt"
 	"log/slog"
 	"sync"
 
@@ -8,7 +9,6 @@ import (
 	"github.com/samsamfire/gocanopen/pkg/config"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/sdo"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -75,10 +75,6 @@ func (node *BaseNode) GetID() uint8 {
 	return node.id
 }
 
-func (node *BaseNode) SetMainCallback(mainCallback func(node Node)) {
-	node.mainCallback = mainCallback
-}
-
 func (node *BaseNode) Configurator() *config.NodeConfigurator {
 	return config.NewNodeConfigurator(node.id, node.logger, node.SDOClient)
 }
@@ -89,7 +85,7 @@ func (node *BaseNode) Export(filename string) error {
 	countErrors := 0
 	for index, entry := range node.GetOD().Entries() {
 		if entry.ObjectType == od.ObjectTypeDOMAIN {
-			log.Warnf("skipping domain object %x", index)
+			node.logger.Warn("skipping domain object", "index", fmt.Sprintf("x%x", index))
 			continue
 		}
 		for j := range uint8(entry.SubCount()) {
@@ -97,18 +93,24 @@ func (node *BaseNode) Export(filename string) error {
 			n, err := node.ReadRaw(index, j, buffer)
 			if err != nil {
 				countErrors++
-				log.Warnf("failed to read remote value %x|%x : %v", index, j, err)
+				node.logger.Warn("failed to read remote value",
+					"index", fmt.Sprintf("x%x", index),
+					"subIndex", fmt.Sprintf("x%x", j),
+					"error", err)
 				continue
 			}
 			err = entry.WriteExactly(j, buffer[:n], true)
 			if err != nil {
-				log.Warnf("failed to write remote value to local od %x|%x : %v", index, j, err)
+				node.logger.Warn("failed to write remote value to local od",
+					"index", fmt.Sprintf("x%x", index),
+					"subIndex", fmt.Sprintf("x%x", j),
+					"error", err)
 				countErrors++
 				continue
 			}
 			countRead++
 		}
 	}
-	log.Infof("dump successful, read : %v, errors : %v", countRead, countErrors)
+	node.logger.Info("dump successful", "nbRead", countRead, "nbErrors", countErrors)
 	return od.ExportEDS(node.GetOD(), false, filename)
 }

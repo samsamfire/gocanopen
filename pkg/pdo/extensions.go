@@ -2,15 +2,14 @@ package pdo
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/od"
-	log "github.com/sirupsen/logrus"
 )
 
 // [RPDO] update communication parameter
 func writeEntry14xx(stream *od.Stream, data []byte, countWritten *uint16) error {
-	log.Debug("[OD][EXTENSION][RPDO] updating communication parameter")
 	if stream == nil || data == nil || countWritten == nil || len(data) > 4 {
 		return od.ErrDevIncompat
 	}
@@ -33,7 +32,10 @@ func writeEntry14xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 		/* bits 11...29 must be zero, PDO must be disabled on change,
 		 * CAN_ID == 0 is not allowed, mapping must be configured before
 		 * enabling the PDO */
-		log.Debugf("[OD][EXTENSION][%v] updating pdo cob-id, valid : %v, canId : x%x", pdo.Type(), valid, canId)
+		rpdo.pdo.logger.Debug("updating cob-id",
+			"valid", valid,
+			"canId", fmt.Sprintf("x%x", canId),
+		)
 		if (cobId&0x3FFFF800) != 0 ||
 			valid && pdo.Valid && canId != uint32(pdo.configuredId) ||
 			valid && canopen.IsIDRestricted(uint16(canId)) ||
@@ -62,7 +64,10 @@ func writeEntry14xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 					return od.ErrDevIncompat
 				}
 			}
-			log.Debugf("[OD][EXTENSION][%v] updated pdo with cobId : x%x, valid : %v", pdo.Type(), pdo.configuredId&0x7FF, pdo.Valid)
+			rpdo.pdo.logger.Debug("updated cob-id",
+				"valid", valid,
+				"cobId", fmt.Sprintf("x%x", pdo.configuredId&0x7FF),
+			)
 		}
 
 	case 2:
@@ -77,14 +82,14 @@ func writeEntry14xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 			rpdo.rxNew[1] = false
 		}
 		rpdo.synchronous = synchronous
-		log.Debugf("[OD][EXTENSION][%v] updated pdo transmission type to : %v", pdo.Type(), transmissionType)
+		rpdo.pdo.logger.Debug("updated transmission type", "transmissionType", transmissionType)
 
 	case 5:
 		// Event timer
 		eventTime := binary.LittleEndian.Uint16(data)
 		rpdo.timeoutTimeUs = uint32(eventTime) * 1000
 		rpdo.timeoutTimer = 0
-		log.Debugf("[OD][EXTENSION][%v] updated pdo event timer to : %v us", pdo.Type(), eventTime)
+		rpdo.pdo.logger.Debug("updated event timer", "transmissionType", eventTime)
 	}
 
 	return od.WriteEntryDefault(stream, bufCopy, countWritten)
@@ -143,7 +148,7 @@ func writeEntry16xxOr1Axx(stream *od.Stream, data []byte, countWritten *uint16) 
 	default:
 		return od.ErrDevIncompat
 	}
-	log.Debugf("[OD][EXTENSION][%v] updating mapping parameter", pdo.Type())
+	pdo.logger.Debug("updating mapping parameter")
 	// PDO must be disabled in order to allow mapping
 	if pdo.Valid || pdo.nbMapped != 0 && stream.Subindex > 0 {
 		return od.ErrUnsuppAccess
@@ -172,8 +177,7 @@ func writeEntry16xxOr1Axx(stream *od.Stream, data []byte, countWritten *uint16) 
 		}
 		pdo.dataLength = pdoDataLength
 		pdo.nbMapped = mappedObjectsCount
-		log.Debugf("[OD][EXTENSION][%v] updated pdo number of mapped objects to : %v", pdo.Type(), mappedObjectsCount)
-
+		pdo.logger.Debug("updated number of mapped objects to", "count", mappedObjectsCount)
 	} else {
 		err := pdo.configureMap(binary.LittleEndian.Uint32(data), uint32(stream.Subindex)-1, pdo.IsRPDO)
 		if err != nil {
@@ -208,7 +212,7 @@ func writeEntry18xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 		// - PDO must be disabled on change
 		// - CAN_ID == 0 is not allowed
 		// - mapping must be configured before enabling the PDO
-		log.Debugf("[OD][EXTENSION][%v] updating pdo cob-id, valid : %v, canId : x%x", pdo.Type(), valid, canId)
+		pdo.logger.Debug("updating cob-id", "valid", valid, "canId", canId)
 
 		if (cobId&0x3FFFF800) != 0 ||
 			(valid && pdo.Valid && canId != uint32(pdo.configuredId)) ||
