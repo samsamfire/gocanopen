@@ -1,4 +1,14 @@
 site_name: Gocanopen
+
+nav:
+  - Getting started: index.md
+  - CAN driver: can.md
+  - Network : network.md
+  - Object Dictionary : od.md
+  - Configurator : configurator.md
+  - Nodes :
+    - Local : local.md
+
 theme:
   name: material
   icon : 
@@ -10,6 +20,8 @@ theme:
 
   features:
     - content.code.copy
+    - navigation.instant
+    - navigation.instant.progress
 
 markdown_extensions:
   - pymdownx.highlight:
