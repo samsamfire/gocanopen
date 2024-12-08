@@ -12,7 +12,7 @@
         <link rel="prev" href="../network/">
       
       
-        <link rel="next" href="../sdo/">
+        <link rel="next" href="../configurator/">
       
       
       <link rel="icon" href="../assets/images/favicon.png">
@@ -20,7 +20,7 @@
     
     
       
-        <title>ObjectDictionary - Gocanopen</title>
+        <title>Object Dictionary - Gocanopen</title>
       
     
     
@@ -106,7 +106,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              ObjectDictionary
+              Object Dictionary
             
           </span>
         </div>
@@ -203,7 +203,7 @@
         
   
   <span class="md-ellipsis">
-    Introduction
+    Getting started
   </span>
   
 
@@ -219,11 +219,11 @@
   
   
     <li class="md-nav__item">
-      <a href="../local/" class="md-nav__link">
+      <a href="../can/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
-    Creating a LocalNode
+    CAN driver
   </span>
   
 
@@ -272,7 +272,7 @@
           
   
   <span class="md-ellipsis">
-    ObjectDictionary
+    Object Dictionary
   </span>
   
 
@@ -283,7 +283,7 @@
         
   
   <span class="md-ellipsis">
-    ObjectDictionary
+    Object Dictionary
   </span>
   
 
@@ -346,15 +346,78 @@
   
   
     <li class="md-nav__item">
-      <a href="../sdo/" class="md-nav__link">
+      <a href="../configurator/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
-    SDO
+    Configurator
   </span>
   
 
       </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Nodes
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Nodes
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../local/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Local
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -597,6 +660,7 @@ The following table lists the available objects, and the ones that are currently
 </tr>
 </tbody>
 </table>
+<p>Check <a href="configuration.md">configuration</a> on how to access these entries.</p>
 <p>These entries are different than regular OD entries as they use special extensions
 that can perform various operations on the running CANopen node.
 You can define your own CANopen extensions for this, you need to create two functions :</p>
@@ -615,14 +679,6 @@ You can define your own CANopen extensions for this, you need to create two func
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1">// this will create a file on disk that will be accessible by SDO block transfer</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nx">entry</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">odict</span><span class="p">.</span><span class="nx">AddFile</span><span class="p">(</span><span class="mh">0x3333</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;File entry&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;./path_to_file.txt&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">os</span><span class="p">.</span><span class="nx">O_RDWR</span><span class="o">|</span><span class="nx">os</span><span class="p">.</span><span class="nx">O_CREATE</span><span class="p">,</span><span class="w"> </span><span class="nx">os</span><span class="p">.</span><span class="nx">O_RDWR</span><span class="o">|</span><span class="nx">os</span><span class="p">.</span><span class="nx">O_CREATE</span><span class="p">)</span>
 </span></code></pre></div></p>
-<p>Some helper methods are also available for reading or configuring these objects. The
-following are non-exhaustive examples :</p>
-<div class="language-go highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nx">config</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">net</span><span class="p">.</span><span class="nx">Configurator</span><span class="p">(</span><span class="mh">0x20</span><span class="p">)</span><span class="w"> </span><span class="c1">// create a NodeConfigurator object for node 0x20</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nx">config</span><span class="p">.</span><span class="nx">HB</span><span class="p">.</span><span class="nx">WriteHeartbeatPeriod</span><span class="p">(</span><span class="mi">500</span><span class="p">)</span><span class="w"> </span><span class="c1">// update heartbeat period of node 0x20 to 500ms</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nx">config</span><span class="p">.</span><span class="nx">SYNC</span><span class="p">.</span><span class="nx">ProducerDisable</span><span class="p">()</span><span class="w"> </span><span class="c1">// disable sync transmission (if this node is the one sending the SYNC)</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="nx">mappings</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">config</span><span class="p">.</span><span class="nx">PDO</span><span class="p">.</span><span class="nx">ReadMappings</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="c1">// read pdo mapping parameter of 1st RPDO</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="nx">config</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">config</span><span class="p">.</span><span class="nx">PDO</span><span class="p">.</span><span class="nx">ReadConfiguration</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="c1">// read pdo configuration parameter of 1st RPDO</span>
-</span></code></pre></div>
 
 
 
@@ -668,8 +724,10 @@ following are non-exhaustive examples :</p>
       <div class="md-dialog__inner md-typeset"></div>
     </div>
     
+      <div class="md-progress" data-md-component="progress" role="progressbar"></div>
     
-    <script id="__config" type="application/json">{"base": "..", "features": ["content.code.copy"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    <script id="__config" type="application/json">{"base": "..", "features": ["content.code.copy", "navigation.instant", "navigation.instant.progress"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
     
     
       <script src="../assets/javascripts/bundle.83f73b43.min.js"></script>
