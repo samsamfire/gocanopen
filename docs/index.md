@@ -1,22 +1,42 @@
 # Introduction
 
-This package was written because I wanted an easy to use and efficient CANopen stack CiA 301
-capable of running on embedded devices using golang.
+This package is aimed to be a modern, efficient and compliant CANopen stack
+written entirely in go. It features both **slave** & **master** control and
+supports **dynamic OD creation** directly via EDS file.
 
 This project has been inspired by two other existing projects:
 
 * [CANopenNode](https://github.com/CANopenNode/CANopenNode) a C implementation slave side.
 * [canopen](https://github.com/christiansandberg/canopen) a python implementation mostly for master control.
 
-This project implements both slave & master side using an efficient API.
+This project implements both **slave** & **master** side using an efficient API.
+Currently the following is implemented :
 
-This documentation does not aim to be a tutorial on how CANopen works, a lot of information is freely available online.
+| Service name | Implemented |
+| ------------ | ----------- |
+| SDO server   | yes |
+| SDO client   | yes |
+| NMT master   | yes |
+| NMT slave    | yes |
+| HB producer  | yes |
+| HB consumer  | yes |
+| TPDO         | yes |
+| RPDO         | yes |
+| EMERGENCY  producer   | yes |
+| EMERGENCY  consumer   | yes |
+| SYNC producer | yes |
+| SYNC consumer | yes |
+| TIME producer | yes |
+| TIME consumer | yes |
+| LSS producer | **no**|
+| LSS consumer | **no**|
 
-### Example
+## Basic Example
 
-This is a short example that connects to socketcan and performs various things on a remote node.
+This is a short example that connects to socketcan, reads remote node device name \
+and performs a network scan.
 
-``` golang
+``` go
 package main
 
 import (
@@ -27,6 +47,7 @@ import (
 )
 
 func main() {
+
 	network := network.NewNetwork(nil)
 	err := network.Connect("socketcan", "can0", 500_000)
 	if err != nil {
@@ -58,5 +79,3 @@ func main() {
 }
 
 ```
-
-Check [Network](network.md) for more info !
