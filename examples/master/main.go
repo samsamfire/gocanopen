@@ -2,8 +2,10 @@
 package main
 
 import (
+	"log/slog"
+	"os"
+
 	"github.com/samsamfire/gocanopen/pkg/network"
-	log "github.com/sirupsen/logrus"
 )
 
 var DEFAULT_NODE_ID = uint8(0x20)
@@ -12,9 +14,11 @@ var DEFAULT_CAN_BITRATE = 500_000
 var EDS_PATH = "../../testdata/base.eds"
 
 func main() {
-	log.SetLevel(log.DebugLevel)
 
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	network := network.NewNetwork(nil)
+	network.SetLogger(logger)
+
 	err := network.Connect("socketcan", DEFAULT_CAN_INTERFACE, DEFAULT_CAN_BITRATE)
 	if err != nil {
 		panic(err)
@@ -30,11 +34,11 @@ func main() {
 	// Read values via SDO
 	val, err := node.ReadUint("UNSIGNED32 value", "")
 	if err == nil {
-		log.Infof("read : %v", val)
+		logger.Info("read", "value", val)
 	}
 	// Or write values via SDO
 	err = node.Write("UNSIGNED64 value", "", uint64(10))
 	if err != nil {
-		log.Info("failed to write", err)
+		logger.Info("failed to write", "err", err)
 	}
 }

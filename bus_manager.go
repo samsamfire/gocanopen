@@ -1,14 +1,14 @@
 package canopen
 
 import (
+	"log/slog"
 	"sync"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // Bus manager is a wrapper around the CAN bus interface
 // Used by the CANopen stack to control errors, callbacks for specific IDs, etc.
 type BusManager struct {
+	logger         *slog.Logger
 	mu             sync.Mutex
 	bus            Bus // Bus interface that can be adapted
 	frameListeners map[uint32][]FrameListener
@@ -48,7 +48,7 @@ func (bm *BusManager) Bus() Bus {
 func (bm *BusManager) Send(frame Frame) error {
 	err := bm.bus.Send(frame)
 	if err != nil {
-		log.Warnf("[CAN] %v", err)
+		bm.logger.Warn("error sending frame", "err", err)
 	}
 	return err
 }
@@ -78,7 +78,7 @@ func (bm *BusManager) Subscribe(ident uint32, mask uint32, rtr bool, callback Fr
 	// Iterate over all callbacks and verify that we are not adding the same one twice
 	for _, cb := range bm.frameListeners[ident] {
 		if cb == callback {
-			log.Warnf("[CAN] callback for frame id %x already added", ident)
+			bm.logger.Warn("callback for frame already present", "id", ident)
 			return nil
 		}
 	}
@@ -96,6 +96,7 @@ func (bm *BusManager) Error() uint16 {
 func NewBusManager(bus Bus) *BusManager {
 	bm := &BusManager{
 		bus:            bus,
+		logger:         slog.Default(),
 		frameListeners: make(map[uint32][]FrameListener),
 		canError:       0,
 	}
