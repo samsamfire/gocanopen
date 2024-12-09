@@ -9,13 +9,8 @@ package http
 // 	"github.com/samsamfire/gocanopen/pkg/can/virtual"
 // 	"github.com/samsamfire/gocanopen/pkg/network"
 // 	"github.com/samsamfire/gocanopen/pkg/od"
-// 	log "github.com/sirupsen/logrus"
 // 	"github.com/stretchr/testify/assert"
 // )
-
-// func init() {
-// 	log.SetLevel(log.DebugLevel)
-// }
 
 // const NODE_ID_TEST = uint8(0x66)
 
