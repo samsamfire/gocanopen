@@ -37,7 +37,11 @@ type Bus struct {
 }
 
 func NewVirtualCanBus(channel string) (canopen.Bus, error) {
-	return &Bus{channel: channel, stopChan: make(chan bool), isRunning: false}, nil
+	return &Bus{
+		channel:   channel,
+		logger:    slog.Default(),
+		stopChan:  make(chan bool),
+		isRunning: false}, nil
 }
 
 // Helper function for serializing a CAN frame into the expected binary format
