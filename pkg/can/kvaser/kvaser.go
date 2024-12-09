@@ -11,12 +11,11 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"unsafe"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/can"
-
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -52,6 +51,7 @@ func init() {
 
 type KvaserBus struct {
 	handle       C.canHandle
+	logger       *slog.Logger
 	rxCallback   canopen.FrameListener
 	timeoutRead  int
 	timeoutWrite int
@@ -83,6 +83,7 @@ func NewKvaserBus(name string) (canopen.Bus, error) {
 	bus := &KvaserBus{}
 	bus.timeoutRead = defaultReadTimeoutMs
 	bus.timeoutWrite = defaultWriteTimeoutMs
+	bus.logger = slog.Default()
 	bus.exit = make(chan bool)
 	// Call lib init, any error here is silent
 	// and will happen when trying to open port
@@ -166,7 +167,7 @@ func (k *KvaserBus) handleReception() {
 		default:
 			frame, err := k.Recv()
 			if err != nil && err.Error() != ErrNoMsg.Error() {
-				log.Errorf("[KVASER DRIVER] listening routine has closed because : %v", err)
+				k.logger.Error("listening routine has closed because", "err", err)
 				return
 			}
 			if k.rxCallback != nil {
