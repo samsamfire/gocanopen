@@ -5,3 +5,4 @@ __pycache__/
 node_modules
 *.code-workspace
 site
+examples/test/example.bin
