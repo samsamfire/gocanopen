@@ -1,11 +1,12 @@
 package gateway
 
 import (
+	"log/slog"
+
 	"github.com/samsamfire/gocanopen/pkg/network"
 	"github.com/samsamfire/gocanopen/pkg/nmt"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/sdo"
-	log "github.com/sirupsen/logrus"
 )
 
 // BaseGateway implements the basic gateway features defined by CiA 309
@@ -16,14 +17,21 @@ import (
 // CiA 309-5 : HTTP / Websocket
 // Each gateway maps its own parsing logic to this base gateway
 type BaseGateway struct {
+	logger         *slog.Logger
 	network        *network.Network
 	defaultNetwork uint16
 	defaultNodeId  uint8
 	sdoBuffer      []byte
 }
 
-func NewBaseGateway(network *network.Network, defaultNetwork uint16, defaultNodeId uint8, sdoUploadBufferSize int) *BaseGateway {
+func NewBaseGateway(network *network.Network, logger *slog.Logger, defaultNetwork uint16, defaultNodeId uint8, sdoUploadBufferSize int) *BaseGateway {
+
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	return &BaseGateway{
+		logger:         logger,
 		network:        network,
 		defaultNetwork: defaultNetwork,
 		defaultNodeId:  defaultNodeId,
@@ -87,7 +95,7 @@ func (gw *BaseGateway) SetSDOTimeout(timeoutMs uint32) error {
 	// TODO : maybe add mutex in case ongoing transfer
 	gw.network.SDOClient.SetTimeout(timeoutMs)
 	gw.network.SDOClient.SetTimeoutBlockTransfer(timeoutMs)
-	log.Debugf("[HTTP][SERVER] changing sdo client timeout to %vms", timeoutMs)
+	gw.logger.Debug("changing sdo client timeout", "timeoutMs", timeoutMs)
 	return nil
 }
 
