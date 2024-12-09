@@ -54,7 +54,7 @@ func newBaseNode(
 		od:         odict,
 		id:         nodeId,
 	}
-	sdoClient, err := sdo.NewSDOClient(bm, odict, nodeId, sdo.DefaultClientTimeout, nil)
+	sdoClient, err := sdo.NewSDOClient(bm, logger, odict, nodeId, sdo.DefaultClientTimeout, nil)
 	if err != nil {
 		return nil, err
 	}

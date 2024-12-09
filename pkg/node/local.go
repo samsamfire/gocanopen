@@ -290,7 +290,7 @@ func NewLocalNode(
 		logger.Warn("no [SDOClient] initialized")
 	} else {
 
-		client, err := sdo.NewSDOClient(bm, odict, nodeId, sdoClientTimeoutMs, entry1280)
+		client, err := sdo.NewSDOClient(bm, logger, odict, nodeId, sdoClientTimeoutMs, entry1280)
 		if err != nil {
 			logger.Error("init failed [SDOClient]", "error", err)
 		} else {
