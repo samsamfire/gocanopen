@@ -1,12 +1,7 @@
 package http
 
 import (
-	"encoding/json"
-	"io"
-	"net/http"
 	"strconv"
-
-	log "github.com/sirupsen/logrus"
 )
 
 const TOKEN_NONE = -3
@@ -57,53 +52,4 @@ func parseNodeOrNetworkParam(param string) (int, error) {
 		return 0, err
 	}
 	return int(paramUint), nil
-}
-
-// Create a new sanitized api request object from raw http request
-// This function also checks that values are within bounds etc.
-func NewGatewayRequestFromRaw(r *http.Request) (*GatewayRequest, error) {
-	// Global expression match
-	match := regURI.FindStringSubmatch(r.URL.Path)
-	if len(match) != 6 {
-		log.Error("[HTTP][SERVER] request does not match a known API pattern")
-		return nil, ErrGwSyntaxError
-	}
-	// Check differents components of API route : api, sequence number, network and node
-	apiVersion := match[1]
-	if apiVersion != API_VERSION {
-		log.Errorf("[HTTP][SERVER] api version %v is not supported", apiVersion)
-		return nil, ErrGwRequestNotSupported
-	}
-	sequence, err := strconv.Atoi(match[2])
-	if err != nil || sequence > MAX_SEQUENCE_NB {
-		log.Errorf("[HTTP][SERVER] error processing sequence number %v", match[2])
-		return nil, ErrGwSyntaxError
-	}
-	netStr := match[3]
-	netInt, err := parseNodeOrNetworkParam(netStr)
-	if err != nil || netInt == 0 || netInt > 0xFFFF {
-		log.Errorf("[HTTP][SERVER] error processing network param %v", netStr)
-		return nil, ErrGwUnsupportedNet
-	}
-	nodeStr := match[4]
-	nodeInt, err := parseNodeOrNetworkParam(nodeStr)
-	if err != nil || nodeInt == 0 || nodeInt > 127 {
-		log.Errorf("[HTTP][SERVER] error processing node param %v", nodeStr)
-	}
-
-	// Unmarshall request body
-	var parameters json.RawMessage
-	err = json.NewDecoder(r.Body).Decode(&parameters)
-	if err != nil && err != io.EOF {
-		log.Warnf("[HTTP][SERVER] failed to unmarshal request body : %v", err)
-		return nil, ErrGwSyntaxError
-	}
-	request := &GatewayRequest{
-		nodeId:     nodeInt,
-		networkId:  netInt,
-		command:    match[5], // Contains rest of URL after node
-		sequence:   uint32(sequence),
-		parameters: parameters,
-	}
-	return request, nil
 }

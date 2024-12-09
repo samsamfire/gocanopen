@@ -5,23 +5,29 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/samsamfire/gocanopen/pkg/gateway"
-	log "github.com/sirupsen/logrus"
 )
 
 type GatewayClient struct {
 	http.Client
+	logger            *slog.Logger
 	baseURL           string
 	apiVersion        string
 	currentSequenceNb int
 	networkId         int
 }
 
-func NewGatewayClient(baseURL string, apiVersion string, networkId int) *GatewayClient {
+func NewGatewayClient(baseURL string, apiVersion string, networkId int, logger *slog.Logger) *GatewayClient {
+
+	if logger == nil {
+		logger = slog.Default()
+	}
 	return &GatewayClient{
+		logger:     logger.With("service", "[HTTP client]"),
 		Client:     http.Client{},
 		baseURL:    baseURL,
 		networkId:  networkId,
@@ -37,19 +43,19 @@ func (client *GatewayClient) Do(method string, uri string, body io.Reader, respo
 	baseUri := client.baseURL + "/cia309-5" + fmt.Sprintf("/%s/%d/%d", client.apiVersion, client.currentSequenceNb, client.networkId)
 	req, err := http.NewRequest(method, baseUri+uri, body)
 	if err != nil {
-		log.Errorf("[HTTP][CLIENT] http error : %v", err)
+		client.logger.Error("failed to create request", "err", err)
 		return err
 	}
 	// HTTP request
 	httpResp, err := client.Client.Do(req)
 	if err != nil {
-		log.Errorf("[HTTP][CLIENT] http error : %v", err)
+		client.logger.Error("failed request", "err", err)
 		return err
 	}
 	// Decode JSON "generic" response
 	err = json.NewDecoder(httpResp.Body).Decode(response)
 	if err != nil {
-		log.Errorf("[HTTP][CLIENT] error decoding json response : %v", err)
+		client.logger.Error("failed to decode response", "err", err)
 		return err
 	}
 	// Check for gateway errors
@@ -60,7 +66,7 @@ func (client *GatewayClient) Do(method string, uri string, body io.Reader, respo
 	// Check for sequence nb mismatch
 	sequence := response.GetSequenceNb()
 	if client.currentSequenceNb != sequence {
-		log.Errorf("[HTTP][CLIENT][SEQ:%v] sequence number does not match expected value (%v)", sequence, client.currentSequenceNb)
+		client.logger.Error("wrong sequence number", "sequence", sequence, "expected", client.currentSequenceNb)
 		return fmt.Errorf("error in sequence number")
 	}
 	return nil

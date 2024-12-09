@@ -1,6 +1,7 @@
 package http
 
 import (
+	"log/slog"
 	"net/http"
 	"regexp"
 
@@ -37,52 +38,62 @@ var DATATYPE_MAP = map[string]uint8{
 
 type GatewayServer struct {
 	*gateway.BaseGateway
+	logger   *slog.Logger
 	serveMux *http.ServeMux
 	routes   map[string]GatewayRequestHandler
 }
 
 // Create a new gateway
-func NewGatewayServer(network *network.Network, defaultNetworkId uint16, defaultNodeId uint8, sdoUploadBufferSize int) *GatewayServer {
-	base := gateway.NewBaseGateway(network, defaultNetworkId, defaultNodeId, sdoUploadBufferSize)
-	gw := &GatewayServer{BaseGateway: base}
-	gw.serveMux = http.NewServeMux()
-	gw.serveMux.HandleFunc("/", gw.handleRequest) // This base route handles all the requests
-	gw.routes = make(map[string]GatewayRequestHandler)
+func NewGatewayServer(network *network.Network, logger *slog.Logger, defaultNetworkId uint16, defaultNodeId uint8, sdoUploadBufferSize int) *GatewayServer {
 
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger = logger.With("service", "[HTTP]")
+	base := gateway.NewBaseGateway(network, logger, defaultNetworkId, defaultNodeId, sdoUploadBufferSize)
+	g := &GatewayServer{BaseGateway: base, logger: logger}
+	g.serveMux = http.NewServeMux()
+	g.serveMux.HandleFunc("/", g.handleRequest) // This base route handles all the requests
+	g.routes = make(map[string]GatewayRequestHandler)
+
+	g.logger.Info("initializing http gateway (CiA 309-5) endpoints")
 	// CiA 309-5 | 4.1
-	gw.addRoute("r", gw.handlerRead)
-	gw.addRoute("read", gw.handlerRead)
-	gw.addRoute("w", gw.handleWrite)
-	gw.addRoute("write", gw.handleWrite)
-	gw.addRoute("set/sdo-timeout", gw.handleSDOTimeout)
+	g.addRoute("r", g.handlerRead)
+	g.addRoute("read", g.handlerRead)
+	g.addRoute("w", g.handleWrite)
+	g.addRoute("write", g.handleWrite)
+	g.addRoute("set/sdo-timeout", g.handleSDOTimeout)
 
 	// CiA 309-5 | 4.3
-	gw.addRoute("start", createNmtHandler(base, nmt.CommandEnterOperational))
-	gw.addRoute("stop", createNmtHandler(base, nmt.CommandEnterStopped))
-	gw.addRoute("preop", createNmtHandler(base, nmt.CommandEnterPreOperational))
-	gw.addRoute("preoperational", createNmtHandler(base, nmt.CommandEnterPreOperational))
-	gw.addRoute("reset/node", createNmtHandler(base, nmt.CommandResetNode))
-	gw.addRoute("reset/comm", createNmtHandler(base, nmt.CommandResetCommunication))
-	gw.addRoute("reset/communication", createNmtHandler(base, nmt.CommandResetCommunication))
-	gw.addRoute("enable/guarding", handlerNotSupported)
-	gw.addRoute("disable/guarding", handlerNotSupported)
-	gw.addRoute("enable/heartbeat", handlerNotSupported)
-	gw.addRoute("disable/heartbeat", handlerNotSupported)
+	g.addRoute("start", createNmtHandler(base, nmt.CommandEnterOperational))
+	g.addRoute("stop", createNmtHandler(base, nmt.CommandEnterStopped))
+	g.addRoute("preop", createNmtHandler(base, nmt.CommandEnterPreOperational))
+	g.addRoute("preoperational", createNmtHandler(base, nmt.CommandEnterPreOperational))
+	g.addRoute("reset/node", createNmtHandler(base, nmt.CommandResetNode))
+	g.addRoute("reset/comm", createNmtHandler(base, nmt.CommandResetCommunication))
+	g.addRoute("reset/communication", createNmtHandler(base, nmt.CommandResetCommunication))
+	g.addRoute("enable/guarding", handlerNotSupported)
+	g.addRoute("disable/guarding", handlerNotSupported)
+	g.addRoute("enable/heartbeat", handlerNotSupported)
+	g.addRoute("disable/heartbeat", handlerNotSupported)
 
 	// CiA 309-5 | 4.6
-	gw.addRoute("set/network", gw.handleSetDefaultNetwork)
-	gw.addRoute("set/node", gw.handleSetDefaultNode)
-	gw.addRoute("info/version", gw.handleGetVersion)
+	g.addRoute("set/network", g.handleSetDefaultNetwork)
+	g.addRoute("set/node", g.handleSetDefaultNode)
+	g.addRoute("info/version", g.handleGetVersion)
 
-	return gw
+	g.logger.Info("finished initializing")
+
+	return g
 }
 
 // Process server, blocking
-func (gateway *GatewayServer) ListenAndServe(addr string) error {
-	return http.ListenAndServe(addr, gateway.serveMux)
+func (g *GatewayServer) ListenAndServe(addr string) error {
+	return http.ListenAndServe(addr, g.serveMux)
 }
 
 // Add a route to the server for handling a specific command
 func (g *GatewayServer) addRoute(command string, handler GatewayRequestHandler) {
+	g.logger.Debug("registering route", "command", command)
 	g.routes[command] = handler
 }

@@ -116,7 +116,7 @@ func (network *Network) Connect(args ...any) error {
 		return err
 	}
 	// Add SDO client to network by default
-	client, err := sdo.NewSDOClient(network.BusManager, nil, 0, sdo.DefaultClientTimeout, nil)
+	client, err := sdo.NewSDOClient(network.BusManager, network.logger, nil, 0, sdo.DefaultClientTimeout, nil)
 	network.SDOClient = client
 	return err
 }
@@ -378,7 +378,7 @@ func (network *Network) Scan(timeoutMs uint32) (map[uint8]NodeInformation, error
 	// Create multiple sdo clients to speed up discovery
 	clients := make([]*sdo.SDOClient, 0)
 	for i := nodeIdMin; i <= nodeIdMax; i++ {
-		client, err := sdo.NewSDOClient(network.BusManager, nil, i, timeoutMs, nil)
+		client, err := sdo.NewSDOClient(network.BusManager, network.logger, nil, i, timeoutMs, nil)
 		if err != nil {
 			return nil, err
 		}

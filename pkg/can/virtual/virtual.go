@@ -5,13 +5,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"sync"
 	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	can "github.com/samsamfire/gocanopen/pkg/can"
-	log "github.com/sirupsen/logrus"
 )
 
 // Virtual CAN bus implementation with TCP primarily used for testing
@@ -24,6 +24,7 @@ func init() {
 }
 
 type Bus struct {
+	logger        *slog.Logger
 	mu            sync.Mutex
 	channel       string
 	conn          net.Conn
@@ -36,7 +37,11 @@ type Bus struct {
 }
 
 func NewVirtualCanBus(channel string) (canopen.Bus, error) {
-	return &Bus{channel: channel, stopChan: make(chan bool), isRunning: false}, nil
+	return &Bus{
+		channel:   channel,
+		logger:    slog.Default(),
+		stopChan:  make(chan bool),
+		isRunning: false}, nil
 }
 
 // Helper function for serializing a CAN frame into the expected binary format
@@ -181,7 +186,7 @@ func (client *Bus) handleReception() {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				// No message received, this is OK
 			} else if err != nil {
-				log.Errorf("[VIRTUAL DRIVER] listening routine has closed because : %v", err)
+				client.logger.Error("listening routine has closed because", "err", err)
 				client.errSubscriber = true
 				client.mu.Unlock()
 				return
