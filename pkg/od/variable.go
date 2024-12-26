@@ -323,6 +323,46 @@ func DecodeToType(data []byte, dataType uint8) (v any, e error) {
 }
 
 // Decode byte array given the CANopen data type
+// Function will return the exact type (uint8,uint16,...,int8,...)
+func DecodeToTypeExact(data []byte, dataType uint8) (v any, e error) {
+	e = CheckSize(len(data), dataType)
+	if e != nil {
+		return nil, e
+	}
+	// Cast to correct type
+	switch dataType {
+	case BOOLEAN, UNSIGNED8:
+		return data[0], nil
+	case INTEGER8:
+		return int8(data[0]), nil
+	case UNSIGNED16:
+		return binary.LittleEndian.Uint16(data), nil
+	case INTEGER16:
+		return int16(binary.LittleEndian.Uint16(data)), nil
+	case UNSIGNED32:
+		return binary.LittleEndian.Uint32(data), nil
+	case INTEGER32:
+		return int32(binary.LittleEndian.Uint32(data)), nil
+	case UNSIGNED64:
+		return binary.LittleEndian.Uint64(data), nil
+	case INTEGER64:
+		return int64(binary.LittleEndian.Uint64(data)), nil
+	case REAL32:
+		parsed := binary.LittleEndian.Uint32(data)
+		return math.Float32frombits(parsed), nil
+	case REAL64:
+		parsed := binary.LittleEndian.Uint64(data)
+		return math.Float64frombits(parsed), nil
+	case VISIBLE_STRING, OCTET_STRING:
+		return string(data), nil
+	case DOMAIN:
+		return int64(0), nil
+	default:
+		return nil, ErrTypeMismatch
+	}
+}
+
+// Decode byte array given the CANopen data type
 // Function will return either string, int64, uint64, or float64
 func DecodeToString(data []byte, dataType uint8, base int) (v string, e error) {
 	e = CheckSize(len(data), dataType)

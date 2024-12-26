@@ -52,7 +52,7 @@ func BenchmarkSDOReadLocal(b *testing.B) {
 	b.StartTimer()
 	var value uint64
 	for i := 0; i < b.N; i++ {
-		value, err = client.ReadUint64(0x55, 0x201B, 0x0)
+		value, err = client.ReadUint(0x201B, 0x0)
 	}
 	result = value
 }
