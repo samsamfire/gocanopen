@@ -69,7 +69,7 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 
 // Process [RPDO] state machine and TX CAN frames
 // This should be called periodically
-func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOperational bool, syncWas bool) {
+func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWas bool) {
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
 
@@ -148,12 +148,6 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, timerNext *uint32, nmtIsOpera
 		rpdo.timeoutTimer += timeDifferenceUs
 		if rpdo.timeoutTimer > rpdo.timeoutTimeUs {
 			pdo.emcy.ErrorReport(emergency.EmRPDOTimeOut, emergency.ErrRpdoTimeout, rpdo.timeoutTimer)
-		}
-	}
-	if timerNext != nil && rpdo.timeoutTimer < rpdo.timeoutTimeUs {
-		diff := rpdo.timeoutTimeUs - rpdo.timeoutTimer
-		if *timerNext > diff {
-			*timerNext = diff
 		}
 	}
 }
