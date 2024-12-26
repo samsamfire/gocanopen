@@ -49,7 +49,7 @@ func TestTpdo(t *testing.T) {
 		time.Sleep(400 * time.Millisecond)
 
 		// Internal value received via PDO
-		val, err := remote.ReadUint8(0, 0x2002, 0)
+		val, err := remote.ReadUint8(0x2002, 0)
 		assert.Nil(t, err)
 		assert.EqualValues(t, 10, val)
 
