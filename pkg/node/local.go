@@ -37,34 +37,27 @@ type LocalNode struct {
 	TIME               *t.TIME
 }
 
-func (node *LocalNode) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
+func (node *LocalNode) ProcessPDO(syncWas bool, timeDifferenceUs uint32) {
 	if node.NodeIdUnconfigured {
 		return
 	}
-	nmtIsOperational := node.NMT.GetInternalState() == nmt.StateOperational
+	isOperational := node.NMT.GetInternalState() == nmt.StateOperational
 	for _, tpdo := range node.TPDOs {
-		tpdo.Process(timeDifferenceUs, timerNextUs, nmtIsOperational, syncWas)
+		tpdo.Process(timeDifferenceUs, isOperational, syncWas)
 	}
-}
-
-func (node *LocalNode) ProcessRPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
-	if node.NodeIdUnconfigured {
-		return
-	}
-	nmtIsOperational := node.NMT.GetInternalState() == nmt.StateOperational
 	for _, rpdo := range node.RPDOs {
-		rpdo.Process(timeDifferenceUs, timerNextUs, nmtIsOperational, syncWas)
+		rpdo.Process(timeDifferenceUs, isOperational, syncWas)
 	}
 }
 
-func (node *LocalNode) ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32) bool {
+func (node *LocalNode) ProcessSYNC(timeDifferenceUs uint32) bool {
 	syncWas := false
 	sy := node.SYNC
 	if !node.NodeIdUnconfigured && sy != nil {
 
 		nmtState := node.NMT.GetInternalState()
 		nmtIsPreOrOperational := nmtState == nmt.StatePreOperational || nmtState == nmt.StateOperational
-		syncProcess := sy.Process(nmtIsPreOrOperational, timeDifferenceUs, timerNextUs)
+		syncProcess := sy.Process(nmtIsPreOrOperational, timeDifferenceUs)
 
 		switch syncProcess {
 		case s.EventRxOrTx:

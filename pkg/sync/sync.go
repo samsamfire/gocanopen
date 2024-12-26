@@ -65,7 +65,7 @@ func (sync *SYNC) Handle(frame canopen.Frame) {
 // Process [SYNC] state machine and TX CAN frames
 // It returns the according sync event
 // This should be called periodically
-func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
+func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) uint8 {
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
 
@@ -99,12 +99,6 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 				sync.send()
 				sync.mu.Lock()
 			}
-			if timerNextUs != nil {
-				diff := commCyclePeriod - sync.timer
-				if *timerNextUs > diff {
-					*timerNextUs = diff
-				}
-			}
 		} else if sync.timeoutError == 1 {
 			periodTimeout := commCyclePeriod + commCyclePeriod>>1
 			if periodTimeout < commCyclePeriod {
@@ -114,11 +108,6 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 				sync.emcy.Error(true, emergency.EmSyncTimeOut, emergency.ErrCommunication, sync.timer)
 				sync.logger.Warn("timeout error", "timer", sync.timer, "period", periodTimeout)
 				sync.timeoutError = 2
-			} else if timerNextUs != nil {
-				diff := periodTimeout - sync.timer
-				if *timerNextUs > diff {
-					*timerNextUs = diff
-				}
 			}
 		}
 	}

@@ -36,28 +36,22 @@ type RemoteNode struct {
 	emcy     *emergency.EMCY      // Emergency consumer (fake producer for logging internal errors)
 }
 
-func (node *RemoteNode) ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
-
+func (node *RemoteNode) ProcessPDO(syncWas bool, timeDifferenceUs uint32) {
 	node.mu.Lock()
 	defer node.mu.Unlock()
+
 	for _, tpdo := range node.tpdos {
-		tpdo.Process(timeDifferenceUs, timerNextUs, true, syncWas)
+		tpdo.Process(timeDifferenceUs, true, syncWas)
 	}
-
-}
-
-func (node *RemoteNode) ProcessRPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32) {
-	node.mu.Lock()
-	defer node.mu.Unlock()
 	for _, rpdo := range node.rpdos {
-		rpdo.Process(timeDifferenceUs, timerNextUs, true, syncWas)
+		rpdo.Process(timeDifferenceUs, true, syncWas)
 	}
 }
 
-func (node *RemoteNode) ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32) bool {
+func (node *RemoteNode) ProcessSYNC(timeDifferenceUs uint32) bool {
 	syncWas := false
 	if node.sync != nil {
-		event := node.sync.Process(true, timeDifferenceUs, timerNextUs)
+		event := node.sync.Process(true, timeDifferenceUs)
 
 		switch event {
 		case sync.EventNone, sync.EventRxOrTx:
