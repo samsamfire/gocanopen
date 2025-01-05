@@ -7,6 +7,7 @@ import (
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/config"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
+	"github.com/samsamfire/gocanopen/pkg/lss"
 	"github.com/samsamfire/gocanopen/pkg/nmt"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/pdo"
@@ -67,6 +68,10 @@ func (node *RemoteNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32,
 }
 
 func (node *RemoteNode) Servers() []*sdo.SDOServer {
+	return nil
+}
+
+func (node *RemoteNode) LSSSlave() *lss.LSSSlave {
 	return nil
 }
 

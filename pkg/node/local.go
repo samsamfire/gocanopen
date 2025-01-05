@@ -11,6 +11,7 @@ import (
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
 	"github.com/samsamfire/gocanopen/pkg/heartbeat"
+	"github.com/samsamfire/gocanopen/pkg/lss"
 	"github.com/samsamfire/gocanopen/pkg/nmt"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/pdo"
@@ -35,6 +36,7 @@ type LocalNode struct {
 	SYNC               *s.SYNC
 	EMCY               *emergency.EMCY
 	TIME               *t.TIME
+	LSSslave           *lss.LSSSlave
 }
 
 func (node *LocalNode) ProcessPDO(syncWas bool, timeDifferenceUs uint32) {
@@ -100,6 +102,10 @@ func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, 
 
 func (node *LocalNode) Servers() []*sdo.SDOServer {
 	return node.SDOServers
+}
+
+func (node *LocalNode) LSSSlave() *lss.LSSSlave {
+	return node.LSSslave
 }
 
 // Initialize all PDOs
@@ -315,6 +321,14 @@ func NewLocalNode(
 		node.logger.Error("init failed [SYNC]", "error", err)
 	} else {
 		node.SYNC = sync
+	}
+
+	// Initialize LSS
+	node.LSSslave, err = lss.NewLSSSlave(bm, logger, odict.Index(od.EntryIdentityObject), nodeId)
+	if err != nil {
+		node.logger.Error("init failed [LSSSlave]", "error", err)
+	} else {
+		logger.Info("[LSSSlave] initialized")
 	}
 
 	// Add EDS storage if supported, library supports either plain ascii

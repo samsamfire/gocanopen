@@ -105,6 +105,13 @@ func (c *NodeProcessor) Start(ctx context.Context) error {
 			server.Process(ctx)
 		}()
 	}
+
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		c.node.LSSSlave().Process(ctx)
+	}()
+
 	return nil
 }
 
