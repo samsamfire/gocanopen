@@ -7,6 +7,7 @@ import (
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/config"
+	"github.com/samsamfire/gocanopen/pkg/lss"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/sdo"
 )
@@ -26,6 +27,8 @@ type Node interface {
 	ProcessMain(enableGateway bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8
 	// Internal servers
 	Servers() []*sdo.SDOServer
+	// LSS slave
+	LSSSlave() *lss.LSSSlave
 	GetOD() *od.ObjectDictionary
 	GetID() uint8
 	Export(filename string) error

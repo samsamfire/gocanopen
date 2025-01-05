@@ -14,6 +14,7 @@ import (
 	can "github.com/samsamfire/gocanopen/pkg/can"
 	_ "github.com/samsamfire/gocanopen/pkg/can/all"
 	"github.com/samsamfire/gocanopen/pkg/config"
+	"github.com/samsamfire/gocanopen/pkg/lss"
 	"github.com/samsamfire/gocanopen/pkg/nmt"
 	n "github.com/samsamfire/gocanopen/pkg/node"
 	"github.com/samsamfire/gocanopen/pkg/od"
@@ -40,6 +41,7 @@ const (
 type Network struct {
 	*canopen.BusManager
 	*sdo.SDOClient
+	lss         *lss.LSSMaster
 	controllers map[uint8]*n.NodeProcessor
 	// Network has an its own SDOClient
 	odMap  map[uint8]*ObjectDictionaryInformation
@@ -118,6 +120,12 @@ func (network *Network) Connect(args ...any) error {
 	// Add SDO client to network by default
 	client, err := sdo.NewSDOClient(network.BusManager, network.logger, nil, 0, sdo.DefaultClientTimeout, nil)
 	network.SDOClient = client
+	if err != nil {
+		return err
+	}
+	// Add an LSS master
+	lss, err := lss.NewLSSMaster(network.BusManager, network.logger, lss.DefaultTimeout)
+	network.lss = lss
 	return err
 }
 
@@ -418,4 +426,8 @@ func (network *Network) Scan(timeoutMs uint32) (map[uint8]NodeInformation, error
 
 func (network *Network) SetLogger(logger *slog.Logger) {
 	network.logger = logger
+}
+
+func (network *Network) LSS() *lss.LSSMaster {
+	return network.lss
 }
