@@ -1,11 +1,22 @@
 package lss
 
-import "github.com/samsamfire/gocanopen/pkg/config"
+import (
+	"errors"
+
+	"github.com/samsamfire/gocanopen/pkg/config"
+)
 
 const (
 	ServiceSlaveId     = 0x7E4
 	ServiceMasterId    = 0x7E5
-	UnconfiguredNodeId = 0xFF
+	NodeIdUnconfigured = 0xFF
+	NodeIdMin          = 0x1
+	NodeIdMax          = 0x7F
+)
+
+var (
+	ErrTimeout       = errors.New("no answer received")
+	ErrInvalidNodeId = errors.New("invalid node id")
 )
 
 type LSSMode uint8

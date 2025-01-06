@@ -108,7 +108,7 @@ func (node *LocalNode) LSSSlave() *lss.LSSSlave {
 	return node.LSSslave
 }
 
-// Initialize all PDOs
+// Initialize all [pdo.RPDO] and [pdo.TPDO] objects
 func (node *LocalNode) initPDO() error {
 	if node.id < 1 || node.id > 127 || node.NodeIdUnconfigured {
 		if node.NodeIdUnconfigured {
@@ -173,6 +173,225 @@ func (node *LocalNode) initPDO() error {
 	return nil
 }
 
+// Initialize [emergency.EMCY] object
+func (node *LocalNode) initEMCY() error {
+
+	emcy, err := emergency.NewEMCY(
+		node.BusManager,
+		node.logger,
+		node.LSSslave.GetNodeIdActive(),
+		node.od.Index(od.EntryErrorRegister),
+		node.od.Index(od.EntryCobIdEMCY),
+		node.od.Index(od.EntryInhibitTimeEMCY),
+		node.od.Index(od.EntryManufacturerStatusRegister),
+		nil,
+	)
+	if err != nil {
+		node.logger.Error("init failed [EMCY] producer", "error", err)
+		return canopen.ErrOdParameters
+	}
+	node.EMCY = emcy
+	return nil
+}
+
+// Initialize [nmt.NMT] object, requires an EMCY object
+func (node *LocalNode) initNMT(nmtControl uint16, firstHbTimeMs uint16) error {
+
+	nodeIdActive := node.LSSslave.GetNodeIdActive()
+	nm, err := nmt.NewNMT(
+		node.BusManager,
+		node.logger,
+		node.EMCY,
+		nodeIdActive,
+		nmtControl,
+		firstHbTimeMs,
+		nmt.ServiceId,
+		nmt.ServiceId,
+		heartbeat.ServiceId+uint16(nodeIdActive),
+		node.od.Index(od.EntryProducerHeartbeatTime),
+	)
+	if err != nil {
+		node.logger.Error("init failed [NMT]", "error", err)
+		return err
+	}
+	node.NMT = nm
+	return nil
+}
+
+// Initialize [heartbeat.HBConsumer] object
+func (node *LocalNode) initHBConsumer() error {
+
+	hbCons, err := heartbeat.NewHBConsumer(
+		node.BusManager,
+		node.logger,
+		node.EMCY,
+		node.od.Index(od.EntryConsumerHeartbeatTime),
+	)
+	if err != nil {
+		node.logger.Error("init failed [HBConsumer]", "error", err)
+		return err
+	}
+	node.HBConsumer = hbCons
+	return nil
+}
+
+// Initialize [sdo.SDOServer] object(s)
+// Currently, only one server is supported (optionally)
+func (node *LocalNode) initSDOServers(serverTimeoutMs uint32) error {
+	entry1200 := node.od.Index(od.EntrySDOServerParameter)
+	if entry1200 == nil {
+		node.logger.Warn("no [SDOServer] initialized")
+		return nil
+	}
+	sdoServers := make([]*sdo.SDOServer, 0)
+	server, err := sdo.NewSDOServer(
+		node.BusManager,
+		node.logger,
+		node.od,
+		node.LSSslave.GetNodeIdActive(),
+		serverTimeoutMs,
+		entry1200,
+	)
+	if err != nil {
+		node.logger.Error("init failed [SDOServer]", "error", err)
+		return err
+	}
+	sdoServers = append(sdoServers, server)
+	node.SDOServers = sdoServers
+	return nil
+}
+
+// Initialize [sdo.SDOClient] object(s)
+func (node *LocalNode) initSDOClients(clientTimeoutMs uint32) error {
+
+	entry1280 := node.od.Index(od.EntrySDOClientParameter)
+	if entry1280 == nil {
+		node.logger.Warn("no [SDOClient] initialized")
+		return nil
+	}
+	sdoClients := make([]*sdo.SDOClient, 0)
+	client, err := sdo.NewSDOClient(
+		node.BusManager,
+		node.logger,
+		node.od, node.LSSslave.GetNodeIdActive(),
+		clientTimeoutMs,
+		entry1280,
+	)
+	if err != nil {
+		node.logger.Error("init failed [SDOClient]", "error", err)
+		return err
+	}
+	sdoClients = append(sdoClients, client)
+	node.SDOclients = sdoClients
+	return nil
+}
+
+// Initialize [s.SYNC] object
+func (node *LocalNode) initSYNC() error {
+
+	sync, err := s.NewSYNC(
+		node.BusManager,
+		node.logger,
+		node.EMCY,
+		node.od.Index(od.EntryCobIdSYNC),
+		node.od.Index(od.EntryCommunicationCyclePeriod),
+		node.od.Index(od.EntrySynchronousWindowLength),
+		node.od.Index(od.EntrySynchronousCounterOverflow),
+	)
+	if err != nil {
+		node.logger.Error("init failed [SYNC]", "error", err)
+		return err
+	}
+	node.SYNC = sync
+	return nil
+}
+
+// Initialize [t.TIME] object
+func (node *LocalNode) initTIME() error {
+
+	time, err := t.NewTIME(
+		node.BusManager,
+		node.logger,
+		node.od.Index(od.EntryCobIdTIME),
+		1000,
+	) // hardcoded for now
+	if err != nil {
+		node.logger.Error("init failed [TIME]", "error", err)
+		return err
+	}
+	node.TIME = time
+	return nil
+}
+
+// Initialize [lss.LSSSlave] object
+func (node *LocalNode) initLSSSlave() error {
+
+	slave, err := lss.NewLSSSlave(
+		node.BusManager,
+		node.logger,
+		node.od.Index(od.EntryIdentityObject),
+		node.LSSslave.GetNodeIdActive(),
+	)
+	if err != nil {
+		node.logger.Error("init failed [LSSSlave]", "error", err)
+		return err
+	}
+	node.LSSslave = slave
+	return nil
+}
+
+// Initialize all CANopen components, this is will be called
+// On node 'reset communication' NMT state machine
+func (node *LocalNode) initAll(
+	nmtControl uint16,
+	firstHbTimeMs uint16,
+	sdoServerTimeoutMs uint32,
+	sdoClientTimeoutMs uint32,
+) error {
+
+	err := node.initLSSSlave()
+	if err != nil {
+		return err
+	}
+
+	err = node.initEMCY()
+	if err != nil {
+		return err
+	}
+
+	err = node.initNMT(nmtControl, firstHbTimeMs)
+	if err != nil {
+		return err
+	}
+
+	err = node.initHBConsumer()
+	if err != nil {
+		return err
+	}
+
+	err = node.initSDOServers(sdoServerTimeoutMs)
+	if err != nil {
+		return err
+	}
+
+	err = node.initSDOClients(sdoClientTimeoutMs)
+	if err != nil {
+		return err
+	}
+
+	err = node.initTIME()
+	if err != nil {
+		return err
+	}
+
+	err = node.initSYNC()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Create a new local node
 func NewLocalNode(
 	bm *canopen.BusManager,
@@ -206,129 +425,10 @@ func NewLocalNode(
 	node.od = odict
 	node.id = nodeId
 
-	if emcy == nil {
-		emergency, err := emergency.NewEMCY(
-			bm,
-			logger,
-			nodeId,
-			odict.Index(od.EntryErrorRegister),
-			odict.Index(od.EntryCobIdEMCY),
-			odict.Index(od.EntryInhibitTimeEMCY),
-			odict.Index(od.EntryManufacturerStatusRegister),
-			nil,
-		)
-		if err != nil {
-			logger.Error("init failed [EMCY] producer", "error", err)
-			return nil, canopen.ErrOdParameters
-		}
-		node.EMCY = emergency
-	} else {
-		node.EMCY = emcy
-	}
-	emcy = node.EMCY
-
-	// NMT object can either be supplied or created with automatically with an OD entry
-	if nm == nil {
-		nmt, err := nmt.NewNMT(
-			bm,
-			logger,
-			emcy,
-			nodeId,
-			nmtControl,
-			firstHbTimeMs,
-			nmt.ServiceId,
-			nmt.ServiceId,
-			heartbeat.ServiceId+uint16(nodeId),
-			odict.Index(od.EntryProducerHeartbeatTime),
-		)
-		if err != nil {
-			logger.Error("init failed [NMT]", "error", err)
-			return nil, err
-		} else {
-			node.NMT = nmt
-			logger.Info("[NMT] initialized from OD")
-		}
-	} else {
-		node.NMT = nm
-		logger.Info("[NMT] initialized from parameters")
-	}
-
-	// Initialize HB consumer
-	hbCons, err := heartbeat.NewHBConsumer(bm, logger, emcy, odict.Index(od.EntryConsumerHeartbeatTime))
+	// Initialize all CANopen parts
+	err = node.initAll(nmtControl, firstHbTimeMs, sdoServerTimeoutMs, sdoClientTimeoutMs)
 	if err != nil {
-		logger.Error("init failed [HBConsumer]", "error", err)
 		return nil, err
-	} else {
-		node.HBConsumer = hbCons
-	}
-	logger.Info("[HBConsumer] initialized")
-
-	// Initialize SDO server
-	// For now only one server
-	entry1200 := odict.Index(od.EntrySDOServerParameter)
-	sdoServers := make([]*sdo.SDOServer, 0)
-	if entry1200 == nil {
-		logger.Warn("no [SDOServer] initialized")
-	} else {
-		server, err := sdo.NewSDOServer(bm, logger, odict, nodeId, sdoServerTimeoutMs, entry1200)
-		if err != nil {
-			logger.Error("init failed [SDOServer]", "error", err)
-			return nil, err
-		} else {
-			sdoServers = append(sdoServers, server)
-			node.SDOServers = sdoServers
-			logger.Info("[SDOServer] initialized")
-		}
-	}
-
-	// Initialize SDO clients if any
-	// For now only one client
-	entry1280 := odict.Index(od.EntrySDOClientParameter)
-	sdoClients := make([]*sdo.SDOClient, 0)
-	if entry1280 == nil {
-		logger.Warn("no [SDOClient] initialized")
-	} else {
-
-		client, err := sdo.NewSDOClient(bm, logger, odict, nodeId, sdoClientTimeoutMs, entry1280)
-		if err != nil {
-			logger.Error("init failed [SDOClient]", "error", err)
-		} else {
-			sdoClients = append(sdoClients, client)
-			logger.Info("[SDOClient] initialized")
-		}
-		node.SDOclients = sdoClients
-	}
-
-	// Initialize TIME
-	time, err := t.NewTIME(bm, logger, odict.Index(od.EntryCobIdTIME), 1000) // hardcoded for now
-	if err != nil {
-		node.logger.Error("init failed [TIME]", "error", err)
-	} else {
-		node.TIME = time
-	}
-
-	// Initialize SYNC
-	sync, err := s.NewSYNC(
-		bm,
-		logger,
-		emcy,
-		odict.Index(od.EntryCobIdSYNC),
-		odict.Index(od.EntryCommunicationCyclePeriod),
-		odict.Index(od.EntrySynchronousWindowLength),
-		odict.Index(od.EntrySynchronousCounterOverflow),
-	)
-	if err != nil {
-		node.logger.Error("init failed [SYNC]", "error", err)
-	} else {
-		node.SYNC = sync
-	}
-
-	// Initialize LSS
-	node.LSSslave, err = lss.NewLSSSlave(bm, logger, odict.Index(od.EntryIdentityObject), nodeId)
-	if err != nil {
-		node.logger.Error("init failed [LSSSlave]", "error", err)
-	} else {
-		logger.Info("[LSSSlave] initialized")
 	}
 
 	// Add EDS storage if supported, library supports either plain ascii
