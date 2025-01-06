@@ -2,7 +2,6 @@ package lss
 
 import (
 	"encoding/binary"
-	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -10,7 +9,6 @@ import (
 	canopen "github.com/samsamfire/gocanopen"
 )
 
-var ErrTimeout = errors.New("no answer received")
 var DefaultTimeout = 1000 * time.Millisecond
 
 type LSSMaster struct {

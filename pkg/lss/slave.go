@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log/slog"
+	"sync"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/od"
@@ -12,14 +13,19 @@ import (
 
 type LSSSlave struct {
 	*canopen.BusManager
-	logger          *slog.Logger
-	address         LSSAddress
-	addressSwitch   LSSAddress
-	addressFastscan LSSAddress
-	activeNodeId    uint8
-	pendingNodeId   uint8
-	rx              chan LSSMessage
-	state           LSSState
+	mu            sync.Mutex
+	logger        *slog.Logger
+	address       LSSAddress
+	addressSwitch LSSAddress
+	// The id stored inside NVM memory, taken on boot.
+	nodeIdPersistent uint8
+	// The current active id. On startup, this is taken from the persistent id
+	nodeIdActive uint8
+	// Id that will be taken by the node on a "reset communication" command
+	// this is not persistent if the configuration is not saved to "nvm"
+	nodeIdPending uint8
+	rx            chan LSSMessage
+	state         LSSState
 }
 
 // Handle [LSSSlave] related RX CAN frames
@@ -64,6 +70,24 @@ func (l *LSSSlave) Process(ctx context.Context) {
 // Get current lss state
 func (l *LSSSlave) GetState() LSSState {
 	return l.state
+}
+
+func (l *LSSSlave) GetNodeIdPersistent() uint8 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.nodeIdPersistent
+}
+
+func (l *LSSSlave) GetNodeIdActive() uint8 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.nodeIdActive
+}
+
+func (l *LSSSlave) GetNodeIdPending() uint8 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.nodeIdPending
 }
 
 // Process new request from master depending on the current LSS mode
@@ -172,7 +196,7 @@ func (l *LSSSlave) processInquiryService(cmd LSSCommand) error {
 		binary.LittleEndian.PutUint32(data[1:], l.address.SerialNumber)
 
 	case CmdInquireNodeId:
-		data[1] = l.activeNodeId
+		data[1] = l.nodeIdActive
 
 	default:
 		return fmt.Errorf("unknown LSS command %v", cmd)
@@ -195,7 +219,7 @@ func (l *LSSSlave) processConfigurationService(msg LSSMessage) error {
 			l.logger.Warn("requested nodeId is out of range", "id", nodeId)
 			return l.Send([8]byte{byte(msg.Command()), ConfigNodeIdOutOfRange})
 		}
-		l.pendingNodeId = nodeId
+		l.nodeIdPending = nodeId
 		return l.Send([8]byte{byte(msg.Command()), ConfigNodeIdOk})
 
 	default:
@@ -211,14 +235,29 @@ func (l *LSSSlave) Send(data [8]byte) error {
 	return l.BusManager.Send(frame)
 }
 
-func NewLSSSlave(bm *canopen.BusManager, logger *slog.Logger, identity *od.Entry, nodeId uint8) (*LSSSlave, error) {
+func NewLSSSlave(
+	bm *canopen.BusManager,
+	logger *slog.Logger,
+	identity *od.Entry,
+	nodeId uint8, // Persistent node id
+) (*LSSSlave, error) {
 
 	var err error
+
+	// Unconfigured ids are also tolerated, an LSS master can change the id
+	if !((nodeId >= NodeIdMin && nodeId <= NodeIdMax) || nodeId == NodeIdUnconfigured) {
+		return nil, ErrInvalidNodeId
+	}
+
 	if logger == nil {
 		logger = slog.Default()
 	}
+
 	lss := &LSSSlave{BusManager: bm, logger: logger}
 	lss.logger = logger.With("service", "[LSSSlave]")
+	lss.nodeIdActive = nodeId
+	lss.nodeIdPersistent = nodeId
+	lss.nodeIdPending = nodeId
 	lss.address.VendorId, err = identity.Uint32(1)
 	if err != nil {
 		return nil, err
@@ -241,7 +280,5 @@ func NewLSSSlave(bm *canopen.BusManager, logger *slog.Logger, identity *od.Entry
 	if err != nil {
 		return nil, err
 	}
-	lss.activeNodeId = nodeId
-	lss.pendingNodeId = nodeId
 	return lss, nil
 }
