@@ -67,15 +67,36 @@ func TestSDOReadBlock(t *testing.T) {
 
 func TestSDOWriteBlock(t *testing.T) {
 	network := CreateNetworkTest()
+	network2 := CreateNetworkEmptyTest()
 	defer network.Disconnect()
-	data := []byte("some random string some random string some random string some random string some random string some random string some random string")
+	defer network2.Disconnect()
 	node := network.controllers[NodeIdTest].GetNode()
 	file, err := os.CreateTemp("", "filename")
 	assert.Nil(t, err)
 	node.GetOD().AddFile(0x3333, "File entry", file.Name(), os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
 	assert.Nil(t, err)
-	err = network.WriteRaw(NodeIdTest, 0x3333, 0, data, false)
+
+	w, err := network2.SDOClient.NewRawWriter(NodeIdTest, 0x3333, 0, true, 0)
 	assert.Nil(t, err)
+
+	t.Run("small block", func(t *testing.T) {
+		data := []byte(`some random string some random string some random
+		string some random string some random 
+		string some random string some random string`)
+		n, err := w.Write(data)
+		assert.Nil(t, err)
+		assert.EqualValues(t, len(data), n)
+	})
+
+	t.Run("big block", func(t *testing.T) {
+		data := make([]byte, 10_000)
+		w, err := network2.SDOClient.NewRawWriter(NodeIdTest, 0x3333, 0, true, 10_000)
+		assert.Nil(t, err)
+		n, err := w.Write(data)
+		assert.Nil(t, err)
+		assert.EqualValues(t, 10_000, n)
+	})
+
 }
 
 func TestSDOReadWriteBlock(t *testing.T) {
