@@ -214,7 +214,13 @@ func (server *SDOServer) writeObjectDictionary(crcOperation uint, crcClient crc.
 	_, err := io.Copy(server.streamer, server.buf)
 	if err != nil && err != od.ErrPartial {
 		server.state = stateAbort
-		return ConvertOdToSdoAbort(err.(od.ODR))
+		odr, ok := err.(od.ODR)
+		if !ok {
+			server.logger.Warn("unexpected error in server on io.Copy", "error", err)
+			odr = od.ErrGeneral
+		}
+
+		return ConvertOdToSdoAbort(odr)
 	}
 
 	if server.finished && err == od.ErrPartial {
@@ -242,7 +248,12 @@ func (server *SDOServer) readObjectDictionary(countMinimum uint32, size int, cal
 	countRd, err := server.streamer.Read(server.intermediateBuf)
 	if err != nil && err != od.ErrPartial {
 		server.state = stateAbort
-		return ConvertOdToSdoAbort(err.(od.ODR))
+		odr, ok := err.(od.ODR)
+		if !ok {
+			server.logger.Warn("unexpected error in server when reading", "error", err)
+			odr = od.ErrGeneral
+		}
+		return ConvertOdToSdoAbort(odr)
 	}
 
 	// Stop sending at null termination if string
@@ -293,7 +304,12 @@ func (server *SDOServer) updateStreamer(response SDOMessage) error {
 	server.subindex = response.GetSubindex()
 	server.streamer, err = server.od.Streamer(server.index, server.subindex, false)
 	if err != nil {
-		return ConvertOdToSdoAbort(err.(od.ODR))
+		odr, ok := err.(od.ODR)
+		if !ok {
+			server.logger.Warn("unexpected error in server creating streamer", "error", err)
+			odr = od.ErrGeneral
+		}
+		return ConvertOdToSdoAbort(odr)
 	}
 	if !server.streamer.HasAttribute(od.AttributeSdoRw) {
 		return AbortUnsupportedAccess

@@ -196,19 +196,16 @@ func (s *SDOServer) txDownloadBlockSubBlock() error {
 
 	// Determine the next block size depending on the free buffer space
 	// If not enough space, try to empty buffer once by writting to OD
-	count := s.buf.Available()
-	if count > BlockMaxSize {
-		count = BlockMaxSize
-	} else if s.buf.Len() > 0 {
+	if s.buf.Len() > 0 {
 		// We have something in the buffer
 		err := s.writeObjectDictionary(1, 0)
 		if err != nil {
 			return err
 		}
-		count := s.buf.Available()
-		if count > BlockMaxSize {
-			count = BlockMaxSize
-		}
+	}
+	count := s.buf.Available()
+	if count > BlockMaxSize {
+		count = BlockMaxSize
 	}
 
 	// Update parameters for next block
