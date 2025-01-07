@@ -158,6 +158,16 @@ def test_sdo_block_download(node: canopen.RemoteNode):
             f.write(LINE)
 
 
+def test_sdo_block_download_big_block(node: canopen.RemoteNode):
+    NB_LINES = 100000
+    LINE = b"123456"
+    with node.sdo["DOMAIN value"].open(
+        mode="wb", block_transfer=True, request_crc_support=True, size=NB_LINES * len(LINE)
+    ) as f:
+        for _ in range(NB_LINES):
+            f.write(LINE)
+
+
 def test_sdo_block_upload_bye(node: canopen.RemoteNode):
     with node.sdo["DOMAIN value"].open(
         mode="rb",
