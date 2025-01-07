@@ -65,7 +65,7 @@ func TestSDOReadBlock(t *testing.T) {
 
 }
 
-func TestSDOWriteBlock(t *testing.T) {
+func TestClientBlock(t *testing.T) {
 	network := CreateNetworkTest()
 	network2 := CreateNetworkEmptyTest()
 	defer network.Disconnect()
@@ -96,22 +96,19 @@ func TestSDOWriteBlock(t *testing.T) {
 		assert.Nil(t, err)
 		assert.EqualValues(t, 10_000, n)
 	})
-
-}
-
-func TestSDOReadWriteBlock(t *testing.T) {
-	network := CreateNetworkTest()
-	defer network.Disconnect()
-	data := []byte("some random string some random string some random string some random string some random string some random string some random string")
-	node, err := network.Local(NodeIdTest)
-	assert.Nil(t, err)
-	file, err := os.CreateTemp("", "filename")
-	assert.Nil(t, err)
-	node.GetOD().AddFile(0x3333, "File entry", file.Name(), os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
-	assert.Nil(t, err)
-	err = network.WriteRaw(NodeIdTest, 0x3333, 0, data, false)
-	assert.Nil(t, err)
-	data2, err := network.ReadAll(NodeIdTest, 0x3333, 0)
-	assert.Nil(t, err)
-	assert.Equal(t, data, data2)
+	t.Run("write file and read back", func(t *testing.T) {
+		file, err := os.CreateTemp("", "filename")
+		assert.Nil(t, err)
+		node.GetOD().AddFile(0x3333, "File entry", file.Name(), os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
+		assert.Nil(t, err)
+		data := []byte(`some random string some random string some random
+		string some random string some random 
+		string some random string some random string`)
+		n, err := w.Write(data)
+		assert.Nil(t, err)
+		assert.EqualValues(t, len(data), n)
+		data2, err := network.ReadAll(NodeIdTest, 0x3333, 0)
+		assert.Nil(t, err)
+		assert.Equal(t, data, data2)
+	})
 }
