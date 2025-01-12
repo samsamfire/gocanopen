@@ -54,6 +54,7 @@ func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
 	}
 
 	od := NewOD()
+	od.rawOd = bu.Bytes()
 
 	var section string
 	entry := &Entry{}

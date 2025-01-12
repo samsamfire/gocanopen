@@ -23,7 +23,7 @@ var matchSubidxRegExp = regexp.MustCompile(`^([0-9A-Fa-f]{4})sub([0-9A-Fa-f]+)$`
 
 // Return embeded default object dictionary
 func Default() *ObjectDictionary {
-	defaultOd, err := Parse(rawDefaultOd, 0)
+	defaultOd, err := ParseV2(rawDefaultOd, 0)
 	if err != nil {
 		panic(err)
 	}
@@ -48,9 +48,7 @@ func Parse(file any, nodeId uint8) (*ObjectDictionary, error) {
 	// Write data from edsFile to the buffer
 	// Don't care if fails
 	_, _ = edsFile.WriteTo(&buf)
-	reader := bytes.NewReader(buf.Bytes())
-	od.Reader = reader
-	od.iniFile = edsFile
+	od.rawOd = buf.Bytes()
 
 	// Get all the sections in the file
 	sections := edsFile.Sections()
