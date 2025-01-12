@@ -42,8 +42,9 @@ type Network struct {
 	*sdo.SDOClient
 	controllers map[uint8]*n.NodeProcessor
 	// Network has an its own SDOClient
-	odMap  map[uint8]*ObjectDictionaryInformation
-	logger *slog.Logger
+	odMap    map[uint8]*ObjectDictionaryInformation
+	odParser od.Parser
+	logger   *slog.Logger
 }
 
 type ObjectDictionaryInformation struct {
@@ -71,6 +72,7 @@ func NewNetwork(bus canopen.Bus) Network {
 		controllers: map[uint8]*n.NodeProcessor{},
 		BusManager:  canopen.NewBusManager(bus),
 		odMap:       map[uint8]*ObjectDictionaryInformation{},
+		odParser:    od.Parse,
 		logger:      slog.Default(),
 	}
 }
@@ -210,7 +212,7 @@ func (network *Network) CreateLocalNode(nodeId uint8, odict any) (*n.LocalNode, 
 
 	switch odType := odict.(type) {
 	case string:
-		odNode, err = od.Parse(odType, nodeId)
+		odNode, err = network.odParser(odType, nodeId)
 		if err != nil {
 			return nil, err
 		}
@@ -268,7 +270,7 @@ func (network *Network) AddRemoteNode(nodeId uint8, odict any) (*n.RemoteNode, e
 
 	switch odType := odict.(type) {
 	case string:
-		odNode, err = od.Parse(odType, nodeId)
+		odNode, err = network.odParser(odType, nodeId)
 		if err != nil {
 			return nil, err
 		}
@@ -418,4 +420,8 @@ func (network *Network) Scan(timeoutMs uint32) (map[uint8]NodeInformation, error
 
 func (network *Network) SetLogger(logger *slog.Logger) {
 	network.logger = logger
+}
+
+func (network *Network) SetParser(parser od.Parser) {
+	network.odParser = parser
 }
