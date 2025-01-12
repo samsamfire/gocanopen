@@ -6,8 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"sync"
-
-	"gopkg.in/ini.v1"
 )
 
 var _logger = slog.Default()
@@ -17,7 +15,6 @@ var _logger = slog.Default()
 type ObjectDictionary struct {
 	logger              *slog.Logger
 	rawOd               []byte
-	iniFile             *ini.File
 	entriesByIndexValue map[uint16]*Entry
 	entriesByIndexName  map[string]*Entry
 }

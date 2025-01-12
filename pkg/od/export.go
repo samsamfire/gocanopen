@@ -2,6 +2,7 @@ package od
 
 import (
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 
@@ -15,7 +16,16 @@ import (
 // work for this library.
 func ExportEDS(odict *ObjectDictionary, defaultValues bool, filename string) error {
 	if defaultValues {
-		return odict.iniFile.SaveTo(filename)
+		r := odict.NewReaderSeeker()
+		buffer, err := io.ReadAll(r)
+		if err != nil {
+			return fmt.Errorf("failed to read OD raw data %v", err)
+		}
+		i, err := ini.Load(buffer)
+		if err != nil {
+			return fmt.Errorf("failed to load .INI %v", err)
+		}
+		return i.SaveTo(filename)
 	}
 	eds := ini.Empty()
 
