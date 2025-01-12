@@ -286,6 +286,10 @@ func NewRecord() *VariableList {
 	return &VariableList{objectType: ObjectTypeRECORD, Variables: make([]*Variable, 0)}
 }
 
+func NewRecordWithLength(length uint8) *VariableList {
+	return &VariableList{objectType: ObjectTypeRECORD, Variables: make([]*Variable, length)}
+}
+
 func NewArray(length uint8) *VariableList {
 	return &VariableList{objectType: ObjectTypeARRAY, Variables: make([]*Variable, length)}
 }
