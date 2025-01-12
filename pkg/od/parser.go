@@ -17,10 +17,6 @@ import (
 var f embed.FS
 var rawDefaultOd []byte
 
-// Get index & subindex matching
-var matchIdxRegExp = regexp.MustCompile(`^[0-9A-Fa-f]{4}$`)
-var matchSubidxRegExp = regexp.MustCompile(`^([0-9A-Fa-f]{4})sub([0-9A-Fa-f]+)$`)
-
 // Return embeded default object dictionary
 func Default() *ObjectDictionary {
 	defaultOd, err := ParseV2(rawDefaultOd, 0)

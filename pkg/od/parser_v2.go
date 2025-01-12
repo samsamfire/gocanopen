@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 )
@@ -55,8 +54,6 @@ func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
 
 	od := NewOD()
 	od.rawOd = bu.Bytes()
-
-	var section string
 	entry := &Entry{}
 	vList := &VariableList{}
 	isEntry := false
@@ -67,8 +64,6 @@ func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
 	var parameterName string
 	var objectType string
 	var pdoMapping string
-	var lowLimit string
-	var highLimit string
 	var subNumber string
 	var accessType string
 	var dataType string
@@ -101,45 +96,41 @@ func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
 
 			// New section, this means we have finished building
 			// Previous one, so take all the values and update the section
-			if parameterName != "" && isEntry {
-				entry.Name = parameterName
-				od.entriesByIndexName[parameterName] = entry
-				vList, err = populateEntry(
-					entry,
-					nodeId,
-					parameterName,
-					defaultValue,
-					objectType,
-					pdoMapping,
-					lowLimit,
-					highLimit,
-					accessType,
-					dataType,
-					subNumber,
-				)
+			if parameterName != "" {
+				if isEntry {
+					entry.Name = parameterName
+					od.entriesByIndexName[parameterName] = entry
+					vList, err = populateEntry(
+						entry,
+						nodeId,
+						parameterName,
+						defaultValue,
+						objectType,
+						pdoMapping,
+						accessType,
+						dataType,
+						subNumber,
+					)
 
-				if err != nil {
-					return nil, fmt.Errorf("failed to create new entry %v", err)
-				}
+					if err != nil {
+						return nil, fmt.Errorf("failed to create new entry %v", err)
+					}
+				} else if isSubEntry {
+					err = populateSubEntry(
+						entry,
+						vList,
+						nodeId,
+						parameterName,
+						defaultValue,
+						pdoMapping,
+						accessType,
+						dataType,
+						subindex,
+					)
 
-			} else if parameterName != "" && isSubEntry {
-				err = populateSubEntry(
-					entry,
-					vList,
-					nodeId,
-					parameterName,
-					defaultValue,
-					objectType,
-					pdoMapping,
-					lowLimit,
-					highLimit,
-					accessType,
-					dataType,
-					subindex,
-				)
-
-				if err != nil {
-					return nil, fmt.Errorf("failed to create sub entry %v", err)
+					if err != nil {
+						return nil, fmt.Errorf("failed to create sub entry %v", err)
+					}
 				}
 			}
 
@@ -149,12 +140,9 @@ func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
 
 			// Check if a sub entry or the actual entry
 			// A subentry should be more than 4 bytes long
-			subSection := sectionBytes[4:]
-			if len(subSection) < 4 && matchIdxRegExp.Match(sectionBytes) {
-				section = string(sectionBytes)
+			if isValidHex4(sectionBytes) {
 
-				// Add a new entry inside object dictionary
-				idx, err := strconv.ParseUint(section, 16, 16)
+				idx, err := hexAsciiToUint(sectionBytes)
 				if err != nil {
 					return nil, err
 				}
@@ -165,15 +153,14 @@ func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
 				entry.logger = od.logger
 				od.entriesByIndexValue[uint16(idx)] = entry
 
-			} else if matchSubidxRegExp.Match(sectionBytes) {
-				section = string(sectionBytes)
-				// TODO we could get entry to double check if ever something is out of order
-				isSubEntry = true
-				// Subindex part is from the 7th letter onwards
-				sidx, err := strconv.ParseUint(section[7:], 16, 8)
+			} else if isValidSubIndexFormat(sectionBytes) {
+
+				sidx, err := hexAsciiToUint(sectionBytes[7:])
 				if err != nil {
 					return nil, err
 				}
+				// TODO we could get entry to double check if ever something is out of order
+				isSubEntry = true
 				subindex = uint8(sidx)
 			}
 
@@ -182,8 +169,6 @@ func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
 			parameterName = ""
 			objectType = ""
 			pdoMapping = ""
-			lowLimit = ""
-			highLimit = ""
 			subNumber = ""
 			accessType = ""
 			dataType = ""
@@ -203,27 +188,64 @@ func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
 			// We will get the different elements of the entry
 			switch key {
 			case "ParameterName":
-				parameterName = value
+				parameterName = string(value)
 			case "ObjectType":
-				objectType = value
+				objectType = string(value)
 			case "SubNumber":
-				subNumber = value
+				subNumber = string(value)
 			case "AccessType":
-				accessType = value
+				accessType = string(value)
 			case "DataType":
-				dataType = value
-			case "LowLimit":
-				lowLimit = value
-			case "HighLimit":
-				highLimit = value
+				dataType = string(value)
 			case "DefaultValue":
-				defaultValue = value
+				defaultValue = string(value)
 			case "PDOMapping":
-				pdoMapping = value
-
+				pdoMapping = string(value)
 			}
 		}
 	}
+
+	// Last index or subindex part
+	// New section, this means we have finished building
+	// Previous one, so take all the values and update the section
+	if parameterName != "" {
+		if isEntry {
+			entry.Name = parameterName
+			od.entriesByIndexName[parameterName] = entry
+			_, err = populateEntry(
+				entry,
+				nodeId,
+				parameterName,
+				defaultValue,
+				objectType,
+				pdoMapping,
+				accessType,
+				dataType,
+				subNumber,
+			)
+
+			if err != nil {
+				return nil, fmt.Errorf("failed to create new entry %v", err)
+			}
+		} else if isSubEntry {
+			err = populateSubEntry(
+				entry,
+				vList,
+				nodeId,
+				parameterName,
+				defaultValue,
+				pdoMapping,
+				accessType,
+				dataType,
+				subindex,
+			)
+
+			if err != nil {
+				return nil, fmt.Errorf("failed to create sub entry %v", err)
+			}
+		}
+	}
+
 	return od, nil
 }
 
@@ -234,8 +256,6 @@ func populateEntry(
 	defaultValue string,
 	objectType string,
 	pdoMapping string,
-	lowLimit string,
-	highLimit string,
 	accessType string,
 	dataType string,
 	subNumber string,
@@ -277,9 +297,8 @@ func populateEntry(
 		variable.Attribute = attribute
 		variable.SubIndex = 0
 
-		if strings.Contains(defaultValue, "$NODEID") {
-			re := regexp.MustCompile(`\+?\$NODEID\+?`)
-			defaultValue = re.ReplaceAllString(defaultValue, "")
+		if strings.Index(defaultValue, "$NODEID") != -1 {
+			defaultValue = fastRemoveNodeID(defaultValue)
 		} else {
 			nodeId = 0
 		}
@@ -321,14 +340,12 @@ func populateSubEntry(
 	nodeId uint8,
 	parameterName string,
 	defaultValue string,
-	objectType string,
 	pdoMapping string,
-	lowLimit string,
-	highLimit string,
 	accessType string,
 	dataType string,
 	subIndex uint8,
 ) error {
+
 	if dataType == "" {
 		return fmt.Errorf("need data type")
 	}
@@ -347,9 +364,8 @@ func populateSubEntry(
 		Attribute: attribute,
 		SubIndex:  subIndex,
 	}
-	if strings.Contains(defaultValue, "$NODEID") {
-		re := regexp.MustCompile(`\+?\$NODEID\+?`)
-		defaultValue = re.ReplaceAllString(defaultValue, "")
+	if strings.Index(defaultValue, "$NODEID") != -1 {
+		defaultValue = fastRemoveNodeID(defaultValue)
 	} else {
 		nodeId = 0
 	}
@@ -386,4 +402,88 @@ func trimSpaces(b []byte) []byte {
 		end--
 	}
 	return b[start:end]
+}
+
+func hexAsciiToUint(bytes []byte) (uint64, error) {
+	var num uint64
+
+	for _, b := range bytes {
+		var digit uint64
+
+		switch {
+		case b >= '0' && b <= '9':
+			digit = uint64(b - '0') // Convert '0'-'9' to 0-9
+		case b >= 'A' && b <= 'F':
+			digit = uint64(b - 'A' + 10) // Convert 'A'-'F' to 10-15
+		case b >= 'a' && b <= 'f':
+			digit = uint64(b - 'a' + 10) // Convert 'a'-'f' to 10-15
+		default:
+			return 0, fmt.Errorf("invalid hex character: %c", b)
+		}
+
+		num = (num << 4) | digit // Left shift by 4 (multiply by 16) and add new digit
+	}
+
+	return num, nil
+}
+
+// Check if exactly 4 hex digits (no regex)
+func isValidHex4(b []byte) bool {
+	if len(b) != 4 {
+		return false
+	}
+	for _, c := range b {
+		if !((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f')) {
+			return false
+		}
+	}
+	return true
+}
+
+// Check if format is "XXXXsubYY" (without regex)
+func isValidSubIndexFormat(b []byte) bool {
+
+	// Must be at least "XXXXsubY" (4+3+1 chars)
+	if len(b) < 8 {
+		return false
+	}
+	// Check first 4 chars are hex
+	if !isValidHex4(b[:4]) {
+		return false
+	}
+	// Check "sub" part (fixed position)
+	if string(b[4:7]) != "sub" {
+		return false
+	}
+	// Check remaining are hex
+	for _, c := range b[7:] {
+		if !((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f')) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func fastRemoveNodeID(s string) string {
+	b := make([]byte, 0, len(s)) // Preallocate same capacity as input string
+
+	i := 0
+	for i < len(s) {
+		if s[i] == '$' && len(s) > i+6 && s[i:i+7] == "$NODEID" {
+			i += 7 // Skip "$NODEID"
+			// Skip optional '+' after "$NODEID"
+			if i < len(s) && s[i] == '+' {
+				i++
+			}
+			// Skip optional '+' before "$NODEID"
+			if len(b) > 0 && b[len(b)-1] == '+' {
+				b = b[:len(b)-1]
+			}
+			continue
+		}
+		b = append(b, s[i])
+		i++
+	}
+	return string(b)
 }
