@@ -11,6 +11,8 @@ import (
 	"gopkg.in/ini.v1"
 )
 
+type Parser func(file any, nodeId uint8) (*ObjectDictionary, error)
+
 // Parse an EDS file
 // file can be either a path or an *os.File or []byte
 // Other file types could be supported in the future
