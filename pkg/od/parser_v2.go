@@ -1,6 +1,7 @@
 package od
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -33,23 +34,30 @@ import (
 //   - file i/o ==> not much to do here
 func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
 
-	filename := file.(string)
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
+	var err error
 	bu := &bytes.Buffer{}
-	io.Copy(bu, f)
-	buffer := bu.Bytes()
+
+	switch fType := file.(type) {
+	case string:
+		f, err := os.Open(fType)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		bu = &bytes.Buffer{}
+		io.Copy(bu, f)
+
+	case []byte:
+		bu = bytes.NewBuffer(fType)
+	default:
+		return nil, fmt.Errorf("unsupported type")
+	}
 
 	od := NewOD()
 
 	var section string
 	entry := &Entry{}
 	vList := &VariableList{}
-	start := 0
 	isEntry := false
 	isSubEntry := false
 	subindex := uint8(0)
@@ -64,16 +72,12 @@ func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
 	var accessType string
 	var dataType string
 
-	// Scan hole EDS file
-	for i, b := range buffer {
+	scanner := bufio.NewScanner(bu)
 
-		if b != '\n' {
-			continue
-		}
+	for scanner.Scan() {
 
 		// New line detected
-		lineRaw := buffer[start:i]
-		start = i + 1
+		lineRaw := scanner.Bytes()
 
 		// Skip if less than 2 chars
 		if len(lineRaw) < 2 {
@@ -88,8 +92,7 @@ func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
 		}
 
 		// Handle section headers: [section]
-		if line[0] == '[' && line[len(line)-2] == ']' {
-
+		if line[0] == '[' && line[len(line)-1] == ']' {
 			// A section should be of length 4 at least
 			if len(line) < 4 {
 				continue
@@ -141,7 +144,7 @@ func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
 
 			isEntry = false
 			isSubEntry = false
-			sectionBytes := line[1 : len(line)-2]
+			sectionBytes := line[1 : len(line)-1]
 
 			// Check if a sub entry or the actual entry
 			// A subentry should be more than 4 bytes long
@@ -194,7 +197,7 @@ func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
 
 		if equalsIdx := bytes.IndexByte(line, '='); equalsIdx != -1 {
 			key := string(trimSpaces(line[:equalsIdx]))
-			value := string(trimSpacesAndr(line[equalsIdx+1:]))
+			value := string(trimSpaces(line[equalsIdx+1:]))
 
 			// We will get the different elements of the entry
 			switch key {
@@ -300,13 +303,9 @@ func populateEntry(
 		return vList, nil
 
 	case ObjectTypeRECORD:
-		sub, err := strconv.ParseUint(subNumber, 0, 8)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse subnumber %v", err)
-		}
 		// Record objects allow holes in mapping
 		// Sub-objects will be added with "append"
-		vList := NewRecordWithLength(uint8(sub))
+		vList := NewRecord()
 		entry.object = vList
 		return vList, nil
 
@@ -361,8 +360,11 @@ func populateSubEntry(
 	copy(variable.value, variable.valueDefault)
 
 	switch entry.ObjectType {
-	case ObjectTypeARRAY, ObjectTypeRECORD:
+	case ObjectTypeARRAY:
 		vlist.Variables[subIndex] = variable
+		entry.subEntriesNameMap[parameterName] = subIndex
+	case ObjectTypeRECORD:
+		vlist.Variables = append(vlist.Variables, variable)
 		entry.subEntriesNameMap[parameterName] = subIndex
 	default:
 		return fmt.Errorf("add member not supported for ObjectType : %v", entry.ObjectType)
@@ -380,20 +382,6 @@ func trimSpaces(b []byte) []byte {
 		start++
 	}
 	for end > start && (b[end-1] == ' ' || b[end-1] == '\t') {
-		end--
-	}
-	return b[start:end]
-}
-
-// Remove '\t' and ' ' characters at beginning
-// and remove also '\r' at end of line
-func trimSpacesAndr(b []byte) []byte {
-	start, end := 0, len(b)
-
-	for start < end && (b[start] == ' ' || b[start] == '\t') {
-		start++
-	}
-	for end > start && (b[end-1] == ' ' || b[end-1] == '\t' || b[end-1] == '\r') {
 		end--
 	}
 	return b[start:end]
