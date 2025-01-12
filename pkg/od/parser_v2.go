@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// v2 of OD parser, this implementation is ~10x faster
+// v2 of OD parser, this implementation is ~15x faster
 // than the previous one but has some caveats :
 //
 //   - it expects OD definitions to be "in order" i.e.
@@ -25,12 +25,13 @@ import (
 //     ...
 //     [1001]
 //
+// With the current OD architecture, only minor other
+// optimizations could be done.
 // The remaining bottlenecks are the following :
 //
-//   - regexp are pretty slow, not sure if would could do much better
 //   - bytes to string conversions for values create a lot of unnecessary allocation.
 //     As values are mostly stored in bytes anyway, we could remove this step.
-//   - file i/o ==> not much to do here
+//   - bufio.Scanner() ==> more performant implementation ?
 func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
 
 	var err error
@@ -465,6 +466,7 @@ func isValidSubIndexFormat(b []byte) bool {
 	return true
 }
 
+// Remove "$NODEID" from given string
 func fastRemoveNodeID(s string) string {
 	b := make([]byte, 0, len(s)) // Preallocate same capacity as input string
 

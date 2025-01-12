@@ -3,7 +3,6 @@ package od
 import (
 	"archive/zip"
 	"bytes"
-	"embed"
 	"fmt"
 	"io"
 	"regexp"
@@ -11,20 +10,6 @@ import (
 
 	"gopkg.in/ini.v1"
 )
-
-//go:embed base.eds
-
-var f embed.FS
-var rawDefaultOd []byte
-
-// Return embeded default object dictionary
-func Default() *ObjectDictionary {
-	defaultOd, err := ParseV2(rawDefaultOd, 0)
-	if err != nil {
-		panic(err)
-	}
-	return defaultOd
-}
 
 // Parse an EDS file
 // file can be either a path or an *os.File or []byte
