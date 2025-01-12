@@ -2,10 +2,12 @@ package od
 
 import (
 	"archive/zip"
+	"bufio"
 	"bytes"
 	"embed"
 	"fmt"
 	"io"
+	"os"
 	"regexp"
 	"strconv"
 
@@ -17,6 +19,10 @@ import (
 var f embed.FS
 var rawDefaultOd []byte
 
+// Get index & subindex matching
+var matchIdxRegExp = regexp.MustCompile(`^[0-9A-Fa-f]{4}$`)
+var matchSubidxRegExp = regexp.MustCompile(`^([0-9A-Fa-f]{4})sub([0-9A-Fa-f]+)$`)
+
 // Return embeded default object dictionary
 func Default() *ObjectDictionary {
 	defaultOd, err := Parse(rawDefaultOd, 0)
@@ -24,6 +30,191 @@ func Default() *ObjectDictionary {
 		panic(err)
 	}
 	return defaultOd
+}
+
+// trimSpaces trims spaces efficiently without new allocations
+func trimSpaces(b []byte) []byte {
+	start, end := 0, len(b)
+
+	// Trim left space
+	for start < end && (b[start] == ' ' || b[start] == '\t') {
+		start++
+	}
+	// Trim right space
+	for end > start && (b[end-1] == ' ' || b[end-1] == '\t') {
+		end--
+	}
+	return b[start:end]
+}
+
+// Parse an EDS file
+// file can be either a path or an *os.File or []byte
+// Other file types could be supported in the future
+func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
+
+	filename := file.(string)
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	var section string
+
+	od := NewOD()
+
+	entry := &Entry{}
+	vList := &VariableList{}
+	var subindex uint8
+
+	isEntry := false
+	isSubEntry := false
+
+	var defaultValue string
+	var parameterName string
+	var objectType string
+	var pdoMapping string
+	var lowLimit string
+	var highLimit string
+	var subNumber string
+	var accessType string
+	var dataType string
+
+	//  Scan all .ini lines
+	for scanner.Scan() {
+
+		line := trimSpaces(scanner.Bytes()) // Read as []byte to reduce allocations
+
+		// Skip empty lines and comments
+		if len(line) == 0 || line[0] == ';' || line[0] == '#' {
+			continue
+		}
+
+		// Handle section headers: [section]
+		if line[0] == '[' && line[len(line)-1] == ']' {
+
+			// New section, this means we have finished building
+			// Previous one, so take all the values and update the section
+			if parameterName != "" && isEntry {
+				entry.Name = parameterName
+				vList, err = PopulateEntry(
+					entry,
+					nodeId,
+					parameterName,
+					defaultValue,
+					objectType,
+					pdoMapping,
+					lowLimit,
+					highLimit,
+					accessType,
+					dataType,
+					subNumber,
+				)
+				if err != nil {
+					return nil, fmt.Errorf("failed to create new entry %v", err)
+				}
+			} else if parameterName != "" && isSubEntry {
+				err = PopulateSubEntry(
+					entry,
+					vList,
+					nodeId,
+					parameterName,
+					defaultValue,
+					objectType,
+					pdoMapping,
+					lowLimit,
+					highLimit,
+					accessType,
+					dataType,
+					subindex,
+				)
+				if err != nil {
+					return nil, fmt.Errorf("failed to create sub entry %v", err)
+				}
+			}
+
+			// Match indexes and not sub indexes
+			section = string(line[1 : len(line)-1])
+
+			isEntry = false
+			isSubEntry = false
+
+			if matchIdxRegExp.MatchString(section) {
+
+				// Add a new entry inside object dictionary
+				idx, err := strconv.ParseUint(section, 16, 16)
+				if err != nil {
+					return nil, err
+				}
+				isEntry = true
+				entry = &Entry{}
+				entry.Index = uint16(idx)
+				entry.subEntriesNameMap = map[string]uint8{}
+				entry.logger = od.logger.With("index", idx)
+				od.entriesByIndexValue[uint16(idx)] = entry
+
+			} else if matchSubidxRegExp.MatchString(section) {
+				// Do we need to do smthg ?
+				// TODO we could get entry to double check if ever something is out of order
+				isSubEntry = true
+				// Subindex part is from the 7th letter onwards
+				sidx, err := strconv.ParseUint(section[7:], 16, 8)
+				if err != nil {
+					return nil, err
+				}
+				subindex = uint8(sidx)
+			}
+
+			// Reset all values
+			defaultValue = ""
+			parameterName = ""
+			objectType = ""
+			pdoMapping = ""
+			lowLimit = ""
+			highLimit = ""
+			subNumber = ""
+			accessType = ""
+			dataType = ""
+
+			continue
+		}
+
+		// We are in a section so we need to populate the given entry
+		// Parse key-value pairs: key = value
+		// We will create variables for storing intermediate values
+		// Once we are at the end of the section
+
+		if equalsIdx := bytes.IndexByte(line, '='); equalsIdx != -1 {
+			key := string(trimSpaces(line[:equalsIdx]))
+			value := string(trimSpaces(line[equalsIdx+1:]))
+
+			// We will get the different elements of the entry
+			switch key {
+			case "ParameterName":
+				parameterName = value
+			case "ObjectType":
+				objectType = value
+			case "SubNumber":
+				subNumber = value
+			case "AccessType":
+				accessType = value
+			case "DataType":
+				dataType = value
+			case "LowLimit":
+				lowLimit = value
+			case "HighLimit":
+				highLimit = value
+			case "DefaultValue":
+				defaultValue = value
+			case "PDOMapping":
+				pdoMapping = value
+
+			}
+		}
+	}
+
+	return od, nil
 }
 
 // Parse an EDS file

@@ -21,6 +21,199 @@ func (variable *Variable) DefaultValue() []byte {
 	return variable.valueDefault
 }
 
+// func PopulateVariable(
+// 	variable *Variable,
+// 	nodeId uint8,
+// 	parameterName string,
+// 	defaultValue string,
+// 	objectType string,
+// 	pdoMapping string,
+// 	lowLimit string,
+// 	highLimit string,
+// 	accessType string,
+// 	dataType string,
+// 	subNumber string,
+// ) error {
+
+// 	if dataType == "" {
+// 		return fmt.Errorf("need data type")
+// 	}
+// 	dataTypeUint, err := strconv.ParseUint(dataType, 0, 8)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to parse object type %v", err)
+// 	}
+
+// 	// Get Attribute
+// 	dType := uint8(dataTypeUint)
+// 	attribute := EncodeAttribute(accessType, pdoMapping == "1", dType)
+
+// 	variable.Name = parameterName
+// 	variable.DataType = dType
+// 	variable.Attribute = attribute
+// 	variable.SubIndex = 0
+
+// 	if strings.Contains(defaultValue, "$NODEID") {
+// 		re := regexp.MustCompile(`\+?\$NODEID\+?`)
+// 		defaultValue = re.ReplaceAllString(defaultValue, "")
+// 	} else {
+// 		nodeId = 0
+// 	}
+// 	variable.valueDefault, err = EncodeFromString(defaultValue, variable.DataType, nodeId)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to parse 'DefaultValue' for x%x|x%x, because %v (datatype :x%x)", "", 0, err, variable.DataType)
+// 	}
+// 	variable.value = make([]byte, len(variable.valueDefault))
+// 	copy(variable.value, variable.valueDefault)
+// 	return nil
+// }
+
+func PopulateEntry(
+	entry *Entry,
+	nodeId uint8,
+	parameterName string,
+	defaultValue string,
+	objectType string,
+	pdoMapping string,
+	lowLimit string,
+	highLimit string,
+	accessType string,
+	dataType string,
+	subNumber string,
+) (*VariableList, error) {
+
+	oType := uint8(0)
+	// Determine object type
+	// If no object type, default to 7 (CiA spec)
+	if objectType == "" {
+		oType = 7
+	} else {
+		oTypeUint, err := strconv.ParseUint(objectType, 0, 8)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse object type %v", err)
+		}
+		oType = uint8(oTypeUint)
+	}
+	entry.ObjectType = oType
+
+	// Add necessary stuff depending on oType
+	switch oType {
+
+	case ObjectTypeVAR, ObjectTypeDOMAIN:
+		variable := &Variable{}
+		if dataType == "" {
+			return nil, fmt.Errorf("need data type")
+		}
+		dataTypeUint, err := strconv.ParseUint(dataType, 0, 8)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse object type %v", err)
+		}
+
+		// Get Attribute
+		dType := uint8(dataTypeUint)
+		attribute := EncodeAttribute(accessType, pdoMapping == "1", dType)
+
+		variable.Name = parameterName
+		variable.DataType = dType
+		variable.Attribute = attribute
+		variable.SubIndex = 0
+
+		if strings.Contains(defaultValue, "$NODEID") {
+			re := regexp.MustCompile(`\+?\$NODEID\+?`)
+			defaultValue = re.ReplaceAllString(defaultValue, "")
+		} else {
+			nodeId = 0
+		}
+		variable.valueDefault, err = EncodeFromString(defaultValue, variable.DataType, nodeId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse 'DefaultValue' for x%x|x%x, because %v (datatype :x%x)", "", 0, err, variable.DataType)
+		}
+		variable.value = make([]byte, len(variable.valueDefault))
+		copy(variable.value, variable.valueDefault)
+		entry.object = variable
+		return nil, nil
+
+	case ObjectTypeARRAY:
+		// Array objects do not allow holes in subindex numbers
+		// So pre-init slice up to subnumber
+		sub, err := strconv.ParseUint(subNumber, 0, 8)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse subnumber %v", err)
+		}
+		vList := NewArray(uint8(sub))
+		entry.object = vList
+		return vList, nil
+
+	case ObjectTypeRECORD:
+		// Record objects allow holes in mapping
+		// Sub-objects will be added with "append"
+		vList := NewRecord()
+		entry.object = vList
+		return vList, nil
+
+	default:
+		return nil, fmt.Errorf("unknown object type %v", oType)
+	}
+}
+
+func PopulateSubEntry(
+	entry *Entry,
+	vlist *VariableList,
+	nodeId uint8,
+	parameterName string,
+	defaultValue string,
+	objectType string,
+	pdoMapping string,
+	lowLimit string,
+	highLimit string,
+	accessType string,
+	dataType string,
+	subIndex uint8,
+) error {
+	if dataType == "" {
+		return fmt.Errorf("need data type")
+	}
+	dataTypeUint, err := strconv.ParseUint(dataType, 0, 8)
+	if err != nil {
+		return fmt.Errorf("failed to parse object type %v", err)
+	}
+
+	// Get Attribute
+	dType := uint8(dataTypeUint)
+	attribute := EncodeAttribute(accessType, pdoMapping == "1", dType)
+
+	variable := &Variable{
+		Name:      parameterName,
+		DataType:  byte(dataTypeUint),
+		Attribute: attribute,
+		SubIndex:  0,
+	}
+	if strings.Contains(defaultValue, "$NODEID") {
+		re := regexp.MustCompile(`\+?\$NODEID\+?`)
+		defaultValue = re.ReplaceAllString(defaultValue, "")
+	} else {
+		nodeId = 0
+	}
+	variable.valueDefault, err = EncodeFromString(defaultValue, variable.DataType, nodeId)
+	if err != nil {
+		return fmt.Errorf("failed to parse 'DefaultValue' %v %v %v", err, defaultValue, variable.DataType)
+	}
+	variable.value = make([]byte, len(variable.valueDefault))
+	copy(variable.value, variable.valueDefault)
+
+	switch entry.ObjectType {
+	case ObjectTypeARRAY:
+		vlist.Variables[subIndex] = variable
+		entry.subEntriesNameMap[parameterName] = subIndex
+	case ObjectTypeRECORD:
+		vlist.Variables = append(vlist.Variables, variable)
+		entry.subEntriesNameMap[parameterName] = subIndex
+	default:
+		return fmt.Errorf("add member not supported for ObjectType : %v", entry.ObjectType)
+	}
+
+	return nil
+}
+
 // Create variable from section entry
 func NewVariableFromSection(
 	section *ini.Section,
