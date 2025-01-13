@@ -72,4 +72,46 @@ A node can be created with the following commands:
 node,err := network.CreateLocalNode(0x10,od.Default())
 ```
 
+# Custom OD parsing
+
+The network can be configured to use a different OD parser
+when creating local nodes.
+
+```golang
+// Change default OD parser
+network.SetParsev2(od.ParserV2)
+```
+
+# Custom node processing
+
+Nodes can also be added to network and controlled locally
+with a **NodeProcessor**. e.g.
+
+
+```golang
+
+// Create a local node
+node, err := network.NewLocalNode(
+		network.BusManager,
+		slog.Default(),
+		odNode, // OD object ==> Should be created
+		nil, // Use definition from OD
+		nil, // Use definition from OD
+		nodeId,
+		nmt.StartupToOperational,
+		500,
+		sdo.DefaultClientTimeout,
+		sdo.DefaultServerTimeout,
+		true,
+		nil,
+	)
+
+
+// Add a custom node to network and control it independently
+proc,err := network.AddNode(node)
+
+// Start node processing
+err = proc.Start(context.Background())
+```
+
 More information on local nodes [here](local.md)
