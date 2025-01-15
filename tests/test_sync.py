@@ -84,9 +84,7 @@ def test_synchronous_overflow(node_sync: canopen.RemoteNode):
     node_sync.sdo["Communication cycle period"].raw = 0
     SYNCHRONOUS_OVERFLOW = 100
     node_sync.sdo["Synchronous counter overflow value"].raw = SYNCHRONOUS_OVERFLOW
-    assert (
-        node_sync.sdo["Synchronous counter overflow value"].raw == SYNCHRONOUS_OVERFLOW
-    )
+    assert node_sync.sdo["Synchronous counter overflow value"].raw == SYNCHRONOUS_OVERFLOW
 
     for WRONG_VALUE in [1, 245]:
         with pytest.raises(canopen.SdoAbortedError, match="parameter exceeded"):
@@ -128,7 +126,6 @@ def test_sync_tpdo_start_value(node_sync: canopen.RemoteNode):
 
 
 def test_sync_tpdo(node_sync: canopen.RemoteNode):
-
     counter = 0
 
     def sync_receiver(*args):
