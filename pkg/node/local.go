@@ -335,10 +335,10 @@ func NewLocalNode(
 		switch format {
 		case od.FormatEDSAscii:
 			node.logger.Info("EDS is downloadable via object 0x1021 in ASCII format")
-			odict.AddReader(edsStore.Index, edsStore.Name, odict.Reader)
+			odict.AddReader(edsStore.Index, edsStore.Name, odict.NewReaderSeeker())
 		case od.FormatEDSZipped:
 			node.logger.Info("EDS is downloadable via object 0x1021 in Zipped format")
-			compressed, err := createInMemoryZip("compressed.eds", odict.Reader)
+			compressed, err := createInMemoryZip("compressed.eds", odict.NewReaderSeeker())
 			if err != nil {
 				node.logger.Error("failed to compress EDS", "error", err)
 				return nil, err
@@ -356,6 +356,10 @@ func NewLocalNode(
 // This can be used to increase transfer speeds in block transfers
 // for example.
 func createInMemoryZip(filename string, r io.ReadSeeker) ([]byte, error) {
+
+	if r == nil {
+		return nil, fmt.Errorf("expecting a reader %v", r)
+	}
 
 	buffer := new(bytes.Buffer)
 	zipWriter := zip.NewWriter(buffer)

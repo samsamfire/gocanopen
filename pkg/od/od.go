@@ -1,12 +1,10 @@
 package od
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log/slog"
-	"sync"
-
-	"gopkg.in/ini.v1"
 )
 
 var _logger = slog.Default()
@@ -14,11 +12,16 @@ var _logger = slog.Default()
 // ObjectDictionary is used for storing all entries of a CANopen node
 // according to CiA 301. This is the internal representation of an EDS file
 type ObjectDictionary struct {
-	Reader              io.ReadSeeker
 	logger              *slog.Logger
-	iniFile             *ini.File
+	rawOd               []byte
 	entriesByIndexValue map[uint16]*Entry
 	entriesByIndexName  map[string]*Entry
+}
+
+// Create a new reader object for reading
+// raw OD file.
+func (od *ObjectDictionary) NewReaderSeeker() io.ReadSeeker {
+	return bytes.NewReader(od.rawOd)
 }
 
 // Add an entry to OD, any existing entry will be replaced
@@ -173,119 +176,4 @@ func (od *ObjectDictionary) Streamer(index uint16, subindex uint8, origin bool) 
 // Entries returns map of indexes and entries
 func (od *ObjectDictionary) Entries() map[uint16]*Entry {
 	return od.entriesByIndexValue
-}
-
-// type FileInfo struct {
-// 	FileName         string
-// 	FileVersion      string
-// 	FileRevision     string
-// 	LastEDS          string
-// 	EDSVersion       string
-// 	Description      string
-// 	CreationTime     string
-// 	CreationDate     string
-// 	CreatedBy        string
-// 	ModificationTime string
-// 	ModificationDate string
-// 	ModifiedBy       string
-// }
-
-// Variable is the main data representation for a value stored inside of OD
-// It is used to store a "VAR" or "DOMAIN" object type as well as
-// any sub entry of a "RECORD" or "ARRAY" object type
-type Variable struct {
-	mu           sync.RWMutex
-	valueDefault []byte
-	value        []byte
-	// Name of this variable
-	Name string
-	// The CiA 301 data type of this variable
-	DataType byte
-	// Attribute contains the access type as well as the mapping
-	// information. e.g. AttributeSdoRw | AttributeRpdo
-	Attribute uint8
-	// StorageLocation has information on which medium is the data
-	// stored. Currently this is unused, everything is stored in RAM
-	StorageLocation string
-	// The minimum value for this variable
-	lowLimit []byte
-	// The maximum value for this variable
-	highLimit []byte
-	// The subindex for this variable if part of an ARRAY or RECORD
-	SubIndex uint8
-}
-
-// VariableList is the data representation for
-// storing a "RECORD" or "ARRAY" object type
-type VariableList struct {
-	objectType uint8 // either "RECORD" or "ARRAY"
-	Variables  []*Variable
-}
-
-// GetSubObject returns the [Variable] corresponding to
-// a given subindex if not found, it errors with
-// ODR_SUB_NOT_EXIST
-func (rec *VariableList) GetSubObject(subindex uint8) (*Variable, error) {
-	if rec.objectType == ObjectTypeARRAY {
-		subEntriesCount := len(rec.Variables)
-		if subindex >= uint8(subEntriesCount) {
-			return nil, ErrSubNotExist
-		}
-		return rec.Variables[subindex], nil
-	}
-	for i, variable := range rec.Variables {
-		if variable.SubIndex == subindex {
-			return rec.Variables[i], nil
-		}
-	}
-	return nil, ErrSubNotExist
-}
-
-// AddSubObject adds a [Variable] to the VariableList
-// If the VariableList is an ARRAY then the subindex should be
-// identical to the actual placement inside of the array.
-// Otherwise it can be any valid subindex value, and the VariableList
-// will grow accordingly
-func (rec *VariableList) AddSubObject(
-	subindex uint8,
-	name string,
-	datatype uint8,
-	attribute uint8,
-	value string,
-) (*Variable, error) {
-	encoded, err := EncodeFromString(value, datatype, 0)
-	encodedCopy := make([]byte, len(encoded))
-	copy(encodedCopy, encoded)
-	if err != nil {
-		return nil, err
-	}
-	if rec.objectType == ObjectTypeARRAY {
-		if int(subindex) >= len(rec.Variables) {
-			_logger.Error("trying to add a sub-object to array but ouf of bounds",
-				"subindex", subindex,
-				"length", len(rec.Variables),
-			)
-			return nil, ErrSubNotExist
-		}
-		variable, err := NewVariable(subindex, name, datatype, attribute, value)
-		if err != nil {
-			return nil, err
-		}
-		rec.Variables[subindex] = variable
-		return rec.Variables[subindex], nil
-	}
-	variable, err := NewVariable(subindex, name, datatype, attribute, value)
-	if err != nil {
-		return nil, err
-	}
-	rec.Variables = append(rec.Variables, variable)
-	return rec.Variables[len(rec.Variables)-1], nil
-}
-
-func NewRecord() *VariableList {
-	return &VariableList{objectType: ObjectTypeRECORD, Variables: make([]*Variable, 0)}
-}
-
-func NewArray(length uint8) *VariableList {
-	return &VariableList{objectType: ObjectTypeARRAY, Variables: make([]*Variable, length)}
 }

@@ -3,28 +3,16 @@ package od
 import (
 	"archive/zip"
 	"bytes"
-	"embed"
 	"fmt"
 	"io"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"gopkg.in/ini.v1"
 )
 
-//go:embed base.eds
-
-var f embed.FS
-var rawDefaultOd []byte
-
-// Return embeded default object dictionary
-func Default() *ObjectDictionary {
-	defaultOd, err := Parse(rawDefaultOd, 0)
-	if err != nil {
-		panic(err)
-	}
-	return defaultOd
-}
+type Parser func(file any, nodeId uint8) (*ObjectDictionary, error)
 
 // Parse an EDS file
 // file can be either a path or an *os.File or []byte
@@ -44,9 +32,7 @@ func Parse(file any, nodeId uint8) (*ObjectDictionary, error) {
 	// Write data from edsFile to the buffer
 	// Don't care if fails
 	_, _ = edsFile.WriteTo(&buf)
-	reader := bytes.NewReader(buf.Bytes())
-	od.Reader = reader
-	od.iniFile = edsFile
+	od.rawOd = buf.Bytes()
 
 	// Get all the sections in the file
 	sections := edsFile.Sections()
@@ -183,6 +169,83 @@ func NewOD() *ObjectDictionary {
 	}
 }
 
-func init() {
-	rawDefaultOd, _ = f.ReadFile("base.eds")
+// Create variable from section entry
+func NewVariableFromSection(
+	section *ini.Section,
+	name string,
+	nodeId uint8,
+	index uint16,
+	subindex uint8,
+) (*Variable, error) {
+
+	variable := &Variable{
+		Name:     name,
+		SubIndex: subindex,
+	}
+
+	// Get AccessType
+	accessType, err := section.GetKey("AccessType")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get 'AccessType' for %x : %x", index, subindex)
+	}
+
+	// Get PDOMapping to know if pdo mappable
+	var pdoMapping bool
+	if pM, err := section.GetKey("PDOMapping"); err == nil {
+		pdoMapping, err = pM.Bool()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		pdoMapping = true
+	}
+
+	// TODO maybe add support for datatype particularities (>1B)
+	dataType, err := strconv.ParseInt(section.Key("DataType").Value(), 0, 8)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse 'DataType' for %x : %x, because %v", index, subindex, err)
+	}
+	variable.DataType = byte(dataType)
+	variable.Attribute = EncodeAttribute(accessType.String(), pdoMapping, variable.DataType)
+
+	if highLimit, err := section.GetKey("HighLimit"); err == nil {
+		variable.highLimit, err = EncodeFromString(highLimit.Value(), variable.DataType, 0)
+		if err != nil {
+			_logger.Warn("error parsing HighLimit",
+				"index", fmt.Sprintf("x%x", index),
+				"subindex", fmt.Sprintf("x%x", subindex),
+				"error", err,
+			)
+		}
+	}
+
+	if lowLimit, err := section.GetKey("LowLimit"); err == nil {
+		variable.lowLimit, err = EncodeFromString(lowLimit.Value(), variable.DataType, 0)
+		if err != nil {
+			_logger.Warn("error parsing LowLimit",
+				"index", fmt.Sprintf("x%x", index),
+				"subindex", fmt.Sprintf("x%x", subindex),
+				"error", err,
+			)
+		}
+	}
+
+	if defaultValue, err := section.GetKey("DefaultValue"); err == nil {
+		defaultValueStr := defaultValue.Value()
+		// If $NODEID is in default value then remove it, and add it afterwards
+		if strings.Contains(defaultValueStr, "$NODEID") {
+			re := regexp.MustCompile(`\+?\$NODEID\+?`)
+			defaultValueStr = re.ReplaceAllString(defaultValueStr, "")
+		} else {
+			nodeId = 0
+		}
+		variable.valueDefault, err = EncodeFromString(defaultValueStr, variable.DataType, nodeId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse 'DefaultValue' for x%x|x%x, because %v (datatype :x%x)", index, subindex, err, variable.DataType)
+		}
+		variable.value = make([]byte, len(variable.valueDefault))
+		copy(variable.value, variable.valueDefault)
+	}
+
+	return variable, nil
 }

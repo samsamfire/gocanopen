@@ -2,104 +2,34 @@ package od
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math"
-	"regexp"
 	"strconv"
-	"strings"
-
-	"gopkg.in/ini.v1"
+	"sync"
 )
 
-// Return number of bytes
-func (variable *Variable) DataLength() uint32 {
-	return uint32(len(variable.value))
-}
-
-// Return default value as byte slice
-func (variable *Variable) DefaultValue() []byte {
-	return variable.valueDefault
-}
-
-// Create variable from section entry
-func NewVariableFromSection(
-	section *ini.Section,
-	name string,
-	nodeId uint8,
-	index uint16,
-	subindex uint8,
-) (*Variable, error) {
-
-	variable := &Variable{
-		Name:     name,
-		SubIndex: subindex,
-	}
-
-	// Get AccessType
-	accessType, err := section.GetKey("AccessType")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get 'AccessType' for %x : %x", index, subindex)
-	}
-
-	// Get PDOMapping to know if pdo mappable
-	var pdoMapping bool
-	if pM, err := section.GetKey("PDOMapping"); err == nil {
-		pdoMapping, err = pM.Bool()
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		pdoMapping = true
-	}
-
-	// TODO maybe add support for datatype particularities (>1B)
-	dataType, err := strconv.ParseInt(section.Key("DataType").Value(), 0, 8)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse 'DataType' for %x : %x, because %v", index, subindex, err)
-	}
-	variable.DataType = byte(dataType)
-	variable.Attribute = EncodeAttribute(accessType.String(), pdoMapping, variable.DataType)
-
-	if highLimit, err := section.GetKey("HighLimit"); err == nil {
-		variable.highLimit, err = EncodeFromString(highLimit.Value(), variable.DataType, 0)
-		if err != nil {
-			_logger.Warn("error parsing HighLimit",
-				"index", fmt.Sprintf("x%x", index),
-				"subindex", fmt.Sprintf("x%x", subindex),
-				"error", err,
-			)
-		}
-	}
-
-	if lowLimit, err := section.GetKey("LowLimit"); err == nil {
-		variable.lowLimit, err = EncodeFromString(lowLimit.Value(), variable.DataType, 0)
-		if err != nil {
-			_logger.Warn("error parsing LowLimit",
-				"index", fmt.Sprintf("x%x", index),
-				"subindex", fmt.Sprintf("x%x", subindex),
-				"error", err,
-			)
-		}
-	}
-
-	if defaultValue, err := section.GetKey("DefaultValue"); err == nil {
-		defaultValueStr := defaultValue.Value()
-		// If $NODEID is in default value then remove it, and add it afterwards
-		if strings.Contains(defaultValueStr, "$NODEID") {
-			re := regexp.MustCompile(`\+?\$NODEID\+?`)
-			defaultValueStr = re.ReplaceAllString(defaultValueStr, "")
-		} else {
-			nodeId = 0
-		}
-		variable.valueDefault, err = EncodeFromString(defaultValueStr, variable.DataType, nodeId)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse 'DefaultValue' for x%x|x%x, because %v (datatype :x%x)", index, subindex, err, variable.DataType)
-		}
-		variable.value = make([]byte, len(variable.valueDefault))
-		copy(variable.value, variable.valueDefault)
-	}
-
-	return variable, nil
+// Variable is the main data representation for a value stored inside of OD
+// It is used to store a "VAR" or "DOMAIN" object type as well as
+// any sub entry of a "RECORD" or "ARRAY" object type
+type Variable struct {
+	mu           sync.RWMutex
+	valueDefault []byte
+	value        []byte
+	// Name of this variable
+	Name string
+	// The CiA 301 data type of this variable
+	DataType byte
+	// Attribute contains the access type as well as the mapping
+	// information. e.g. AttributeSdoRw | AttributeRpdo
+	Attribute uint8
+	// StorageLocation has information on which medium is the data
+	// stored. Currently this is unused, everything is stored in RAM
+	StorageLocation string
+	// The minimum value for this variable
+	lowLimit []byte
+	// The maximum value for this variable
+	highLimit []byte
+	// The subindex for this variable if part of an ARRAY or RECORD
+	SubIndex uint8
 }
 
 // Create a new variable
@@ -110,6 +40,7 @@ func NewVariable(
 	attribute uint8,
 	value string,
 ) (*Variable, error) {
+
 	encoded, err := EncodeFromString(value, datatype, 0)
 	encodedCopy := make([]byte, len(encoded))
 	copy(encodedCopy, encoded)
@@ -125,6 +56,16 @@ func NewVariable(
 		DataType:     datatype,
 	}
 	return variable, nil
+}
+
+// Return number of bytes
+func (variable *Variable) DataLength() uint32 {
+	return uint32(len(variable.value))
+}
+
+// Return default value as byte slice
+func (variable *Variable) DefaultValue() []byte {
+	return variable.valueDefault
 }
 
 // EncodeFromString value from EDS into bytes respecting canopen datatype
