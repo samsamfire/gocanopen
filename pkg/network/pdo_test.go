@@ -46,12 +46,16 @@ func TestTpdo(t *testing.T) {
 		// received on other side
 		err = local.Write(0x2002, 0, int8(10))
 		assert.Nil(t, err)
-		time.Sleep(400 * time.Millisecond)
 
-		// Internal value received via PDO
-		val, err := remote.ReadUint8(0x2002, 0)
-		assert.Nil(t, err)
-		assert.EqualValues(t, 10, val)
-
+		assert.Eventually(t,
+			func() bool {
+				// Internal value received via PDO
+				val, err := remote.ReadInt8(0x2002, 0)
+				if val == 10 && err == nil {
+					return true
+				}
+				return false
+			}, 5*time.Second, 100*time.Millisecond,
+		)
 	})
 }
