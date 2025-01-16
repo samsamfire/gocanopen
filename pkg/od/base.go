@@ -1,10 +1,8 @@
 package od
 
-import "embed"
+import _ "embed"
 
 //go:embed base.eds
-
-var f embed.FS
 var rawDefaultOd []byte
 
 // Return embeded default object dictionary
