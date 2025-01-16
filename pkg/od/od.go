@@ -1,12 +1,11 @@
 package od
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log/slog"
 	"sync"
-
-	"gopkg.in/ini.v1"
 )
 
 var _logger = slog.Default()
@@ -14,11 +13,16 @@ var _logger = slog.Default()
 // ObjectDictionary is used for storing all entries of a CANopen node
 // according to CiA 301. This is the internal representation of an EDS file
 type ObjectDictionary struct {
-	Reader              io.ReadSeeker
 	logger              *slog.Logger
-	iniFile             *ini.File
+	rawOd               []byte
 	entriesByIndexValue map[uint16]*Entry
 	entriesByIndexName  map[string]*Entry
+}
+
+// Create a new reader object for reading
+// raw OD file.
+func (od *ObjectDictionary) NewReaderSeeker() io.ReadSeeker {
+	return bytes.NewReader(od.rawOd)
 }
 
 // Add an entry to OD, any existing entry will be replaced
@@ -284,6 +288,10 @@ func (rec *VariableList) AddSubObject(
 
 func NewRecord() *VariableList {
 	return &VariableList{objectType: ObjectTypeRECORD, Variables: make([]*Variable, 0)}
+}
+
+func NewRecordWithLength(length uint8) *VariableList {
+	return &VariableList{objectType: ObjectTypeRECORD, Variables: make([]*Variable, length)}
 }
 
 func NewArray(length uint8) *VariableList {
