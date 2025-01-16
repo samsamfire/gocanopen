@@ -303,6 +303,7 @@ func (server *SDOServer) updateStreamer(response SDOMessage) error {
 	server.index = response.GetIndex()
 	server.subindex = response.GetSubindex()
 	server.streamer, err = server.od.Streamer(server.index, server.subindex, false)
+	server.errorExtraInfo = nil
 	if err != nil {
 		odr, ok := err.(od.ODR)
 		if !ok {
