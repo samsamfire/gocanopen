@@ -1,131 +1,220 @@
 package node
 
 import (
-	"encoding/binary"
-	"math"
+	"io"
 
 	"github.com/samsamfire/gocanopen/pkg/od"
 )
 
-// Helper function for reading a remote node entry as bytes
-func (node *BaseNode) readBytes(index any, subindex any) ([]byte, uint8, error) {
+// Read an entry using a base sdo client
+// index and subindex can either be strings or integers
+// this method requires the corresponding node OD to be loaded
+// returned value can be either string, uint64, int64 or float64
+func (node *BaseNode) ReadAny(index any, subindex any) (any, error) {
 
-	// Find corresponding Variable inside OD
-	// This will be used to determine information on the expected value
+	// We need index,subindex & datatype to be able to decode data.
 	entry := node.od.Index(index)
 	odVar, err := entry.SubIndex(subindex)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-	n, err := node.ReadRaw(entry.Index, odVar.SubIndex, node.rxBuffer)
+	r, err := node.SDOClient.NewRawReader(
+		node.GetID(),
+		entry.Index,
+		odVar.SubIndex,
+		false,
+		0,
+	) // size not specified
 	if err != nil {
-		return nil, 0, err
+		return 0, err
 	}
-	return node.rxBuffer[:n], odVar.DataType, nil
+	// Perform the actual read. This can be long
+	n, err := r.Read(node.rxBuffer)
+	if err != nil && err != io.EOF {
+		return n, err
+	}
+	// Decode data to ~type
+	return od.DecodeToType(node.rxBuffer[:n], odVar.DataType)
 }
 
 // Read an entry using a base sdo client
 // index and subindex can either be strings or integers
 // this method requires the corresponding node OD to be loaded
-// Returned value can be either string, uint64, int64 or float64
-func (node *BaseNode) Read(index any, subindex any) (value any, e error) {
-	data, dataType, err := node.readBytes(index, subindex)
+// returned value corresponds to the exact datatype
+// (uint8,uint16,...,int8,int16,...,float32,float64,...)
+func (node *BaseNode) ReadAnyExact(index any, subindex any) (any, error) {
+
+	// We need index,subindex & datatype to be able to decode data.
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
 	if err != nil {
 		return nil, err
 	}
-	return od.DecodeToType(data, dataType)
+	r, err := node.SDOClient.NewRawReader(
+		node.GetID(),
+		entry.Index,
+		odVar.SubIndex,
+		false,
+		0,
+	) // size not specified
+	if err != nil {
+		return 0, err
+	}
+	// Perform the actual read. This can be long
+	n, err := r.Read(node.rxBuffer)
+	if err != nil && err != io.EOF {
+		return n, err
+	}
+	// Decode data to ~type
+	return od.DecodeToTypeExact(node.rxBuffer[:n], odVar.DataType)
 }
 
-// Same as Read but enforces the returned type as uint64
+// [Deprecated] use ReadAny instead
+func (node *BaseNode) Read(index any, subindex any) (value any, e error) {
+	return node.ReadAny(index, subindex)
+}
+
+// Same as [ReadAny] but enforces the returned type as uint64
 func (node *BaseNode) ReadUint(index any, subindex any) (value uint64, e error) {
-	data, dataType, err := node.readBytes(index, subindex)
+	v, err := node.ReadAny(index, subindex)
 	if err != nil {
 		return 0, err
 	}
-	e = od.CheckSize(len(data), dataType)
-	if e != nil {
-		return 0, e
-	}
-	// Cast to correct type
-	switch dataType {
-	case od.BOOLEAN, od.UNSIGNED8:
-		return uint64(data[0]), nil
-	case od.UNSIGNED16:
-		return uint64(binary.LittleEndian.Uint16(data)), nil
-	case od.UNSIGNED32:
-		return uint64(binary.LittleEndian.Uint32(data)), nil
-	case od.UNSIGNED64:
-		return uint64(binary.LittleEndian.Uint64(data)), nil
-	default:
+	value, ok := v.(uint64)
+	if !ok {
 		return 0, od.ErrTypeMismatch
 	}
+	return value, nil
 }
 
-// Same as Read but enforces the returned type as int64
+// Same as [ReadAny] but enforces the returned type as uint32
+func (node *BaseNode) ReadUint32(index any, subindex any) (value uint32, e error) {
+	v, err := node.ReadAnyExact(index, subindex)
+	if err != nil {
+		return 0, err
+	}
+	value, ok := v.(uint32)
+	if !ok {
+		return 0, od.ErrTypeMismatch
+	}
+	return value, nil
+}
+
+// Same as [ReadAny] but enforces the returned type as uint16
+func (node *BaseNode) ReadUint16(index any, subindex any) (value uint16, e error) {
+	v, err := node.ReadAnyExact(index, subindex)
+	if err != nil {
+		return 0, err
+	}
+	value, ok := v.(uint16)
+	if !ok {
+		return 0, od.ErrTypeMismatch
+	}
+	return value, nil
+}
+
+// Same as [ReadAny] but enforces the returned type as uint8
+func (node *BaseNode) ReadUint8(index any, subindex any) (value uint8, e error) {
+	v, err := node.ReadAnyExact(index, subindex)
+	if err != nil {
+		return 0, err
+	}
+	value, ok := v.(uint8)
+	if !ok {
+		return 0, od.ErrTypeMismatch
+	}
+	return value, nil
+}
+
+// Same as [ReadAny] but enforces the returned type as int64
 func (node *BaseNode) ReadInt(index any, subindex any) (value int64, e error) {
-	data, dataType, err := node.readBytes(index, subindex)
+	v, err := node.ReadAny(index, subindex)
 	if err != nil {
 		return 0, err
 	}
-	e = od.CheckSize(len(data), dataType)
-	if e != nil {
-		return 0, e
-	}
-	// Cast to correct type
-	switch dataType {
-	case od.BOOLEAN, od.INTEGER8:
-		return int64(data[0]), nil
-	case od.INTEGER16:
-		return int64(int16(binary.LittleEndian.Uint16(data))), nil
-	case od.INTEGER32:
-		return int64(int32(binary.LittleEndian.Uint32(data))), nil
-	case od.INTEGER64:
-		return int64(binary.LittleEndian.Uint64(data)), nil
-	default:
+	value, ok := v.(int64)
+	if !ok {
 		return 0, od.ErrTypeMismatch
 	}
+	return value, nil
 }
 
-// Same as Read but enforces the returned type as float
+// Same as [ReadAny] but enforces the returned type as int32
+func (node *BaseNode) ReadInt32(index any, subindex any) (value int32, e error) {
+	v, err := node.ReadAnyExact(index, subindex)
+	if err != nil {
+		return 0, err
+	}
+	value, ok := v.(int32)
+	if !ok {
+		return 0, od.ErrTypeMismatch
+	}
+	return value, nil
+}
+
+// Same as [ReadAny] but enforces the returned type as int16
+func (node *BaseNode) ReadInt16(index any, subindex any) (value int16, e error) {
+	v, err := node.ReadAnyExact(index, subindex)
+	if err != nil {
+		return 0, err
+	}
+	value, ok := v.(int16)
+	if !ok {
+		return 0, od.ErrTypeMismatch
+	}
+	return value, nil
+}
+
+// Same as [ReadAny] but enforces the returned type as int8
+func (node *BaseNode) ReadInt8(index any, subindex any) (value int8, e error) {
+	v, err := node.ReadAnyExact(index, subindex)
+	if err != nil {
+		return 0, err
+	}
+	value, ok := v.(int8)
+	if !ok {
+		return 0, od.ErrTypeMismatch
+	}
+	return value, nil
+}
+
+// Same as [ReadAny] but enforces the returned type as float64
 func (node *BaseNode) ReadFloat(index any, subindex any) (value float64, e error) {
-	data, dataType, err := node.readBytes(index, subindex)
+	v, err := node.ReadAny(index, subindex)
 	if err != nil {
 		return 0, err
 	}
-	e = od.CheckSize(len(data), dataType)
-	if e != nil {
-		return 0, e
-	}
-	// Cast to correct type
-	switch dataType {
-	case od.REAL32:
-		parsed := binary.LittleEndian.Uint32(data)
-		return float64(math.Float32frombits(parsed)), nil
-	case od.REAL64:
-		parsed := binary.LittleEndian.Uint64(data)
-		return math.Float64frombits(parsed), nil
-	default:
+	value, ok := v.(float64)
+	if !ok {
 		return 0, od.ErrTypeMismatch
 	}
+	return value, nil
 }
 
-// Same as Read but enforces the returned type as string
+// Same as [ReadAny] but enforces the returned type as float32
+func (node *BaseNode) ReadFloat32(index any, subindex any) (value float32, e error) {
+	v, err := node.ReadAnyExact(index, subindex)
+	if err != nil {
+		return 0, err
+	}
+	value, ok := v.(float32)
+	if !ok {
+		return 0, od.ErrTypeMismatch
+	}
+	return value, nil
+}
+
+// Same as [ReadAny] but enforces the returned type as string
 func (node *BaseNode) ReadString(index any, subindex any) (value string, e error) {
-	data, dataType, err := node.readBytes(index, subindex)
+	v, err := node.ReadAny(index, subindex)
 	if err != nil {
 		return "", err
 	}
-	e = od.CheckSize(len(data), dataType)
-	if e != nil {
-		return "", e
-	}
-	// Cast to correct type
-	switch dataType {
-	case od.OCTET_STRING, od.VISIBLE_STRING, od.UNICODE_STRING:
-		return string(data), nil
-	default:
+	value, ok := v.(string)
+	if !ok {
 		return "", od.ErrTypeMismatch
 	}
+	return value, nil
 }
 
 // Read an entry from a remote node
@@ -140,7 +229,7 @@ func (node *BaseNode) ReadRaw(index uint16, subIndex uint8, data []byte) (int, e
 // index and subindex can either be strings or integers
 // this method requires the corresponding node OD to be loaded
 // value should correspond to the expected datatype
-func (node *BaseNode) Write(index any, subindex any, value any) error {
+func (node *BaseNode) WriteAny(index any, subindex any, value any) error {
 	// Find corresponding Variable inside OD
 	// This will be used to determine information on the expected value
 	entry := node.od.Index(index)
@@ -149,6 +238,11 @@ func (node *BaseNode) Write(index any, subindex any, value any) error {
 		return err
 	}
 	return node.SDOClient.WriteRaw(node.id, entry.Index, odVar.SubIndex, value, false)
+}
+
+// [Deprecated] use WriteAny instead
+func (node *BaseNode) Write(index any, subindex any, value any) error {
+	return node.WriteAny(index, subindex, value)
 }
 
 // Write an entry to a remote node

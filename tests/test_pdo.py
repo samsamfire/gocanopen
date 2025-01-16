@@ -162,9 +162,7 @@ def test_tpdo_receive_consistency(node_configured: canopen.RemoteNode, first_tpd
             toggle = True
 
     for raw_val in received_bytes:
-        assert (
-            raw_val == 0xAA_AA_AA_AA_AA_AA_AA_A or raw_val == 0xBB_BB_BB_BB_BB_BB_BB_B
-        )
+        assert raw_val == 0xAA_AA_AA_AA_AA_AA_AA_A or raw_val == 0xBB_BB_BB_BB_BB_BB_BB_B
 
 
 def test_tpdo_transmission_type(first_tpdo: Map, node_configured: RemoteNode):

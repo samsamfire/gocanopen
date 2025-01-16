@@ -41,9 +41,8 @@ func (c *NodeProcessor) background(ctx context.Context) {
 			ticker.Stop()
 			return
 		case <-ticker.C:
-			syncWas := c.node.ProcessSYNC(PeriodUs, nil)
-			c.node.ProcessTPDO(syncWas, PeriodUs, nil)
-			c.node.ProcessRPDO(syncWas, PeriodUs, nil)
+			syncWas := c.node.ProcessSYNC(PeriodUs)
+			c.node.ProcessPDO(syncWas, PeriodUs)
 		}
 	}
 }

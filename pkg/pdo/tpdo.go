@@ -29,7 +29,7 @@ type TPDO struct {
 
 // Process [TPDO] state machine and TX CAN frames
 // This should be called periodically
-func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOperational bool, syncWas bool) error {
+func (tpdo *TPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWas bool) error {
 	tpdo.mu.Lock()
 
 	pdo := tpdo.pdo
@@ -51,9 +51,6 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 			}
 			if tpdo.eventTimer == 0 {
 				tpdo.sendRequest = true
-			}
-			if timerNextUs != nil && *timerNextUs > tpdo.eventTimer {
-				*timerNextUs = tpdo.eventTimer
 			}
 		}
 		// Check for tpdo send requests
@@ -79,9 +76,6 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, timerNextUs *uint32, nmtIsOpe
 			tpdo.mu.Unlock()
 			_ = tpdo.send()
 			tpdo.mu.Lock()
-		}
-		if tpdo.sendRequest && timerNextUs != nil && *timerNextUs > tpdo.inhibitTimer {
-			*timerNextUs = tpdo.inhibitTimer
 		}
 	} else if tpdo.sync != nil && syncWas {
 

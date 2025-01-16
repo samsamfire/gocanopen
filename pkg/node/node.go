@@ -21,9 +21,8 @@ const (
 // A [Node] handles the CANopen stack.
 type Node interface {
 	// Cyclic tasks
-	ProcessTPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32)
-	ProcessRPDO(syncWas bool, timeDifferenceUs uint32, timerNextUs *uint32)
-	ProcessSYNC(timeDifferenceUs uint32, timerNextUs *uint32) bool
+	ProcessPDO(syncWas bool, timeDifferenceUs uint32)
+	ProcessSYNC(timeDifferenceUs uint32) bool
 	ProcessMain(enableGateway bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8
 	// Internal servers
 	Servers() []*sdo.SDOServer

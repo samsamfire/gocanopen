@@ -1233,7 +1233,7 @@ func NewSDOClient(
 	c.od = odict
 	c.nodeId = nodeId
 	c.streamer = &od.Streamer{}
-	c.fifo = fifo.NewFifo(BlockMaxSize * BlockSeqSize)
+	c.fifo = fifo.NewFifo(DefaultClientBufferSize + 2)
 	c.localBuffer = make([]byte, DefaultClientBufferSize+2)
 	c.SetTimeout(DefaultClientTimeout)
 	c.SetTimeoutBlockTransfer(DefaultClientTimeout)
