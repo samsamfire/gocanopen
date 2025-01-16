@@ -1,5 +1,5 @@
 site_name: Gocanopen
-
+repo_url: https://github.com/samsamfire/gocanopen
 nav:
   - Getting started: index.md
   - CAN driver: can.md
