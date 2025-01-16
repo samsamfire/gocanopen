@@ -76,13 +76,12 @@ func TestClientBlock(t *testing.T) {
 	node.GetOD().AddFile(0x3333, "File entry", file.Name(), os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
 	assert.Nil(t, err)
 
-	w, err := network2.SDOClient.NewRawWriter(NodeIdTest, 0x3333, 0, true, 0)
-	assert.Nil(t, err)
-
 	t.Run("small block", func(t *testing.T) {
 		data := []byte(`some random string some random string some random
 		string some random string some random 
 		string some random string some random string`)
+		w, err := network2.SDOClient.NewRawWriter(NodeIdTest, 0x3333, 0, true, 0)
+		assert.Nil(t, err)
 		n, err := w.Write(data)
 		assert.Nil(t, err)
 		assert.EqualValues(t, len(data), n)
@@ -90,7 +89,9 @@ func TestClientBlock(t *testing.T) {
 
 	t.Run("big block", func(t *testing.T) {
 		data := make([]byte, 10_000)
+		network2.SDOClient.SetProcessingPeriod(100)
 		w, err := network2.SDOClient.NewRawWriter(NodeIdTest, 0x3333, 0, true, 10_000)
+
 		assert.Nil(t, err)
 		n, err := w.Write(data)
 		assert.Nil(t, err)
@@ -104,6 +105,8 @@ func TestClientBlock(t *testing.T) {
 		data := []byte(`some random string some random string some random
 		string some random string some random 
 		string some random string some random string`)
+		w, err := network2.SDOClient.NewRawWriter(NodeIdTest, 0x3333, 0, true, 0)
+		assert.Nil(t, err)
 		n, err := w.Write(data)
 		assert.Nil(t, err)
 		assert.EqualValues(t, len(data), n)
