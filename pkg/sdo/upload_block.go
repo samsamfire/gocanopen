@@ -74,24 +74,28 @@ func (s *SDOServer) rxUploadSubBlock(rx SDOMessage) error {
 
 	// Check client acknowledged all packets sent
 	if ackseq < s.blockSequenceNb {
-		s.logger.Debug("server acked less than sent, will retransmit")
 		// We go back to the last acknowledged packet
 		// Because some data might still be in buffer, we must first remove it
-		nbFailed := uint32(s.blockSequenceNb-ackseq)*BlockSeqSize - uint32(s.blockNoData)
+		nbFailed := uint32(s.blockSize-ackseq)*BlockSeqSize - uint32(s.blockNoData)
 		nbPending := uint32(s.buf.Len())
 		s.sizeTransferred -= uint32(nbFailed)
+		s.logger.Debug("server acked less than sent, will rewind & retransmit",
+			"nBytes", nbFailed+nbPending,
+			"nbFailed", nbFailed,
+			"nbPending", nbPending,
+		)
 		s.streamer.DataOffset -= (nbFailed + nbPending)
 		s.buf.Reset()
 
-		// Refill buffer with preivous data without re-calculating CRC (already done)
-		err := s.readObjectDictionary(nbFailed+nbPending, int(nbPending)+int(nbFailed), false)
+		// Refill buffer with previous data without re-calculating CRC (already calculated before)
+		// This needs to be the exact size to not cause CRC errors
+		err := s.readObjectDictionary(nbFailed+nbPending, int(nbPending+nbFailed), false)
 		if err != nil {
 			return err
 		}
 	}
-
 	// Refill buffer for next block
-	err := s.readObjectDictionary(uint32(s.blockSize)*BlockSeqSize, 0, true)
+	err := s.readObjectDictionary(uint32(s.blockSize)*BlockSeqSize, -1, true)
 	if err != nil {
 		return err
 	}

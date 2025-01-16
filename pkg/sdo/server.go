@@ -237,20 +237,35 @@ func (server *SDOServer) writeObjectDictionary(crcOperation uint, crcClient crc.
 
 // Read from OD into buffer & calculate CRC if needed
 // Depending on the transfer type, this might have to be called multiple times
-func (server *SDOServer) readObjectDictionary(countMinimum uint32, size int, calculateCRC bool) error {
+// countMin : threshold to refill data in buffer
+// countExact : number of bytes to read if != -1 exactly
+func (server *SDOServer) readObjectDictionary(countMin uint32, countExact int, calculateCRC bool) error {
 
-	unread := server.buf.Len()
-	if server.finished || unread >= int(countMinimum) {
+	// If we already have at least coutMin unread in the buffer
+	// We don't need to refill
+	if server.finished || (uint32(server.buf.Len()) >= countMin && countExact == -1) {
 		return nil
 	}
 
-	// Read from OD into the buffer
-	countRd, err := server.streamer.Read(server.intermediateBuf)
+	// Read from OD into an intermediate buffer, we are limited by the remaining space inside the buffer
+	// countExact can be used to control precisely how much bytes are read.
+	nbToRead := 0
+	if countExact == -1 {
+		nbToRead = min(len(server.intermediateBuf), server.buf.Cap()-server.buf.Len())
+	} else {
+		nbToRead = countExact
+	}
+
+	countRd, err := server.streamer.Read(server.intermediateBuf[:nbToRead])
+	if countExact != -1 && countExact != countRd {
+		return AbortOutOfMem
+	}
+
 	if err != nil && err != od.ErrPartial {
 		server.state = stateAbort
 		odr, ok := err.(od.ODR)
 		if !ok {
-			server.logger.Warn("unexpected error in server when reading", "error", err)
+			server.logger.Warn("unexpected error in server when reading", "err", err)
 			odr = od.ErrGeneral
 		}
 		return ConvertOdToSdoAbort(odr)
@@ -275,25 +290,31 @@ func (server *SDOServer) readObjectDictionary(countMinimum uint32, size int, cal
 			server.streamer.DataLength = server.sizeTransferred + uint32(countRd)
 		}
 	}
-	// Calculate CRC for the read data
-	if size > 0 {
-		countRd = size
+	countWritten, err2 := server.buf.Write(server.intermediateBuf[:countRd])
+	if countWritten != countRd || err2 != nil {
+		server.logger.Error("failed to write to buffer the same amount as read",
+			"countWritten", countWritten,
+			"countRead", countRd,
+			"err", err2,
+		)
+		return AbortDeviceIncompat
 	}
-	server.buf.Write(server.intermediateBuf[:countRd])
 
 	if err == od.ErrPartial {
 		server.finished = false
-		if uint32(countRd) < countMinimum {
+		if uint32(countRd) < countMin {
 			server.state = stateAbort
-			server.errorExtraInfo = fmt.Errorf("buffer unread %v is less than the minimum count %v", server.buf.Len(), countMinimum)
+			server.errorExtraInfo = fmt.Errorf("buffer unread %v is less than the minimum count %v", server.buf.Len(), countMin)
 			return AbortDeviceIncompat
 		}
 	} else {
 		server.finished = true
 	}
-	if calculateCRC && server.blockCRCEnabled {
+
+	if server.blockCRCEnabled && calculateCRC {
 		server.blockCRC.Block(server.intermediateBuf[:countRd])
 	}
+
 	return nil
 }
 
@@ -338,7 +359,7 @@ func (server *SDOServer) prepareRx() error {
 	server.finished = false
 
 	// Load data from OD now
-	err := server.readObjectDictionary(BlockSeqSize, 0, false)
+	err := server.readObjectDictionary(BlockSeqSize, -1, false)
 	if err != nil && err != od.ErrPartial {
 		return err
 	}
@@ -413,7 +434,7 @@ func NewSDOServer(
 	server.timeoutTimeUs = timeoutMs * 1000
 	server.blockTimeout = timeoutMs * 700
 	server.rx = make(chan SDOMessage, 127)
-	server.buf = bytes.NewBuffer(make([]byte, 0, 1000))
+	server.buf = bytes.NewBuffer(make([]byte, 0, 2000))
 	server.intermediateBuf = make([]byte, 1000)
 	var canIdClientToServer uint16
 	var canIdServerToClient uint16
