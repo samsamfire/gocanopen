@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	SocketCANFrameSize  = 16
-	DefaultRcvTimeoutUs = 100000
+	SocketCANFrameSize = 16
 )
 
 func init() {
@@ -52,15 +51,12 @@ func NewBus(channel string) (canopen.Bus, error) {
 		return nil, err
 	}
 
-	fd, err := syscall.Socket(syscall.AF_CAN, syscall.SOCK_RAW, unix.CAN_RAW)
+	fd, err := unix.Socket(unix.AF_CAN, unix.SOCK_RAW, unix.CAN_RAW)
+	//fd, err := syscall.Socket(syscall.AF_CAN, syscall.SOCK_RAW, unix.CAN_RAW)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CAN socket : %v", err)
 	}
-	tv := syscall.Timeval{
-		Sec:  0,
-		Usec: int64(DefaultRcvTimeoutUs),
-	}
-	err = syscall.SetsockoptTimeval(fd, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &tv)
+	err = unix.SetsockoptTimeval(fd, unix.SOL_SOCKET, unix.SO_RCVTIMEO, &DefaultTimeVal)
 	if err != nil {
 		return nil, fmt.Errorf("failed to set read timeout %v", err)
 	}
