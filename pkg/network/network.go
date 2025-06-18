@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"slices"
 	"sync"
+	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	can "github.com/samsamfire/gocanopen/pkg/can"
@@ -42,9 +43,10 @@ type Network struct {
 	*sdo.SDOClient
 	controllers map[uint8]*n.NodeProcessor
 	// Network has an its own SDOClient
-	odMap    map[uint8]*ObjectDictionaryInformation
-	odParser od.Parser
-	logger   *slog.Logger
+	odMap            map[uint8]*ObjectDictionaryInformation
+	odParser         od.Parser
+	processingPeriod time.Duration
+	logger           *slog.Logger
 }
 
 type ObjectDictionaryInformation struct {
@@ -69,11 +71,12 @@ func NewBus(canInterfaceName string, channel string, bitrate int) (canopen.Bus, 
 // Create a new Network using the given CAN bus
 func NewNetwork(bus canopen.Bus) Network {
 	return Network{
-		controllers: map[uint8]*n.NodeProcessor{},
-		BusManager:  canopen.NewBusManager(bus),
-		odMap:       map[uint8]*ObjectDictionaryInformation{},
-		odParser:    od.Parse,
-		logger:      slog.Default(),
+		controllers:      map[uint8]*n.NodeProcessor{},
+		BusManager:       canopen.NewBusManager(bus),
+		odMap:            map[uint8]*ObjectDictionaryInformation{},
+		odParser:         od.Parse,
+		logger:           slog.Default(),
+		processingPeriod: 10 * time.Millisecond,
 	}
 }
 
@@ -309,7 +312,7 @@ func (network *Network) AddRemoteNode(nodeId uint8, odict any) (*n.RemoteNode, e
 // Add any node to the network and return a node controller which can be used
 // To control high level node behaviour (starting, stopping the node)
 func (network *Network) AddNode(node n.Node) (*n.NodeProcessor, error) {
-	controller := n.NewNodeProcessor(node, network.logger)
+	controller := n.NewNodeProcessor(node, network.logger, network.processingPeriod)
 	_, ok := network.controllers[node.GetID()]
 	if ok {
 		return nil, ErrIdConflict
@@ -424,4 +427,8 @@ func (network *Network) SetLogger(logger *slog.Logger) {
 
 func (network *Network) SetParser(parser od.Parser) {
 	network.odParser = parser
+}
+
+func (network *Network) SetProcessingTime(period time.Duration) {
+	network.processingPeriod = period
 }

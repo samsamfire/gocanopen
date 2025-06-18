@@ -17,22 +17,28 @@ type NodeProcessor struct {
 	cancel       context.CancelFunc
 	resetHandler func(node Node, cmd uint8) error
 	wg           *sync.WaitGroup
+	period       time.Duration
 }
 
-func NewNodeProcessor(n Node, logger *slog.Logger) *NodeProcessor {
+func NewNodeProcessor(n Node, logger *slog.Logger, processingPeriod time.Duration) *NodeProcessor {
 
 	if logger == nil {
 		logger = slog.Default()
 	}
 
-	return &NodeProcessor{logger: logger.With("service", "[CTRLR]", "id", n.GetID()), node: n, wg: &sync.WaitGroup{}}
+	return &NodeProcessor{
+		logger: logger.With("service", "[CTRLR]", "id", n.GetID()),
+		node:   n,
+		wg:     &sync.WaitGroup{},
+		period: processingPeriod,
+	}
 }
 
 // background processing for [SYNC],[TPDO],[RPDO] services
 func (c *NodeProcessor) background(ctx context.Context) {
 
-	const PeriodUs = 10_000
-	ticker := time.NewTicker(PeriodUs * time.Microsecond)
+	ticker := time.NewTicker(c.period)
+	periodUs := uint32(c.period.Microseconds())
 	c.logger.Info("starting node background process")
 	for {
 		select {
@@ -41,8 +47,8 @@ func (c *NodeProcessor) background(ctx context.Context) {
 			ticker.Stop()
 			return
 		case <-ticker.C:
-			syncWas := c.node.ProcessSYNC(PeriodUs)
-			c.node.ProcessPDO(syncWas, PeriodUs)
+			syncWas := c.node.ProcessSYNC(periodUs)
+			c.node.ProcessPDO(syncWas, periodUs)
 		}
 	}
 }
@@ -50,8 +56,8 @@ func (c *NodeProcessor) background(ctx context.Context) {
 // Main node processing
 func (c *NodeProcessor) main(ctx context.Context) {
 
-	const PeriodUs = 1_000
-	ticker := time.NewTicker(PeriodUs * time.Microsecond)
+	ticker := time.NewTicker(c.period)
+	periodUs := uint32(c.period.Microseconds())
 	c.logger.Info("starting node main process")
 	for {
 		select {
@@ -61,7 +67,7 @@ func (c *NodeProcessor) main(ctx context.Context) {
 			return
 		case <-ticker.C:
 			// Process main
-			state := c.node.ProcessMain(false, PeriodUs, nil)
+			state := c.node.ProcessMain(false, periodUs, nil)
 			if state == nmt.ResetApp || state == nmt.ResetComm {
 				c.logger.Info("node reset requested")
 				if c.resetHandler != nil {
