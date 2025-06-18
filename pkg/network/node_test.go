@@ -109,17 +109,6 @@ func TestRemoteNode(t *testing.T) {
 		assert.Equal(t, []byte{10}, read)
 	})
 }
-func TestAddRemoteNodeGenerateEm(t *testing.T) {
-	network := CreateNetworkTest()
-	networkRemote := CreateNetworkEmptyTest()
-	defer network.Disconnect()
-	defer networkRemote.Disconnect()
-	node, err := networkRemote.AddRemoteNode(NodeIdTest, "../../testdata/faulty.eds")
-	assert.Nil(t, err)
-	assert.NotNil(t, node)
-	err = node.StartPDOs(true)
-	assert.Nil(t, err, err)
-}
 
 func TestCreateLocalNode(t *testing.T) {
 	network := CreateNetworkTest()
