@@ -525,6 +525,10 @@ func (emcy *EMCY) SetCallback(callback EMCYRxCallback) {
 	emcy.rxCallback = callback
 }
 
+func NewEMCYForLogging(logger *slog.Logger) *EMCY {
+	return &EMCY{logger: logger}
+}
+
 func NewEMCY(
 	bm *canopen.BusManager,
 	logger *slog.Logger,
