@@ -1,6 +1,7 @@
 package network
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -28,12 +29,92 @@ var SDO_FLOAT_READ_MAP = map[string]float64{
 	"REAL64 value": float64(0.55),
 }
 
-func TestAddRemoteNode(t *testing.T) {
+func TestRemoteNode(t *testing.T) {
+	t.Run("add remote node", func(t *testing.T) {
+		network := CreateNetworkTest()
+		networkRemote := CreateNetworkEmptyTest()
+		defer network.Disconnect()
+		defer networkRemote.Disconnect()
+		node, err := networkRemote.AddRemoteNode(NodeIdTest, od.Default())
+		assert.Nil(t, err)
+		assert.NotNil(t, node)
+		err = node.StartPDOs(true)
+		assert.Nil(t, err, err)
+	})
+
+	t.Run("wrong mapping in OD", func(t *testing.T) {
+		odict := od.Default()
+		odict.AddRPDO(1)
+		pdoMap := od.NewRecord()
+		pdoMap.AddSubObject(0, "Number of mapped application objects in PDO", od.UNSIGNED8, od.AttributeSdoRw, "0x1")
+		for i := range od.MaxMappedEntriesPdo {
+			pdoMap.AddSubObject(i+1, fmt.Sprintf("Application object %d", i+1), od.UNSIGNED32, od.AttributeSdoRw, "0x21000010")
+		}
+		odict.AddVariableList(od.EntryRPDOMappingStart, "RPDO mapping parameter", pdoMap)
+
+		network := CreateNetworkTest()
+		networkRemote := CreateNetworkEmptyTest()
+		defer network.Disconnect()
+		defer networkRemote.Disconnect()
+		node, err := networkRemote.AddRemoteNode(NodeIdTest, odict)
+		assert.Nil(t, err)
+		assert.NotNil(t, node)
+		err = node.StartPDOs(true)
+		assert.Nil(t, err, err)
+
+	})
+
+	t.Run("rpdo updates correctly", func(t *testing.T) {
+		network := CreateNetworkTest()
+		networkRemote := CreateNetworkEmptyTest()
+		defer network.Disconnect()
+		defer networkRemote.Disconnect()
+		remoteNode, err := networkRemote.AddRemoteNode(NodeIdTest, od.Default())
+		configurator := network.Configurator(NodeIdTest)
+		configurator.EnablePDO(1 + 256)
+		assert.Nil(t, err)
+		assert.NotNil(t, remoteNode)
+		err = network.WriteRaw(NodeIdTest, 0x2002, 0, []byte{10}, false)
+		assert.Nil(t, err)
+		time.Sleep(500 * time.Millisecond)
+		read := make([]byte, 1)
+		remoteNode.SDOClient.ReadRaw(0, 0x2002, 0x0, read)
+		// assert.Equal(t, node.NodeRunning, remoteNode.GetState())
+		assert.Equal(t, []byte{0x33}, read)
+	})
+
+	t.Run("rpdo updates correctly using remote OD", func(t *testing.T) {
+		network := CreateNetworkTest()
+		networkRemote := CreateNetworkEmptyTest()
+		defer network.Disconnect()
+		defer networkRemote.Disconnect()
+		remoteNode, err := networkRemote.AddRemoteNode(NodeIdTest, od.Default())
+		assert.Nil(t, err)
+		// Setup remote node PDOs by reading configuration from remote
+		err = remoteNode.StartPDOs(false)
+		assert.Nil(t, err)
+		// Enable real node TPDO nb 1
+		configurator := network.Configurator(NodeIdTest)
+		err = configurator.EnablePDO(1 + 256)
+		assert.Nil(t, err)
+		assert.NotNil(t, remoteNode)
+		// Write value to remote node
+		err = network.WriteRaw(NodeIdTest, 0x2002, 0, []byte{10}, false)
+		assert.Nil(t, err)
+		time.Sleep(1000 * time.Millisecond)
+		read := make([]byte, 1)
+		// Check that value received from remote node was correctly updated in internal OD
+		remoteNode.SDOClient.ReadRaw(0, 0x2002, 0x0, read)
+		// assert.Equal(t, node.NodeRunning, remoteNode.GetState())
+		assert.Equal(t, []byte{10}, read)
+	})
+}
+func TestAddRemoteNodeGenerateEm(t *testing.T) {
 	network := CreateNetworkTest()
 	networkRemote := CreateNetworkEmptyTest()
 	defer network.Disconnect()
 	defer networkRemote.Disconnect()
-	node, err := networkRemote.AddRemoteNode(NodeIdTest, od.Default())
+	node, err := networkRemote.AddRemoteNode(NodeIdTest, "../../testdata/faulty.eds")
 	assert.Nil(t, err)
 	assert.NotNil(t, node)
 	err = node.StartPDOs(true)
@@ -233,51 +314,6 @@ func TestReadRemote(t *testing.T) {
 		assert.InDelta(t, 1500.1, val, 0.01)
 	})
 
-}
-
-func TestRemoteNodeRPDO(t *testing.T) {
-	network := CreateNetworkTest()
-	networkRemote := CreateNetworkEmptyTest()
-	defer network.Disconnect()
-	defer networkRemote.Disconnect()
-	remoteNode, err := networkRemote.AddRemoteNode(NodeIdTest, od.Default())
-	configurator := network.Configurator(NodeIdTest)
-	configurator.EnablePDO(1 + 256)
-	assert.Nil(t, err)
-	assert.NotNil(t, remoteNode)
-	err = network.WriteRaw(NodeIdTest, 0x2002, 0, []byte{10}, false)
-	assert.Nil(t, err)
-	time.Sleep(500 * time.Millisecond)
-	read := make([]byte, 1)
-	remoteNode.SDOClient.ReadRaw(0, 0x2002, 0x0, read)
-	// assert.Equal(t, node.NodeRunning, remoteNode.GetState())
-	assert.Equal(t, []byte{0x33}, read)
-}
-
-func TestRemoteNodeRPDOUsingRemote(t *testing.T) {
-	network := CreateNetworkTest()
-	networkRemote := CreateNetworkEmptyTest()
-	defer network.Disconnect()
-	defer networkRemote.Disconnect()
-	remoteNode, err := networkRemote.AddRemoteNode(NodeIdTest, od.Default())
-	assert.Nil(t, err)
-	// Setup remote node PDOs by reading configuration from remote
-	err = remoteNode.StartPDOs(false)
-	assert.Nil(t, err)
-	// Enable real node TPDO nb 1
-	configurator := network.Configurator(NodeIdTest)
-	err = configurator.EnablePDO(1 + 256)
-	assert.Nil(t, err)
-	assert.NotNil(t, remoteNode)
-	// Write value to remote node
-	err = network.WriteRaw(NodeIdTest, 0x2002, 0, []byte{10}, false)
-	assert.Nil(t, err)
-	time.Sleep(1000 * time.Millisecond)
-	read := make([]byte, 1)
-	// Check that value received from remote node was correctly updated in internal OD
-	remoteNode.SDOClient.ReadRaw(0, 0x2002, 0x0, read)
-	// assert.Equal(t, node.NodeRunning, remoteNode.GetState())
-	assert.Equal(t, []byte{10}, read)
 }
 
 func TestTimeSynchronization(t *testing.T) {
