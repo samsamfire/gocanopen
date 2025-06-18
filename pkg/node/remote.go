@@ -28,12 +28,12 @@ import (
 // locally.
 type RemoteNode struct {
 	*BaseNode
-	remoteOd *od.ObjectDictionary // Remote node od, this does not change
-	client   *sdo.SDOClient       // A unique sdoClient shared between localCtrl & remoteCtrl
-	rpdos    []*pdo.RPDO          // Local RPDOs (corresponds to remote TPDOs)
-	tpdos    []*pdo.TPDO          // Local TPDOs (corresponds to remote RPDOs)
-	sync     *sync.SYNC           // Sync consumer (for synchronous PDOs)
-	emcy     *emergency.EMCY      // Emergency consumer (fake producer for logging internal errors)
+	remoteOd       *od.ObjectDictionary // Remote node od, this does not change
+	client         *sdo.SDOClient       // A unique sdoClient shared between localCtrl & remoteCtrl
+	rpdos          []*pdo.RPDO          // Local RPDOs (corresponds to remote TPDOs)
+	tpdos          []*pdo.TPDO          // Local TPDOs (corresponds to remote RPDOs)
+	sync           *sync.SYNC           // Sync consumer (for synchronous PDOs)
+	emcyForLogging *emergency.EMCY      // Emergency consumer (fake producer for logging internal errors)
 }
 
 func (node *RemoteNode) ProcessPDO(syncWas bool, timeDifferenceUs uint32) {
@@ -121,7 +121,9 @@ func NewRemoteNode(
 	node.sync = sync
 
 	// Add empty EMCY, only used for logging for now
-	node.emcy = &emergency.EMCY{}
+	// in particular any errors that would have generated an emergency message
+	// for a "local node" will log errors.
+	node.emcyForLogging = emergency.NewEMCYForLogging(logger)
 
 	return node, nil
 }
@@ -166,7 +168,7 @@ func (node *RemoteNode) StartPDOs(useLocal bool) error {
 			node.BusManager,
 			node.logger,
 			node.od,
-			node.emcy, // Empty emergency object used for logging
+			node.emcyForLogging, // Empty emergency object used for logging
 			node.sync,
 			node.GetOD().Index(0x1400+i),
 			node.GetOD().Index(0x1600+i),
@@ -201,7 +203,7 @@ func (node *RemoteNode) StartPDOs(useLocal bool) error {
 			node.BusManager,
 			node.logger,
 			node.od,
-			node.emcy, // Empty emergency object used for logging
+			node.emcyForLogging, // Empty emergency object used for logging
 			node.sync,
 			node.GetOD().Index(0x1800+i),
 			node.GetOD().Index(0x1A00+i),
