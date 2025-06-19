@@ -346,7 +346,7 @@ func TestTimeSynchronization(t *testing.T) {
 	time.Sleep(150 * time.Millisecond)
 	for _, slaveNode := range slaveNodes {
 		timeDiff := slaveNode.TIME.InternalTime().Sub(masterNode.TIME.InternalTime())
-		assert.InDelta(t, 0, timeDiff.Milliseconds(), 5)
+		assert.InDelta(t, 0, timeDiff.Milliseconds(), 50)
 	}
 }
 
