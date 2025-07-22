@@ -1,4 +1,4 @@
-//go:build amd64
+//go:build arm64
 
 package socketcanv2
 
