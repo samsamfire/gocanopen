@@ -25,7 +25,7 @@ func TestTpdo(t *testing.T) {
 		assert.Nil(t, err)
 		err = config.ProducerDisableSYNC()
 		assert.Nil(t, err)
-		err = config.EnablePDO(pdo.MinTpdoNumber)
+		err = config.EnablePDO(pdo.MaxRpdoNumber + 1)
 		assert.Nil(t, err)
 
 		// Create a second local node that will send SYNC

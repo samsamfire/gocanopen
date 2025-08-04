@@ -24,7 +24,7 @@ type PDOConfigurationParameter struct {
 }
 
 func (conf *NodeConfigurator) getType(pdoNb uint16) string {
-	if pdoNb <= 256 {
+	if pdoNb <= pdo.MaxRpdoNumber {
 		return "RPDO"
 	}
 	return "TPDO"
@@ -162,12 +162,12 @@ func (config *NodeConfigurator) ReadConfigurationAllPDO() (
 	rpdos []PDOConfigurationParameter, tpdos []PDOConfigurationParameter, err error,
 ) {
 	// Read all RPDOs
-	rpdos, err = config.ReadConfigurationRangePDO(pdo.MinRpdoNumber, pdo.MaxRpdoNumber)
+	rpdos, err = config.ReadConfigurationRangePDO(pdo.MinPdoNumber, pdo.MaxRpdoNumber)
 	if err != nil {
 		return rpdos, tpdos, err
 	}
 	// Read all TPDOs
-	tpdos, err = config.ReadConfigurationRangePDO(pdo.MinTpdoNumber, pdo.MaxTpdoNumber)
+	tpdos, err = config.ReadConfigurationRangePDO(pdo.MaxRpdoNumber+1, pdo.MaxPdoNumber)
 	return rpdos, tpdos, err
 }
 
