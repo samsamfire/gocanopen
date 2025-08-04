@@ -6,6 +6,7 @@ import (
 
 	"github.com/samsamfire/gocanopen/pkg/config"
 	"github.com/samsamfire/gocanopen/pkg/od"
+	"github.com/samsamfire/gocanopen/pkg/pdo"
 	"github.com/samsamfire/gocanopen/pkg/sdo"
 	"github.com/stretchr/testify/assert"
 )
@@ -56,7 +57,7 @@ var TEST_MAPPING = []config.PDOMappingParameter{
 
 // Test everything common to RPDO & TPDO
 func TestPDOConfiguratorCommon(t *testing.T) {
-	pdos := []uint16{1, 257}
+	pdos := []uint16{pdo.IndexFirstRpdo, pdo.IndexFirstTpdo}
 	network := CreateNetworkTest()
 	defer network.Disconnect()
 
@@ -117,15 +118,14 @@ func TestPDOConfiguratorCommon(t *testing.T) {
 }
 
 func TestPDOConfiguratorNotCommon(t *testing.T) {
-
 	network := CreateNetworkTest()
 	defer network.Disconnect()
 	conf := network.Configurator(NodeIdTest)
-	err := conf.WriteInhibitTime(1, 2222)
+	err := conf.WriteInhibitTime(pdo.IndexFirstRpdo, 2222)
 	assert.Nil(t, err)
-	err = conf.WriteInhibitTime(257, 2222)
+	err = conf.WriteInhibitTime(pdo.IndexFirstTpdo, 2222)
 	assert.Nil(t, err)
-	inhibitTime, err := conf.ReadInhibitTime(257)
+	inhibitTime, err := conf.ReadInhibitTime(pdo.IndexFirstTpdo)
 	assert.Nil(t, err)
 	assert.EqualValues(t, 2222, inhibitTime)
 }

@@ -13,11 +13,11 @@ const (
 	MaxPdoLength    uint8 = 8
 	BufferCountRpdo uint8 = 2
 	MinPdoNumber          = uint16(1)
-	MaxPdoNumber          = uint16(512)
-	MinRpdoNumber         = MinPdoNumber
-	MaxRpdoNumber         = uint16(256)
-	MinTpdoNumber         = MaxRpdoNumber + 1
-	MaxTpdoNumber         = MaxPdoNumber
+	MaxRpdoNumber         = uint16(512)
+	MaxTpdoNumber         = MaxRpdoNumber
+	MaxPdoNumber          = MaxRpdoNumber + MaxTpdoNumber
+	IndexFirstRpdo        = 1
+	IndexFirstTpdo        = MaxRpdoNumber + 1
 )
 
 const (

@@ -7,6 +7,7 @@ import (
 
 	"github.com/samsamfire/gocanopen/pkg/node"
 	"github.com/samsamfire/gocanopen/pkg/od"
+	"github.com/samsamfire/gocanopen/pkg/pdo"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -71,7 +72,7 @@ func TestRemoteNode(t *testing.T) {
 		defer networkRemote.Disconnect()
 		remoteNode, err := networkRemote.AddRemoteNode(NodeIdTest, od.Default())
 		configurator := network.Configurator(NodeIdTest)
-		configurator.EnablePDO(1 + 256)
+		configurator.EnablePDO(1 + pdo.MaxRpdoNumber)
 		assert.Nil(t, err)
 		assert.NotNil(t, remoteNode)
 		err = network.WriteRaw(NodeIdTest, 0x2002, 0, []byte{10}, false)
@@ -95,7 +96,7 @@ func TestRemoteNode(t *testing.T) {
 		assert.Nil(t, err)
 		// Enable real node TPDO nb 1
 		configurator := network.Configurator(NodeIdTest)
-		err = configurator.EnablePDO(1 + 256)
+		err = configurator.EnablePDO(1 + pdo.MaxRpdoNumber)
 		assert.Nil(t, err)
 		assert.NotNil(t, remoteNode)
 		// Write value to remote node
