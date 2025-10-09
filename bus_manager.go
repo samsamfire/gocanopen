@@ -20,11 +20,13 @@ type BusManager struct {
 // [listener.Handle] should not be blocking !
 func (bm *BusManager) Handle(frame Frame) {
 	bm.mu.Lock()
-	defer bm.mu.Unlock()
 	listeners, ok := bm.frameListeners[frame.ID]
+	bm.mu.Unlock()
+
 	if !ok {
 		return
 	}
+
 	for _, listener := range listeners {
 		listener.Handle(frame)
 	}
