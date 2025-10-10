@@ -133,11 +133,14 @@ func (network *Network) Disconnect() {
 	// Stop processing for everyone then wait for everyone
 	// This is done in two steps because there can be a delay
 	// between stop & wait.
-	for _, controller := range network.controllers {
+	network.mu.Lock()
+	controllers := network.controllers
+	network.mu.Unlock()
+	for _, controller := range controllers {
 		controller.Stop()
 	}
 	wg := sync.WaitGroup{}
-	for _, controller := range network.controllers {
+	for _, controller := range controllers {
 		wg.Add(1)
 		go func() { defer wg.Done(); controller.Wait() }()
 	}
