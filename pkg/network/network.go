@@ -135,9 +135,12 @@ func (network *Network) Disconnect() {
 	for _, controller := range network.controllers {
 		controller.Stop()
 	}
+	wg := sync.WaitGroup{}
 	for _, controller := range network.controllers {
-		controller.Wait()
+		wg.Add(1)
+		go func() { defer wg.Done(); controller.Wait() }()
 	}
+	wg.Wait()
 	_ = network.BusManager.Bus().Disconnect()
 }
 
