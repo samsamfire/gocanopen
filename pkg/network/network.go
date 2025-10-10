@@ -39,6 +39,7 @@ const (
 // It acts as scheduler for locally created CANopen nodes
 // But can also be used for controlling remote CANopen nodes
 type Network struct {
+	mu sync.Mutex
 	*canopen.BusManager
 	*sdo.SDOClient
 	controllers map[uint8]*n.NodeProcessor
@@ -146,14 +147,19 @@ func (network *Network) Disconnect() {
 
 // Get OD for a specific node id
 func (network *Network) GetOD(nodeId uint8) (*od.ObjectDictionary, error) {
-	_, odLoaded := network.odMap[nodeId]
+
+	network.mu.Lock()
+	odInfo, odLoaded := network.odMap[nodeId]
+	network.mu.Unlock()
 	if odLoaded {
-		return network.odMap[nodeId].od, nil
+		return odInfo.od, nil
 	}
 	// Look in local nodes
-	_, odLoaded = network.controllers[nodeId]
+	network.mu.Lock()
+	controller, odLoaded := network.controllers[nodeId]
+	network.mu.Unlock()
 	if odLoaded {
-		return network.controllers[nodeId].GetNode().GetOD(), nil
+		return controller.GetNode().GetOD(), nil
 	}
 	return nil, od.ErrOdMissing
 }
@@ -280,7 +286,9 @@ func (network *Network) AddRemoteNode(nodeId uint8, odict any) (*n.RemoteNode, e
 		if err != nil {
 			return nil, err
 		}
+		network.mu.Lock()
 		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: odNode, edsPath: odType}
+		network.mu.Unlock()
 	case od.ObjectDictionary:
 		odNode = &odType
 		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: odNode, edsPath: ""}
@@ -316,10 +324,14 @@ func (network *Network) AddRemoteNode(nodeId uint8, odict any) (*n.RemoteNode, e
 // To control high level node behaviour (starting, stopping the node)
 func (network *Network) AddNode(node n.Node) (*n.NodeProcessor, error) {
 	controller := n.NewNodeProcessor(node, network.logger, network.processingPeriod)
+	network.mu.Lock()
 	_, ok := network.controllers[node.GetID()]
+	network.mu.Unlock()
 	if ok {
 		return nil, ErrIdConflict
 	}
+	network.mu.Lock()
+	defer network.mu.Unlock()
 	network.controllers[node.GetID()] = controller
 	return controller, nil
 }
@@ -327,7 +339,9 @@ func (network *Network) AddNode(node n.Node) (*n.NodeProcessor, error) {
 // RemoveNode gracefully exits any running go routine for this node
 // It also removes any object associated with the node, including OD
 func (network *Network) RemoveNode(nodeId uint8) error {
+	network.mu.Lock()
 	node, ok := network.controllers[nodeId]
+	network.mu.Unlock()
 	if !ok {
 		return ErrNotFound
 	}
@@ -336,13 +350,17 @@ func (network *Network) RemoveNode(nodeId uint8) error {
 		return err
 	}
 	node.Wait()
+	network.mu.Lock()
+	defer network.mu.Unlock()
 	delete(network.controllers, nodeId)
 	return nil
 }
 
 // Get a remote node object in network, based on its id
 func (network *Network) Remote(nodeId uint8) (*n.RemoteNode, error) {
+	network.mu.Lock()
 	ctrl, ok := network.controllers[nodeId]
+	network.mu.Unlock()
 	if !ok {
 		return nil, ErrNotFound
 	}
@@ -355,7 +373,9 @@ func (network *Network) Remote(nodeId uint8) (*n.RemoteNode, error) {
 
 // Get a local node object in network, based on its id
 func (network *Network) Local(nodeId uint8) (*n.LocalNode, error) {
+	network.mu.Lock()
 	ctrl, ok := network.controllers[nodeId]
+	network.mu.Unlock()
 	if !ok {
 		return nil, ErrNotFound
 	}
