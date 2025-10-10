@@ -149,15 +149,13 @@ func (network *Network) Disconnect() {
 func (network *Network) GetOD(nodeId uint8) (*od.ObjectDictionary, error) {
 
 	network.mu.Lock()
+	defer network.mu.Unlock()
 	odInfo, odLoaded := network.odMap[nodeId]
-	network.mu.Unlock()
 	if odLoaded {
 		return odInfo.od, nil
 	}
 	// Look in local nodes
-	network.mu.Lock()
 	controller, odLoaded := network.controllers[nodeId]
-	network.mu.Unlock()
 	if odLoaded {
 		return controller.GetNode().GetOD(), nil
 	}
@@ -224,7 +222,9 @@ func (network *Network) CreateLocalNode(nodeId uint8, odict any) (*n.LocalNode, 
 
 	switch odType := odict.(type) {
 	case string:
+		network.mu.Lock()
 		odNode, err = network.odParser(odType, nodeId)
+		network.mu.Unlock()
 		if err != nil {
 			return nil, err
 		}
@@ -282,19 +282,24 @@ func (network *Network) AddRemoteNode(nodeId uint8, odict any) (*n.RemoteNode, e
 
 	switch odType := odict.(type) {
 	case string:
+		network.mu.Lock()
 		odNode, err = network.odParser(odType, nodeId)
 		if err != nil {
+			network.mu.Unlock()
 			return nil, err
 		}
-		network.mu.Lock()
 		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: odNode, edsPath: odType}
 		network.mu.Unlock()
 	case od.ObjectDictionary:
 		odNode = &odType
+		network.mu.Lock()
 		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: odNode, edsPath: ""}
+		network.mu.Unlock()
 	case *od.ObjectDictionary:
 		odNode = odType
+		network.mu.Lock()
 		network.odMap[nodeId] = &ObjectDictionaryInformation{nodeId: nodeId, od: odNode, edsPath: ""}
+		network.mu.Unlock()
 	case nil:
 		odNode = nil
 
@@ -323,15 +328,13 @@ func (network *Network) AddRemoteNode(nodeId uint8, odict any) (*n.RemoteNode, e
 // Add any node to the network and return a node controller which can be used
 // To control high level node behaviour (starting, stopping the node)
 func (network *Network) AddNode(node n.Node) (*n.NodeProcessor, error) {
-	controller := n.NewNodeProcessor(node, network.logger, network.processingPeriod)
 	network.mu.Lock()
+	defer network.mu.Unlock()
+	controller := n.NewNodeProcessor(node, network.logger, network.processingPeriod)
 	_, ok := network.controllers[node.GetID()]
-	network.mu.Unlock()
 	if ok {
 		return nil, ErrIdConflict
 	}
-	network.mu.Lock()
-	defer network.mu.Unlock()
 	network.controllers[node.GetID()] = controller
 	return controller, nil
 }
@@ -359,8 +362,8 @@ func (network *Network) RemoveNode(nodeId uint8) error {
 // Get a remote node object in network, based on its id
 func (network *Network) Remote(nodeId uint8) (*n.RemoteNode, error) {
 	network.mu.Lock()
+	defer network.mu.Unlock()
 	ctrl, ok := network.controllers[nodeId]
-	network.mu.Unlock()
 	if !ok {
 		return nil, ErrNotFound
 	}
@@ -374,8 +377,8 @@ func (network *Network) Remote(nodeId uint8) (*n.RemoteNode, error) {
 // Get a local node object in network, based on its id
 func (network *Network) Local(nodeId uint8) (*n.LocalNode, error) {
 	network.mu.Lock()
+	defer network.mu.Unlock()
 	ctrl, ok := network.controllers[nodeId]
-	network.mu.Unlock()
 	if !ok {
 		return nil, ErrNotFound
 	}
@@ -445,13 +448,19 @@ func (network *Network) Scan(timeoutMs uint32) (map[uint8]NodeInformation, error
 }
 
 func (network *Network) SetLogger(logger *slog.Logger) {
+	network.mu.Lock()
+	defer network.mu.Unlock()
 	network.logger = logger
 }
 
 func (network *Network) SetParser(parser od.Parser) {
+	network.mu.Lock()
+	defer network.mu.Unlock()
 	network.odParser = parser
 }
 
 func (network *Network) SetProcessingTime(period time.Duration) {
+	network.mu.Lock()
+	defer network.mu.Unlock()
 	network.processingPeriod = period
 }
