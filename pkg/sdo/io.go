@@ -3,12 +3,14 @@ package sdo
 import (
 	"encoding/binary"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/samsamfire/gocanopen/pkg/od"
 )
 
 type sdoRawReadWriter struct {
+	mu     sync.Mutex
 	client *SDOClient
 }
 
@@ -57,6 +59,9 @@ func (client *SDOClient) NewRawWriter(nodeId uint8, index uint16, subindex uint8
 // Implements io.Reader interface
 // Read bytes from remote node using sdo client
 func (rw *sdoRawReadWriter) Read(b []byte) (n int, err error) {
+	rw.mu.Lock()
+	defer rw.mu.Unlock()
+
 	client := rw.client
 	n = 0
 
@@ -112,6 +117,9 @@ func (client *SDOClient) ReadAll(nodeId uint8, index uint16, subindex uint8) ([]
 // internal fifo as soon a we call downloadMain. This means that for small
 // transfers, exact size should be written.
 func (rw *sdoRawReadWriter) Write(b []byte) (n int, err error) {
+	rw.mu.Lock()
+	defer rw.mu.Unlock()
+
 	client := rw.client
 
 	// Fill fifo buffer
