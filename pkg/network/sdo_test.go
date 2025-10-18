@@ -61,3 +61,17 @@ func BenchmarkNodeStreamerWriter(b *testing.B) {
 		assert.NotEqual(b, 0, value)
 	}
 }
+
+func BenchmarkLocalReader(b *testing.B) {
+	b.StopTimer()
+	network := CreateNetworkTest()
+	local, err := network.Local(NodeIdTest)
+	assert.Nil(b, err)
+	assert.NotNil(b, local)
+	b.StartTimer()
+	for n := 0; n < b.N; n++ {
+		value, err := local.ReadString(0x2009, 0)
+		assert.Nil(b, err)
+		assert.NotEqual(b, 0, value)
+	}
+}
