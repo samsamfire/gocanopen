@@ -1,11 +1,9 @@
 package sdo
 
 import (
-	"context"
 	"encoding/binary"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"sync"
 
 	canopen "github.com/samsamfire/gocanopen"
@@ -483,13 +481,11 @@ func (c *SDOClient) downloadLocal(bufferPartial bool) (ret uint8, abortCode erro
 	var err error
 
 	if c.streamer.Writer() == nil {
-		if c.logger.Enabled(context.Background(), slog.LevelDebug) {
-			c.logger.Debug("[TX] local transfer write",
-				"nodeId", "x"+strconv.FormatInt(int64(c.nodeId), 16),
-				"index", "x"+strconv.FormatInt(int64(c.index), 16),
-				"subindex", "x"+strconv.FormatInt(int64(c.subindex), 16),
-			)
-		}
+		c.logger.Debug("[TX] local transfer write",
+			"nodeId", fmt.Sprintf("x%x", c.nodeId),
+			"index", fmt.Sprintf("x%x", c.index),
+			"subindex", fmt.Sprintf("x%x", c.subindex),
+		)
 		streamer, err := c.od.Streamer(c.index, c.subindex, false)
 		if err == nil {
 			c.streamer = streamer
@@ -703,14 +699,11 @@ func (c *SDOClient) uploadSetup(index uint16, subindex uint8, blockEnabled bool)
 func (c *SDOClient) uploadLocal() (ret uint8, err error) {
 
 	if c.streamer.Reader() == nil {
-		if c.logger.Enabled(context.Background(), slog.LevelDebug) {
-			// Lazy evaluation of formating
-			c.logger.Debug("[RX] local transfer read",
-				"nodeId", "x"+strconv.FormatInt(int64(c.nodeId), 16),
-				"index", "x"+strconv.FormatInt(int64(c.index), 16),
-				"subindex", "x"+strconv.FormatInt(int64(c.subindex), 16),
-			)
-		}
+		c.logger.Debug("[RX] local transfer read",
+			"nodeId", fmt.Sprintf("x%x", c.nodeId),
+			"index", fmt.Sprintf("x%x", c.index),
+			"subindex", fmt.Sprintf("x%x", c.subindex),
+		)
 		streamer, err := c.od.Streamer(c.index, c.subindex, false)
 		if err == nil {
 			c.streamer = streamer
