@@ -71,7 +71,8 @@ jobs:
           echo "Starting Go test application..."
           go run ./examples/test &
           GO_APP_PID=$!
-          sleep 2 # Give the Go app a moment to connect to virtualcan
+
+          sleep 10 # Give the Go app a moment to connect to virtualcan
 
           # 4. Run the python integration tests
           echo "Running pytest for SDO..."
