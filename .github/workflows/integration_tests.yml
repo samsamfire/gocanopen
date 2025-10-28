@@ -3,80 +3,87 @@ name: Integration tests with python
 on: [push]
 
 jobs:
-  build:
+  integration-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      VIRTUALCAN_SERVER_BIN: ${{ github.workspace }}/vcan/virtualcan
-    steps:
 
-      - name: Checkout Repository
+    steps:
+      - name: Checkout Main Repository
         uses: actions/checkout@v4
 
-      - name: Cache rust modules
-        id: cache-rust
-        uses: actions/cache@v3
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          go-version: "1.24"
+          cache: true
 
-      - name: Install minimal stable with clippy and rustfmt
-        if: steps.cache-rust.outputs.cache-hit != 'true'
-        uses: actions-rs/toolchain@v1
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          profile: minimal
-          toolchain: stable
-    
-      - name: Checkout virtualcan
-        uses: actions/checkout@v3
-        with:
-          repository: windelbouwman/virtualcan
-          ref: refs/heads/master
-          path: virtualcan
-
-      - name: Cache vcan
-        id: cache-vcan
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/vcan
-          key: ${{ runner.os }}-vcan
-
-
-      - name: Build virtualcan
-        if: steps.cache-vcan.outputs.cache-hit != 'true'
-        run: |
-          cd ./virtualcan/rust/server
-          cargo build --release
-          mkdir ~/vcan
-          mv ../target/release/virtualcan ~/vcan
-
-      - name: Install python deps
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-          cache: 'pip'
+          python-version: "3.10"
+          cache: "pip"
           cache-dependency-path: |
             ./virtualcan/python/setup.py
             **/requirements*.txt
 
-      - run: |
-          pip install -r ./tests/requirements.txt
-          pip install ./virtualcan/python
-
-      - name: Run python integration tests
+      - name: Install Python Dependencies
         run: |
-          nohup ~/vcan/virtualcan --port 18889 &
-          nohup go run ./examples/test &
-          sleep 15
+          pip install -r ./tests/requirements.txt
+          # The virtualcan python lib will be installed in the next step
+
+      - name: Setup and Build virtualcan Server
+        id: setup_vcan
+        run: |
+          # Checkout the virtualcan repository
+          git clone https://github.com/windelbouwman/virtualcan.git ${{ github.workspace }}/virtualcan
+
+          # Install rust toolchain
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source "$HOME/.cargo/env"
+
+          # Build the server
+          cd ${{ github.workspace }}/virtualcan/rust/server
+          cargo build --release
+
+          # Install the python client library
+          pip install ${{ github.workspace }}/virtualcan/python
+
+          # Move binary to a known location and add to PATH
+          mkdir -p $GITHUB_WORKSPACE/bin
+          mv ../target/release/virtualcan $GITHUB_WORKSPACE/bin/
+          echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
+
+      - name: Start Services and Run Tests
+        run: |
+          # 1. Start the virtualcan server in the background
+          echo "Starting virtualcan server..."
+          virtualcan --port 18889 &
+          VCAN_PID=$!
+
+          # 2. Health check: Wait for the virtualcan server to be ready.
+          echo "Waiting for virtualcan server to be available on port 18889..."
+          while ! nc -z localhost 18889; do   
+            sleep 0.1
+          done
+          echo "virtualcan server is up!"
+
+          # 3. Start your Go application in the background
+          echo "Starting Go test application..."
+          go run ./examples/test &
+          GO_APP_PID=$!
+
+          while ! nc -z localhost 6060; do   
+            sleep 0.1
+          done
+
+          # 4. Run the python integration tests
+          echo "Running pytest for SDO..."
           python -m pytest ./tests/test_sdo.py -v
+
+          echo "Running pytest for PDO..."
           python -m pytest ./tests/test_pdo.py -v
 
-
-
-
-      
+          # 5. Stop the background services
+          echo "Tests finished. Shutting down services..."
+          kill $VCAN_PID
+          kill $GO_APP_PID

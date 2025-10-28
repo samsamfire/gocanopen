@@ -24,10 +24,6 @@ const (
 
 func main() {
 
-	go func() {
-		http.ListenAndServe("localhost:6060", nil)
-	}()
-
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	network := network.NewNetwork(nil)
 	network.SetLogger(logger)
@@ -45,5 +41,9 @@ func main() {
 	}
 	//Add file extension
 	node.GetOD().AddFile(0x200F, "File", "example.bin", os.O_RDONLY|os.O_CREATE, os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
+
+	go func() {
+		http.ListenAndServe("localhost:6060", nil)
+	}()
 	select {}
 }
