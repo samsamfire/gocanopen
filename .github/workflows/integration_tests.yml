@@ -60,7 +60,7 @@ jobs:
           virtualcan --port 18889 &
           VCAN_PID=$!
 
-          # 2. Health check: Wait for the virtualcan server to be ready
+          # 2. Health check: Wait for the virtualcan server to be ready.
           echo "Waiting for virtualcan server to be available on port 18889..."
           while ! nc -z localhost 18889; do   
             sleep 0.1 # wait for 100ms before check again
