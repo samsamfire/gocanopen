@@ -57,7 +57,7 @@ jobs:
         run: |
           # 1. Start the virtualcan server in the background
           echo "Starting virtualcan server..."
-          virtualcan --port 18889 &
+          nohup virtualcan --port 18889 &
           VCAN_PID=$!
 
           # 2. Health check: Wait for the virtualcan server to be ready.
