@@ -63,7 +63,7 @@ jobs:
           # 2. Health check: Wait for the virtualcan server to be ready.
           echo "Waiting for virtualcan server to be available on port 18889..."
           while ! nc -z localhost 18889; do   
-            sleep 0.1 # wait for 100ms before check again
+            sleep 0.1
           done
           echo "virtualcan server is up!"
 
@@ -72,7 +72,9 @@ jobs:
           go run ./examples/test &
           GO_APP_PID=$!
 
-          sleep 10 # Give the Go app a moment to connect to virtualcan
+          while ! nc -z localhost 6060; do   
+            sleep 0.1
+          done
 
           # 4. Run the python integration tests
           echo "Running pytest for SDO..."
