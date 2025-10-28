@@ -255,7 +255,7 @@ func (s *SDOServer) readObjectDictionary(countMin uint32, countExact int, calcul
 	if countExact == -1 {
 		nbToRead = min(len(s.intermediateBuf), s.buf.Cap()-s.buf.Len())
 	} else {
-		nbToRead = countExact
+		nbToRead = min(len(s.intermediateBuf), countExact)
 	}
 
 	countRd, err := s.streamer.Read(s.intermediateBuf[:nbToRead])
