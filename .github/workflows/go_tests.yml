@@ -9,7 +9,6 @@ jobs:
     env:
       VIRTUALCAN_SERVER_BIN: ${{ github.workspace }}/vcan/virtualcan
     steps:
-
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -30,7 +29,7 @@ jobs:
         with:
           profile: minimal
           toolchain: stable
-    
+
       - name: Checkout virtualcan
         uses: actions/checkout@v3
         with:
@@ -46,7 +45,6 @@ jobs:
             ~/vcan
           key: ${{ runner.os }}-vcan
 
-
       - name: Build virtualcan
         if: steps.cache-vcan.outputs.cache-hit != 'true'
         run: |
@@ -58,12 +56,12 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.21'
-      
+          go-version: "1.24"
+
       - name: Install Go deps
-        run: | 
-         go get . &
-         go install gotest.tools/gotestsum@latest
+        run: |
+          go get . &
+          go install gotest.tools/gotestsum@latest
 
       - name: Build gocanopen
         run: go build -v ./...
@@ -73,8 +71,3 @@ jobs:
           nohup ~/vcan/virtualcan --port 18888 &
           cd pkg
           go run gotest.tools/gotestsum@latest --format testname
-
-
-
-
-      
