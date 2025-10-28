@@ -162,7 +162,10 @@ def test_sdo_block_download_big_block(node: canopen.RemoteNode):
     NB_LINES = 100000
     LINE = b"123456"
     with node.sdo["DOMAIN value"].open(
-        mode="wb", block_transfer=True, request_crc_support=True, size=NB_LINES * len(LINE)
+        mode="wb",
+        block_transfer=True,
+        request_crc_support=True,
+        size=NB_LINES * len(LINE),
     ) as f:
         for _ in range(NB_LINES):
             f.write(LINE)
@@ -321,14 +324,18 @@ def test_sdo_segmented_timeout(node: canopen.RemoteNode):
     # !! This is a limitation of canopen that does not check for SDO aborts without calling "read_response"
     # In the case of a block download, this means that aborts are not correctly handled
     # This starts a block download and hangs on purpose
-    f = node.sdo["UNSIGNED64 value"].open(mode="rb", block_transfer=False, request_crc_support=True)
+    f = node.sdo["UNSIGNED64 value"].open(
+        mode="rb", block_transfer=False, request_crc_support=True
+    )
     f.raw.close = mock_close
     time.sleep(1.1)
     with pytest.raises(canopen.SdoAbortedError, match="Timeout"):
         while True:
             response = f.raw.sdo_client.read_response()
 
-    f = node.sdo["UNSIGNED64 value"].open(mode="wb", block_transfer=False, request_crc_support=True)
+    f = node.sdo["UNSIGNED64 value"].open(
+        mode="wb", block_transfer=False, request_crc_support=True
+    )
     f.raw.close = mock_close
     time.sleep(1.1)
     with pytest.raises(canopen.SdoAbortedError, match="Timeout"):
@@ -347,14 +354,18 @@ def test_sdo_block_timeout(node: canopen.RemoteNode):
     # !! This is a limitation of canopen that does not check for SDO aborts without calling "read_response"
     # In the case of a block download, this means that aborts are not correctly handled
     # This starts a block download and hangs on purpose
-    f = node.sdo["DOMAIN value"].open(mode="wb", block_transfer=True, request_crc_support=True, size=1000)
+    f = node.sdo["DOMAIN value"].open(
+        mode="wb", block_transfer=True, request_crc_support=True, size=1000
+    )
     f.raw.close = mock_close
     time.sleep(2.0)
     with pytest.raises(canopen.SdoAbortedError, match="Timeout"):
         while True:
             _ = f.raw.sdo_client.read_response()
 
-    f = node.sdo["DOMAIN value"].open(mode="rb", block_transfer=True, request_crc_support=True, size=1000)
+    f = node.sdo["DOMAIN value"].open(
+        mode="rb", block_transfer=True, request_crc_support=True, size=1000
+    )
     f.raw.close = mock_close
     time.sleep(2.0)
     with pytest.raises(canopen.SdoAbortedError, match="Timeout"):
@@ -380,7 +391,9 @@ def test_sdo_block_upload_crc_invalid(node: canopen.RemoteNode):
     from canopen.sdo.client import BlockUploadStream
 
     with pytest.raises(canopen.SdoCommunicationError, match="CRC"):
-        stream = BlockUploadStream(node.sdo, index=0x200F, subindex=0x0, request_crc_support=True)
+        stream = BlockUploadStream(
+            node.sdo, index=0x200F, subindex=0x0, request_crc_support=True
+        )
         counter = 0
         while stream._done != True:
             counter += 1
@@ -399,7 +412,9 @@ def test_sdo_block_upload_crc_invalid(node: canopen.RemoteNode):
 
 def _retransmit(self):
     """Path _retransmit because of bug in canopen package"""
-    logger.info("Only %d sequences were received. Requesting retransmission", self._ackseq)
+    logger.info(
+        "Only %d sequences were received. Requesting retransmission", self._ackseq
+    )
     end_time = time.time() + self.sdo_client.RESPONSE_TIMEOUT
     self._ack_block()
     while time.time() < end_time:
@@ -431,22 +446,64 @@ def test_sdo_block_upload_retransmit(node: canopen.RemoteNode, monkeypatch):
 
     monkeypatch.setattr(BlockUploadStream, "_retransmit", _retransmit)
 
-    stream = BlockUploadStream(node.sdo, index=0x200F, subindex=0x0, request_crc_support=True)
+    stream = BlockUploadStream(
+        node.sdo, index=0x200F, subindex=0x0, request_crc_support=True
+    )
     counter = 0
     done = False
     data = bytes()
 
     while stream._done != True:
         # Mess up sequence number in order to trigger retransmit
-        if not done and stream._ackseq >= 50:
+        if not done and stream._ackseq >= 120:
             # Patch read function fake a wrong block to trigger retransmit
             stream.sdo_client.responses.get()
-            stream.sdo_client.responses.put(bytes([80, 255, 255, 255, 255, 255, 255, 255]))
+            stream.sdo_client.responses.put(
+                bytes([80, 255, 255, 255, 255, 255, 255, 255])
+            )
             done = True
         counter += 1
         data += stream.read(7)
     stream.close()
     assert data.decode("utf-8") == 111 * "this is some fake bin data\n"
+
+
+def test_sdo_block_upload_retransmit_forever(node: canopen.RemoteNode, monkeypatch):
+    LINE = b"this is some fake bin data\n"
+    STRING_BINARY = b""
+    for i in range(1111):
+        STRING_BINARY += LINE
+    # Write some data then read back
+    with node.sdo["DOMAIN value"].open(
+        mode="wb",
+        block_transfer=True,
+        size=len(STRING_BINARY),
+        request_crc_support=True,
+    ) as f:
+        f.write(STRING_BINARY)
+
+    from canopen.sdo.client import BlockUploadStream
+
+    monkeypatch.setattr(BlockUploadStream, "_retransmit", _retransmit)
+
+    stream = BlockUploadStream(
+        node.sdo, index=0x200F, subindex=0x0, request_crc_support=True
+    )
+    counter = 0
+    done = False
+    data = bytes()
+    with pytest.raises(SdoCommunicationError):
+        while stream._done != True:
+            # Mess up sequence number in order to trigger retransmit
+            if not done and stream._ackseq >= 120:
+                # Patch read function fake a wrong block to trigger retransmit
+                stream.sdo_client.responses.get()
+                stream.sdo_client.responses.put(
+                    bytes([80, 255, 255, 255, 255, 255, 255, 255])
+                )
+            counter += 1
+            data += stream.read(7)
+        stream.close()
 
 
 @pytest.mark.parametrize("nb_lines", [i for i in range(1, 120)])
