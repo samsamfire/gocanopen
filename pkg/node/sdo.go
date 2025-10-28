@@ -6,10 +6,16 @@ import (
 	"github.com/samsamfire/gocanopen/pkg/od"
 )
 
-// Read an entry using a base sdo client
-// index and subindex can either be strings or integers
-// this method requires the corresponding node OD to be loaded
-// returned value can be either string, uint64, int64 or float64
+// import (
+// 	"io"
+
+// 	"github.com/samsamfire/gocanopen/pkg/od"
+// )
+
+// // Read an entry using a base sdo client
+// // index and subindex can either be strings or integers
+// // this method requires the corresponding node OD to be loaded
+// // returned value can be either string, uint64, int64 or float64
 func (node *BaseNode) ReadAny(index any, subindex any) (any, error) {
 
 	// We need index,subindex & datatype to be able to decode data.
@@ -75,7 +81,7 @@ func (node *BaseNode) Read(index any, subindex any) (value any, e error) {
 }
 
 // Same as [ReadAny] but enforces the returned type as uint64
-func (node *BaseNode) ReadUint(index any, subindex any) (value uint64, e error) {
+func (node *RemoteNode) ReadUint(index any, subindex any) (value uint64, e error) {
 	v, err := node.ReadAny(index, subindex)
 	if err != nil {
 		return 0, err
@@ -88,7 +94,7 @@ func (node *BaseNode) ReadUint(index any, subindex any) (value uint64, e error) 
 }
 
 // Same as [ReadAny] but enforces the returned type as uint32
-func (node *BaseNode) ReadUint32(index any, subindex any) (value uint32, e error) {
+func (node *RemoteNode) ReadUint32(index any, subindex any) (value uint32, e error) {
 	v, err := node.ReadAnyExact(index, subindex)
 	if err != nil {
 		return 0, err
@@ -101,7 +107,7 @@ func (node *BaseNode) ReadUint32(index any, subindex any) (value uint32, e error
 }
 
 // Same as [ReadAny] but enforces the returned type as uint16
-func (node *BaseNode) ReadUint16(index any, subindex any) (value uint16, e error) {
+func (node *RemoteNode) ReadUint16(index any, subindex any) (value uint16, e error) {
 	v, err := node.ReadAnyExact(index, subindex)
 	if err != nil {
 		return 0, err
@@ -114,7 +120,7 @@ func (node *BaseNode) ReadUint16(index any, subindex any) (value uint16, e error
 }
 
 // Same as [ReadAny] but enforces the returned type as uint8
-func (node *BaseNode) ReadUint8(index any, subindex any) (value uint8, e error) {
+func (node *RemoteNode) ReadUint8(index any, subindex any) (value uint8, e error) {
 	v, err := node.ReadAnyExact(index, subindex)
 	if err != nil {
 		return 0, err
@@ -127,7 +133,7 @@ func (node *BaseNode) ReadUint8(index any, subindex any) (value uint8, e error) 
 }
 
 // Same as [ReadAny] but enforces the returned type as int64
-func (node *BaseNode) ReadInt(index any, subindex any) (value int64, e error) {
+func (node *RemoteNode) ReadInt(index any, subindex any) (value int64, e error) {
 	v, err := node.ReadAny(index, subindex)
 	if err != nil {
 		return 0, err
@@ -140,7 +146,7 @@ func (node *BaseNode) ReadInt(index any, subindex any) (value int64, e error) {
 }
 
 // Same as [ReadAny] but enforces the returned type as int32
-func (node *BaseNode) ReadInt32(index any, subindex any) (value int32, e error) {
+func (node *RemoteNode) ReadInt32(index any, subindex any) (value int32, e error) {
 	v, err := node.ReadAnyExact(index, subindex)
 	if err != nil {
 		return 0, err
@@ -153,7 +159,7 @@ func (node *BaseNode) ReadInt32(index any, subindex any) (value int32, e error) 
 }
 
 // Same as [ReadAny] but enforces the returned type as int16
-func (node *BaseNode) ReadInt16(index any, subindex any) (value int16, e error) {
+func (node *RemoteNode) ReadInt16(index any, subindex any) (value int16, e error) {
 	v, err := node.ReadAnyExact(index, subindex)
 	if err != nil {
 		return 0, err
@@ -166,7 +172,7 @@ func (node *BaseNode) ReadInt16(index any, subindex any) (value int16, e error) 
 }
 
 // Same as [ReadAny] but enforces the returned type as int8
-func (node *BaseNode) ReadInt8(index any, subindex any) (value int8, e error) {
+func (node *RemoteNode) ReadInt8(index any, subindex any) (value int8, e error) {
 	v, err := node.ReadAnyExact(index, subindex)
 	if err != nil {
 		return 0, err
@@ -179,7 +185,7 @@ func (node *BaseNode) ReadInt8(index any, subindex any) (value int8, e error) {
 }
 
 // Same as [ReadAny] but enforces the returned type as float64
-func (node *BaseNode) ReadFloat(index any, subindex any) (value float64, e error) {
+func (node *RemoteNode) ReadFloat(index any, subindex any) (value float64, e error) {
 	v, err := node.ReadAny(index, subindex)
 	if err != nil {
 		return 0, err
@@ -192,7 +198,7 @@ func (node *BaseNode) ReadFloat(index any, subindex any) (value float64, e error
 }
 
 // Same as [ReadAny] but enforces the returned type as float32
-func (node *BaseNode) ReadFloat32(index any, subindex any) (value float32, e error) {
+func (node *RemoteNode) ReadFloat32(index any, subindex any) (value float32, e error) {
 	v, err := node.ReadAnyExact(index, subindex)
 	if err != nil {
 		return 0, err
@@ -205,7 +211,7 @@ func (node *BaseNode) ReadFloat32(index any, subindex any) (value float32, e err
 }
 
 // Same as [ReadAny] but enforces the returned type as string
-func (node *BaseNode) ReadString(index any, subindex any) (value string, e error) {
+func (node *RemoteNode) ReadString(index any, subindex any) (value string, e error) {
 	v, err := node.ReadAny(index, subindex)
 	if err != nil {
 		return "", err
@@ -217,10 +223,10 @@ func (node *BaseNode) ReadString(index any, subindex any) (value string, e error
 	return value, nil
 }
 
-// Read an entry from a remote node
-// this method does not require corresponding OD to be loaded
-// value will be read as a raw byte slice
-// does not support block transfer
+// // Read an entry from a remote node
+// // this method does not require corresponding OD to be loaded
+// // value will be read as a raw byte slice
+// // does not support block transfer
 func (node *BaseNode) ReadRaw(index uint16, subIndex uint8, data []byte) (int, error) {
 	return node.SDOClient.ReadRaw(node.id, index, subIndex, data)
 }
