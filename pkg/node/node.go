@@ -34,12 +34,11 @@ type Node interface {
 type BaseNode struct {
 	*canopen.BusManager
 	*sdo.SDOClient
-	logger       *slog.Logger
-	mu           sync.Mutex
-	od           *od.ObjectDictionary
-	mainCallback func(node Node)
-	id           uint8
-	rxBuffer     []byte
+	logger   *slog.Logger
+	mu       sync.Mutex
+	od       *od.ObjectDictionary
+	id       uint8
+	rxBuffer []byte
 }
 
 func newBaseNode(
@@ -89,15 +88,17 @@ func (node *BaseNode) Export(filename string) error {
 		}
 		for j := range uint8(entry.SubCount()) {
 			buffer := make([]byte, 100)
-			n, err := node.ReadRaw(index, j, buffer)
-			if err != nil {
-				countErrors++
-				node.logger.Warn("failed to read remote value",
-					"index", fmt.Sprintf("x%x", index),
-					"subIndex", fmt.Sprintf("x%x", j),
-					"error", err)
-				continue
-			}
+			// n, err := node.ReadRaw(index, j, buffer)
+			// if err != nil {
+			// 	countErrors++
+			// 	node.logger.Warn("failed to read remote value",
+			// 		"index", fmt.Sprintf("x%x", index),
+			// 		"subIndex", fmt.Sprintf("x%x", j),
+			// 		"error", err)
+			// 	continue
+			// }
+			var n int = 0
+			var err error
 			err = entry.WriteExactly(j, buffer[:n], true)
 			if err != nil {
 				node.logger.Warn("failed to write remote value to local od",
