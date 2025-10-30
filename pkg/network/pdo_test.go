@@ -44,7 +44,7 @@ func TestTpdo(t *testing.T) {
 
 		// Update local node, wait for some time & check value
 		// received on other side
-		err = local.Write(0x2002, 0, int8(10))
+		err = local.WriteAnyExact(0x2002, 0, int8(10))
 		assert.Nil(t, err)
 
 		assert.Eventually(t,
