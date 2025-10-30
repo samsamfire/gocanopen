@@ -88,17 +88,15 @@ func (node *BaseNode) Export(filename string) error {
 		}
 		for j := range uint8(entry.SubCount()) {
 			buffer := make([]byte, 100)
-			// n, err := node.ReadRaw(index, j, buffer)
-			// if err != nil {
-			// 	countErrors++
-			// 	node.logger.Warn("failed to read remote value",
-			// 		"index", fmt.Sprintf("x%x", index),
-			// 		"subIndex", fmt.Sprintf("x%x", j),
-			// 		"error", err)
-			// 	continue
-			// }
-			var n int = 0
-			var err error
+			n, err := node.SDOClient.ReadRaw(node.id, index, j, buffer)
+			if err != nil {
+				countErrors++
+				node.logger.Warn("failed to read remote value",
+					"index", fmt.Sprintf("x%x", index),
+					"subIndex", fmt.Sprintf("x%x", j),
+					"error", err)
+				continue
+			}
 			err = entry.WriteExactly(j, buffer[:n], true)
 			if err != nil {
 				node.logger.Warn("failed to write remote value to local od",
