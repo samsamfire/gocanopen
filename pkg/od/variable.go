@@ -67,6 +67,16 @@ func (v *Variable) DefaultValue() []byte {
 	return v.valueDefault
 }
 
+func (v *Variable) Bool() (bool, error) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	if v.DataType != BOOLEAN {
+		return false, ErrTypeMismatch
+	}
+	return v.value[0] > 0, nil
+}
+
 // Return value as uint64 (only for UNSIGNED types)
 func (v *Variable) Uint() (uint64, error) {
 	v.mu.RLock()
@@ -230,24 +240,12 @@ func (v *Variable) String() (string, error) {
 
 	switch v.DataType {
 	case VISIBLE_STRING, OCTET_STRING:
+		// Stop at first null byte
+		// TODO
 		return string(v.value), nil
 	default:
 		return "", ErrTypeMismatch
 	}
-}
-
-// Return value as bool (only for BOOLEAN type)
-func (v *Variable) Bool() (bool, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
-
-	if v.DataType != BOOLEAN {
-		return false, ErrTypeMismatch
-	}
-	if v.value[0] == 0 {
-		return false, nil
-	}
-	return true, nil
 }
 
 // Return value as byte slice
@@ -258,4 +256,42 @@ func (v *Variable) Bytes() []byte {
 	copied := make([]byte, len(v.value))
 	copy(copied, v.value)
 	return copied
+}
+
+// Return value as underlying "base" datatype
+func (v *Variable) Any() (any, error) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return DecodeToType(v.value, v.DataType)
+}
+
+// Return value as underlying datatype
+func (v *Variable) AnyExact() (any, error) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return DecodeToTypeExact(v.value, v.DataType)
+}
+
+// Update value from bytes.
+// This will check that the underlying length is coherent
+// but makes no assumption on content
+func (v *Variable) PutBytes(value []byte) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if len(v.value) != len(value) {
+		if len(value) > len(v.value) {
+			return ErrDataLong
+		}
+		return ErrDataShort
+	}
+	v.value = value
+	return nil
+}
+
+// This will check that the actual type corresponds
+// to the CANopen datatype before updating the value
+func (v *Variable) PutAnyExact(value any) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return EncodeFromTypeExactToBuffer(value, v.DataType, v.value)
 }

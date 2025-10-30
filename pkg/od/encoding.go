@@ -84,7 +84,131 @@ func EncodeFromString(value string, datatype uint8, offset uint8) ([]byte, error
 }
 
 // Encode from generic type
-func EncodeFromGeneric(data any) ([]byte, error) {
+func EncodeFromTypeExact(data any) ([]byte, error) {
+	var encoded []byte
+	switch val := data.(type) {
+	case uint8:
+		encoded = []byte{val}
+	case int8:
+		encoded = []byte{byte(val)}
+	case uint16:
+		encoded = make([]byte, 2)
+		binary.LittleEndian.PutUint16(encoded, val)
+	case int16:
+		encoded = make([]byte, 2)
+		binary.LittleEndian.PutUint16(encoded, uint16(val))
+	case uint32:
+		encoded = make([]byte, 4)
+		binary.LittleEndian.PutUint32(encoded, val)
+	case int32:
+		encoded = make([]byte, 4)
+		binary.LittleEndian.PutUint32(encoded, uint32(val))
+	case uint64:
+		encoded = make([]byte, 8)
+		binary.LittleEndian.PutUint64(encoded, val)
+	case int64:
+		encoded = make([]byte, 8)
+		binary.LittleEndian.PutUint64(encoded, uint64(val))
+	case string:
+		encoded = []byte(val)
+	case float32:
+		encoded = make([]byte, 4)
+		binary.LittleEndian.PutUint32(encoded, math.Float32bits(val))
+	case float64:
+		encoded = make([]byte, 8)
+		binary.LittleEndian.PutUint64(encoded, math.Float64bits(val))
+	case []byte:
+		encoded = val
+	default:
+		return nil, ErrTypeMismatch
+	}
+	return encoded, nil
+}
+
+func EncodeFromTypeExactToBuffer(data any, dataType uint8, buf []byte) error {
+
+	switch val := data.(type) {
+	case bool:
+		if dataType != BOOLEAN {
+			return ErrTypeMismatch
+		}
+		if val {
+			buf[0] = 1
+		} else {
+			buf[0] = 0
+		}
+	case uint8:
+		if dataType != UNSIGNED8 {
+			return ErrTypeMismatch
+		}
+		buf[0] = val
+	case int8:
+		if dataType != INTEGER8 {
+			return ErrTypeMismatch
+		}
+		buf[0] = byte(val)
+	case uint16:
+		if dataType != UNSIGNED16 {
+			return ErrTypeMismatch
+		}
+		binary.LittleEndian.PutUint16(buf, val)
+	case int16:
+		if dataType != INTEGER16 {
+			return ErrTypeMismatch
+		}
+		binary.LittleEndian.PutUint16(buf, uint16(val))
+	case uint32:
+		if dataType != UNSIGNED32 {
+			return ErrTypeMismatch
+		}
+		binary.LittleEndian.PutUint32(buf, val)
+	case int32:
+		if dataType != INTEGER32 {
+			return ErrTypeMismatch
+		}
+		binary.LittleEndian.PutUint32(buf, uint32(val))
+	case uint64:
+		if dataType != UNSIGNED64 {
+			return ErrTypeMismatch
+		}
+		binary.LittleEndian.PutUint64(buf, val)
+	case int64:
+		if dataType != INTEGER64 {
+			return ErrTypeMismatch
+		}
+		binary.LittleEndian.PutUint64(buf, uint64(val))
+	case float32:
+		if dataType != REAL32 {
+			return ErrTypeMismatch
+		}
+		binary.LittleEndian.PutUint32(buf, math.Float32bits(val))
+	case float64:
+		if dataType != REAL64 {
+			return ErrTypeMismatch
+		}
+		binary.LittleEndian.PutUint64(buf, math.Float64bits(val))
+	case string:
+		if dataType != VISIBLE_STRING {
+			return ErrTypeMismatch
+		}
+		if len(val) > len(buf) {
+			return ErrDataLong
+		}
+		clear(buf)
+		copy(buf, []byte(val))
+	case []byte:
+		if len(val) > len(buf) {
+			return ErrDataLong
+		}
+		clear(buf)
+		copy(buf, val)
+	default:
+		return ErrTypeMismatch
+	}
+	return nil
+}
+
+func EncodeFromType(data any) ([]byte, error) {
 	var encoded []byte
 	switch val := data.(type) {
 	case uint8:
@@ -160,6 +284,64 @@ func CheckSize(length int, dataType uint8) error {
 	return nil
 
 }
+
+// // Helper function to check that concrete type of data and dataType
+// // are consistent
+// func CheckDatatype(data any, dataType byte) error {
+// 	switch data.(type) {
+// 	case uint8:
+// 		if dataType != UNSIGNED8 {
+// 			return ErrTypeMismatch
+// 		}
+// 	case uint16:
+// 		if dataType != UNSIGNED16 {
+// 			return ErrTypeMismatch
+// 		}
+// 	case uint32:
+// 		if dataType != UNSIGNED32 {
+// 			return ErrTypeMismatch
+// 		}
+// 	case uint64:
+// 		if dataType != UNSIGNED64 {
+// 			return ErrTypeMismatch
+// 		}
+// 	case int8:
+// 		if dataType != INTEGER8 {
+// 			return ErrTypeMismatch
+// 		}
+// 	case int16:
+// 		if dataType != INTEGER16 {
+// 			return ErrTypeMismatch
+// 		}
+// 	case int32:
+// 		if dataType != INTEGER32 {
+// 			return ErrTypeMismatch
+// 		}
+// 	case int64:
+// 		if dataType != INTEGER64 {
+// 			return ErrTypeMismatch
+// 		}
+// 	case float32:
+// 		if dataType != REAL32 {
+// 			return ErrTypeMismatch
+// 		}
+// 	case float64:
+// 		if dataType != REAL64 {
+// 			return ErrTypeMismatch
+// 		}
+// 	case string:
+// 		if dataType != UNICODE_STRING {
+// 			return ErrTypeMismatch
+// 		}
+// 	case []byte:
+// 		if dataType != OCTET_STRING {
+// 			return ErrTypeMismatch
+// 		}
+// 	default:
+// 		return ErrTypeMismatch
+// 	}
+// 	return nil
+// }
 
 // Decode byte array given the CANopen data type
 // Function will return either string, int64, uint64, or float64
