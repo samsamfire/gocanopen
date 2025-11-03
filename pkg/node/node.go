@@ -29,6 +29,18 @@ type Node interface {
 	GetOD() *od.ObjectDictionary
 	GetID() uint8
 	Export(filename string) error
+
+	// OD access
+	ReadAny(index any, subindex any) (any, error)
+	ReadAnyExact(index any, subindex any) (any, error)
+	ReadBytes(index any, subindex any) ([]byte, error)
+	ReadBool(index any, subindex any) (bool, error)
+	ReadUint(index any, subindex any) (uint64, error)
+	ReadInt(index any, subindex any) (int64, error)
+	ReadFloat(index any, subindex any) (float64, error)
+	ReadString(index any, subindex any) (string, error)
+
+	WriteAnyExact(index any, subindex any, value any) error
 }
 
 type BaseNode struct {
