@@ -153,45 +153,41 @@ func (entry *Entry) FlagPDOByte(subIndex byte) *uint8 {
 // Uint8 reads data inside of OD as if it were and UNSIGNED8.
 // It returns an error if length is incorrect or read failed.
 func (entry *Entry) Uint8(subIndex uint8) (uint8, error) {
-	b := make([]byte, 1)
-	err := entry.ReadExactly(subIndex, b, true)
+	sub, err := entry.SubIndex(subIndex)
 	if err != nil {
 		return 0, err
 	}
-	return b[0], nil
+	return sub.Uint8()
 }
 
 // Uint16 reads data inside of OD as if it were and UNSIGNED16.
 // It returns an error if length is incorrect or read failed.
 func (entry *Entry) Uint16(subIndex uint8) (uint16, error) {
-	b := make([]byte, 2)
-	err := entry.ReadExactly(subIndex, b, true)
+	sub, err := entry.SubIndex(subIndex)
 	if err != nil {
 		return 0, err
 	}
-	return binary.LittleEndian.Uint16(b), nil
+	return sub.Uint16()
 }
 
 // Uint32 reads data inside of OD as if it were and UNSIGNED32.
 // It returns an error if length is incorrect or read failed.
 func (entry *Entry) Uint32(subIndex uint8) (uint32, error) {
-	b := make([]byte, 4)
-	err := entry.ReadExactly(subIndex, b, true)
+	sub, err := entry.SubIndex(subIndex)
 	if err != nil {
 		return 0, err
 	}
-	return binary.LittleEndian.Uint32(b), nil
+	return sub.Uint32()
 }
 
 // Uint64 reads data inside of OD as if it were and UNSIGNED64.
 // It returns an error if length is incorrect or read failed.
 func (entry *Entry) Uint64(subIndex uint8) (uint64, error) {
-	b := make([]byte, 8)
-	err := entry.ReadExactly(subIndex, b, true)
+	sub, err := entry.SubIndex(subIndex)
 	if err != nil {
 		return 0, err
 	}
-	return binary.LittleEndian.Uint64(b), nil
+	return sub.Uint64()
 }
 
 // PutUint8 writes an UNSIGNED8 to OD entry.
