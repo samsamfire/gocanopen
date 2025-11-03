@@ -392,7 +392,9 @@ func DecodeToTypeExact(data []byte, dataType uint8) (v any, e error) {
 	}
 	// Cast to correct type
 	switch dataType {
-	case BOOLEAN, UNSIGNED8:
+	case BOOLEAN:
+		return data[0] > 0, nil
+	case UNSIGNED8:
 		return data[0], nil
 	case INTEGER8:
 		return int8(data[0]), nil
