@@ -37,7 +37,7 @@ func main() {
 		logger.Info("read", "value", val)
 	}
 	// Or write values via SDO
-	err = node.Write("UNSIGNED64 value", "", uint64(10))
+	err = node.WriteAnyExact("UNSIGNED64 value", "", uint64(10))
 	if err != nil {
 		logger.Info("failed to write", "err", err)
 	}
