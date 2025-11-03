@@ -55,11 +55,26 @@ func (entry *Entry) SubIndex(subIndex any) (v *Variable, e error) {
 		return nil, ErrIdxNotExist
 	}
 	switch object := entry.object.(type) {
+
 	case *Variable:
-		if subIndex != 0 && subIndex != "" {
+		switch sub := subIndex.(type) {
+		case string:
+			if sub != "" {
+				return nil, ErrSubNotExist
+			}
+		case int:
+			if sub != 0 {
+				return nil, ErrSubNotExist
+			}
+		case uint8:
+			if sub != 0 {
+				return nil, ErrSubNotExist
+			}
+		default:
 			return nil, ErrSubNotExist
 		}
 		return object, nil
+
 	case *VariableList:
 		var convertedSubIndex uint8
 		var ok bool
@@ -81,6 +96,7 @@ func (entry *Entry) SubIndex(subIndex any) (v *Variable, e error) {
 
 		}
 		return object.GetSubObject(convertedSubIndex)
+
 	default:
 		// This is not normal
 		return nil, ErrDevIncompat
