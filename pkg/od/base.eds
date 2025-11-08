@@ -955,7 +955,7 @@ ObjectType=0x7
 ;StorageLocation=RAM
 DataType=0x0005
 AccessType=rw
-DefaultValue=0
+DefaultValue=8
 PDOMapping=0
 
 [1600sub1]
@@ -964,7 +964,7 @@ ObjectType=0x7
 ;StorageLocation=RAM
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000000
+DefaultValue=0x22000008
 PDOMapping=0
 
 [1600sub2]
@@ -973,7 +973,7 @@ ObjectType=0x7
 ;StorageLocation=RAM
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000000
+DefaultValue=0x22010008
 PDOMapping=0
 
 [1600sub3]
@@ -982,7 +982,7 @@ ObjectType=0x7
 ;StorageLocation=RAM
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000000
+DefaultValue=0x22020008
 PDOMapping=0
 
 [1600sub4]
@@ -991,7 +991,7 @@ ObjectType=0x7
 ;StorageLocation=RAM
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000000
+DefaultValue=0x22030008
 PDOMapping=0
 
 [1600sub5]
@@ -1000,7 +1000,7 @@ ObjectType=0x7
 ;StorageLocation=RAM
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000000
+DefaultValue=0x22040008
 PDOMapping=0
 
 [1600sub6]
@@ -1009,7 +1009,7 @@ ObjectType=0x7
 ;StorageLocation=RAM
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000000
+DefaultValue=0x22050008
 PDOMapping=0
 
 [1600sub7]
@@ -1018,7 +1018,7 @@ ObjectType=0x7
 ;StorageLocation=RAM
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000000
+DefaultValue=0x22060008
 PDOMapping=0
 
 [1600sub8]
@@ -1027,7 +1027,7 @@ ObjectType=0x7
 ;StorageLocation=RAM
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000000
+DefaultValue=0x22070008
 PDOMapping=0
 
 [1601]
@@ -2035,3 +2035,67 @@ HighLimit=0x5600
 DefaultValue=0x500
 AccessType=rw
 PDOMapping=0
+
+[2200]
+ParameterName=RPDO_byte0
+ObjectType=0x7
+DataType=0x0005
+DefaultValue=0x10
+AccessType=rw
+PDOMapping=1
+
+[2201]
+ParameterName=RPDO_byte1
+ObjectType=0x7
+DataType=0x0005
+DefaultValue=0x10
+AccessType=rw
+PDOMapping=1
+
+[2202]
+ParameterName=RPDO_byte2
+ObjectType=0x7
+DataType=0x0005
+DefaultValue=0x10
+AccessType=rw
+PDOMapping=1
+
+[2203]
+ParameterName=RPDO_byte3
+ObjectType=0x7
+DataType=0x0005
+DefaultValue=0x10
+AccessType=rw
+PDOMapping=1
+
+[2204]
+ParameterName=RPDO_byte4
+ObjectType=0x7
+DataType=0x0005
+DefaultValue=0x10
+AccessType=rw
+PDOMapping=1
+
+[2205]
+ParameterName=RPDO_byte5
+ObjectType=0x7
+DataType=0x0005
+DefaultValue=0x10
+AccessType=rw
+PDOMapping=1
+
+[2206]
+ParameterName=RPDO_byte6
+ObjectType=0x7
+DataType=0x0005
+DefaultValue=0x10
+AccessType=rw
+PDOMapping=1
+
+[2207]
+ParameterName=RPDO_byte7
+ObjectType=0x7
+DataType=0x0005
+DefaultValue=0x10
+AccessType=rw
+PDOMapping=1
