@@ -39,31 +39,33 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	defer rpdo.mu.Unlock()
 	pdo := rpdo.pdo
 	err := rpdo.receiveError
+
 	if !pdo.Valid {
 		return
 	}
-	if frame.DLC >= uint8(pdo.dataLength) {
-		// Indicate if errors in PDO length
-		if frame.DLC == uint8(pdo.dataLength) {
-			if err == rpdoRxAckError {
-				err = rpdoRxOk
-			}
-		} else {
-			if err == rpdoRxAckNoError {
-				err = rpdoRxLong
-			}
-		}
-		// Determine where to copy the message
-		bufNo := 0
-		if rpdo.synchronous && rpdo.sync != nil && rpdo.sync.RxToggle() {
-			bufNo = 1
-		}
-		rpdo.rxData[bufNo] = frame.Data
-		rpdo.rxNew[bufNo] = true
 
-	} else if err == rpdoRxAckNoError {
-		err = rpdoRxShort
+	if frame.DLC < uint8(pdo.dataLength) {
+		if err == rpdoRxAckNoError {
+			rpdo.receiveError = rpdoRxShort
+		}
+		return
 	}
+
+	if frame.DLC > uint8(pdo.dataLength) {
+		if err == rpdoRxAckNoError {
+			rpdo.receiveError = rpdoRxLong
+		}
+		return
+	}
+
+	// Frame size is correct
+	err = rpdoRxOk
+	bufNo := 0
+	if rpdo.synchronous && rpdo.sync != nil && rpdo.sync.RxToggle() {
+		bufNo = 1
+	}
+	rpdo.rxData[bufNo] = frame.Data
+	rpdo.rxNew[bufNo] = true
 	rpdo.receiveError = err
 }
 
