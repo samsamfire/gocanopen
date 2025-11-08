@@ -556,10 +556,10 @@ func NewEMCY(
 	emcy.fifo = make([]emfifo, fifoSize)
 
 	// Get cob id initial & verify
-	cobIdEmergency, ret := entry1014.Uint32(0)
-	if ret != nil || (cobIdEmergency&0x7FFFF800) != 0 {
+	cobIdEmergency, err := entry1014.Uint32(0)
+	if err != nil || (cobIdEmergency&0x7FFFF800) != 0 {
 		// Don't break if only value is wrong
-		if ret != nil {
+		if err != nil {
 			return nil, canopen.ErrOdParameters
 		}
 	}
@@ -574,8 +574,8 @@ func NewEMCY(
 	emcy.txBuffer = canopen.NewFrame(producerCanId, 0, 8)
 	emcy.inhibitTimeUs = 0
 	emcy.inhibitTimer = 0
-	inhibitTime100us, ret := entry1015.Uint16(0)
-	if ret == nil {
+	inhibitTime100us, err := entry1015.Uint16(0)
+	if err == nil {
 		emcy.inhibitTimeUs = uint32(inhibitTime100us) * 100
 		entry1015.AddExtension(emcy, od.ReadEntryDefault, writeEntry1015)
 	}
