@@ -75,7 +75,9 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
 
+	var buffer []byte
 	pdo := rpdo.pdo
+
 	if !pdo.Valid || !nmtIsOperational || (!syncWas && rpdo.synchronous) {
 		// not valid and op, clear can receive flags & timeouttimer
 		if !pdo.Valid || !nmtIsOperational {
@@ -109,9 +111,11 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 	totalNbWritten := uint32(0)
 
 	for rpdo.rxNew[bufNo] {
+
 		rpdoReceived = true
-		dataRPDO := rpdo.rxData[bufNo]
+		dataRPDO := rpdo.rxData[bufNo][:pdo.dataLength]
 		rpdo.rxNew[bufNo] = false
+
 		for i := range pdo.nbMapped {
 			streamer := &pdo.streamers[i]
 			mappedLength := streamer.DataOffset
@@ -119,7 +123,7 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 			if dataLength > uint32(MaxPdoLength) {
 				dataLength = uint32(MaxPdoLength)
 			}
-			buffer := dataRPDO[totalNbWritten : totalNbWritten+mappedLength]
+			buffer = dataRPDO[totalNbWritten : totalNbWritten+mappedLength]
 			if dataLength > uint32(mappedLength) {
 				buffer = buffer[:cap(buffer)]
 			}
