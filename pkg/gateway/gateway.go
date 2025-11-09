@@ -93,8 +93,8 @@ func (gw *BaseGateway) NMTCommand(id uint8, command nmt.Command) error {
 // Set SDO timeout
 func (gw *BaseGateway) SetSDOTimeout(timeoutMs uint32) error {
 	// TODO : maybe add mutex in case ongoing transfer
-	gw.network.SDOClient.SetTimeout(timeoutMs)
-	gw.network.SDOClient.SetTimeoutBlockTransfer(timeoutMs)
+	gw.network.SetTimeout(timeoutMs)
+	gw.network.SetTimeoutBlockTransfer(timeoutMs)
 	gw.logger.Debug("changing sdo client timeout", "timeoutMs", timeoutMs)
 	return nil
 }

@@ -80,7 +80,7 @@ func TestClientBlock(t *testing.T) {
 		data := []byte(`some random string some random string some random
 		string some random string some random 
 		string some random string some random string`)
-		w, err := network2.SDOClient.NewRawWriter(NodeIdTest, 0x3333, 0, true, 0)
+		w, err := network2.NewRawWriter(NodeIdTest, 0x3333, 0, true, 0)
 		assert.Nil(t, err)
 		n, err := w.Write(data)
 		assert.Nil(t, err)
@@ -89,8 +89,8 @@ func TestClientBlock(t *testing.T) {
 
 	t.Run("big block", func(t *testing.T) {
 		data := make([]byte, 10_000)
-		network2.SDOClient.SetProcessingPeriod(100)
-		w, err := network2.SDOClient.NewRawWriter(NodeIdTest, 0x3333, 0, true, 10_000)
+		network2.SetProcessingPeriod(100)
+		w, err := network2.NewRawWriter(NodeIdTest, 0x3333, 0, true, 10_000)
 
 		assert.Nil(t, err)
 		n, err := w.Write(data)
@@ -105,7 +105,7 @@ func TestClientBlock(t *testing.T) {
 		data := []byte(`some random string some random string some random
 		string some random string some random 
 		string some random string some random string`)
-		w, err := network2.SDOClient.NewRawWriter(NodeIdTest, 0x3333, 0, true, 0)
+		w, err := network2.NewRawWriter(NodeIdTest, 0x3333, 0, true, 0)
 		assert.Nil(t, err)
 		n, err := w.Write(data)
 		assert.Nil(t, err)
