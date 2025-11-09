@@ -8,17 +8,17 @@ import (
 )
 
 // [SDO server] update server parameters
-func writeEntry1201(stream *od.Stream, data []byte, countWritten *uint16) error {
-	if stream == nil || data == nil || countWritten == nil {
-		return od.ErrDevIncompat
+func writeEntry1201(stream *od.Stream, data []byte) (uint16, error) {
+	if stream == nil || data == nil {
+		return 0, od.ErrDevIncompat
 	}
 	server, ok := stream.Object.(*SDOServer)
 	if !ok {
-		return od.ErrDevIncompat
+		return 0, od.ErrDevIncompat
 	}
 	switch stream.Subindex {
 	case 0:
-		return od.ErrReadonly
+		return 0, od.ErrReadonly
 	// cob id client to server
 	case 1:
 		cobId := binary.LittleEndian.Uint32(data)
@@ -28,11 +28,11 @@ func writeEntry1201(stream *od.Stream, data []byte, countWritten *uint16) error 
 		if (cobId&0x3FFFF800) != 0 ||
 			(valid && server.valid && canId != canIdCurrent) ||
 			(valid && canopen.IsIDRestricted(canId)) {
-			return od.ErrInvalidValue
+			return 0, od.ErrInvalidValue
 		}
 		err := server.initRxTx(cobId, server.cobIdServerToClient)
 		if err != nil {
-			return od.ErrDevIncompat
+			return 0, od.ErrDevIncompat
 		}
 	// cob id server to client
 	case 2:
@@ -43,42 +43,42 @@ func writeEntry1201(stream *od.Stream, data []byte, countWritten *uint16) error 
 		if (cobId&0x3FFFF800) != 0 ||
 			(valid && server.valid && canId != canIdCurrent) ||
 			(valid && canopen.IsIDRestricted(canId)) {
-			return od.ErrInvalidValue
+			return 0, od.ErrInvalidValue
 		}
 		err := server.initRxTx(server.cobIdClientToServer, cobId)
 		if err != nil {
-			return od.ErrDevIncompat
+			return 0, od.ErrDevIncompat
 		}
 	// node id of server
 	case 3:
 		if len(data) != 1 {
-			return od.ErrTypeMismatch
+			return 0, od.ErrTypeMismatch
 		}
 		nodeId := data[0]
 		if nodeId < 1 || nodeId > 127 {
-			return od.ErrInvalidValue
+			return 0, od.ErrInvalidValue
 		}
 		server.nodeId = nodeId // ??
 
 	default:
-		return od.ErrSubNotExist
+		return 0, od.ErrSubNotExist
 
 	}
-	return od.WriteEntryDefault(stream, data, countWritten)
+	return od.WriteEntryDefault(stream, data)
 }
 
 // [SDO Client] update parameters
-func writeEntry1280(stream *od.Stream, data []byte, countWritten *uint16) error {
-	if stream == nil || data == nil || countWritten == nil {
-		return od.ErrDevIncompat
+func writeEntry1280(stream *od.Stream, data []byte) (uint16, error) {
+	if stream == nil || data == nil {
+		return 0, od.ErrDevIncompat
 	}
 	client, ok := stream.Object.(*SDOClient)
 	if !ok {
-		return od.ErrDevIncompat
+		return 0, od.ErrDevIncompat
 	}
 	switch stream.Subindex {
 	case 0:
-		return od.ErrReadonly
+		return 0, od.ErrReadonly
 	// cob id client to server
 	case 1:
 		cobId := binary.LittleEndian.Uint32(data)
@@ -88,11 +88,11 @@ func writeEntry1280(stream *od.Stream, data []byte, countWritten *uint16) error 
 		if (cobId&0x3FFFF800) != 0 ||
 			(valid && client.valid && canId != canIdCurrent) ||
 			(valid && canopen.IsIDRestricted(canId)) {
-			return od.ErrInvalidValue
+			return 0, od.ErrInvalidValue
 		}
 		err := client.setupServer(cobId, client.cobIdServerToClient, client.nodeIdServer)
 		if err != nil {
-			return od.ErrDevIncompat
+			return 0, od.ErrDevIncompat
 		}
 	// cob id server to client
 	case 2:
@@ -103,26 +103,26 @@ func writeEntry1280(stream *od.Stream, data []byte, countWritten *uint16) error 
 		if (cobId&0x3FFFF800) != 0 ||
 			(valid && client.valid && canId != canIdCurrent) ||
 			(valid && canopen.IsIDRestricted(canId)) {
-			return od.ErrInvalidValue
+			return 0, od.ErrInvalidValue
 		}
 		err := client.setupServer(cobId, client.cobIdClientToServer, client.nodeIdServer)
 		if err != nil {
-			return od.ErrDevIncompat
+			return 0, od.ErrDevIncompat
 		}
 	// node id of server
 	case 3:
 		if len(data) != 1 {
-			return od.ErrTypeMismatch
+			return 0, od.ErrTypeMismatch
 		}
 		nodeId := data[0]
 		if nodeId > 127 {
-			return od.ErrInvalidValue
+			return 0, od.ErrInvalidValue
 		}
 		client.nodeIdServer = nodeId
 
 	default:
-		return od.ErrSubNotExist
+		return 0, od.ErrSubNotExist
 
 	}
-	return od.WriteEntryDefault(stream, data, countWritten)
+	return od.WriteEntryDefault(stream, data)
 }

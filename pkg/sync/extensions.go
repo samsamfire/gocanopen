@@ -8,13 +8,13 @@ import (
 )
 
 // [SYNC] update cob id & if should be producer
-func writeEntry1005(stream *od.Stream, data []byte, countWritten *uint16) error {
-	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
-		return od.ErrDevIncompat
+func writeEntry1005(stream *od.Stream, data []byte) (uint16, error) {
+	if stream == nil || data == nil || stream.Subindex != 0 || len(data) != 4 {
+		return 0, od.ErrDevIncompat
 	}
 	sync, ok := stream.Object.(*SYNC)
 	if !ok {
-		return od.ErrDevIncompat
+		return 0, od.ErrDevIncompat
 	}
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
@@ -24,13 +24,13 @@ func writeEntry1005(stream *od.Stream, data []byte, countWritten *uint16) error 
 	canId := uint16(cobIdSync & 0x7FF)
 	isProducer := (cobIdSync & 0x40000000) != 0
 	if (cobIdSync&0xBFFFF800) != 0 || canopen.IsIDRestricted(canId) || (sync.isProducer && isProducer && canId != uint16(sync.cobId)) {
-		return od.ErrInvalidValue
+		return 0, od.ErrInvalidValue
 	}
 	// Reconfigure the receive and transmit buffers only if changed
 	if canId != uint16(sync.cobId) {
 		err := sync.Subscribe(uint32(canId), 0x7FF, false, sync)
 		if err != nil {
-			return od.ErrDevIncompat
+			return 0, od.ErrDevIncompat
 		}
 		var frameSize uint8 = 0
 		if sync.counterOverflow != 0 {
@@ -49,62 +49,62 @@ func writeEntry1005(stream *od.Stream, data []byte, countWritten *uint16) error 
 	} else {
 		sync.logger.Info("not producer")
 	}
-	return od.WriteEntryDefault(stream, data, countWritten)
+	return od.WriteEntryDefault(stream, data)
 }
 
 // [SYNC] update communication cycle period
-func writeEntry1006(stream *od.Stream, data []byte, countWritten *uint16) error {
-	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
-		return od.ErrDevIncompat
+func writeEntry1006(stream *od.Stream, data []byte) (uint16, error) {
+	if stream == nil || data == nil || stream.Subindex != 0 || len(data) != 4 {
+		return 0, od.ErrDevIncompat
 	}
 	sync, ok := stream.Object.(*SYNC)
 	if !ok {
-		return od.ErrDevIncompat
+		return 0, od.ErrDevIncompat
 	}
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
 
 	cyclePeriodUs := binary.LittleEndian.Uint32(data)
 	sync.logger.Info("updating communication cycle", "periodMs", cyclePeriodUs/1000)
-	return od.WriteEntryDefault(stream, data, countWritten)
+	return od.WriteEntryDefault(stream, data)
 }
 
 // [SYNC] update pdo synchronous window length
-func writeEntry1007(stream *od.Stream, data []byte, countWritten *uint16) error {
-	if stream == nil || data == nil || stream.Subindex != 0 || countWritten == nil || len(data) != 4 {
-		return od.ErrDevIncompat
+func writeEntry1007(stream *od.Stream, data []byte) (uint16, error) {
+	if stream == nil || data == nil || stream.Subindex != 0 || len(data) != 4 {
+		return 0, od.ErrDevIncompat
 	}
 	sync, ok := stream.Object.(*SYNC)
 	if !ok {
-		return od.ErrDevIncompat
+		return 0, od.ErrDevIncompat
 	}
 	windowLengthUs := binary.LittleEndian.Uint32(data)
 	sync.logger.Info("updating synchronous window length", "lengthMs", windowLengthUs/1000)
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
 
-	return od.WriteEntryDefault(stream, data, countWritten)
+	return od.WriteEntryDefault(stream, data)
 }
 
 // [SYNC] update synchronous counter overflow
-func writeEntry1019(stream *od.Stream, data []byte, countWritten *uint16) error {
-	if stream == nil || data == nil || countWritten == nil || len(data) != 1 {
-		return od.ErrDevIncompat
+func writeEntry1019(stream *od.Stream, data []byte) (uint16, error) {
+	if stream == nil || data == nil || len(data) != 1 {
+		return 0, od.ErrDevIncompat
 	}
 	sync, ok := stream.Object.(*SYNC)
 	if !ok {
-		return od.ErrDevIncompat
+		return 0, od.ErrDevIncompat
 	}
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
 
 	syncCounterOverflow := data[0]
 	if syncCounterOverflow == 1 || syncCounterOverflow > 240 {
-		return od.ErrInvalidValue
+		return 0, od.ErrInvalidValue
 	}
 	commCyclePeriod, err := sync.commCyclePeriod.Uint32(0)
 	if commCyclePeriod != 0 || err != nil {
-		return od.ErrDataDevState
+		return 0, od.ErrDataDevState
 	}
 	var nbBytes = uint8(0)
 	if syncCounterOverflow != 0 {
@@ -113,5 +113,5 @@ func writeEntry1019(stream *od.Stream, data []byte, countWritten *uint16) error 
 	sync.txBuffer = canopen.NewFrame(sync.cobId, 0, nbBytes)
 	sync.counterOverflow = syncCounterOverflow
 	sync.logger.Info("updating synchronous counter overflow", "overflow", syncCounterOverflow)
-	return od.WriteEntryDefault(stream, data, countWritten)
+	return od.WriteEntryDefault(stream, data)
 }

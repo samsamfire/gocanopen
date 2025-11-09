@@ -65,8 +65,7 @@ func TestReadWriteDisabled(t *testing.T) {
 	_, err = streamer.Read([]byte{0})
 	assert.Equal(t, ErrUnsuppAccess, err)
 
-	var countWrite uint16
-	err = streamer.reader(&streamer.Stream, []byte{0}, &countWrite)
+	_, err = streamer.reader(&streamer.Stream, []byte{0})
 	assert.Equal(t, ErrUnsuppAccess, err)
 }
 

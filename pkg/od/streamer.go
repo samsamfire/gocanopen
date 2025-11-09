@@ -30,13 +30,13 @@ type Stream struct {
 	Subindex uint8
 }
 
-// A StreamReader is a function that reads from a [Stream] object and
-// updates the countRead and the read slice with the read bytes
-type StreamReader func(stream *Stream, read []byte, countRead *uint16) error
+// A StreamReader is a function that reads from a [Stream] object to buff
+// and returns the number of bytes read and any error
+type StreamReader func(stream *Stream, buff []byte) (uint16, error)
 
 // A StreamWriter is a function that writes to a [Stream] object
-// using the to_write slice and updates countWritten
-type StreamWriter func(stream *Stream, to_write []byte, countWritten *uint16) error
+// from buff and returns the number of bytes written and any error
+type StreamWriter func(stream *Stream, buff []byte) (uint16, error)
 
 // extension object, is used for extending functionnality of an OD entry
 // This package has some pre-made extensions for CiA defined entries
@@ -57,17 +57,15 @@ type Streamer struct {
 }
 
 // Implements io.Reader
-func (s *Streamer) Read(b []byte) (n int, err error) {
-	countRead := uint16(0)
-	err = s.reader(&s.Stream, b, &countRead)
-	return int(countRead), err
+func (s *Streamer) Read(b []byte) (int, error) {
+	n, err := s.reader(&s.Stream, b)
+	return int(n), err
 }
 
 // Implements io.Writer
-func (s *Streamer) Write(b []byte) (n int, err error) {
-	countWritten := uint16(0)
-	err = s.writer(&s.Stream, b, &countWritten)
-	return int(countWritten), err
+func (s *Streamer) Write(b []byte) (int, error) {
+	n, err := s.writer(&s.Stream, b)
+	return int(n), err
 }
 
 // Return streamer writer
@@ -178,10 +176,10 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (Streamer, error) {
 // This is the default "StreamReader" type for every OD entry
 // It Reads a value from the original OD location i.e. [Stream] object
 // And writes it inside data. It also updates the actual read count, countRead
-func ReadEntryDefault(stream *Stream, data []byte, countRead *uint16) error {
+func ReadEntryDefault(stream *Stream, data []byte) (uint16, error) {
 	if stream == nil || stream.Data == nil || stream.mu == nil ||
-		data == nil || countRead == nil {
-		return ErrDevIncompat
+		data == nil {
+		return 0, ErrDevIncompat
 	}
 	// Check if variable is accessible (i.e.) no write is currently being performed
 	// Reading will hang if entry is already being written to. This is problematic
@@ -197,7 +195,7 @@ func ReadEntryDefault(stream *Stream, data []byte, countRead *uint16) error {
 	// in several calls
 	if stream.DataOffset > 0 || dataLenToCopy > count {
 		if stream.DataOffset >= uint32(dataLenToCopy) {
-			return ErrDevIncompat
+			return 0, ErrDevIncompat
 		}
 		dataLenToCopy -= int(stream.DataOffset)
 		if dataLenToCopy > count {
@@ -210,18 +208,17 @@ func ReadEntryDefault(stream *Stream, data []byte, countRead *uint16) error {
 		}
 	}
 	copy(data, stream.Data[stream.DataOffset:stream.DataOffset+uint32(dataLenToCopy)])
-	*countRead = uint16(dataLenToCopy)
-	return err
+	return uint16(dataLenToCopy), err
 
 }
 
 // This is the default "StreamWriter" type for every OD entry
 // It writes data to the [Stream] object
 // It also updates the number write count, countWritten
-func WriteEntryDefault(stream *Stream, data []byte, countWritten *uint16) error {
+func WriteEntryDefault(stream *Stream, data []byte) (uint16, error) {
 	if stream == nil || stream.Data == nil || stream.mu == nil ||
-		data == nil || countWritten == nil {
-		return ErrDevIncompat
+		data == nil {
+		return 0, ErrDevIncompat
 	}
 	// Writing will hang if entry is already being read. This is problematic
 	// For SDO block transfers.
@@ -236,7 +233,7 @@ func WriteEntryDefault(stream *Stream, data []byte, countWritten *uint16) error 
 	// in several calls
 	if stream.DataOffset > 0 || dataLenToCopy > count {
 		if stream.DataOffset >= uint32(dataLenToCopy) {
-			return ErrDevIncompat
+			return 0, ErrDevIncompat
 		}
 		dataLenToCopy -= int(stream.DataOffset)
 
@@ -253,20 +250,19 @@ func WriteEntryDefault(stream *Stream, data []byte, countWritten *uint16) error 
 	// OD variable is smaller than the provided buffer
 	if dataLenToCopy < count ||
 		stream.DataOffset+uint32(dataLenToCopy) > uint32(len(stream.Data)) {
-		return ErrDataLong
+		return 0, ErrDataLong
 	}
 
 	copy(stream.Data[stream.DataOffset:stream.DataOffset+uint32(dataLenToCopy)], data)
-	*countWritten = uint16(dataLenToCopy)
-	return err
+	return uint16(dataLenToCopy), err
 }
 
 // "StreamReader" when the actual OD entry to be read is disabled
-func ReadEntryDisabled(stream *Stream, data []byte, countRead *uint16) error {
-	return ErrUnsuppAccess
+func ReadEntryDisabled(stream *Stream, data []byte) (uint16, error) {
+	return 0, ErrUnsuppAccess
 }
 
 // "StreamWriter" when the actual OD entry to be written is disabled
-func WriteEntryDisabled(stream *Stream, data []byte, countWritten *uint16) error {
-	return ErrUnsuppAccess
+func WriteEntryDisabled(stream *Stream, data []byte) (uint16, error) {
+	return 0, ErrUnsuppAccess
 }
