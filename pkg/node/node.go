@@ -100,7 +100,7 @@ func (node *BaseNode) Export(filename string) error {
 		}
 		for j := range uint8(entry.SubCount()) {
 			buffer := make([]byte, 100)
-			n, err := node.SDOClient.ReadRaw(node.id, index, j, buffer)
+			n, err := node.ReadRaw(node.id, index, j, buffer)
 			if err != nil {
 				countErrors++
 				node.logger.Warn("failed to read remote value",
