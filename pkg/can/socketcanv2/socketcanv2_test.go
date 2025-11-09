@@ -77,6 +77,7 @@ func TestSendReceiveWithReceiveOwn(t *testing.T) {
 	skipCI(t)
 	listener := &frameListener{frames: make([]canopen.Frame, 0)}
 	sock, err := NewBus("vcan0")
+	assert.Nil(t, err)
 	err = sock.Connect()
 	defer sock.Disconnect()
 	assert.Nil(t, err)

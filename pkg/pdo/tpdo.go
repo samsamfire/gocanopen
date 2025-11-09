@@ -193,11 +193,6 @@ func (tpdo *TPDO) send() error {
 	for i := range pdo.nbMapped {
 		streamer := &pdo.streamers[i]
 		mappedLength := streamer.DataOffset
-		dataLength := int(streamer.DataLength)
-		if dataLength > int(MaxPdoLength) {
-			dataLength = int(MaxPdoLength)
-		}
-
 		streamer.DataOffset = 0
 		_, err = streamer.Read(tpdo.txBuffer.Data[totalNbRead:])
 		if err != nil {
