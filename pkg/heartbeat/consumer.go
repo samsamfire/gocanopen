@@ -86,7 +86,7 @@ func (entry *hbConsumerEntry) update(nodeId uint8, consumerTimeMs uint16) {
 
 // Process [HBConsumer] state machine and TX CAN frames
 // This should be called periodically
-func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
+func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) {
 	consumer.mu.Lock()
 	defer consumer.mu.Unlock()
 
@@ -159,12 +159,6 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 						)
 					}
 					consumer.mu.Lock()
-				} else if timerNextUs != nil {
-					// Calculate when to recheck
-					diff := monitoredNode.timeUs - monitoredNode.timeoutTimer
-					if *timerNextUs > diff {
-						*timerNextUs = diff
-					}
 				}
 			}
 

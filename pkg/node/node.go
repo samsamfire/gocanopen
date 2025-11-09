@@ -23,7 +23,7 @@ type Node interface {
 	// Cyclic tasks
 	ProcessPDO(syncWas bool, timeDifferenceUs uint32)
 	ProcessSYNC(timeDifferenceUs uint32) bool
-	ProcessMain(enableGateway bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8
+	ProcessMain(enableGateway bool, timeDifferenceUs uint32) uint8
 	// Internal servers
 	Servers() []*sdo.SDOServer
 	GetOD() *od.ObjectDictionary

@@ -104,7 +104,7 @@ func (nmt *NMT) Handle(frame canopen.Frame) {
 // Process [NMT] state machine and TX CAN frames
 // It returns a computed global state request for the node
 // This should be called periodically
-func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
+func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32) uint8 {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
 
@@ -196,15 +196,6 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32, timerNext
 		nmt.logger.Info("nmt state changed", "previous", prev, "new", stateMap[nmtStateCopy])
 		if nmt.callback != nil {
 			nmt.callback(nmtStateCopy)
-		}
-	}
-
-	// Calculate next heartbeat
-	if nmt.hearbeatProducerTimeUs != 0 && timerNextUs != nil {
-		if nmt.operatingStatePrev != nmtStateCopy {
-			*timerNextUs = 0
-		} else if *timerNextUs > nmt.hearbeatProducerTimer {
-			*timerNextUs = nmt.hearbeatProducerTimer
 		}
 	}
 

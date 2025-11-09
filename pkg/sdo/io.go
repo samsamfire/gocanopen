@@ -61,7 +61,7 @@ func (rw *sdoRawReadWriter) Read(b []byte) (n int, err error) {
 	n = 0
 
 	for {
-		ret, err := client.upload(DefaultClientProcessPeriodUs, false, nil, nil, nil)
+		ret, err := client.upload(DefaultClientProcessPeriodUs, false, nil, nil)
 		switch {
 		case err != nil:
 			return n, err
@@ -127,7 +127,6 @@ func (rw *sdoRawReadWriter) Write(b []byte) (n int, err error) {
 			false,
 			bufferPartial,
 			&nUint32,
-			nil,
 			false,
 		)
 		switch {

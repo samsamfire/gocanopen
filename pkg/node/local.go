@@ -71,7 +71,7 @@ func (node *LocalNode) ProcessSYNC(timeDifferenceUs uint32) bool {
 
 // Process canopen objects that are not RT
 // Does not process SYNC and PDOs
-func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
+func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32) uint8 {
 
 	// Process all objects
 	NMTState := node.NMT.GetInternalState()
@@ -82,13 +82,13 @@ func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, 
 	}
 
 	node.BusManager.Process()
-	node.EMCY.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
-	reset := node.NMT.Process(&NMTState, timeDifferenceUs, timerNextUs)
+	node.EMCY.Process(NMTisPreOrOperational, timeDifferenceUs)
+	reset := node.NMT.Process(&NMTState, timeDifferenceUs)
 
 	// Update NMTisPreOrOperational
 	NMTisPreOrOperational = (NMTState == nmt.StatePreOperational) || (NMTState == nmt.StateOperational)
 
-	node.HBConsumer.Process(NMTisPreOrOperational, timeDifferenceUs, timerNextUs)
+	node.HBConsumer.Process(NMTisPreOrOperational, timeDifferenceUs)
 
 	if node.TIME != nil {
 		node.TIME.Process(NMTisPreOrOperational, timeDifferenceUs)

@@ -296,7 +296,7 @@ func (emcy *EMCY) Handle(frame canopen.Frame) {
 
 // Process [EMCY] state machine and TX CAN frames
 // This should be called periodically
-func (emcy *EMCY) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, timerNextUs *uint32) {
+func (emcy *EMCY) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) {
 	emcy.mu.Lock()
 	defer emcy.mu.Unlock()
 	// Check errors from driver
@@ -413,11 +413,6 @@ func (emcy *EMCY) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32, t
 				emcy.mu.Unlock()
 				emcy.ErrorReset(EmEmergencyBufferFull, 0)
 				emcy.mu.Lock()
-			}
-		} else if timerNextUs != nil && emcy.inhibitTimeUs < emcy.inhibitTimer {
-			diff := emcy.inhibitTimeUs - emcy.inhibitTimer
-			if *timerNextUs > diff {
-				*timerNextUs = diff
 			}
 		}
 

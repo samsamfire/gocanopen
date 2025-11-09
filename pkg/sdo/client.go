@@ -187,7 +187,6 @@ func (c *SDOClient) downloadMain(
 	abort bool,
 	bufferPartial bool,
 	sizeTransferred *uint32,
-	timerNextUs *uint32,
 	forceSegmented bool,
 ) (uint8, error) {
 	c.mu.Lock()
@@ -206,8 +205,6 @@ func (c *SDOClient) downloadMain(
 		ret, err = c.downloadLocal(bufferPartial)
 		if ret != waitingLocalTransfer {
 			c.state = stateIdle
-		} else if timerNextUs != nil {
-			*timerNextUs = 0
 		}
 	} else if c.rxNew {
 		response := c.response
@@ -360,11 +357,6 @@ func (c *SDOClient) downloadMain(
 		if c.timeoutTimer >= c.timeoutTimeUs {
 			abortCode = AbortTimeout
 			c.state = stateAbort
-		} else if timerNextUs != nil {
-			diff := c.timeoutTimeUs - c.timeoutTimer
-			if *timerNextUs > diff {
-				*timerNextUs = diff
-			}
 		}
 	}
 
@@ -394,7 +386,7 @@ func (c *SDOClient) downloadMain(
 			c.state = stateDownloadBlkInitiateRsp
 
 		case stateDownloadBlkSubblockReq:
-			abortCode = c.downloadBlock(bufferPartial, timerNextUs)
+			abortCode = c.downloadBlock(bufferPartial)
 			if abortCode != nil {
 				c.state = stateAbort
 			}
@@ -613,7 +605,7 @@ func (c *SDOClient) downloadBlockInitiate() error {
 }
 
 // Helper function for downloading a sub-block
-func (c *SDOClient) downloadBlock(bufferPartial bool, timerNext *uint32) error {
+func (c *SDOClient) downloadBlock(bufferPartial bool) error {
 	if c.fifo.AltGetOccupied() < BlockSeqSize && bufferPartial {
 		// No data yet
 		return nil
@@ -636,8 +628,6 @@ func (c *SDOClient) downloadBlock(bufferPartial bool, timerNext *uint32) error {
 		c.state = stateDownloadBlkSubblockRsp
 	} else if c.blockSequenceNb >= c.blockSize {
 		c.state = stateDownloadBlkSubblockRsp
-	} else if timerNext != nil {
-		*timerNext = 0
 	}
 	c.timeoutTimer = 0
 	return c.Send(c.txBuffer)
@@ -785,7 +775,6 @@ func (c *SDOClient) upload(
 	abort bool,
 	sizeIndicated *uint32,
 	sizeTransferred *uint32,
-	timerNextUs *uint32,
 ) (uint8, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -803,8 +792,6 @@ func (c *SDOClient) upload(
 		ret, err = c.uploadLocal()
 		if ret != uploadDataFull && ret != waitingLocalTransfer {
 			c.state = stateIdle
-		} else if timerNextUs != nil {
-			*timerNextUs = 0
 		}
 	} else if c.rxNew {
 		response := c.response
@@ -1036,12 +1023,6 @@ func (c *SDOClient) upload(
 				abortCode = AbortTimeout
 			}
 			c.state = stateAbort
-
-		} else if timerNextUs != nil {
-			diff := c.timeoutTimeUs - c.timeoutTimer
-			if *timerNextUs > diff {
-				*timerNextUs = diff
-			}
 		}
 		// Timeout for subblocks
 		if c.state == stateUploadBlkSubblockSreq {
@@ -1051,11 +1032,6 @@ func (c *SDOClient) upload(
 			if c.timeoutTimerBlock >= c.timeoutTimeBlockTransferUs {
 				c.state = stateUploadBlkSubblockCrsp
 				c.rxNew = false
-			} else if timerNextUs != nil {
-				diff := c.timeoutTimeBlockTransferUs - c.timeoutTimerBlock
-				if *timerNextUs > diff {
-					*timerNextUs = diff
-				}
 			}
 		}
 	}
@@ -1154,9 +1130,6 @@ func (c *SDOClient) upload(
 					ret = uploadDataFull
 					if transferShort {
 						c.logger.Warn("upload data is full", "seqno", seqnoStart)
-					}
-					if timerNextUs != nil {
-						*timerNextUs = 0
 					}
 					break
 				}
