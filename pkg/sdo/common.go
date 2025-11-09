@@ -68,24 +68,12 @@ const (
 	initiateUploadRequest   = uint8(0)
 	// Transfer type (e)
 	transferExpedited = uint8(0b1) << 1
-	transferNormal    = uint8(0b0) << 1
 	// Size indicated (s)
-	sizeIndicated    = uint8(0b1)
-	sizeNotIndicated = uint8(0b0)
+	sizeIndicated = uint8(0b1)
 	// Size indicated block (s)
-	sizeIndicatedBlock    = uint8(0b1) << 1
-	sizeNotIndicatedBlock = uint8(0b0) << 1
-	// Client CRC support (cc)
-	clientCRCSupported    = uint8(0b1) << 2
-	clientCRCNotSupported = uint8(0b0) << 2
-	// Server CRC support (cc)
-	serverCRCSupported    = uint8(0b1) << 3
-	serverCRCNotSupported = uint8(0b0) << 3
+	sizeIndicatedBlock = uint8(0b1) << 1
 	// Segment remaining (c)
-	segmentRemaining    = uint8(0b0) << 7
-	segmentNotRemaining = uint8(0b1) << 7
-	// Server subcommand (ss)
-	serverSubCommandBlockDownloadResp = uint8(0b10)
+	segmentRemaining = uint8(0b0) << 7
 )
 
 const (
