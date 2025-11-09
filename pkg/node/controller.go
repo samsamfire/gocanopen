@@ -67,7 +67,7 @@ func (c *NodeProcessor) main(ctx context.Context) {
 			return
 		case <-ticker.C:
 			// Process main
-			state := c.node.ProcessMain(false, periodUs, nil)
+			state := c.node.ProcessMain(false, periodUs)
 			if state == nmt.ResetApp || state == nmt.ResetComm {
 				c.logger.Info("node reset requested")
 				if c.resetHandler != nil {

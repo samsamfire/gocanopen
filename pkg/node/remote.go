@@ -62,7 +62,7 @@ func (node *RemoteNode) ProcessSYNC(timeDifferenceUs uint32) bool {
 	return syncWas
 }
 
-func (node *RemoteNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32, timerNextUs *uint32) uint8 {
+func (node *RemoteNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32) uint8 {
 	return nmt.ResetNot
 }
 
