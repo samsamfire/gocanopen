@@ -28,3 +28,10 @@ func BenchmarkParser(b *testing.B) {
 	})
 
 }
+
+func TestIsValidHex4(t *testing.T) {
+	assert.True(t, isValidHex4([]byte("0A3f")))
+	assert.True(t, isValidHex4([]byte("bA3E")))
+	assert.True(t, isValidHex4([]byte("1001")))
+	assert.False(t, isValidHex4([]byte("bA3Ei")))
+}

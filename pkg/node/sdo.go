@@ -18,7 +18,7 @@ func (node *BaseNode) ReadAny(index any, subindex any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, err := node.SDOClient.NewRawReader(
+	r, err := node.NewRawReader(
 		node.GetID(),
 		entry.Index,
 		odVar.SubIndex,
@@ -50,7 +50,7 @@ func (node *BaseNode) ReadAnyExact(index any, subindex any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, err := node.SDOClient.NewRawReader(
+	r, err := node.NewRawReader(
 		node.GetID(),
 		entry.Index,
 		odVar.SubIndex,

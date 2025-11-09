@@ -95,19 +95,19 @@ func (od *ObjectDictionary) addPDO(pdoNb uint16, isRPDO bool) error {
 	}
 
 	pdoComm := NewRecord()
-	pdoComm.AddSubObject(0, "Highest sub-index supported", UNSIGNED8, AttributeSdoR, "0x5")
-	pdoComm.AddSubObject(1, fmt.Sprintf("COB-ID used by %s", pdoType), UNSIGNED32, AttributeSdoRw, "0x0")
-	pdoComm.AddSubObject(2, "Transmission type", UNSIGNED8, AttributeSdoRw, "0x0")
-	pdoComm.AddSubObject(3, "Inhibit time", UNSIGNED16, AttributeSdoRw, "0x0")
-	pdoComm.AddSubObject(4, "Reserved", UNSIGNED8, AttributeSdoRw, "0x0")
-	pdoComm.AddSubObject(5, "Event timer", UNSIGNED16, AttributeSdoRw, "0x0")
+	_, _ = pdoComm.AddSubObject(0, "Highest sub-index supported", UNSIGNED8, AttributeSdoR, "0x5")
+	_, _ = pdoComm.AddSubObject(1, fmt.Sprintf("COB-ID used by %s", pdoType), UNSIGNED32, AttributeSdoRw, "0x0")
+	_, _ = pdoComm.AddSubObject(2, "Transmission type", UNSIGNED8, AttributeSdoRw, "0x0")
+	_, _ = pdoComm.AddSubObject(3, "Inhibit time", UNSIGNED16, AttributeSdoRw, "0x0")
+	_, _ = pdoComm.AddSubObject(4, "Reserved", UNSIGNED8, AttributeSdoRw, "0x0")
+	_, _ = pdoComm.AddSubObject(5, "Event timer", UNSIGNED16, AttributeSdoRw, "0x0")
 
 	od.AddVariableList(EntryRPDOCommunicationStart+indexOffset, fmt.Sprintf("%s communication parameter", pdoType), pdoComm)
 
 	pdoMap := NewRecord()
-	pdoMap.AddSubObject(0, "Number of mapped application objects in PDO", UNSIGNED8, AttributeSdoRw, "0x0")
+	_, _ = pdoMap.AddSubObject(0, "Number of mapped application objects in PDO", UNSIGNED8, AttributeSdoRw, "0x0")
 	for i := range MaxMappedEntriesPdo {
-		pdoMap.AddSubObject(i+1, fmt.Sprintf("Application object %d", i+1), UNSIGNED32, AttributeSdoRw, "0x0")
+		_, _ = pdoMap.AddSubObject(i+1, fmt.Sprintf("Application object %d", i+1), UNSIGNED32, AttributeSdoRw, "0x0")
 	}
 	od.AddVariableList(EntryRPDOMappingStart+indexOffset, fmt.Sprintf("%s mapping parameter", pdoType), pdoMap)
 	od.logger.Info("added new PDO oject to OD", "type", pdoType, "nb", pdoNb)
@@ -140,10 +140,10 @@ func (od *ObjectDictionary) AddTPDO(tpdoNb uint16) error {
 // This adds objects 0x1005, 0x1006, 0x1007 & 0x1019 to the OD.
 // By default, SYNC is added with producer disabled and can id of 0x80
 func (od *ObjectDictionary) AddSYNC() {
-	od.AddVariableType(0x1005, "COB-ID SYNC message", UNSIGNED32, AttributeSdoRw, "0x80000080") // Disabled with standard cob-id
-	od.AddVariableType(0x1006, "Communication cycle period", UNSIGNED32, AttributeSdoRw, "0x0")
-	od.AddVariableType(0x1007, "Synchronous window length", UNSIGNED32, AttributeSdoRw, "0x0")
-	od.AddVariableType(0x1019, "Synchronous counter overflow value", UNSIGNED8, AttributeSdoRw, "0x0")
+	_, _ = od.AddVariableType(0x1005, "COB-ID SYNC message", UNSIGNED32, AttributeSdoRw, "0x80000080") // Disabled with standard cob-id
+	_, _ = od.AddVariableType(0x1006, "Communication cycle period", UNSIGNED32, AttributeSdoRw, "0x0")
+	_, _ = od.AddVariableType(0x1007, "Synchronous window length", UNSIGNED32, AttributeSdoRw, "0x0")
+	_, _ = od.AddVariableType(0x1019, "Synchronous counter overflow value", UNSIGNED8, AttributeSdoRw, "0x0")
 	od.logger.Info("added new SYNC object to OD")
 }
 

@@ -43,7 +43,7 @@ func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
 		if err != nil {
 			return nil, err
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		bu = &bytes.Buffer{}
 		io.Copy(bu, f)
 
@@ -298,7 +298,7 @@ func populateEntry(
 		variable.Attribute = attribute
 		variable.SubIndex = 0
 
-		if strings.Index(defaultValue, "$NODEID") != -1 {
+		if strings.Contains(defaultValue, "$NODEID") {
 			defaultValue = fastRemoveNodeID(defaultValue)
 		} else {
 			nodeId = 0
@@ -365,7 +365,7 @@ func populateSubEntry(
 		Attribute: attribute,
 		SubIndex:  subIndex,
 	}
-	if strings.Index(defaultValue, "$NODEID") != -1 {
+	if strings.Contains(defaultValue, "$NODEID") {
 		defaultValue = fastRemoveNodeID(defaultValue)
 	} else {
 		nodeId = 0
@@ -434,7 +434,7 @@ func isValidHex4(b []byte) bool {
 		return false
 	}
 	for _, c := range b {
-		if !((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f')) {
+		if (c < '0' || c > '9') && (c < 'A' || c > 'F') && (c < 'a' || c > 'f') {
 			return false
 		}
 	}
@@ -458,7 +458,7 @@ func isValidSubIndexFormat(b []byte) bool {
 	}
 	// Check remaining are hex
 	for _, c := range b[7:] {
-		if !((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f')) {
+		if (c < '0' || c > '9') && (c < 'A' || c > 'F') && (c < 'a' || c > 'f') {
 			return false
 		}
 	}

@@ -9,9 +9,18 @@ import (
 
 func createOD() *ObjectDictionary {
 	od := NewOD()
-	od.AddVariableType(0x3016, "entry3016", UNSIGNED8, AttributeSdoRw, "0x10")
-	od.AddVariableType(0x3017, "entry3017", UNSIGNED16, AttributeSdoRw, "0x20")
-	od.AddVariableType(0x3018, "entry3018", UNSIGNED32, AttributeSdoRw, "0x30")
+	_, err := od.AddVariableType(0x3016, "entry3016", UNSIGNED8, AttributeSdoRw, "0x10")
+	if err != nil {
+		panic(err)
+	}
+	_, err = od.AddVariableType(0x3017, "entry3017", UNSIGNED16, AttributeSdoRw, "0x20")
+	if err != nil {
+		panic(err)
+	}
+	_, err = od.AddVariableType(0x3018, "entry3018", UNSIGNED32, AttributeSdoRw, "0x30")
+	if err != nil {
+		panic(err)
+	}
 	record := NewRecord()
 	record.AddSubObject(0, "sub0", UNSIGNED8, AttributeSdoRw, "0x11")
 	od.AddVariableList(0x3030, "entry3030", record)

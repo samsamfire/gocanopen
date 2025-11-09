@@ -61,12 +61,12 @@ func ReadEntryFileObject(stream *Stream, data []byte) (uint16, error) {
 		return uint16(countReadInt), ErrPartial
 	case io.EOF, io.ErrUnexpectedEOF:
 		fileObject.logger.Info("finished reading", "path", fileObject.FilePath)
-		fileObject.File.Close()
-		return uint16(countReadInt), nil
+		err := fileObject.File.Close()
+		return uint16(countReadInt), err
 	default:
 		// unexpected error
 		fileObject.logger.Warn("error reading", "path", fileObject.FilePath, "err", err)
-		fileObject.File.Close()
+		_ = fileObject.File.Close()
 		return uint16(countReadInt), ErrDevIncompat
 	}
 }
@@ -101,14 +101,14 @@ func WriteEntryFileObject(stream *Stream, data []byte) (uint16, error) {
 		stream.DataOffset += uint32(countWrittenInt)
 		if stream.DataLength == stream.DataOffset {
 			fileObject.logger.Info("finished writing", "path", fileObject.FilePath)
-			fileObject.File.Close()
-			return uint16(countWrittenInt), nil
+			err := fileObject.File.Close()
+			return uint16(countWrittenInt), err
 		} else {
 			return uint16(countWrittenInt), ErrPartial
 		}
 	} else {
 		fileObject.logger.Warn("error writing", "path", fileObject.FilePath, "err", err)
-		fileObject.File.Close()
+		_ = fileObject.File.Close()
 		return uint16(countWrittenInt), ErrDevIncompat
 	}
 }
