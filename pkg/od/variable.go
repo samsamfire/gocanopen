@@ -1,6 +1,7 @@
 package od
 
 import (
+	"bytes"
 	"encoding/binary"
 	"math"
 	"sync"
@@ -241,8 +242,11 @@ func (v *Variable) String() (string, error) {
 	switch v.DataType {
 	case VISIBLE_STRING, OCTET_STRING:
 		// Stop at first null byte
-		// TODO
-		return string(v.value), nil
+		n := bytes.IndexByte(v.value, 0)
+		if n == -1 {
+			return string(v.value), nil
+		}
+		return string(v.value[:n]), nil
 	default:
 		return "", ErrTypeMismatch
 	}
