@@ -9,13 +9,13 @@ import (
 )
 
 // [RPDO] update communication parameter
-func writeEntry14xx(stream *od.Stream, data []byte, countWritten *uint16) error {
-	if stream == nil || data == nil || countWritten == nil || len(data) > 4 {
-		return od.ErrDevIncompat
+func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
+	if stream == nil || data == nil || len(data) > 4 {
+		return 0, od.ErrDevIncompat
 	}
 	rpdo, ok := stream.Object.(*RPDO)
 	if !ok {
-		return od.ErrDevIncompat
+		return 0, od.ErrDevIncompat
 	}
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
@@ -40,7 +40,7 @@ func writeEntry14xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 			valid && pdo.Valid && canId != uint32(pdo.configuredId) ||
 			valid && canopen.IsIDRestricted(uint16(canId)) ||
 			valid && pdo.nbMapped == 0 {
-			return od.ErrInvalidValue
+			return 0, od.ErrInvalidValue
 		}
 
 		// Parameter changed ?
@@ -61,7 +61,7 @@ func writeEntry14xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 				rpdo.rxNew[0] = false
 				rpdo.rxNew[1] = false
 				if err != nil {
-					return od.ErrDevIncompat
+					return 0, od.ErrDevIncompat
 				}
 			}
 			rpdo.pdo.logger.Debug("updated cob-id",
@@ -74,7 +74,7 @@ func writeEntry14xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 		// Transmission type
 		transmissionType := data[0]
 		if transmissionType > TransmissionTypeSync240 && transmissionType < TransmissionTypeSyncEventLo {
-			return od.ErrInvalidValue
+			return 0, od.ErrInvalidValue
 		}
 		synchronous := transmissionType <= TransmissionTypeSync240
 		// Remove old message from second buffer
@@ -92,14 +92,14 @@ func writeEntry14xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 		rpdo.pdo.logger.Debug("updated event timer", "transmissionType", eventTime)
 	}
 
-	return od.WriteEntryDefault(stream, bufCopy, countWritten)
+	return od.WriteEntryDefault(stream, bufCopy)
 }
 
 // [RPDO][TPDO] get communication parameter
-func readEntry14xxOr18xx(stream *od.Stream, data []byte, countRead *uint16) error {
-	err := od.ReadEntryDefault(stream, data, countRead)
+func readEntry14xxOr18xx(stream *od.Stream, data []byte) (uint16, error) {
+	n, err := od.ReadEntryDefault(stream, data)
 	// Add node id when reading subindex 1
-	if err == nil && stream.Subindex == 1 && *countRead == 4 {
+	if err == nil && stream.Subindex == 1 && n == 4 {
 		// Get the corresponding object, either TPDO or RPDO
 		var pdo *PDOCommon
 		switch v := stream.Object.(type) {
@@ -112,7 +112,7 @@ func readEntry14xxOr18xx(stream *od.Stream, data []byte, countRead *uint16) erro
 			defer v.mu.Unlock()
 			pdo = v.pdo
 		default:
-			return od.ErrDevIncompat
+			return n, od.ErrDevIncompat
 		}
 		cobId := binary.LittleEndian.Uint32(data)
 		canId := uint16(cobId & 0x7FF)
@@ -126,13 +126,13 @@ func readEntry14xxOr18xx(stream *od.Stream, data []byte, countRead *uint16) erro
 		}
 		binary.LittleEndian.PutUint32(data, cobId)
 	}
-	return err
+	return n, err
 }
 
 // [RPDO][TPDO] update mapping parameter
-func writeEntry16xxOr1Axx(stream *od.Stream, data []byte, countWritten *uint16) error {
-	if stream == nil || data == nil || countWritten == nil || stream.Subindex > od.MaxMappedEntriesPdo {
-		return od.ErrDevIncompat
+func writeEntry16xxOr1Axx(stream *od.Stream, data []byte) (uint16, error) {
+	if stream == nil || data == nil || stream.Subindex > od.MaxMappedEntriesPdo {
+		return 0, od.ErrDevIncompat
 	}
 	// Get the corresponding object, either TPDO or RPDO
 	var pdo *PDOCommon
@@ -146,34 +146,34 @@ func writeEntry16xxOr1Axx(stream *od.Stream, data []byte, countWritten *uint16) 
 		defer v.mu.Unlock()
 		pdo = v.pdo
 	default:
-		return od.ErrDevIncompat
+		return 0, od.ErrDevIncompat
 	}
 	pdo.logger.Debug("updating mapping parameter")
 	// PDO must be disabled in order to allow mapping
 	if pdo.Valid || pdo.nbMapped != 0 && stream.Subindex > 0 {
-		return od.ErrUnsuppAccess
+		return 0, od.ErrUnsuppAccess
 	}
 	if stream.Subindex == 0 {
 		mappedObjectsCount := data[0]
 		pdoDataLength := uint32(0)
 		// Don't allow number greater than possible mapped objects
 		if mappedObjectsCount > od.MaxMappedEntriesPdo {
-			return od.ErrMapLen
+			return 0, od.ErrMapLen
 		}
 		for i := range mappedObjectsCount {
 			streamer := pdo.streamers[i]
 			dataLength := streamer.DataLength
 			mappedLength := streamer.DataOffset
 			if mappedLength > dataLength {
-				return od.ErrNoMap
+				return 0, od.ErrNoMap
 			}
 			pdoDataLength += mappedLength
 		}
 		if pdoDataLength > uint32(MaxPdoLength) {
-			return od.ErrMapLen
+			return 0, od.ErrMapLen
 		}
 		if pdoDataLength == 0 && mappedObjectsCount > 0 {
-			return od.ErrInvalidValue
+			return 0, od.ErrInvalidValue
 		}
 		pdo.dataLength = pdoDataLength
 		pdo.nbMapped = mappedObjectsCount
@@ -181,20 +181,20 @@ func writeEntry16xxOr1Axx(stream *od.Stream, data []byte, countWritten *uint16) 
 	} else {
 		err := pdo.configureMap(binary.LittleEndian.Uint32(data), uint32(stream.Subindex)-1, pdo.IsRPDO)
 		if err != nil {
-			return err
+			return 0, err
 		}
 	}
-	return od.WriteEntryDefault(stream, data, countWritten)
+	return od.WriteEntryDefault(stream, data)
 }
 
 // [TPDO] update communication parameter
-func writeEntry18xx(stream *od.Stream, data []byte, countWritten *uint16) error {
-	if stream == nil || data == nil || countWritten == nil || len(data) > 4 {
-		return od.ErrDevIncompat
+func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
+	if stream == nil || data == nil || len(data) > 4 {
+		return 0, od.ErrDevIncompat
 	}
 	tpdo, ok := stream.Object.(*TPDO)
 	if !ok {
-		return od.ErrDevIncompat
+		return 0, od.ErrDevIncompat
 	}
 	tpdo.mu.Lock()
 	defer tpdo.mu.Unlock()
@@ -218,7 +218,7 @@ func writeEntry18xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 			(valid && pdo.Valid && canId != uint32(pdo.configuredId)) ||
 			(valid && canopen.IsIDRestricted(uint16(canId))) ||
 			(valid && pdo.nbMapped == 0) {
-			return od.ErrInvalidValue
+			return 0, od.ErrInvalidValue
 		}
 
 		// Parameter changed ?
@@ -239,7 +239,7 @@ func writeEntry18xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 		// Transmission type
 		transmissionType := data[0]
 		if transmissionType > TransmissionTypeSync240 && transmissionType < TransmissionTypeSyncEventLo {
-			return od.ErrInvalidValue
+			return 0, od.ErrInvalidValue
 		}
 		tpdo.syncCounter = 255
 		tpdo.transmissionType = transmissionType
@@ -250,7 +250,7 @@ func writeEntry18xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 	case 3:
 		// Inhibit time
 		if pdo.Valid {
-			return od.ErrInvalidValue
+			return 0, od.ErrInvalidValue
 		}
 		inhibitTime := binary.LittleEndian.Uint16(data)
 		tpdo.inhibitTimeUs = uint32(inhibitTime) * 100
@@ -265,32 +265,26 @@ func writeEntry18xx(stream *od.Stream, data []byte, countWritten *uint16) error 
 	case 6:
 		syncStartValue := data[0]
 		if pdo.Valid || syncStartValue > 240 {
-			return od.ErrInvalidValue
+			return 0, od.ErrInvalidValue
 		}
 		tpdo.syncStartValue = syncStartValue
 
 	}
-	return od.WriteEntryDefault(stream, bufCopy, countWritten)
-
+	return od.WriteEntryDefault(stream, bufCopy)
 }
 
 // [RPDO][TPDO] write method that fakes writing an OD variable
-func WriteDummy(stream *od.Stream, data []byte, countWritten *uint16) error {
-	if countWritten != nil {
-		*countWritten = uint16(len(data))
-	}
-	return nil
+func WriteDummy(stream *od.Stream, data []byte) (uint16, error) {
+	return uint16(len(data)), nil
 }
 
 // [RPDO][TPDO] read method that fakes reading an OD variable
-func ReadDummy(stream *od.Stream, data []byte, countRead *uint16) error {
-	if countRead == nil || data == nil || stream == nil {
-		return od.ErrDevIncompat
+func ReadDummy(stream *od.Stream, data []byte) (uint16, error) {
+	if data == nil || stream == nil {
+		return 0, od.ErrDevIncompat
 	}
 	if len(data) > len(stream.Data) {
-		*countRead = uint16(len(stream.Data))
-	} else {
-		*countRead = uint16(len(data))
+		return uint16(len(stream.Data)), nil
 	}
-	return nil
+	return uint16(len(data)), nil
 }

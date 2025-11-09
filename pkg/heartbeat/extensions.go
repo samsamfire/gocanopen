@@ -7,10 +7,10 @@ import (
 )
 
 // [HBConsumer] update heartbeat consumer
-func writeEntry1016(stream *od.Stream, data []byte, countWritten *uint16) error {
+func writeEntry1016(stream *od.Stream, data []byte) (uint16, error) {
 	consumer, ok := stream.Object.(*HBConsumer)
 	if !ok {
-		return od.ErrDevIncompat
+		return 0, od.ErrDevIncompat
 	}
 	consumer.mu.Lock()
 	defer consumer.mu.Unlock()
@@ -18,7 +18,7 @@ func writeEntry1016(stream *od.Stream, data []byte, countWritten *uint16) error 
 	if stream == nil || stream.Subindex < 1 ||
 		int(stream.Subindex) > len(consumer.entries) ||
 		len(data) != 4 {
-		return od.ErrDevIncompat
+		return 0, od.ErrDevIncompat
 	}
 
 	hbConsValue := binary.LittleEndian.Uint32(data)
@@ -26,7 +26,7 @@ func writeEntry1016(stream *od.Stream, data []byte, countWritten *uint16) error 
 	periodMs := uint16(hbConsValue & 0xFFFF)
 	err := consumer.updateConsumerEntry(stream.Subindex-1, nodeId, periodMs)
 	if err != nil {
-		return od.ErrParIncompat
+		return 0, od.ErrParIncompat
 	}
-	return od.WriteEntryDefault(stream, data, countWritten)
+	return od.WriteEntryDefault(stream, data)
 }
