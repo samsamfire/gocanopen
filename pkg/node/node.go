@@ -34,12 +34,11 @@ type Node interface {
 type BaseNode struct {
 	*canopen.BusManager
 	*sdo.SDOClient
-	logger       *slog.Logger
-	mu           sync.Mutex
-	od           *od.ObjectDictionary
-	mainCallback func(node Node)
-	id           uint8
-	rxBuffer     []byte
+	logger   *slog.Logger
+	mu       sync.Mutex
+	od       *od.ObjectDictionary
+	id       uint8
+	rxBuffer []byte
 }
 
 func newBaseNode(
