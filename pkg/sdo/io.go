@@ -149,7 +149,7 @@ func (rw *sdoRawReadWriter) Write(b []byte) (n int, err error) {
 // This is blocking
 func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, data any, forceSegmented bool) error {
 	_ = forceSegmented
-	encoded, err := od.EncodeFromGeneric(data)
+	encoded, err := od.EncodeFromTypeExact(data)
 	if err != nil {
 		return err
 	}

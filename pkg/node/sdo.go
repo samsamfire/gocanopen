@@ -1,15 +1,10 @@
 package node
 
-import (
-	"io"
-
-	"github.com/samsamfire/gocanopen/pkg/od"
-)
-
-// Read an entry using a base sdo client
-// index and subindex can either be strings or integers
-// this method requires the corresponding node OD to be loaded
-// returned value can be either string, uint64, int64 or float64
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns value as actual OD "base" datatype
+// i.e. one of : uint64, int64, float64, string, []byte
 func (node *BaseNode) ReadAny(index any, subindex any) (any, error) {
 
 	// We need index,subindex & datatype to be able to decode data.
@@ -18,30 +13,15 @@ func (node *BaseNode) ReadAny(index any, subindex any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, err := node.NewRawReader(
-		node.GetID(),
-		entry.Index,
-		odVar.SubIndex,
-		false,
-		0,
-	) // size not specified
-	if err != nil {
-		return 0, err
-	}
-	// Perform the actual read. This can be long
-	n, err := r.Read(node.rxBuffer)
-	if err != nil && err != io.EOF {
-		return n, err
-	}
-	// Decode data to ~type
-	return od.DecodeToType(node.rxBuffer[:n], odVar.DataType)
+	return odVar.Any()
 }
 
-// Read an entry using a base sdo client
-// index and subindex can either be strings or integers
-// this method requires the corresponding node OD to be loaded
-// returned value corresponds to the exact datatype
-// (uint8,uint16,...,int8,int16,...,float32,float64,...)
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns the exact OD datatype :
+// i.e. one of : uint8, ..., uint64, int8, ..., int64,
+// float32, float64, string, []byte
 func (node *BaseNode) ReadAnyExact(index any, subindex any) (any, error) {
 
 	// We need index,subindex & datatype to be able to decode data.
@@ -50,205 +30,241 @@ func (node *BaseNode) ReadAnyExact(index any, subindex any) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, err := node.NewRawReader(
-		node.GetID(),
-		entry.Index,
-		odVar.SubIndex,
-		false,
-		0,
-	) // size not specified
+	return odVar.AnyExact()
+}
+
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns a copy of the OD value as raw []byte
+func (node *BaseNode) ReadBytes(index any, subindex any) ([]byte, error) {
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	// Perform the actual read. This can be long
-	n, err := r.Read(node.rxBuffer)
-	if err != nil && err != io.EOF {
-		return n, err
-	}
-	// Decode data to ~type
-	return od.DecodeToTypeExact(node.rxBuffer[:n], odVar.DataType)
+	return odVar.Bytes(), nil
 }
 
-// [Deprecated] use ReadAny instead
-func (node *BaseNode) Read(index any, subindex any) (value any, e error) {
-	return node.ReadAny(index, subindex)
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns as bool
+func (node *BaseNode) ReadBool(index any, subindex any) (bool, error) {
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
+	if err != nil {
+		return false, err
+	}
+	return odVar.Bool()
 }
 
-// Same as [ReadAny] but enforces the returned type as uint64
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns uint8, uint16, uint32, uint64 value as uint64
 func (node *BaseNode) ReadUint(index any, subindex any) (value uint64, e error) {
-	v, err := node.ReadAny(index, subindex)
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
 	if err != nil {
 		return 0, err
 	}
-	value, ok := v.(uint64)
-	if !ok {
-		return 0, od.ErrTypeMismatch
-	}
-	return value, nil
+	return odVar.Uint()
 }
 
-// Same as [ReadAny] but enforces the returned type as uint32
-func (node *BaseNode) ReadUint32(index any, subindex any) (value uint32, e error) {
-	v, err := node.ReadAnyExact(index, subindex)
-	if err != nil {
-		return 0, err
-	}
-	value, ok := v.(uint32)
-	if !ok {
-		return 0, od.ErrTypeMismatch
-	}
-	return value, nil
-}
-
-// Same as [ReadAny] but enforces the returned type as uint16
-func (node *BaseNode) ReadUint16(index any, subindex any) (value uint16, e error) {
-	v, err := node.ReadAnyExact(index, subindex)
-	if err != nil {
-		return 0, err
-	}
-	value, ok := v.(uint16)
-	if !ok {
-		return 0, od.ErrTypeMismatch
-	}
-	return value, nil
-}
-
-// Same as [ReadAny] but enforces the returned type as uint8
-func (node *BaseNode) ReadUint8(index any, subindex any) (value uint8, e error) {
-	v, err := node.ReadAnyExact(index, subindex)
-	if err != nil {
-		return 0, err
-	}
-	value, ok := v.(uint8)
-	if !ok {
-		return 0, od.ErrTypeMismatch
-	}
-	return value, nil
-}
-
-// Same as [ReadAny] but enforces the returned type as int64
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns int8, int16, int32, int64 value as int64
 func (node *BaseNode) ReadInt(index any, subindex any) (value int64, e error) {
-	v, err := node.ReadAny(index, subindex)
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
 	if err != nil {
 		return 0, err
 	}
-	value, ok := v.(int64)
-	if !ok {
-		return 0, od.ErrTypeMismatch
-	}
-	return value, nil
+	return odVar.Int()
 }
 
-// Same as [ReadAny] but enforces the returned type as int32
-func (node *BaseNode) ReadInt32(index any, subindex any) (value int32, e error) {
-	v, err := node.ReadAnyExact(index, subindex)
-	if err != nil {
-		return 0, err
-	}
-	value, ok := v.(int32)
-	if !ok {
-		return 0, od.ErrTypeMismatch
-	}
-	return value, nil
-}
-
-// Same as [ReadAny] but enforces the returned type as int16
-func (node *BaseNode) ReadInt16(index any, subindex any) (value int16, e error) {
-	v, err := node.ReadAnyExact(index, subindex)
-	if err != nil {
-		return 0, err
-	}
-	value, ok := v.(int16)
-	if !ok {
-		return 0, od.ErrTypeMismatch
-	}
-	return value, nil
-}
-
-// Same as [ReadAny] but enforces the returned type as int8
-func (node *BaseNode) ReadInt8(index any, subindex any) (value int8, e error) {
-	v, err := node.ReadAnyExact(index, subindex)
-	if err != nil {
-		return 0, err
-	}
-	value, ok := v.(int8)
-	if !ok {
-		return 0, od.ErrTypeMismatch
-	}
-	return value, nil
-}
-
-// Same as [ReadAny] but enforces the returned type as float64
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns float32, float64 value as float64
 func (node *BaseNode) ReadFloat(index any, subindex any) (value float64, e error) {
-	v, err := node.ReadAny(index, subindex)
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
 	if err != nil {
 		return 0, err
 	}
-	value, ok := v.(float64)
-	if !ok {
-		return 0, od.ErrTypeMismatch
-	}
-	return value, nil
+	return odVar.Float()
 }
 
-// Same as [ReadAny] but enforces the returned type as float32
-func (node *BaseNode) ReadFloat32(index any, subindex any) (value float32, e error) {
-	v, err := node.ReadAnyExact(index, subindex)
-	if err != nil {
-		return 0, err
-	}
-	value, ok := v.(float32)
-	if !ok {
-		return 0, od.ErrTypeMismatch
-	}
-	return value, nil
-}
-
-// Same as [ReadAny] but enforces the returned type as string
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns value as string
 func (node *BaseNode) ReadString(index any, subindex any) (value string, e error) {
-	v, err := node.ReadAny(index, subindex)
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
 	if err != nil {
 		return "", err
 	}
-	value, ok := v.(string)
-	if !ok {
-		return "", od.ErrTypeMismatch
+	return odVar.String()
+}
+
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns value as uint8
+func (node *BaseNode) ReadUint8(index any, subindex any) (value uint8, e error) {
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
+	if err != nil {
+		return 0, err
 	}
-	return value, nil
+	return odVar.Uint8()
 }
 
-// Read an entry from a remote node
-// this method does not require corresponding OD to be loaded
-// value will be read as a raw byte slice
-// does not support block transfer
-func (node *BaseNode) ReadRaw(index uint16, subIndex uint8, data []byte) (int, error) {
-	return node.SDOClient.ReadRaw(node.id, index, subIndex, data)
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns value as uint16
+func (node *BaseNode) ReadUint16(index any, subindex any) (value uint16, e error) {
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
+	if err != nil {
+		return 0, err
+	}
+	return odVar.Uint16()
 }
 
-// Write an entry to a remote node
-// index and subindex can either be strings or integers
-// this method requires the corresponding node OD to be loaded
-// value should correspond to the expected datatype
-func (node *BaseNode) WriteAny(index any, subindex any, value any) error {
-	// Find corresponding Variable inside OD
-	// This will be used to determine information on the expected value
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns value as uint32
+func (node *BaseNode) ReadUint32(index any, subindex any) (value uint32, e error) {
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
+	if err != nil {
+		return 0, err
+	}
+	return odVar.Uint32()
+}
+
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns value as uint64
+func (node *BaseNode) ReadUint64(index any, subindex any) (value uint64, e error) {
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
+	if err != nil {
+		return 0, err
+	}
+	return odVar.Uint64()
+}
+
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns value as int8
+func (node *BaseNode) ReadInt8(index any, subindex any) (value int8, e error) {
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
+	if err != nil {
+		return 0, err
+	}
+	return odVar.Int8()
+}
+
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns value as int16
+func (node *BaseNode) ReadInt16(index any, subindex any) (value int16, e error) {
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
+	if err != nil {
+		return 0, err
+	}
+	return odVar.Int16()
+}
+
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns value as int32
+func (node *BaseNode) ReadInt32(index any, subindex any) (value int32, e error) {
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
+	if err != nil {
+		return 0, err
+	}
+	return odVar.Int32()
+}
+
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns value as int64
+func (node *BaseNode) ReadInt64(index any, subindex any) (value int64, e error) {
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
+	if err != nil {
+		return 0, err
+	}
+	return odVar.Int64()
+}
+
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns value as float32
+func (node *BaseNode) ReadFloat32(index any, subindex any) (value float32, e error) {
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
+	if err != nil {
+		return 0, err
+	}
+	return odVar.Float32()
+}
+
+// Read entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// returns value as float64
+func (node *BaseNode) ReadFloat64(index any, subindex any) (value float64, e error) {
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
+	if err != nil {
+		return 0, err
+	}
+	return odVar.Float64()
+}
+
+// Write entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// write any datatype i.e. one of : uint8, ..., uint64, int8, ..., int64,
+// float32, float64, string, []byte
+func (node *BaseNode) WriteAnyExact(index any, subindex any, value any) error {
 	entry := node.od.Index(index)
 	odVar, err := entry.SubIndex(subindex)
 	if err != nil {
 		return err
 	}
-	return node.SDOClient.WriteRaw(node.id, entry.Index, odVar.SubIndex, value, false)
+	return odVar.PutAnyExact(value)
 }
 
-// [Deprecated] use WriteAny instead
-func (node *BaseNode) Write(index any, subindex any, value any) error {
-	return node.WriteAny(index, subindex, value)
-}
-
-// Write an entry to a remote node
-// this method does not require corresponding OD to be loaded
-// value will be written as a raw byte slice
-// does not support block transfer
-func (node *BaseNode) WriteRaw(index uint16, subIndex uint8, data []byte) error {
-	return node.SDOClient.WriteRaw(node.id, index, subIndex, data, false)
+// Write entry via direct local OD access
+// - index should be the same as accepted by [od.ObjectDictionary.Index]
+// - subindex should be the same as accepted by [od.Entry.SubIndex]
+// write data as raw bytes, only length will be checked, no assumtions
+// are made.
+func (node *BaseNode) WriteBytes(index any, subindex any, value []byte) error {
+	entry := node.od.Index(index)
+	odVar, err := entry.SubIndex(subindex)
+	if err != nil {
+		return err
+	}
+	return odVar.PutBytes(value)
 }

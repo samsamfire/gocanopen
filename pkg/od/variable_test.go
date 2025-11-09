@@ -69,7 +69,7 @@ func TestEncode(t *testing.T) {
 	assert.Nil(t, err)
 	assert.EqualValues(t, []byte{0xec, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, data)
 
-	data, err = EncodeFromGeneric(uint8(0))
+	data, err = EncodeFromTypeExact(uint8(0))
 	assert.Equal(t, []byte{uint8(0)}, data)
 	assert.Nil(t, err)
 

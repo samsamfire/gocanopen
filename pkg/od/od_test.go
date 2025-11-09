@@ -42,13 +42,14 @@ func TestFind(t *testing.T) {
 func TestEntryUint(t *testing.T) {
 	odParsed := Default()
 
-	entry := odParsed.Index(0x2003)
+	entry := odParsed.Index(0x2006)
 	assert.NotNil(t, entry)
 
-	data, _ := entry.Uint16(0)
-	assert.EqualValues(t, 0x4444, data)
+	data, err := entry.Uint16(0)
+	assert.EqualValues(t, 0x1111, data)
+	assert.Nil(t, err)
 
-	_, err := entry.Uint8(0)
+	_, err = entry.Uint8(0)
 	assert.Equal(t, ErrTypeMismatch, err)
 }
 

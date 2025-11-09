@@ -11,6 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var SDO_BOOL_MAP = map[string]bool{
+	"BOOLEAN value": true,
+}
+
 var SDO_UNSIGNED_READ_MAP = map[string]uint64{
 	"UNSIGNED8 value":  uint64(0x10),
 	"UNSIGNED16 value": uint64(0x1111),
@@ -28,6 +32,10 @@ var SDO_INTEGER_READ_MAP = map[string]int64{
 var SDO_FLOAT_READ_MAP = map[string]float64{
 	"REAL32 value": float64(0.1),
 	"REAL64 value": float64(0.55),
+}
+
+var SDO_STRING_READ_MAP = map[string]string{
+	"VISIBLE STRING value": "AStringCannotBeLongerThanTheDefaultValue",
 }
 
 func TestRemoteNode(t *testing.T) {
@@ -120,190 +128,259 @@ func TestCreateLocalNode(t *testing.T) {
 	assert.Equal(t, ErrIdRange, err)
 }
 
-func TestReadLocal(t *testing.T) {
+func TestNodeReadAnyExact(t *testing.T) {
 	network := CreateNetworkTest()
+	networkRemote := CreateNetworkEmptyTest()
 	defer network.Disconnect()
-	local, err := network.Local(NodeIdTest)
+	defer networkRemote.Disconnect()
+
+	loc, err := network.Local(NodeIdTest)
 	assert.Nil(t, err)
-	t.Run("Read any", func(t *testing.T) {
-		for indexName, key := range SDO_UNSIGNED_READ_MAP {
-			val, _ := local.ReadAny(indexName, "")
-			assert.Equal(t, key, val)
-		}
-		for indexName, key := range SDO_INTEGER_READ_MAP {
-			val, _ := local.ReadAny(indexName, "")
-			assert.Equal(t, key, val)
-		}
-		for indexName, key := range SDO_FLOAT_READ_MAP {
-			val, _ := local.ReadAny(indexName, "")
-			assert.InDelta(t, key, val, 1e-5)
-		}
+	remote, err := networkRemote.AddRemoteNode(NodeIdTest, od.Default())
+	assert.Nil(t, err)
 
-	})
-	t.Run("Read Uint", func(t *testing.T) {
-		for indexName, key := range SDO_UNSIGNED_READ_MAP {
-			val, _ := local.ReadUint(indexName, "")
-			assert.Equal(t, key, val)
-		}
-		_, err := local.ReadUint("INTEGER8 value", "")
-		assert.Equal(t, od.ErrTypeMismatch, err)
-	})
+	for _, n := range []node.Node{loc, remote} {
+		t.Run(fmt.Sprintf("Read Any Exact %T bool", n), func(t *testing.T) {
+			val, err := n.ReadAnyExact("BOOLEAN value", "")
+			assert.Equal(t, SDO_BOOL_MAP["BOOLEAN value"], val)
+			assert.Nil(t, err)
+		})
+		t.Run(fmt.Sprintf("Read Any Exact %T uint8", n), func(t *testing.T) {
+			val, err := n.ReadAnyExact("UNSIGNED8 value", "")
+			assert.Equal(t, uint8(SDO_UNSIGNED_READ_MAP["UNSIGNED8 value"]), val)
+			assert.Nil(t, err)
+		})
+		t.Run(fmt.Sprintf("Read Any Exact %T uint16", n), func(t *testing.T) {
+			val, err := n.ReadAnyExact("UNSIGNED16 value", "")
+			assert.Equal(t, uint16(SDO_UNSIGNED_READ_MAP["UNSIGNED16 value"]), val)
+			assert.Nil(t, err)
+		})
+		t.Run(fmt.Sprintf("Read Any Exact %T uint32", n), func(t *testing.T) {
+			val, err := n.ReadAnyExact("UNSIGNED32 value", "")
+			assert.Equal(t, uint32(SDO_UNSIGNED_READ_MAP["UNSIGNED32 value"]), val)
+			assert.Nil(t, err)
+		})
+		t.Run(fmt.Sprintf("Read Any Exact %T uint64", n), func(t *testing.T) {
+			val, err := n.ReadAnyExact("UNSIGNED64 value", "")
+			assert.Equal(t, uint64(SDO_UNSIGNED_READ_MAP["UNSIGNED64 value"]), val)
+			assert.Nil(t, err)
+		})
 
-	t.Run("Read Uint", func(t *testing.T) {
-		for indexName, key := range SDO_UNSIGNED_READ_MAP {
-			val, _ := local.ReadUint(indexName, "")
-			assert.Equal(t, key, val)
-		}
-		_, err := local.ReadUint("INTEGER8 value", "")
-		assert.Equal(t, od.ErrTypeMismatch, err)
-	})
-
-	t.Run("Read Int", func(t *testing.T) {
-		for indexName, key := range SDO_INTEGER_READ_MAP {
-			val, _ := local.ReadInt(indexName, "")
-			assert.Equal(t, key, val)
-		}
-		_, err := local.ReadInt("UNSIGNED8 value", "")
-		assert.Equal(t, od.ErrTypeMismatch, err)
-	})
-
-	t.Run("Read Float", func(t *testing.T) {
-		for indexName, key := range SDO_FLOAT_READ_MAP {
-			val, _ := local.ReadFloat(indexName, "")
-			assert.InDelta(t, key, val, 0.01)
-		}
-		_, err := local.ReadFloat("UNSIGNED8 value", "")
-		assert.Equal(t, od.ErrTypeMismatch, err)
-	})
-
-	t.Run("Read String", func(t *testing.T) {
-		val, err := local.ReadString("VISIBLE STRING value", "")
-		assert.Equal(t, "AStringCannotBeLongerThanTheDefaultValue", val)
-		assert.Equal(t, nil, err, err)
-	})
-
-	t.Run("Write any", func(t *testing.T) {
-		err = local.Write("REAL32 value", "", float32(1500.1))
-		assert.Nil(t, err)
-		val, _ := local.ReadFloat("REAL32 value", "")
-		assert.InDelta(t, 1500.1, val, 0.01)
-	})
+		t.Run(fmt.Sprintf("Read Any Exact %T int8", n), func(t *testing.T) {
+			val, err := n.ReadAnyExact("INTEGER8 value", "")
+			assert.Equal(t, int8(SDO_INTEGER_READ_MAP["INTEGER8 value"]), val)
+			assert.Nil(t, err)
+		})
+		t.Run(fmt.Sprintf("Read Any Exact %T int16", n), func(t *testing.T) {
+			val, err := n.ReadAnyExact("INTEGER16 value", "")
+			assert.Equal(t, int16(SDO_INTEGER_READ_MAP["INTEGER16 value"]), val)
+			assert.Nil(t, err)
+		})
+		t.Run(fmt.Sprintf("Read Any Exact %T int32", n), func(t *testing.T) {
+			val, err := n.ReadAnyExact("INTEGER32 value", "")
+			assert.Equal(t, int32(SDO_INTEGER_READ_MAP["INTEGER32 value"]), val)
+			assert.Nil(t, err)
+		})
+		t.Run(fmt.Sprintf("Read Any Exact %T int64", n), func(t *testing.T) {
+			val, err := n.ReadAnyExact("INTEGER64 value", "")
+			assert.Equal(t, int64(SDO_INTEGER_READ_MAP["INTEGER64 value"]), val)
+			assert.Nil(t, err)
+		})
+		t.Run(fmt.Sprintf("Read Any Exact %T float32", n), func(t *testing.T) {
+			val, err := n.ReadAnyExact("REAL32 value", "")
+			assert.Equal(t, float32(SDO_FLOAT_READ_MAP["REAL32 value"]), val)
+			assert.Nil(t, err)
+		})
+		t.Run(fmt.Sprintf("Read Any Exact %T float64", n), func(t *testing.T) {
+			val, err := n.ReadAnyExact("REAL64 value", "")
+			assert.Equal(t, float64(SDO_FLOAT_READ_MAP["REAL64 value"]), val)
+			assert.Nil(t, err)
+		})
+		t.Run(fmt.Sprintf("Read Any Exact %T string", n), func(t *testing.T) {
+			val, err := n.ReadAnyExact("VISIBLE STRING value", "")
+			assert.Equal(t, SDO_STRING_READ_MAP["VISIBLE STRING value"], val)
+			assert.Nil(t, err)
+		})
+	}
 }
 
-func TestReadLocalExact(t *testing.T) {
+func TestNodeReadX(t *testing.T) {
+	network := CreateNetworkTest()
+	networkRemote := CreateNetworkEmptyTest()
+	defer network.Disconnect()
+	defer networkRemote.Disconnect()
+
+	loc, err := network.Local(NodeIdTest)
+	assert.Nil(t, err)
+	remote, err := networkRemote.AddRemoteNode(NodeIdTest, od.Default())
+	assert.Nil(t, err)
+
+	for _, n := range []node.Node{loc, remote} {
+
+		t.Run(fmt.Sprintf("Read Bool %T valid entry", n), func(t *testing.T) {
+			for indexName, value := range SDO_BOOL_MAP {
+				val, err := n.ReadBool(indexName, "")
+				assert.Equal(t, value, val)
+				assert.Nil(t, err)
+			}
+		})
+
+		t.Run(fmt.Sprintf("Read Bool %T invalid entry", n), func(t *testing.T) {
+			_, err := n.ReadBool("UNSIGNED8 value", "")
+			assert.Equal(t, od.ErrTypeMismatch, err)
+		})
+
+		t.Run(fmt.Sprintf("Read Any %T valid entries", n), func(t *testing.T) {
+			for indexName, value := range SDO_UNSIGNED_READ_MAP {
+				val, err := n.ReadAny(indexName, "")
+				assert.Equal(t, value, val)
+				assert.Nil(t, err)
+			}
+			for indexName, value := range SDO_INTEGER_READ_MAP {
+				val, err := n.ReadAny(indexName, "")
+				assert.Equal(t, value, val)
+				assert.Nil(t, err)
+			}
+			for indexName, value := range SDO_FLOAT_READ_MAP {
+				val, err := n.ReadAny(indexName, "")
+				assert.InDelta(t, value, val, 1e-5)
+				assert.Nil(t, err)
+			}
+		})
+
+		t.Run(fmt.Sprintf("Read Uint %T valid entries", n), func(t *testing.T) {
+			for indexName, value := range SDO_UNSIGNED_READ_MAP {
+				val, err := n.ReadUint(indexName, "")
+				assert.Equal(t, value, val)
+				assert.Nil(t, err)
+			}
+		})
+
+		t.Run(fmt.Sprintf("Read Uint %T invalid entry", n), func(t *testing.T) {
+			_, err := n.ReadUint("INTEGER8 value", "")
+			assert.Equal(t, od.ErrTypeMismatch, err)
+		})
+
+		t.Run(fmt.Sprintf("Read Int %T valid entries", n), func(t *testing.T) {
+			for indexName, value := range SDO_INTEGER_READ_MAP {
+				val, _ := n.ReadInt(indexName, "")
+				assert.Equal(t, value, val)
+			}
+		})
+
+		t.Run(fmt.Sprintf("Read Int %T invalid entry", n), func(t *testing.T) {
+			_, err := n.ReadInt("UNSIGNED8 value", "")
+			assert.Equal(t, od.ErrTypeMismatch, err)
+		})
+
+		t.Run(fmt.Sprintf("Read Float %T valid entries", n), func(t *testing.T) {
+			for indexName, value := range SDO_FLOAT_READ_MAP {
+				val, _ := n.ReadFloat(indexName, "")
+				assert.InDelta(t, value, val, 0.01)
+			}
+		})
+
+		t.Run(fmt.Sprintf("Read Float %T invalid entry", n), func(t *testing.T) {
+			_, err := n.ReadFloat("UNSIGNED8 value", "")
+			assert.Equal(t, od.ErrTypeMismatch, err)
+		})
+
+		t.Run(fmt.Sprintf("Read String %T valid entry", n), func(t *testing.T) {
+			val, err := n.ReadString("VISIBLE STRING value", "")
+			assert.Equal(t, "AStringCannotBeLongerThanTheDefaultValue", val)
+			assert.Equal(t, nil, err, err)
+		})
+	}
+}
+
+func TestWriteExactThenReadWithType(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
 	local, _ := network.Local(NodeIdTest)
+	t.Run("bool", func(t *testing.T) {
+		err := local.WriteAnyExact("BOOLEAN value", 0, true)
+		assert.Nil(t, err)
+		v, err := local.ReadBool("BOOLEAN value", 0)
+		assert.Nil(t, err)
+		assert.Equal(t, true, v)
+	})
 	t.Run("uint8", func(t *testing.T) {
-		local.WriteAny("UNSIGNED8 value", 0, uint8(55))
+		err := local.WriteAnyExact("UNSIGNED8 value", 0, uint8(55))
+		assert.Nil(t, err)
 		v, err := local.ReadUint8("UNSIGNED8 value", 0)
 		assert.Nil(t, err)
 		assert.Equal(t, uint8(55), v)
 	})
 	t.Run("uint16", func(t *testing.T) {
-		local.WriteAny("UNSIGNED16 value", 0, uint16(1234))
+		err := local.WriteAnyExact("UNSIGNED16 value", 0, uint16(1234))
+		assert.Nil(t, err)
 		v, err := local.ReadUint16("UNSIGNED16 value", 0)
 		assert.Nil(t, err)
 		assert.Equal(t, uint16(1234), v)
 	})
 	t.Run("uint32", func(t *testing.T) {
-		local.WriteAny("UNSIGNED32 value", 0, uint32(567899))
+		err := local.WriteAnyExact("UNSIGNED32 value", 0, uint32(567899))
+		assert.Nil(t, err)
 		v, err := local.ReadUint32("UNSIGNED32 value", 0)
 		assert.Nil(t, err)
 		assert.Equal(t, uint32(567899), v)
 	})
+	t.Run("uint64", func(t *testing.T) {
+		err := local.WriteAnyExact("UNSIGNED64 value", 0, uint64(1234321))
+		assert.Nil(t, err)
+		v, err := local.ReadUint64("UNSIGNED64 value", 0)
+		assert.Nil(t, err)
+		assert.Equal(t, uint64(1234321), v)
+	})
 	t.Run("int8", func(t *testing.T) {
-		local.WriteAny("INTEGER8 value", 0, int8(11))
+		err := local.WriteAnyExact("INTEGER8 value", 0, int8(11))
+		assert.Nil(t, err)
 		v, err := local.ReadInt8("INTEGER8 value", 0)
 		assert.Nil(t, err)
 		assert.Equal(t, int8(11), v)
 	})
 	t.Run("int16", func(t *testing.T) {
-		local.WriteAny("INTEGER16 value", 0, int16(11231))
+		err := local.WriteAnyExact("INTEGER16 value", 0, int16(11231))
+		assert.Nil(t, err)
 		v, err := local.ReadInt16("INTEGER16 value", 0)
 		assert.Nil(t, err)
 		assert.Equal(t, int16(11231), v)
 	})
 	t.Run("int32", func(t *testing.T) {
-		local.WriteAny("INTEGER32 value", 0, int32(98789))
+		err := local.WriteAnyExact("INTEGER32 value", 0, int32(98789))
+		assert.Nil(t, err)
 		v, err := local.ReadInt32("INTEGER32 value", 0)
 		assert.Nil(t, err)
 		assert.Equal(t, int32(98789), v)
 	})
+	t.Run("int64", func(t *testing.T) {
+		err := local.WriteAnyExact("INTEGER64 value", 0, int64(-5999))
+		assert.Nil(t, err)
+		v, err := local.ReadInt64("INTEGER64 value", 0)
+		assert.Nil(t, err)
+		assert.Equal(t, int64(-5999), v)
+	})
 	t.Run("float32", func(t *testing.T) {
-		local.WriteAny("REAL32 value", 0, float32(0.6))
+		err := local.WriteAnyExact("REAL32 value", 0, float32(0.6))
+		assert.Nil(t, err)
 		v, err := local.ReadFloat32("REAL32 value", 0)
 		assert.Nil(t, err)
 		assert.Equal(t, float32(0.6), v)
 	})
-}
-
-func TestReadRemote(t *testing.T) {
-	network := CreateNetworkTest()
-	defer network.Disconnect()
-	network2 := CreateNetworkEmptyTest()
-	defer network2.Disconnect()
-	remote, err := network2.AddRemoteNode(NodeIdTest, od.Default())
-	assert.Nil(t, err)
-	t.Run("Read any", func(t *testing.T) {
-		for indexName, key := range SDO_UNSIGNED_READ_MAP {
-			val, _ := remote.Read(indexName, "")
-			assert.Equal(t, key, val)
-		}
-		for indexName, key := range SDO_INTEGER_READ_MAP {
-			val, _ := remote.Read(indexName, "")
-			assert.Equal(t, key, val)
-		}
-		for indexName, key := range SDO_FLOAT_READ_MAP {
-			val, _ := remote.Read(indexName, "")
-			assert.InDelta(t, key, val, 1e-5)
-		}
-
-	})
-	t.Run("Read Uint", func(t *testing.T) {
-		for indexName, key := range SDO_UNSIGNED_READ_MAP {
-			val, _ := remote.ReadUint(indexName, "")
-			assert.Equal(t, key, val)
-		}
-		_, err := remote.ReadUint("INTEGER8 value", "")
-		assert.Equal(t, od.ErrTypeMismatch, err)
-	})
-
-	t.Run("Read Int", func(t *testing.T) {
-		for indexName, key := range SDO_INTEGER_READ_MAP {
-			val, _ := remote.ReadInt(indexName, "")
-			assert.Equal(t, key, val)
-		}
-		_, err := remote.ReadInt("UNSIGNED8 value", "")
-		assert.Equal(t, od.ErrTypeMismatch, err)
-	})
-
-	t.Run("Read Float", func(t *testing.T) {
-		for indexName, key := range SDO_FLOAT_READ_MAP {
-			val, _ := remote.ReadFloat(indexName, "")
-			assert.InDelta(t, key, val, 0.01)
-		}
-		_, err := remote.ReadFloat("UNSIGNED8 value", "")
-		assert.Equal(t, od.ErrTypeMismatch, err)
-	})
-
-	t.Run("Read String", func(t *testing.T) {
-		val, err := remote.ReadString("VISIBLE STRING value", "")
-		assert.Equal(t, "AStringCannotBeLongerThanTheDefaultValue", val)
-		assert.Equal(t, nil, err, err)
-	})
-
-	t.Run("Write any", func(t *testing.T) {
-		network2 := CreateNetworkEmptyTest()
-		defer network2.Disconnect()
-		remote, err := network2.AddRemoteNode(NodeIdTest, od.Default())
+	t.Run("float64", func(t *testing.T) {
+		err := local.WriteAnyExact("REAL64 value", 0, float64(1996.1))
 		assert.Nil(t, err)
-		err = remote.Write("REAL32 value", "", float32(1500.1))
+		v, err := local.ReadFloat64("REAL64 value", 0)
 		assert.Nil(t, err)
-		val, _ := remote.ReadFloat("REAL32 value", "")
-		assert.InDelta(t, 1500.1, val, 0.01)
+		assert.Equal(t, float64(1996.1), v)
 	})
-
+	t.Run("string", func(t *testing.T) {
+		err := local.WriteAnyExact("VISIBLE STRING value", 0, "hi there")
+		assert.Nil(t, err)
+		v, err := local.ReadString("VISIBLE STRING value", 0)
+		assert.Nil(t, err)
+		assert.Equal(t, "hi there", v)
+	})
 }
 
 func TestTimeSynchronization(t *testing.T) {
