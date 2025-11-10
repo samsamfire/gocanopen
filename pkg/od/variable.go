@@ -11,7 +11,7 @@ import (
 // It is used to store a "VAR" or "DOMAIN" object type as well as
 // any sub entry of a "RECORD" or "ARRAY" object type
 type Variable struct {
-	mu           sync.RWMutex
+	mu           sync.Mutex
 	valueDefault []byte
 	value        []byte
 	// Name of this variable
@@ -69,8 +69,8 @@ func (v *Variable) DefaultValue() []byte {
 }
 
 func (v *Variable) Bool() (bool, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	if v.DataType != BOOLEAN {
 		return false, ErrTypeMismatch
@@ -80,8 +80,8 @@ func (v *Variable) Bool() (bool, error) {
 
 // Return value as uint64 (only for UNSIGNED types)
 func (v *Variable) Uint() (uint64, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	switch v.DataType {
 	case UNSIGNED8:
@@ -98,8 +98,8 @@ func (v *Variable) Uint() (uint64, error) {
 }
 
 func (v *Variable) Uint8() (uint8, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	if v.DataType != UNSIGNED8 {
 		return 0, ErrTypeMismatch
@@ -108,8 +108,8 @@ func (v *Variable) Uint8() (uint8, error) {
 }
 
 func (v *Variable) Uint16() (uint16, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	if v.DataType != UNSIGNED16 {
 		return 0, ErrTypeMismatch
@@ -118,8 +118,8 @@ func (v *Variable) Uint16() (uint16, error) {
 }
 
 func (v *Variable) Uint32() (uint32, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	if v.DataType != UNSIGNED32 {
 		return 0, ErrTypeMismatch
@@ -128,8 +128,8 @@ func (v *Variable) Uint32() (uint32, error) {
 }
 
 func (v *Variable) Uint64() (uint64, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	if v.DataType != UNSIGNED64 {
 		return 0, ErrTypeMismatch
@@ -139,8 +139,8 @@ func (v *Variable) Uint64() (uint64, error) {
 
 // Return value as int64 (only for SIGNED types)
 func (v *Variable) Int() (int64, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	switch v.DataType {
 	case INTEGER8:
@@ -156,8 +156,8 @@ func (v *Variable) Int() (int64, error) {
 	}
 }
 func (v *Variable) Int8() (int8, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	if v.DataType != INTEGER8 {
 		return 0, ErrTypeMismatch
@@ -166,8 +166,8 @@ func (v *Variable) Int8() (int8, error) {
 }
 
 func (v *Variable) Int16() (int16, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	if v.DataType != INTEGER16 {
 		return 0, ErrTypeMismatch
@@ -176,8 +176,8 @@ func (v *Variable) Int16() (int16, error) {
 }
 
 func (v *Variable) Int32() (int32, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	if v.DataType != INTEGER32 {
 		return 0, ErrTypeMismatch
@@ -186,8 +186,8 @@ func (v *Variable) Int32() (int32, error) {
 }
 
 func (v *Variable) Int64() (int64, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	if v.DataType != INTEGER64 {
 		return 0, ErrTypeMismatch
@@ -197,8 +197,8 @@ func (v *Variable) Int64() (int64, error) {
 
 // Return value as float64 (only for REAL types)
 func (v *Variable) Float() (float64, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	switch v.DataType {
 	case REAL32:
@@ -213,8 +213,8 @@ func (v *Variable) Float() (float64, error) {
 }
 
 func (v *Variable) Float32() (float32, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	if v.DataType != REAL32 {
 		return 0, ErrTypeMismatch
@@ -224,8 +224,8 @@ func (v *Variable) Float32() (float32, error) {
 }
 
 func (v *Variable) Float64() (float64, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	if v.DataType != REAL64 {
 		return 0, ErrTypeMismatch
@@ -236,8 +236,8 @@ func (v *Variable) Float64() (float64, error) {
 
 // Return value as string (only for STRING types)
 func (v *Variable) String() (string, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	switch v.DataType {
 	case VISIBLE_STRING, OCTET_STRING:
@@ -254,8 +254,8 @@ func (v *Variable) String() (string, error) {
 
 // Return value as byte slice
 func (v *Variable) Bytes() []byte {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 
 	copied := make([]byte, len(v.value))
 	copy(copied, v.value)
@@ -264,15 +264,15 @@ func (v *Variable) Bytes() []byte {
 
 // Return value as underlying "base" datatype
 func (v *Variable) Any() (any, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	return DecodeToType(v.value, v.DataType)
 }
 
 // Return value as underlying datatype
 func (v *Variable) AnyExact() (any, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	return DecodeToTypeExact(v.value, v.DataType)
 }
 
