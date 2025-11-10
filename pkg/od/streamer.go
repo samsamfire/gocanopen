@@ -11,7 +11,7 @@ import (
 // or writing to an OD entry.
 type Stream struct {
 	// Mutex used for synchronizing OD access
-	mu *sync.RWMutex
+	mu *sync.Mutex
 	// The actual corresponding data stored inside of OD
 	Data []byte
 	// This is used to keep track of how much has been written or read.
@@ -184,8 +184,8 @@ func ReadEntryDefault(stream *Stream, data []byte) (uint16, error) {
 	// Check if variable is accessible (i.e.) no write is currently being performed
 	// Reading will hang if entry is already being written to. This is problematic
 	// For SDO block transfers.
-	stream.mu.RLock()
-	defer stream.mu.RUnlock()
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
 
 	dataLenToCopy := int(stream.DataLength)
 	count := len(data)
