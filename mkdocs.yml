@@ -1,13 +1,16 @@
 site_name: Gocanopen
 repo_url: https://github.com/samsamfire/gocanopen
+site_url: https://samsamfire.github.io/gocanopen
 nav:
   - Getting started: index.md
   - CAN driver: can.md
   - Network : network.md
+  - Nodes :
+    - Local Node: local-node.md
+    - Remote Node: remote-node.md
   - Object Dictionary : od.md
   - Configurator : configurator.md
-  - Nodes :
-    - Local : local.md
+  - SDO : sdo.md
 
 theme:
   name: material
@@ -21,7 +24,7 @@ theme:
   features:
     - content.code.copy
     - navigation.instant
-    - navigation.instant.progress
+    - -navigation.instant.progress
 
 markdown_extensions:
   - pymdownx.highlight:

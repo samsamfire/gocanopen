@@ -13,12 +13,12 @@ var pdoNb uint8 = 0
 // Read / write event timer
 conf.WriteEventTimer(pdoNb, 1111)
 eventTimer, _ := conf.ReadEventTimer(pdoNb)
-fmt.Prinln("event timer",eventTimer)
+fmt.Println("event timer",eventTimer)
 
 // Read / write transmission type
 conf.WriteTransmissionType(pdoNb,11)
 transType, _ := conf.ReadTransmissionType(pdoNb)
-fmt.Prinln("transmission type",transType)
+fmt.Println("transmission type",transType)
 
 // Clear current mapping
 conf.ClearMappings(pdoNb)

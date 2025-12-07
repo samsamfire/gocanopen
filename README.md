@@ -3,10 +3,9 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/samsamfire/gocanopen.svg)](https://pkg.go.dev/github.com/samsamfire/gocanopen)
 [![Go Report Card](https://goreportcard.com/badge/github.com/samsamfire/gocanopen)](https://goreportcard.com/report/github.com/samsamfire/gocanopen)
 [![Unit testing golang](https://github.com/samsamfire/gocanopen/actions/workflows/go_tests.yml/badge.svg)](https://github.com/samsamfire/gocanopen/actions/workflows/go_tests.yml)
+[![License](https://img.shields.io/badge/License-MIT%202.0-blue.svg)](https://opensource.org/license/mit)
 
-**gocanopen** is an implementation of the CANopen protocol (CiA 301) written in pure golang.
-It aims to be simple and efficient.
-This package can be used for master usage but also supports creating regular CANopen nodes.
+**gocanopen** is a modern, efficient, and compliant implementation of the CANopen protocol (CiA 301) written entirely in pure Go. It provides robust support for both CANopen master and slave functionalities, allowing dynamic Object Dictionary (OD) creation directly from EDS files without requiring any code generation.
 
 ### Features
 
@@ -53,60 +52,30 @@ type Bus interface {
 Feel free to contribute to add specific drivers, we will find a way to integrate them in this repo.
 This repo contains two implementation examples : `socketcan.go`, and `virtual.go` used for testing.
 
+### Getting Started
+
+To get started with `gocanopen`, check out our detailed documentation and examples:
+
+*   **Documentation:** [here](https://samsamfire.github.io/gocanopen/)
+*   **Examples:** Explore the [`examples/`](./examples) directory for various use cases, including basic setup, master control, and HTTP gateway integration.
+
 ### Documentation
 
-1. [Introduction](docs/index.md)
-2. [Network](docs/network.md)
-2. [Object Dictionary](docs/od.md)
-4. [Local nodes](docs/local.md)
+Our comprehensive documentation covers various aspects of `gocanopen`:
 
-### Usage
+1.  [Introduction](docs/index.md)
+2.  [Network](docs/network.md)
+3.  [Remote Node](docs/remote-node.md)
+4.  [Local Node](docs/local-node.md)
+5.  [Object Dictionary](docs/od.md)
+6.  [Configurator](docs/configurator.md)
+7.  [CAN driver](docs/can.md)
+8.  [SDO](docs/sdo.md)
 
-Examples can be found in `/examples`
 
-Basic setup example :
+### Contributing
 
-```go
-package main
-
-import (
-	"fmt"
-
-	"github.com/samsamfire/gocanopen/pkg/network"
-	"github.com/samsamfire/gocanopen/pkg/od"
-)
-
-func main() {
-	network := network.NewNetwork(nil)
-	err := network.Connect("socketcan", "can0", 500_000)
-	if err != nil {
-		panic(err)
-	}
-	defer network.Disconnect()
-
-	// Add a remote node to the network, either by providing an EDS file
-	// Or downloading from the node. We use here a default OD available with the library
-	node, err := network.AddRemoteNode(0x10, od.Default())
-	if err != nil {
-		panic(err)
-	}
-
-	// Read standard entry containing device name (0x1008)
-	value, err := node.Configurator().ReadManufacturerDeviceName()
-	if err != nil {
-		fmt.Printf("error reading node %v device name : %v\n", node.GetID(), err)
-	} else {
-		fmt.Printf("node %v device name is %v\n", node.GetID(), value)
-	}
-
-	// Perform a network scan to detect other nodes...
-	res, err := network.Scan(1000)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("scanned the following nodes : ", res)
-}
-```
+Contributions are welcome ! Please open a PR.
 
 ### Work ongoing
 
