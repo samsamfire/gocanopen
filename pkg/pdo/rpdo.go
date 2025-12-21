@@ -98,53 +98,64 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 	if rpdo.synchronous && rpdo.sync != nil && !rpdo.sync.RxToggle() {
 		bufNo = 1
 	}
-	// Copy RPDO into OD variables
-	rpdoReceived := false
-	totalNbWritten := uint32(0)
 
-	for rpdo.rxNew[bufNo] {
-
-		rpdoReceived = true
-		dataRPDO := rpdo.rxData[bufNo][:pdo.dataLength]
-		rpdo.rxNew[bufNo] = false
-
-		for i := range pdo.nbMapped {
-			streamer := &pdo.streamers[i]
-			mappedLength := streamer.DataOffset
-			dataLength := streamer.DataLength
-			if dataLength > uint32(MaxPdoLength) {
-				dataLength = uint32(MaxPdoLength)
+	// Handle timeout logic if RPDO not received
+	if !rpdo.rxNew[bufNo] {
+		if rpdo.timeoutTimeUs > 0 && rpdo.timeoutTimer > 0 && rpdo.timeoutTimer < rpdo.timeoutTimeUs {
+			rpdo.timeoutTimer += timeDifferenceUs
+			if rpdo.timeoutTimer > rpdo.timeoutTimeUs {
+				pdo.emcy.ErrorReport(emergency.EmRPDOTimeOut, emergency.ErrRpdoTimeout, rpdo.timeoutTimer)
 			}
-			buffer = dataRPDO[totalNbWritten : totalNbWritten+mappedLength]
-			if dataLength > uint32(mappedLength) {
-				buffer = buffer[:cap(buffer)]
-			}
-			streamer.DataOffset = 0
-			_, err := streamer.Write(buffer)
-			if err != nil {
-				rpdo.pdo.logger.Warn("failed to write to OD on RPDO reception",
-					"configured id", rpdo.pdo.configuredId,
-					"error", err,
-				)
-			}
-			streamer.DataOffset = mappedLength
-			totalNbWritten += mappedLength
 		}
-	}
-	if rpdo.timeoutTimeUs <= 0 {
 		return
 	}
-	// Check timeouts
-	if rpdoReceived {
-		if rpdo.timeoutTimer > rpdo.timeoutTimeUs {
-			pdo.emcy.ErrorReset(emergency.EmRPDOTimeOut, rpdo.timeoutTimer)
-		}
+
+	localData := rpdo.rxData[bufNo][:pdo.dataLength]
+	rpdo.rxNew[bufNo] = false
+
+	// Handle timeout logic, reset if happened
+	timeoutHappened := rpdo.timeoutTimer > rpdo.timeoutTimeUs
+	if rpdo.timeoutTimeUs > 0 {
 		rpdo.timeoutTimer = 1
-	} else if rpdo.timeoutTimer > 0 && rpdo.timeoutTimer < rpdo.timeoutTimeUs {
-		rpdo.timeoutTimer += timeDifferenceUs
-		if rpdo.timeoutTimer > rpdo.timeoutTimeUs {
-			pdo.emcy.ErrorReport(emergency.EmRPDOTimeOut, emergency.ErrRpdoTimeout, rpdo.timeoutTimer)
+	}
+
+	if timeoutHappened && rpdo.timeoutTimeUs > 0 {
+		pdo.emcy.ErrorReset(emergency.EmRPDOTimeOut, rpdo.timeoutTimer)
+	}
+
+	totalNbWritten := uint32(0)
+	totalMappedLength := uint32(0)
+	rpdo.rxNew[bufNo] = false
+
+	for i := range pdo.nbMapped {
+		streamer := &pdo.streamers[i]
+		mappedLength := streamer.DataOffset
+		dataLength := streamer.DataLength
+
+		// Paranoid check
+		totalMappedLength += mappedLength
+		if totalMappedLength > uint32(MaxPdoLength) {
+			break
 		}
+
+		if dataLength > uint32(MaxPdoLength) {
+			dataLength = uint32(MaxPdoLength)
+		}
+
+		buffer = localData[totalNbWritten : totalNbWritten+mappedLength]
+		if dataLength > uint32(mappedLength) {
+			buffer = buffer[:cap(buffer)]
+		}
+		streamer.DataOffset = 0
+		_, err := streamer.Write(buffer)
+		if err != nil {
+			rpdo.pdo.logger.Warn("failed to write to OD on RPDO reception",
+				"configured id", rpdo.pdo.configuredId,
+				"error", err,
+			)
+		}
+		streamer.DataOffset = mappedLength
+		totalNbWritten += mappedLength
 	}
 }
 
