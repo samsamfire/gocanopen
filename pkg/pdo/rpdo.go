@@ -75,7 +75,6 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 	defer rpdo.mu.Unlock()
 
 	var buffer []byte
-
 	pdo := rpdo.pdo
 
 	if !pdo.Valid || !nmtIsOperational {
@@ -91,18 +90,9 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 
 	// Check errors in length of received messages
 	if rpdo.receiveError > rpdoRxAck {
-		setError := rpdo.receiveError != rpdoRxOk
-		errorCode := emergency.ErrPdoLength
-		if rpdo.receiveError != rpdoRxShort {
-			errorCode = emergency.ErrPdoLengthExc
-		}
-		pdo.emcy.Error(setError, emergency.EmRPDOWrongLength, uint16(errorCode), pdo.dataLength)
-		if setError {
-			rpdo.receiveError = rpdoRxAckError
-		} else {
-			rpdo.receiveError = rpdoRxAckNoError
-		}
+		rpdo.processReceiveErrors(pdo)
 	}
+
 	// Get the correct rx buffer
 	bufNo := uint8(0)
 	if rpdo.synchronous && rpdo.sync != nil && !rpdo.sync.RxToggle() {
@@ -155,6 +145,20 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 		if rpdo.timeoutTimer > rpdo.timeoutTimeUs {
 			pdo.emcy.ErrorReport(emergency.EmRPDOTimeOut, emergency.ErrRpdoTimeout, rpdo.timeoutTimer)
 		}
+	}
+}
+
+func (rpdo *RPDO) processReceiveErrors(pdo *PDOCommon) {
+	setError := rpdo.receiveError != rpdoRxOk
+	errorCode := emergency.ErrPdoLength
+	if rpdo.receiveError != rpdoRxShort {
+		errorCode = emergency.ErrPdoLengthExc
+	}
+	pdo.emcy.Error(setError, emergency.EmRPDOWrongLength, uint16(errorCode), pdo.dataLength)
+	if setError {
+		rpdo.receiveError = rpdoRxAckError
+	} else {
+		rpdo.receiveError = rpdoRxAckNoError
 	}
 }
 
