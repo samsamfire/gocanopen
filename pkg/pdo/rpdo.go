@@ -78,15 +78,17 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 
 	pdo := rpdo.pdo
 
-	if !pdo.Valid || !nmtIsOperational || (!syncWas && rpdo.synchronous) {
-		// not valid and op, clear can receive flags & timeouttimer
-		if !pdo.Valid || !nmtIsOperational {
-			rpdo.rxNew[0] = false
-			rpdo.rxNew[1] = false
-			rpdo.timeoutTimer = 0
-		}
+	if !pdo.Valid || !nmtIsOperational {
+		rpdo.rxNew[0] = false
+		rpdo.rxNew[1] = false
+		rpdo.timeoutTimer = 0
 		return
 	}
+
+	if !syncWas && rpdo.synchronous {
+		return
+	}
+
 	// Check errors in length of received messages
 	if rpdo.receiveError > rpdoRxAck {
 		setError := rpdo.receiveError != rpdoRxOk
