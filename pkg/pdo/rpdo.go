@@ -72,7 +72,6 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 // This should be called periodically
 func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWas bool) {
 	rpdo.mu.Lock()
-	defer rpdo.mu.Unlock()
 
 	var buffer []byte
 	pdo := rpdo.pdo
@@ -81,10 +80,12 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 		rpdo.rxNew[0] = false
 		rpdo.rxNew[1] = false
 		rpdo.timeoutTimer = 0
+		rpdo.mu.Unlock()
 		return
 	}
 
 	if !syncWas && rpdo.synchronous {
+		rpdo.mu.Unlock()
 		return
 	}
 
@@ -107,11 +108,13 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 				pdo.emcy.ErrorReport(emergency.EmRPDOTimeOut, emergency.ErrRpdoTimeout, rpdo.timeoutTimer)
 			}
 		}
+		rpdo.mu.Unlock()
 		return
 	}
 
 	localData := rpdo.rxData[bufNo][:pdo.dataLength]
 	rpdo.rxNew[bufNo] = false
+	rpdo.mu.Unlock()
 
 	// Handle timeout logic, reset if happened
 	timeoutHappened := rpdo.timeoutTimer > rpdo.timeoutTimeUs
