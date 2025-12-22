@@ -112,7 +112,7 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 		return
 	}
 
-	localData := rpdo.rxData[bufNo][:pdo.dataLength]
+	localData := rpdo.rxData[bufNo]
 	rpdo.rxNew[bufNo] = false
 	rpdo.mu.Unlock()
 
