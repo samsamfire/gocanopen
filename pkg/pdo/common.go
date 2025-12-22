@@ -10,14 +10,13 @@ import (
 )
 
 const (
-	MaxPdoLength    uint8 = 8
-	BufferCountRpdo uint8 = 2
-	MinPdoNumber          = uint16(1)
-	MaxRpdoNumber         = uint16(512)
-	MaxTpdoNumber         = MaxRpdoNumber
-	MaxPdoNumber          = MaxRpdoNumber + MaxTpdoNumber
-	IndexFirstRpdo        = 1
-	IndexFirstTpdo        = MaxRpdoNumber + 1
+	MaxPdoLength   uint8 = 8
+	MinPdoNumber         = uint16(1)
+	MaxRpdoNumber        = uint16(512)
+	MaxTpdoNumber        = MaxRpdoNumber
+	MaxPdoNumber         = MaxRpdoNumber + MaxTpdoNumber
+	IndexFirstRpdo       = 1
+	IndexFirstTpdo       = MaxRpdoNumber + 1
 )
 
 const (
