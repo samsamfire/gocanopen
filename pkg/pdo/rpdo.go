@@ -20,12 +20,14 @@ const (
 	rpdoRxLong       = 13 // Too long RPDO received, not acknowledged
 )
 
+const buffCount = 2
+
 type RPDO struct {
 	*canopen.BusManager
 	mu            s.Mutex
 	pdo           *PDOCommon
-	rxNew         [BufferCountRpdo]bool
-	rxData        [BufferCountRpdo][MaxPdoLength]byte
+	rxNew         [buffCount]bool
+	rxData        [buffCount][MaxPdoLength]byte
 	receiveError  uint8
 	sync          *sync.SYNC
 	synchronous   bool
