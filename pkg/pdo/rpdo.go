@@ -130,12 +130,15 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 	totalMappedLength := uint32(0)
 	rpdo.rxNew[bufNo] = false
 
+	// Iterate over all the mapped objects and copy data from
+	// received RPDO frame to OD via streamer objects.
 	for i := range pdo.nbMapped {
 		streamer := &pdo.streamers[i]
 		mappedLength := streamer.DataOffset
 		dataLength := streamer.DataLength
 
-		// Paranoid check
+		// Paranoid check : the accumulated mapped length should never
+		// exceed MaxPdoLength
 		totalMappedLength += mappedLength
 		if totalMappedLength > uint32(MaxPdoLength) {
 			break
@@ -157,8 +160,14 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 				"error", err,
 			)
 		}
+
 		streamer.DataOffset = mappedLength
 		totalNbWritten += mappedLength
+	}
+	// Additional check for total mapped length, should be equal to PDO data length
+	// this should never happen unless software issue.
+	if totalMappedLength > uint32(MaxPdoLength) || totalMappedLength != pdo.dataLength {
+		pdo.emcy.ErrorReport(emergency.EmGenericSoftwareError, emergency.ErrSoftwareInternal, totalMappedLength)
 	}
 }
 
