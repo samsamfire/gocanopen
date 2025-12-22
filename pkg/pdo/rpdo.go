@@ -40,34 +40,44 @@ type RPDO struct {
 func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
-	pdo := rpdo.pdo
-	err := rpdo.receiveError
-	if !pdo.Valid {
+
+	// Don't process any further if PDO is not valid
+	if !rpdo.pdo.Valid {
 		return
 	}
-	if frame.DLC >= uint8(pdo.dataLength) {
-		// Indicate if errors in PDO length
-		if frame.DLC == uint8(pdo.dataLength) {
-			if err == rpdoRxAckError {
-				err = rpdoRxOk
-			}
-		} else {
-			if err == rpdoRxAckNoError {
-				err = rpdoRxLong
-			}
-		}
-		// Determine where to copy the message
-		bufNo := 0
-		if rpdo.synchronous && rpdo.sync != nil && rpdo.sync.RxToggle() {
-			bufNo = 1
-		}
-		rpdo.rxData[bufNo] = frame.Data
-		rpdo.rxNew[bufNo] = true
 
-	} else if err == rpdoRxAckNoError {
-		err = rpdoRxShort
+	expectedLength := uint8(rpdo.pdo.dataLength)
+
+	// If frame is too short, set error and don't process
+	if frame.DLC < expectedLength {
+		if rpdo.receiveError == rpdoRxAckNoError {
+			rpdo.receiveError = rpdoRxShort
+		}
+		return
 	}
-	rpdo.receiveError = err
+
+	// If frame is too long, set error but still process
+	if frame.DLC > expectedLength {
+		if rpdo.receiveError == rpdoRxAckNoError {
+			rpdo.receiveError = rpdoRxLong
+		}
+	}
+
+	// If frame length is correct, clear any previous error
+	if frame.DLC == expectedLength {
+		if rpdo.receiveError == rpdoRxAckError {
+			rpdo.receiveError = rpdoRxOk
+		}
+	}
+
+	// Process the frame, determine buffer to write to
+	bufIdx := 0
+	if rpdo.synchronous && rpdo.sync != nil && rpdo.sync.RxToggle() {
+		bufIdx = 1
+	}
+
+	rpdo.rxData[bufIdx] = frame.Data
+	rpdo.rxNew[bufIdx] = true
 }
 
 // Process [RPDO] state machine and TX CAN frames
