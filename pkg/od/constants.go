@@ -171,6 +171,21 @@ const (
 	EntryTPDOMappingEnd              uint16 = 0x1BFF
 )
 
+// Standard CANopen sub-objects
+const (
+	// Tpdo/Rpdo communication params
+	SubPdoCobId            = 0x1
+	SubPdoTransmissionType = 0x2
+	SubPdoInhibitTime      = 0x3 // optional
+	SubPdoReserved         = 0x4 // optional
+	SubPdoEventTimer       = 0x5 // optional
+	SubPdoSyncStart        = 0x6 // optional
+	// Tpdo/Rpdo mapping params
+	SubPdoNbMappings = 0x0
+	// All other ones (2 to 64 are optional)
+	SubPdoMappingObject1 = 0x1
+)
+
 // Standard CANopen object areas
 const (
 	AreaCommunicationProfileStart        uint16 = 0x1000

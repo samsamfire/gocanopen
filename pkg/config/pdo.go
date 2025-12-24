@@ -20,6 +20,7 @@ type PDOConfigurationParameter struct {
 	TransmissionType uint8
 	InhibitTime      uint16
 	EventTimer       uint16
+	SyncStart        uint8
 	Mappings         []PDOMappingParameter
 }
 
@@ -47,7 +48,7 @@ func (conf *NodeConfigurator) getCommunicationIndex(pdoNb uint16) uint16 {
 
 func (config *NodeConfigurator) ReadCobIdPDO(pdoNb uint16) (uint32, error) {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
-	return config.client.ReadUint32(config.nodeId, pdoCommIndex, 1)
+	return config.client.ReadUint32(config.nodeId, pdoCommIndex, od.SubPdoCobId)
 }
 
 func (config *NodeConfigurator) ReadEnabledPDO(pdoNb uint16) (bool, error) {
@@ -60,22 +61,27 @@ func (config *NodeConfigurator) ReadEnabledPDO(pdoNb uint16) (bool, error) {
 
 func (config *NodeConfigurator) ReadTransmissionType(pdoNb uint16) (uint8, error) {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
-	return config.client.ReadUint8(config.nodeId, pdoCommIndex, 2)
+	return config.client.ReadUint8(config.nodeId, pdoCommIndex, od.SubPdoTransmissionType)
 }
 
 func (config *NodeConfigurator) ReadInhibitTime(pdoNb uint16) (uint16, error) {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
-	return config.client.ReadUint16(config.nodeId, pdoCommIndex, 3)
+	return config.client.ReadUint16(config.nodeId, pdoCommIndex, od.SubPdoInhibitTime)
 }
 
 func (config *NodeConfigurator) ReadEventTimer(pdoNb uint16) (uint16, error) {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
-	return config.client.ReadUint16(config.nodeId, pdoCommIndex, 5)
+	return config.client.ReadUint16(config.nodeId, pdoCommIndex, od.SubPdoEventTimer)
+}
+
+func (config *NodeConfigurator) ReadSyncStart(pdoNb uint16) (uint8, error) {
+	pdoCommIndex := config.getCommunicationIndex(pdoNb)
+	return config.client.ReadUint8(config.nodeId, pdoCommIndex, od.SubPdoSyncStart)
 }
 
 func (config *NodeConfigurator) ReadNbMappings(pdoNb uint16) (uint8, error) {
 	pdoMappingIndex := config.getMappingIndex(pdoNb)
-	return config.client.ReadUint8(config.nodeId, pdoMappingIndex, 0)
+	return config.client.ReadUint8(config.nodeId, pdoMappingIndex, od.SubPdoNbMappings)
 }
 
 func (config *NodeConfigurator) ReadMappings(pdoNb uint16) ([]PDOMappingParameter, error) {
@@ -113,9 +119,21 @@ func (config *NodeConfigurator) ReadConfigurationPDO(pdoNb uint16) (PDOConfigura
 		return conf, err
 	}
 	// Optional
-	conf.InhibitTime, _ = config.ReadInhibitTime(pdoNb)
+	conf.InhibitTime, err = config.ReadInhibitTime(pdoNb)
+	if err != nil && err != sdo.AbortSubUnknown {
+		return conf, err
+	}
 	// Optional
-	conf.EventTimer, _ = config.ReadEventTimer(pdoNb)
+	conf.EventTimer, err = config.ReadEventTimer(pdoNb)
+	if err != nil && err != sdo.AbortSubUnknown {
+		return conf, err
+	}
+	// Optional
+	conf.SyncStart, err = config.ReadSyncStart(pdoNb)
+	if err != nil && err != sdo.AbortSubUnknown {
+		return conf, err
+	}
+
 	conf.Mappings, err = config.ReadMappings(pdoNb)
 	config.logger.Debug("read configuration",
 		"type", config.getType(pdoNb),
@@ -179,7 +197,7 @@ func (config *NodeConfigurator) DisablePDO(pdoNb uint16) error {
 		return err
 	}
 	cobId |= (1 << 31)
-	return config.client.WriteRaw(config.nodeId, pdoCommIndex, 1, cobId, false)
+	return config.client.WriteRaw(config.nodeId, pdoCommIndex, od.SubPdoCobId, cobId, false)
 }
 
 // Enable PDO
@@ -191,7 +209,7 @@ func (config *NodeConfigurator) EnablePDO(pdoNb uint16) error {
 	}
 	mask := ^(uint32(1) << 31)
 	cobId &= mask
-	return config.client.WriteRaw(config.nodeId, pdoCommIndex, 1, cobId, false)
+	return config.client.WriteRaw(config.nodeId, pdoCommIndex, od.SubPdoCobId, cobId, false)
 }
 
 func (config *NodeConfigurator) WriteCanIdPDO(pdoNb uint16, canId uint16) error {
@@ -202,22 +220,27 @@ func (config *NodeConfigurator) WriteCanIdPDO(pdoNb uint16, canId uint16) error 
 	}
 	cobId &= 0xFFFFF800 // clear cobid bits
 	cobId |= uint32(canId)
-	return config.client.WriteRaw(config.nodeId, pdoCommIndex, 1, cobId, false)
+	return config.client.WriteRaw(config.nodeId, pdoCommIndex, od.SubPdoCobId, cobId, false)
 }
 
 func (config *NodeConfigurator) WriteTransmissionType(pdoNb uint16, transType uint8) error {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
-	return config.client.WriteRaw(config.nodeId, pdoCommIndex, 2, transType, false)
+	return config.client.WriteRaw(config.nodeId, pdoCommIndex, od.SubPdoTransmissionType, transType, false)
 }
 
 func (config *NodeConfigurator) WriteInhibitTime(pdoNb uint16, inhibitTime uint16) error {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
-	return config.client.WriteRaw(config.nodeId, pdoCommIndex, 3, inhibitTime, false)
+	return config.client.WriteRaw(config.nodeId, pdoCommIndex, od.SubPdoInhibitTime, inhibitTime, false)
 }
 
 func (config *NodeConfigurator) WriteEventTimer(pdoNb uint16, eventTimer uint16) error {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
-	return config.client.WriteRaw(config.nodeId, pdoCommIndex, 5, eventTimer, false)
+	return config.client.WriteRaw(config.nodeId, pdoCommIndex, od.SubPdoEventTimer, eventTimer, false)
+}
+
+func (config *NodeConfigurator) WriteSyncStart(pdoNb uint16, syncStart uint8) error {
+	pdoCommIndex := config.getCommunicationIndex(pdoNb)
+	return config.client.WriteRaw(config.nodeId, pdoCommIndex, od.SubPdoSyncStart, syncStart, false)
 }
 
 // Clear all the PDO mappings
@@ -225,7 +248,7 @@ func (config *NodeConfigurator) WriteEventTimer(pdoNb uint16, eventTimer uint16)
 func (config *NodeConfigurator) ClearMappings(pdoNb uint16) error {
 	pdoMappingIndex := config.getMappingIndex(pdoNb)
 	// First clear nb of mapped entries
-	err := config.client.WriteRaw(config.nodeId, pdoMappingIndex, 0, uint8(0), false)
+	err := config.client.WriteRaw(config.nodeId, pdoMappingIndex, od.SubPdoNbMappings, uint8(0), false)
 	if err != nil {
 		return err
 	}
@@ -257,7 +280,7 @@ func (config *NodeConfigurator) WriteMappings(pdoNb uint16, mappings []PDOMappin
 		}
 	}
 	// Update number of mapped objects
-	return config.client.WriteRaw(config.nodeId, pdoMappingIndex, 0, uint8(len(mappings)), false)
+	return config.client.WriteRaw(config.nodeId, pdoMappingIndex, od.SubPdoNbMappings, uint8(len(mappings)), false)
 }
 
 // Update hole configuration
@@ -267,6 +290,7 @@ func (config *NodeConfigurator) WriteConfigurationPDO(pdoNb uint16, conf PDOConf
 		"pdoNb", pdoNb,
 		"conf", conf,
 	)
+	// Objects
 	err := config.WriteCanIdPDO(pdoNb, conf.CanId)
 	if err != nil {
 		return err
@@ -275,12 +299,19 @@ func (config *NodeConfigurator) WriteConfigurationPDO(pdoNb uint16, conf PDOConf
 	if err != nil {
 		return err
 	}
+	// Optional
 	err = config.WriteEventTimer(pdoNb, conf.EventTimer)
-	if err != nil {
+	if err != nil && err != sdo.AbortSubUnknown {
 		return err
 	}
+	// Optional
 	err = config.WriteInhibitTime(pdoNb, conf.InhibitTime)
-	if err != nil {
+	if err != nil && err != sdo.AbortSubUnknown {
+		return err
+	}
+	// Optional
+	err = config.WriteSyncStart(pdoNb, conf.SyncStart)
+	if err != nil && err != sdo.AbortSubUnknown {
 		return err
 	}
 	return config.WriteMappings(pdoNb, conf.Mappings)
