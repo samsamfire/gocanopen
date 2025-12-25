@@ -22,6 +22,7 @@ type SDOServer struct {
 	mu                  sync.Mutex
 	od                  *od.ObjectDictionary
 	nodeId              uint8
+	nmtOk               bool
 	rx                  chan SDOMessage
 	streamer            *od.Streamer
 	txBuffer            canopen.Frame
@@ -46,8 +47,6 @@ type SDOServer struct {
 	blockCRC        crc.CRC16
 	blockTimeout    uint32
 	errorExtraInfo  error
-
-	nmt uint8
 }
 
 // Handle [SDOServer] related RX CAN frames
@@ -76,11 +75,12 @@ func (s *SDOServer) Handle(frame canopen.Frame) {
 func (s *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 
 	s.logger.Info("starting sdo server processing")
-	timeout := time.Duration(s.timeoutTimeUs * uint32(time.Microsecond))
+
+	timeout := time.Duration(s.timeoutTimeUs) * time.Microsecond
 
 	for {
 		s.mu.Lock()
-		nmtIsPreOrOperationnal := s.nmt == nmt.StateOperational || s.nmt == nmt.StatePreOperational
+		nmtOk := s.nmtOk
 		s.mu.Unlock()
 
 		select {
@@ -88,7 +88,7 @@ func (s *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 			s.logger.Info("exiting sdo server process")
 			return
 		default:
-			if !s.valid || !nmtIsPreOrOperationnal {
+			if !s.valid || !nmtOk {
 				s.state = stateIdle
 				// Sleep to avoid huge CPU load when idling
 				time.Sleep(100 * time.Millisecond)
@@ -98,6 +98,15 @@ func (s *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 
 		select {
 		case rx := <-s.rx:
+
+			s.mu.Lock()
+			nmtOk := s.nmtOk
+			s.mu.Unlock()
+
+			if !nmtOk {
+				break
+			}
+
 			// New frame received, do what we need to do !
 			err := s.processIncoming(rx)
 			if err != nil && err != od.ErrPartial {
@@ -410,11 +419,15 @@ func (server *SDOServer) SendAbort(abortCode Abort) {
 	)
 }
 
-// Set internal nmt state
-func (server *SDOServer) SetNMTState(state uint8) {
+// Callback on NMT state change
+func (server *SDOServer) OnNmtStateChange(nmtState uint8) {
 	server.mu.Lock()
 	defer server.mu.Unlock()
-	server.nmt = state
+	if nmtState == nmt.StatePreOperational || nmtState == nmt.StateOperational {
+		server.nmtOk = true
+	} else {
+		server.nmtOk = false
+	}
 }
 
 func NewSDOServer(
