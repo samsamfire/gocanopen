@@ -130,7 +130,7 @@ func TestNmt(t *testing.T) {
 		eventHandler := EventHandler{}
 		consumer.HBConsumer.OnEvent(eventHandler.OnEvent)
 
-		err = net2.Command(NodeIdTest, nmt.CommandResetNode)
+		err = net1.Command(NodeIdTest, nmt.CommandResetNode)
 		assert.Nil(t, err)
 
 		assert.Eventually(t, func() bool {
