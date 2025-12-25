@@ -68,15 +68,27 @@ func (c *NodeProcessor) main(ctx context.Context) {
 		case <-ticker.C:
 			// Process main
 			state := c.node.ProcessMain(false, periodUs)
-			if state == nmt.ResetApp || state == nmt.ResetComm {
-				c.logger.Info("node reset requested")
+			if state == nmt.ResetComm {
+				// Currently nothing specific is done here.
+				// We could in the future "recreate" the node here.
+				break
+			}
+			if state == nmt.ResetApp {
+				c.logger.Info("reset has been requested")
 				if c.resetHandler != nil {
+					// Custom logic to apply
+					c.logger.Info("executing custom reset handler")
 					err := c.resetHandler(c.node, state)
 					if err != nil {
-						c.logger.Info("failed to reset node", "error", err)
+						c.logger.Error("error occured executing custom reset handler", "err", err)
 					}
-				} else {
-					c.logger.Warn("no reset handler registered")
+				}
+				// Do simple NMT boot up
+				// TODO : we should re-create the node here for a fresh start (in particular)
+				// Currently node Reset only restarts NMT part
+				err := c.node.Reset()
+				if err != nil {
+					c.logger.Info("error occured during reset", "err", err)
 				}
 			}
 		}
@@ -132,6 +144,7 @@ func (c *NodeProcessor) Wait() error {
 }
 
 // Add a specific handler to be called on reset events
+// after this handler is called, node will reboot automatically
 func (c *NodeProcessor) AddResetHandler(handler func(node Node, cmd uint8) error) {
 	c.resetHandler = handler
 }

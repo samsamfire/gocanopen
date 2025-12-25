@@ -36,7 +36,7 @@ def test_nmt_reset_comm(prepared_node: canopen.RemoteNode):
     # give time for the application to restart
     for _ in range(3):
         state = prepared_node.nmt.wait_for_heartbeat(timeout=1.0)
-    assert state == "OPERATIONAL"
+    assert state == "PRE-OPERATIONAL"
 
 
 def test_nmt_reset_node(prepared_node: canopen.RemoteNode):
