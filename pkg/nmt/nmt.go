@@ -82,7 +82,8 @@ type NMT struct {
 	hearbeatProducerTimer  uint32
 	nmtTxBuff              canopen.Frame
 	hbTxBuff               canopen.Frame
-	callback               func(nmtState uint8)
+	callbacks              map[uint64]func(nmtState uint8)
+	callbackNextId         uint64
 }
 
 // Handle [NMT] related RX CAN frames
@@ -194,8 +195,8 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32) uint8 {
 			prev = stateMap[nmt.operatingStatePrev]
 		}
 		nmt.logger.Info("nmt state changed", "previous", prev, "new", stateMap[nmtStateCopy])
-		if nmt.callback != nil {
-			nmt.callback(nmtStateCopy)
+		for _, callback := range nmt.callbacks {
+			callback(nmtStateCopy)
 		}
 	}
 
@@ -214,6 +215,13 @@ func (nmt *NMT) GetInternalState() uint8 {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
 	return nmt.operatingState
+}
+
+// Reset internal NMT state machine
+func (nmt *NMT) Reset() {
+	nmt.mu.Lock()
+	defer nmt.mu.Unlock()
+	nmt.operatingState = StateInitializing
 }
 
 // Send NMT command to self, don't send on network
@@ -237,6 +245,24 @@ func (nmt *NMT) SendCommand(command Command, nodeId uint8) error {
 	nmt.nmtTxBuff.Data[0] = uint8(command)
 	nmt.nmtTxBuff.Data[1] = nodeId
 	return nmt.Send(nmt.nmtTxBuff)
+}
+
+// Add a callback func to be called on NMT state change
+// It returns a cancel func that can be used to remove the callback
+func (nmt *NMT) AddStateChangeCallback(callback func(nmtState uint8)) (cancel func()) {
+	nmt.mu.Lock()
+	defer nmt.mu.Unlock()
+
+	id := nmt.callbackNextId
+	nmt.callbackNextId++
+	nmt.callbacks[id] = callback
+
+	// Return a cancel closure func
+	return func() {
+		nmt.mu.Lock()
+		defer nmt.mu.Unlock()
+		delete(nmt.callbacks, id)
+	}
 }
 
 func NewNMT(
@@ -267,6 +293,8 @@ func NewNMT(
 	nmt.control = control
 	nmt.emcy = emergency
 	nmt.hearbeatProducerTimer = uint32(firstHbTimeMs * 1000)
+	nmt.callbacks = make(map[uint64]func(nmtState uint8))
+	nmt.callbackNextId = 1
 
 	hbProdTimeMs, err := entry1017.Uint16(0)
 	if err != nil {
