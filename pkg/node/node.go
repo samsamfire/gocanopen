@@ -20,6 +20,8 @@ const (
 
 // A [Node] handles the CANopen stack.
 type Node interface {
+	// Reset node
+	Reset() error
 	// Cyclic tasks
 	ProcessPDO(syncWas bool, timeDifferenceUs uint32)
 	ProcessSYNC(timeDifferenceUs uint32) bool

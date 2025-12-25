@@ -70,6 +70,11 @@ func (node *RemoteNode) Servers() []*sdo.SDOServer {
 	return nil
 }
 
+func (node *RemoteNode) Reset() error {
+	// Nothing to do for a remote node
+	return nil
+}
+
 // Create a remote node
 func NewRemoteNode(
 	bm *canopen.BusManager,

@@ -37,6 +37,13 @@ type LocalNode struct {
 	TIME               *t.TIME
 }
 
+func (node *LocalNode) Reset() error {
+	if node.NMT != nil {
+		node.NMT.Reset()
+	}
+	return nil
+}
+
 func (node *LocalNode) ProcessPDO(syncWas bool, timeDifferenceUs uint32) {
 	if node.NodeIdUnconfigured {
 		return
@@ -76,10 +83,6 @@ func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32) 
 	// Process all objects
 	NMTState := node.NMT.GetInternalState()
 	NMTisPreOrOperational := (NMTState == nmt.StatePreOperational) || (NMTState == nmt.StateOperational)
-	// Propagate NMT state to server
-	for _, server := range node.SDOServers {
-		server.SetNMTState(NMTState)
-	}
 
 	node.BusManager.Process()
 	node.EMCY.Process(NMTisPreOrOperational, timeDifferenceUs)
@@ -273,6 +276,8 @@ func NewLocalNode(
 			node.SDOServers = sdoServers
 			logger.Info("[SDOServer] initialized")
 		}
+		// Register NMT state change callback for sdo servers
+		_ = node.NMT.AddStateChangeCallback(server.OnNmtStateChange)
 	}
 
 	// Initialize SDO clients if any
