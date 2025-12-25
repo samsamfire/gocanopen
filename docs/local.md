@@ -1,56 +1,174 @@
-# Creating a LocalNode
+# Creating a LocalNode (slave node)
 
 A **LocalNode** is the CiA 301 implementation of a CANopen node in golang.
-It has it's own CANopen stack, which is run within a goroutine.
+It has its own CANopen stack, which is run within a goroutine.
 When creating a local node, the library parses the EDS file and creates the relevant
-CANopen objects. This is different from other implementations that usually require a pre-build step 
-that generates .c/.h file that will then be used inside of the application.
+CANopen objects (including the Object Dictionary). This differs from other implementations that usually require a pre-build step that generates .c/.h files.
 
-### Usage
+## Usage
 
-To create a CANopen node :
+To create and start a CANopen node:
 
 ```go
-network := canopen.NewNetwork(nil)
-network.Connect("socketcan","can0",500000)
-defer network.Disconnect() // properly disconnect
+package main
 
-// Create a node with id 0x10 using the example EDS
-node := canopen.CreateLocalNode(0x10,"../testdata/base.eds")
+import (
+	"log"
+	"github.com/samsamfire/gocanopen/pkg/network"
+	"github.com/samsamfire/gocanopen/pkg/od"
+)
 
-```
-Thats it ! The node will go automatically to NMT state **OPERATIONAL** if there are no errors.
-A callback can be added that will be called by the node's goroutine. It must be **non blocking**.
+func main() {
+	// 1. Initialize Network
+	net := network.NewNetwork(nil)
+	if err := net.Connect("socketcan", "can0", 500000); err != nil {
+		log.Fatal(err)
+	}
+	defer net.Disconnect()
 
-```golang
+	// 2. Create a LocalNode (Slave) with ID 0x10
+	// Using default embedded EDS
+	node, err := net.CreateLocalNode(0x10, od.Default())
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// Called every stack tick, i.e. ~10ms
-func NodeMainCallback(node canopen.Node) {
-	od := node.GetOD()
-	// Get manufacturer device name
-	deviceName, _ := od.Index(0x1008).GetRawData(0, 0)
-	fmt.Println("My name is : ", string(deviceName))
+	// Alternatively, load from an EDS file:
+	// node2, err := net.CreateLocalNode(0x11, "path/to/slave.eds")
+	
+	// The node automatically enters NMT state OPERATIONAL
+	select {} // Keep running
 }
-
-node.SetMainCallback(NodeMainCallback)
-
 ```
 
-Note that there are several ways of accessing data in the object dictionnary. Some standard functions
-are provided for direct memory access to the OD. However, all nodes come with a local sdo client for 
-reading the internal OD. Here are some examples:
+## Local OD Access (SDO Interface)
 
-```golang
-od := node.GetOD()
-od.Index("UNSIGNED32 value").Uint32(0) // Get od value as a uint32, if length is incorrect, it will error
+The `LocalNode` provides a direct API to interact with its internal Object Dictionary (OD). This is equivalent to performing SDO operations locally.
+You can **Read** and **Write** entries using their **Index/SubIndex** or their **Name** (as defined in the EDS).
 
-localNode := node.(*canopen.LocalNode) // Get actual type : *canopen.LocalNode
-localNode.ReadUint("UNSIGNED32","") // Returns it as uint64
-localNode.ReadUint("UNSIGNED8","") // Returns it as uint64 also
-deviceName,_ := localNode.ReadString(0x1008, 0x0) // This corresponds to device name
+### Reading Values
 
+The API provides typed helpers to read values. These helpers handle type casting where possible to simplify usage.
+
+**Read String**
+
+```go
+// Read by Name
+deviceName, err := node.ReadString("Manufacturer device name", 0)
+
+// Read by Index/SubIndex (0x1008:00 is Device Name)
+deviceName, err := node.ReadString(0x1008, 0x0)
 ```
 
-See **BaseNode** go doc for more information on the available methods.
+**Read Integers (Uint/Int)**
+The `ReadUint` and `ReadInt` methods automatically cast the underlying OD value to `uint64` or `int64`.
 
+```go
+// Read an UNSIGNED8 entry (0x1001 Error Register)
+// Returns uint64
+errReg, err := node.ReadUint(0x1001, 0) 
 
+// Read using Entry Name (assuming "SomeParam" exists)
+// Returns int64
+val, err := node.ReadInt("SomeParam", 0) 
+```
+
+**Read Floats**
+The `ReadFloat`, `ReadFloat32`, and `ReadFloat64` methods are available for REAL types.
+
+```go
+// Read a REAL32 (float32) entry
+// Returns float64 (cast from float32)
+val, err := node.ReadFloat(0x2001, 0)
+
+// Read REAL32 specifically as float32
+f32Val, err := node.ReadFloat32("MyFloat32Param", 0)
+
+// Read REAL64 specifically as float64
+f64Val, err := node.ReadFloat64("MyFloat64Param", 0)
+```
+
+### Writing Values
+
+To write values to the OD, you can use `WriteAnyExact`. This method writes the provided value to the specified entry.
+The value's type must match the OD entry's expected type (or be compatible).
+
+```go
+// Write a uint32 value to Index 0x2000, SubIndex 0
+err := node.WriteAnyExact(0x2000, 0, uint32(12345))
+
+// Write a string
+err := node.WriteAnyExact(0x1008, 0, "My Custom Device")
+
+// Write using Name
+err := node.WriteAnyExact("Producer heartbeat time", 0, uint16(1000))
+
+// Write a float32
+err := node.WriteAnyExact(0x2001, 0, float32(12.34))
+
+// Write a float64
+err := node.WriteAnyExact(0x2002, 0, float64(56.78))
+```
+
+*Note: It is recommended to cast your Go values to the specific type expected by the OD entry (e.g. `uint16`, `int8`, `uint32`) to ensure successful type checking.*
+
+### Writing Raw Bytes
+
+You can write raw bytes directly to an OD entry using `WriteBytes`. This is useful for `DOMAIN` types or when you want to bypass type checking and write the raw binary representation directly.
+
+```go
+// Write raw bytes to a DOMAIN entry or similar
+data := []byte{0x01, 0x02, 0x03, 0x04}
+err := node.WriteBytes(0x3000, 0, data)
+```
+
+### Error Handling
+
+The API returns specific errors from the `od` package when operations fail. Handling these allows for robust application logic.
+
+**Common Errors:**
+
+- `od.ErrIdxNotExist`: The requested Index does not exist in the OD.
+- `od.ErrSubNotExist`: The Index exists, but the SubIndex does not.
+- `od.ErrTypeMismatch`: The requested read type or provided write value does not match the OD entry's type.
+- `od.ErrObjectNotWritable`: Trying to write to a read-only entry.
+
+**Example: Robust Read/Write with Error Checking**
+
+```go
+func updateParameter(node *network.LocalNode) {
+	// Try to read a value
+	val, err := node.ReadUint(0x2000, 0)
+	if err != nil {
+		switch err {
+		case od.ErrIdxNotExist:
+			log.Printf("Parameter 0x2000 not found in EDS")
+		case od.ErrTypeMismatch:
+			log.Printf("Parameter 0x2000 is not a Uint")
+		default:
+			log.Printf("Read failed: %v", err)
+		}
+		return
+	}
+
+	fmt.Printf("Current Value: %d\n", val)
+
+	// Try to write a new value
+	newValue := uint32(val + 1)
+	err = node.WriteAnyExact(0x2000, 0, newValue)
+	if err != nil {
+		log.Printf("Failed to write: %v", err)
+	} else {
+		log.Println("Value updated successfully")
+	}
+}
+```
+
+## SDO Server Behavior
+
+The `LocalNode` automatically acts as an **SDO Server**. It handles SDO requests from other nodes (SDO Clients) on the network implicitly.
+
+- **Reads (SDO Upload):** Remote nodes can read values from this node's OD.
+- **Writes (SDO Download):** Remote nodes can write values to this node's OD.
+
+The values read/written via remote SDO are the same ones accessed via the `Read...` and `Write...` local API documented above. The `LocalNode` ensures atomicity and consistency.
