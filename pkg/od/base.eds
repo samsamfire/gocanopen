@@ -763,6 +763,15 @@ AccessType=rw
 DefaultValue=0
 PDOMapping=0
 
+[1400sub6]
+ParameterName=SYNC start value
+ObjectType=0x7
+;StorageLocation=RAM
+DataType=0x0005
+AccessType=rw
+DefaultValue=0
+PDOMapping=0
+
 [1401]
 ParameterName=RPDO communication parameter
 ObjectType=0x9
@@ -819,6 +828,15 @@ ParameterName=Event timer
 ObjectType=0x7
 ;StorageLocation=RAM
 DataType=0x0006
+AccessType=rw
+DefaultValue=0
+PDOMapping=0
+
+[1401sub6]
+ParameterName=SYNC start value
+ObjectType=0x7
+;StorageLocation=RAM
+DataType=0x0005
 AccessType=rw
 DefaultValue=0
 PDOMapping=0
@@ -883,6 +901,15 @@ AccessType=rw
 DefaultValue=0
 PDOMapping=0
 
+[1402sub6]
+ParameterName=SYNC start value
+ObjectType=0x7
+;StorageLocation=RAM
+DataType=0x0005
+AccessType=rw
+DefaultValue=0
+PDOMapping=0
+
 [1403]
 ParameterName=RPDO communication parameter
 ObjectType=0x9
@@ -939,6 +966,15 @@ ParameterName=Event timer
 ObjectType=0x7
 ;StorageLocation=RAM
 DataType=0x0006
+AccessType=rw
+DefaultValue=0
+PDOMapping=0
+
+[1403sub6]
+ParameterName=SYNC start value
+ObjectType=0x7
+;StorageLocation=RAM
+DataType=0x0005
 AccessType=rw
 DefaultValue=0
 PDOMapping=0
