@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	nmtErrRegMask           uint16 = 0x00FF
 	StartupToOperational    uint16 = 0x0100
 	nmtErrOnBusOffHb        uint16 = 0x1000
 	nmtErrOnErrReg          uint16 = 0x2000
