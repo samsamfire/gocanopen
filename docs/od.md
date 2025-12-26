@@ -4,7 +4,29 @@ Every CANopen node has an **ObjectDictionary**. An ObjectDictionary consists of 
 between 0 and 0xFFFF. An entry may also have a subindex for some specific CANopen types like RECORD or ARRAY types.
 This subindex must be between 0 and 0xFF.
 All of this information is stored inside of an EDS file as defined by CiA.
-This library can parse a standard EDS file and create the corresponding CANopen objects (SDO, NMT, etc...).
+This library can parse a standard EDS file and create the corresponding CANopen objects (SDO, NMT, etc...). 
+
+## Supported Datatypes
+
+The library supports the standard CANopen datatypes defined in CiA 301.
+
+| Name | Code | Description |
+| :--- | :--- | :--- |
+| BOOLEAN | 0x01 | Boolean (true/false) |
+| INTEGER8 | 0x02 | 8-bit signed integer |
+| INTEGER16 | 0x03 | 16-bit signed integer |
+| INTEGER32 | 0x04 | 32-bit signed integer |
+| UNSIGNED8 | 0x05 | 8-bit unsigned integer |
+| UNSIGNED16 | 0x06 | 16-bit unsigned integer |
+| UNSIGNED32 | 0x07 | 32-bit unsigned integer |
+| REAL32 | 0x08 | 32-bit floating point |
+| VISIBLE_STRING | 0x09 | ASCII string |
+| OCTET_STRING | 0x0A | Byte array |
+| UNICODE_STRING | 0x0B | Unicode string |
+| DOMAIN | 0x0F | Large variable data (e.g., file transfer) |
+| REAL64 | 0x11 | 64-bit floating point |
+| INTEGER64 | 0x15 | 64-bit signed integer |
+| UNSIGNED64 | 0x1B | 64-bit unsigned integer |
 
 ## Basic Usage
 
@@ -15,6 +37,7 @@ import "github.com/samsamfire/gocanopen/pkg/od"
 
 odict := od.Parse("../testdata/base.eds", 0x20) // parse EDS for node id 0x20
 ```
+
 The node id is required but is only useful when the EDS uses the special variable $NODE_ID.
 Usually, the ObjectDictionary is created when adding / creating a node on the network.
 Accessing OD entries and subentries directly is possible either by name or by value.
@@ -25,6 +48,15 @@ odict.Index(0x201B) // get entry index by value
 odict.Index("UNSIGNED64 value") // accessing with the actual name is also possible
 odict.Index(0x201B).SubIndex(0) // returns the associated Variable object (for VAR types, subindex is always 0)
 odict.Index(0x1018).SubIndex(1) // access sub-object of array
+```
+
+You can also iterate over all entries:
+
+```go
+entries := odict.Entries()
+for idx, entry := range entries {
+    fmt.Printf("Index: %X, Name: %s\n", idx, entry.Name)
+}
 ```
 
 It is also possible to create new dictionary entries dynamically :
@@ -108,14 +140,18 @@ The default implementations, i.e. for regular reading and writing are **od.ReadE
 **od.WriteEntryDefault**.
 
 ```go
-odict := od.Parse("../testdata/base.eds", 0x20)
+odict := od.Parse(od.Default(), 0x20)
 entry := odict.AddVariableType(index, indexName, od.DOMAIN, od.AttributeSdoRw, "")
 entry.AddExtension(someObject,od.ReadEntryDefault,od.WriteEntryDefault)
 ```
 
 Some pre-made extensions are available :
+
 ```go
-odict := od.Parse("../testdata/base.eds", 0x20)
+odict := od.Parse(od.Default(), 0x20)
 // this will create a file on disk that will be accessible by SDO block transfer
 entry := odict.AddFile(0x3333, "File entry", "./path_to_file.txt", os.O_RDWR|os.O_CREATE, os.O_RDWR|os.O_CREATE)
+
+// Add an io.Reader as a DOMAIN entry (read-only)
+odict.AddReader(0x3334, "Reader entry", myReader)
 ```
