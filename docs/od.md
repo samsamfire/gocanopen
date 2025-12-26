@@ -126,6 +126,10 @@ The following table lists the available objects, and the ones that are currently
 | 1018  | Identity Object               | yes         |
 | 1021  | Store EDS                     | yes         |
 | 1022  | Storage Format                | yes         |
+| 1400-15FF | RPDO Communication Parameter | yes        |
+| 1600-17FF | RPDO Mapping Parameter       | yes        |
+| 1800-19FF | TPDO Communication Parameter | yes        |
+| 1A00-1BFF | TPDO Mapping Parameter       | yes        |
 
 Check [configuration](configurator.md) on how to access these entries.
 

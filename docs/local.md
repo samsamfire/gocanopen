@@ -20,7 +20,8 @@ import (
 
 func main() {
 	// 1. Initialize Network
-	net := network.NewNetwork(nil)
+
+net := network.NewNetwork(nil)
 	if err := net.Connect("socketcan", "can0", 500000); err != nil {
 		log.Fatal(err)
 	}
@@ -163,6 +164,51 @@ func updateParameter(node *network.LocalNode) {
 	}
 }
 ```
+
+## Special OD Entries & Node Behavior
+
+
+
+Certain Object Dictionary entries are linked to the internal behavior of the `LocalNode`. When these entries are written to (either locally or via a remote SDO client), the node automatically updates its configuration or behavior.
+
+
+
+The supported special objects are listed in the **Special entries** table in [od.md](od.md). These typically include entries in the **Communication Profile Area** (0x1000 - 0x1FFF), such as:
+
+
+
+- **0x1017: Producer Heartbeat Time**: Updating this value changes how often the node sends its heartbeat message.
+
+- **0x1016: Consumer Heartbeat Time**: Updating this allows the node to start or stop monitoring heartbeats from other nodes.
+
+- **Dynamic PDO Reconfiguration**: The `LocalNode` supports dynamic PDO mapping and communication parameter updates (0x1400-0x15FF/0x1800-0x19FF for communication and 0x1600-0x17FF/0x1A00-0x1BFF for mapping).
+
+
+
+### Example: Master Updating Slave Heartbeat
+
+A common use case is a Master node reconfiguring a Slave node's heartbeat frequency over the network.
+
+**Slave Side (LocalNode):**
+The slave node simply needs to be running. It has 0x1017 defined in its EDS.
+
+**Master Side:**
+The master can use a `NodeConfigurator` to update the slave's heartbeat time.
+
+```go
+// Create a configurator for the slave node (ID 0x10) (this is basically a wrapper around an SDO client)
+config := net.Configurator(0x10)
+
+// Update slave's heartbeat producer time to 500ms
+// This will perform an SDO write to index 0x1017:00 on the slave
+err := config.WriteProducerHeartbeatTime(500)
+```
+
+**What happens internally:**
+1. The Master sends an SDO Download request to the Slave for entry `0x1017:00`.
+2. The Slave's `LocalNode` receives the SDO request.
+3. Because `0x1017` has a special **Extension** registered, the new value is not just stored in the OD; it also triggers a configuration update in the Slave's NMT service.
+4. The Slave immediately starts sending heartbeats every 500ms.
 
 ## SDO Server Behavior
 
