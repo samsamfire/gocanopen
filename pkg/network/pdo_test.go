@@ -4,48 +4,57 @@ import (
 	"testing"
 	"time"
 
-	"github.com/samsamfire/gocanopen/pkg/od"
+	canopen "github.com/samsamfire/gocanopen"
+	"github.com/samsamfire/gocanopen/pkg/config"
 	"github.com/samsamfire/gocanopen/pkg/pdo"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestTpdo(t *testing.T) {
-	networkLocal := CreateNetworkEmptyTest()
-	networkRemote := CreateNetworkEmptyTest()
-	defer networkLocal.Disconnect()
-	defer networkRemote.Disconnect()
+func TestPdo(t *testing.T) {
 
-	t.Run("check send tdpo on sync", func(t *testing.T) {
-		// Will act as the "real" node that should send TPDOs
-		// Disable SYNC & set communication period to 0
-		local, err := networkLocal.CreateLocalNode(80, od.Default())
-		assert.Nil(t, err)
-		config := local.Configurator()
-		err = config.WriteCommunicationPeriod(0)
-		assert.Nil(t, err)
-		err = config.ProducerDisableSYNC()
-		assert.Nil(t, err)
-		err = config.EnablePDO(pdo.MaxRpdoNumber + 1)
-		assert.Nil(t, err)
+	net := CreateNetworkTest()
+	otherNet := CreateNetworkEmptyTest()
+	local, err := net.Local(NodeIdTest)
+	assert.Nil(t, err)
 
-		// Create a second local node that will send SYNC
-		localSync, _ := networkLocal.CreateLocalNode(81, od.Default())
-		assert.NotNil(t, localSync)
-		configSync := local.Configurator()
-		err = configSync.ProducerEnableSYNC()
+	t.Run("dynamically map async rpdo and send corresponding tpdo updates od", func(t *testing.T) {
+		c := local.Configurator()
+		err := c.ClearMappings(1)
 		assert.Nil(t, err)
-
-		// Will act as the master that will receive the TPDOs (RPDOs)
-		// Enable SYNC on remote node
-		remote, err := networkRemote.AddRemoteNode(80, od.Default())
-		assert.Nil(t, err)
-		err = remote.StartPDOs(false)
+		err = c.WriteConfigurationPDO(1,
+			config.PDOConfigurationParameter{
+				CanId:            0x255,
+				TransmissionType: pdo.TransmissionTypeSyncEventHi,
+				InhibitTime:      0,
+				EventTimer:       0,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+					{Index: 0x2006, Subindex: 0, LengthBits: 16},
+					{Index: 0x2007, Subindex: 0, LengthBits: 32},
+				},
+			})
 		assert.Nil(t, err)
 
-		// Update local node, wait for some time & check value
-		// received on other side
-		err = local.WriteAnyExact(0x2002, 0, int8(10))
+		err = c.EnablePDO(1)
 		assert.Nil(t, err)
+		time.Sleep(1 * time.Second)
+		// Send corresponding TPDO (total is 8+16+32 = 56 bits i.e. 7 bytes)
+		err = otherNet.Send(canopen.Frame{ID: 0x255, DLC: 7, Data: [8]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77}})
+		assert.Nil(t, err)
+
+		// Read OD entries and check consistency
+		time.Sleep(100 * time.Millisecond)
+		val, err := local.ReadUint8("UNSIGNED8 value", 0)
+		assert.Nil(t, err)
+		assert.Equal(t, uint8(0x11), val)
+		valU16, err := local.ReadUint16("UNSIGNED16 value", 0)
+		assert.Nil(t, err)
+		assert.Equal(t, uint16(0x3322), valU16)
+		valU32, err := local.ReadUint32("UNSIGNED32 value", 0)
+		assert.Nil(t, err)
+		assert.Equal(t, uint32(0x77665544), valU32)
+
+	})
 
 		assert.Eventually(t,
 			func() bool {
