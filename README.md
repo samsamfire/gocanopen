@@ -1,139 +1,164 @@
-﻿# gocanopen
+# 🚀 gocanopen
+
+> A robust, efficient, and pure Golang implementation of the CANopen protocol (CiA 301).
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/samsamfire/gocanopen.svg)](https://pkg.go.dev/github.com/samsamfire/gocanopen)
 [![Go Report Card](https://goreportcard.com/badge/github.com/samsamfire/gocanopen)](https://goreportcard.com/report/github.com/samsamfire/gocanopen)
 [![Unit testing golang](https://github.com/samsamfire/gocanopen/actions/workflows/go_tests.yml/badge.svg)](https://github.com/samsamfire/gocanopen/actions/workflows/go_tests.yml)
+[![License](https://img.shields.io/github/license/samsamfire/gocanopen)](LICENSE)
 
-**gocanopen** is an implementation of the CANopen protocol (CiA 301) written in pure golang.
-It aims to be simple and efficient.
-This package can be used for master usage but also supports creating regular CANopen nodes.
+---
 
-### Features
+**gocanopen** is designed to be a simple to use library for building CANopen Masters and Slaves in Go.
 
-All the main components of CiA 301 are supported, these include :
+## ✨ Features
 
-- SDO server/client
-- NMT master/slave
-- HB producer/consumer
-- TPDO/RPDO
-- EMERGENCY producer/consumer
-- SYNC producer/consumer
-- TIME producer/consumer
+### CiA 301
 
-Partial support also exists for CiA 309, specifically :
+- **NMT (Network Management)**: Full Master/Slave state machine support.
+- **SDO (Service Data Object)**:
+  - Server & Client
+  - Block Transfer & Segmented Transfer
+- **PDO (Process Data Object)**:
+  - Dynamic Mapping & Communication parameters
+  - Synchronous & Asynchronous transmission (TPDO/RPDO)
+- **Heartbeat**: Producer & consumer monitoring
+- **SYNC**: Producer & Consumer
+- **TIME**: Time stamp object support
+- **EMCY**: Emergency object producer & consumer
+- **LSS**: Ongoing work
 
-- HTTP gateway
+### CiA 309
 
-**gocanopen** does not require the use of an external tool to generate some source code from an EDS file.
-EDS files can be loaded dynamically from disk to create local nodes with default supported objects.
-The library comes with a default embedded EDS file, which can be used when creating nodes.
+- **HTTP Gateway**: Experimental support for CiA 309 web interfacing.
 
-### Supported CAN transceivers
+### Advanced Capabilities
 
-Currently this package supports the following transceivers:
-- socketcan
-- kvaser
-- virtualcan [here](https://github.com/windelbouwman/virtualcan)
+- **Dynamic EDS Parsing**: Load `.eds` files at runtime to configure nodes instantly.
+- **No CGO Required**: Pure Go implementation for maximum portability (except when using specific C-based drivers like Kvaser). 
+- **Extensible Bus Interface**: Plug-and-play support for different CAN interfaces.
 
-In order to use kvaser, canlib should be downloaded & installed. Specific compile flags are needed :
-- CFLAGS: -g -Wall -I/path_to_kvaser/canlib/include
-- LDFLAGS: -L/path_to_kvaser/canlib
+## 📦 Supported Hardware / Transceivers
 
-More transceivers can be added by creating your own driver and implementing the following
-interface :
+| Driver | Description |
+| :--- | :--- |
+| **SocketCAN** | Standard Linux CAN interface. Native Go support. |
+| **VirtualCAN** | TCP/IP based virtual bus, great for testing/CI. |
+| **Kvaser** | Requires `canlib` installed (CGO). |
 
-```go
-type Bus interface {
-	Connect(...any) error                   // Connect to the actual bus
-	Disconnect() error                      // Disconnect from bus
-	Send(frame Frame) error                 // Send a frame on the bus
-	Subscribe(callback FrameListener) error // Subscribe to all can frames
-}
-```
-Feel free to contribute to add specific drivers, we will find a way to integrate them in this repo.
-This repo contains two implementation examples : `socketcan.go`, and `virtual.go` used for testing.
+*Want to add your own? Implement the simple `Bus` interface!*
 
-### Documentation
+## 📚 Documentation
 
-1. [Introduction](docs/index.md)
-2. [Network](docs/network.md)
-2. [Object Dictionary](docs/od.md)
-4. [Local nodes](docs/local.md)
+Visit [docs](https://samsamfire.github.io/gocanopen/)
 
-### Usage
+## 🚀 Quick Start
 
-Examples can be found in `/examples`
-
-Basic setup example :
+Here is a complete example of setting up a Network Master and scanning for nodes on a SocketCAN bus.
 
 ```go
 package main
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
 
 	"github.com/samsamfire/gocanopen/pkg/network"
 	"github.com/samsamfire/gocanopen/pkg/od"
 )
 
 func main() {
-	network := network.NewNetwork(nil)
-	err := network.Connect("socketcan", "can0", 500_000)
+    // 1. Setup Logger (Optional but recommended)
+    logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+	// 2. Initialize the Network
+	net := network.NewNetwork(nil)
+    net.SetLogger(logger)
+
+    // 3. Connect to the CAN interface (SocketCAN example)
+	err := net.Connect("socketcan", "can0", 500_000)
 	if err != nil {
 		panic(err)
 	}
-	defer network.Disconnect()
+	defer net.Disconnect()
 
-	// Add a remote node to the network, either by providing an EDS file
-	// Or downloading from the node. We use here a default OD available with the library
-	node, err := network.AddRemoteNode(0x10, od.Default())
+	// 4. Add a Remote Node (e.g., a motor drive at ID 0x10)
+    // We use the default embedded OD for basic definitions
+	node, err := net.AddRemoteNode(0x10, od.Default())
 	if err != nil {
 		panic(err)
 	}
 
-	// Read standard entry containing device name (0x1008)
-	value, err := node.Configurator().ReadManufacturerDeviceName()
+	// 5. Read a value (Manufacturer Device Name - 0x1008)
+    // The Configurator provides typed helpers for standard objects
+	devName, err := node.Configurator().ReadManufacturerDeviceName()
 	if err != nil {
-		fmt.Printf("error reading node %v device name : %v\n", node.GetID(), err)
+		fmt.Printf("Error reading device name: %v\n", err)
 	} else {
-		fmt.Printf("node %v device name is %v\n", node.GetID(), value)
+		fmt.Printf("Found Node 0x10: %s\n", devName)
 	}
 
-	// Perform a network scan to detect other nodes...
-	res, err := network.Scan(1000)
+	// 6. Scan the entire network for other nodes
+	fmt.Println("Scanning network...")
+	foundNodes, err := net.Scan(1000) // 1000ms timeout
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("scanned the following nodes : ", res)
+	
+    for id, info := range foundNodes {
+        fmt.Printf(" > Discovered Node ID: 0x%X (Info: %v)\n", id, info)
+    }
 }
 ```
 
-### Work ongoing
+## 🧪 Testing
 
-- Improve documentation & examples
-- More testing
-- API improvements
+The project uses a combination of:
 
-### Testing
+1. Unit / Integration tests written in **Go**.
+2. Integration tests written in **Python** (`tests/`) to test with another reference implementation.
 
-Testing is done :
-- With unit testing
-- Testing against an other implementation in python
+To be able to run tests in Github Actions, we use a virtualcan interface.
 
-Tests are done with `virtualcan` server, which can be used easily with github actions.
-More tests are always welcome if you believe that some part of the spec is not properly tested.
+To run **Go** tests:
 
-For running tests, install the required packages `pip install -r ./tests/requirements.txt`
-Run the tests with : `pytest -v`
+1. Launch virtualcan server :
 
-### Logs
-
-The application uses slog for logging.
-Example logger setup with **Debug** level :
-
-```go
-logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
-network := network.NewNetwork(nil)
-network.SetLogger(logger)
-
+```bash
+virtualcan --port 18888
 ```
+
+2. Run tests:
+
+```bash
+cd pkg && go test ./... -v -p 1
+```
+
+To run **Python** tests:
+
+1. Install python requirements
+
+```bash
+pip install -r ./tests/requirements.txt
+```
+
+2. Launch virtualcan server :
+
+```bash
+virtualcan --port 18889
+```
+
+3. Run tests:
+
+```bash
+cd tests && python -m pytest -v
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Whether it's adding a new CAN driver, fixing a bug, or improving documentation.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
