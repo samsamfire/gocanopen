@@ -17,8 +17,9 @@ func TestPdo(t *testing.T) {
 	local, err := net.Local(NodeIdTest)
 	assert.Nil(t, err)
 
+	c := local.Configurator()
+
 	t.Run("dynamically map async rpdo and send corresponding tpdo updates od", func(t *testing.T) {
-		c := local.Configurator()
 		err := c.ClearMappings(1)
 		assert.Nil(t, err)
 		err = c.WriteConfigurationPDO(1,
@@ -37,7 +38,8 @@ func TestPdo(t *testing.T) {
 
 		err = c.EnablePDO(1)
 		assert.Nil(t, err)
-		time.Sleep(1 * time.Second)
+
+		time.Sleep(100 * time.Millisecond)
 		// Send corresponding TPDO (total is 8+16+32 = 56 bits i.e. 7 bytes)
 		err = otherNet.Send(canopen.Frame{ID: 0x255, DLC: 7, Data: [8]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77}})
 		assert.Nil(t, err)
@@ -66,5 +68,41 @@ func TestPdo(t *testing.T) {
 				return false
 			}, 5*time.Second, 100*time.Millisecond,
 		)
+	t.Run("remap rpdo with other order and different can id", func(t *testing.T) {
+		c.DisablePDO(1)
+		err = c.WriteConfigurationPDO(1,
+			config.PDOConfigurationParameter{
+				CanId:            0x244,
+				TransmissionType: pdo.TransmissionTypeSyncEventHi,
+				InhibitTime:      0,
+				EventTimer:       0,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2007, Subindex: 0, LengthBits: 32},
+					{Index: 0x2006, Subindex: 0, LengthBits: 16},
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(1)
+		assert.Nil(t, err)
+
+		time.Sleep(100 * time.Millisecond)
+
+		// Send old TPDO id, make sure correctly unregistred
+		err = otherNet.Send(canopen.Frame{ID: 0x255, DLC: 7, Data: [8]byte{0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18}})
+		assert.Nil(t, err)
+		time.Sleep(100 * time.Millisecond)
+		val, err := local.ReadUint8("UNSIGNED8 value", 0)
+		assert.Nil(t, err)
+		assert.Equal(t, uint8(0x11), val)
+
+		// Send new TPDO id, should update correctly
+		err = otherNet.Send(canopen.Frame{ID: 0x244, DLC: 7, Data: [8]byte{0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18}})
+		assert.Nil(t, err)
+		time.Sleep(100 * time.Millisecond)
+		val, err = local.ReadUint8("UNSIGNED8 value", 0)
+		assert.Nil(t, err)
+		assert.Equal(t, uint8(0x18), val)
+	})
 	})
 }
