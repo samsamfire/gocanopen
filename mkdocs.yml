@@ -1,33 +1,73 @@
 site_name: Gocanopen
 repo_url: https://github.com/samsamfire/gocanopen
+repo_name: samsamfire/gocanopen
+
 nav:
   - Getting started: index.md
+  - Network: network.md
+  - Object Dictionary: od.md
   - CAN driver: can.md
-  - Network : network.md
-  - Object Dictionary : od.md
-  - Configurator : configurator.md
-  - Nodes :
-    - Local : local.md
+  - Configurator: configurator.md
+  - SDO: sdo.md
+  - Nodes:
+    - Local Node: local.md
 
 theme:
   name: material
-  icon : 
-    logo: material/file-document
-    favicon: material/file-document
+  icon:
+    logo: material/access-point-network
+    favicon: material/access-point-network
   palette:
-    primary: "light green"
-    accent: "orange"
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: light green
+      accent: deep orange
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: light green
+      accent: deep orange
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
 
   features:
     - content.code.copy
+    - content.tooltips
     - navigation.instant
     - navigation.instant.progress
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.top
+    - navigation.path
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - search.share
 
 markdown_extensions:
+  - admonition
+  - pymdownx.details
   - pymdownx.highlight:
       anchor_linenums: true
       line_spans: __span
       pygments_lang_class: true
   - pymdownx.inlinehilite
   - pymdownx.snippets
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      mermaid_format: svg
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - attr_list
+  - md_in_html
+
+plugins:
+  - search
