@@ -2,6 +2,7 @@ package canopen
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 
@@ -121,6 +122,30 @@ func (bm *BusManager) Subscribe(ident uint32, mask uint32, rtr bool, callback Fr
 	}
 
 	return cancel, nil
+}
+
+// Unsubscribe from a specific CAN ID
+func (bm *BusManager) Unsubscribe(ident uint32, mask uint32, rtr bool, callback FrameListener) error {
+	bm.mu.Lock()
+	defer bm.mu.Unlock()
+	ident = ident & CanSffMask
+	if rtr {
+		ident |= CanRtrFlag
+	}
+	_, ok := bm.frameListeners[ident]
+	if !ok {
+		return fmt.Errorf("no registerd callbacks for id %v", ident)
+	}
+	// Iterate over callbacks and remove corresponding one
+	callbacks := bm.frameListeners[ident]
+
+	for i, cb := range callbacks {
+		if cb == callback {
+			bm.frameListeners[ident] = append(callbacks[:i], callbacks[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("callback not found for id %v", ident)
 }
 
 // Get CAN error

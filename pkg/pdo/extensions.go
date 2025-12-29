@@ -3,9 +3,21 @@ package pdo
 import (
 	"encoding/binary"
 	"fmt"
+	"slices"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/od"
+)
+
+const (
+	CobIdValidBit  = 0x80000000
+	CobIdCanIdMask = 0x000007FF
+	// Mask for bits that MUST be zero (bits 11-29 excluding specific flags)
+	CobIdReservedMask           = 0x1FFFF800
+	CobIdCanIdWithoutNodeIdMask = 0xFFFFFF80
+	// CobId validity mask
+	// bits 11 to 29 should be 0, pdo should be disabled and can id 0 is prohibited
+	CobIdValidityMask = 0x3FFFF800
 )
 
 // [RPDO] update communication parameter
@@ -21,34 +33,33 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 	defer rpdo.mu.Unlock()
 
 	pdo := rpdo.pdo
-	bufCopy := make([]byte, len(data))
-	copy(bufCopy, data)
+	dataCopy := slices.Clone(data)
 
 	switch stream.Subindex {
 	case od.SubPdoCobId:
-		// COB id used by PDO
+
 		cobId := binary.LittleEndian.Uint32(data)
-		canId := cobId & 0x7FF
-		valid := (cobId & 0x80000000) == 0
-		/* bits 11...29 must be zero, PDO must be disabled on change,
-		 * CAN_ID == 0 is not allowed, mapping must be configured before
-		 * enabling the PDO */
+		canId := cobId & CobIdCanIdMask
+		valid := (cobId & CobIdValidBit) == 0
+
 		rpdo.pdo.logger.Debug("updating cob-id",
 			"valid", valid,
 			"canId", fmt.Sprintf("x%x", canId),
+			"cobId", fmt.Sprintf("x%x", cobId),
 		)
-		if (cobId&0x3FFFF800) != 0 ||
+
+		if (cobId&CobIdValidityMask) != 0 ||
 			valid && pdo.Valid && canId != uint32(pdo.configuredId) ||
 			valid && canopen.IsIDRestricted(uint16(canId)) ||
 			valid && pdo.nbMapped == 0 {
 			return 0, od.ErrInvalidValue
 		}
 
-		// Parameter changed ?
 		if valid != pdo.Valid || canId != uint32(pdo.configuredId) {
-			// If default id is written store to OD without node id
+			// If the default od value (predefined id) is the same
+			// then we do not keep the node id
 			if canId == uint32(pdo.predefinedId) {
-				binary.LittleEndian.PutUint32(bufCopy, cobId&0xFFFFFF80)
+				binary.LittleEndian.PutUint32(dataCopy, cobId&CobIdCanIdWithoutNodeIdMask)
 			}
 			if !valid {
 				canId = 0
@@ -61,6 +72,10 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 			if valid && err == nil {
 				pdo.Valid = true
 				pdo.configuredId = uint16(canId)
+				rpdo.pdo.logger.Debug("updated cob-id",
+					"valid", valid,
+					"canId", fmt.Sprintf("x%x", pdo.configuredId&0x7FF),
+				)
 			} else {
 				pdo.Valid = false
 				rpdo.rxNew[0] = false
@@ -69,33 +84,29 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 					return 0, od.ErrDevIncompat
 				}
 			}
-			rpdo.pdo.logger.Debug("updated cob-id",
-				"valid", valid,
-				"cobId", fmt.Sprintf("x%x", pdo.configuredId&0x7FF),
-			)
 		}
 
 	case od.SubPdoTransmissionType:
+
 		transmissionType := data[0]
 		if transmissionType > TransmissionTypeSync240 && transmissionType < TransmissionTypeSyncEventLo {
 			return 0, od.ErrInvalidValue
 		}
 		synchronous := transmissionType <= TransmissionTypeSync240
-		// Remove old message from second buffer
 		if rpdo.synchronous != synchronous {
 			rpdo.rxNew[1] = false
 		}
+		rpdo.pdo.logger.Debug("updated transmission type (synchronous)", "prev", rpdo.synchronous, "new", synchronous)
 		rpdo.synchronous = synchronous
-		rpdo.pdo.logger.Debug("updated transmission type", "transmissionType", transmissionType)
 
 	case od.SubPdoEventTimer:
-		eventTime := binary.LittleEndian.Uint16(data)
-		rpdo.timeoutTimeUs = uint32(eventTime) * 1000
+		eventTimer := binary.LittleEndian.Uint16(data)
+		rpdo.timeoutTimeUs = uint32(eventTimer) * 1000
 		rpdo.timeoutTimer = 0
-		rpdo.pdo.logger.Debug("updated event timer", "transmissionType", eventTime)
+		rpdo.pdo.logger.Debug("updated event timer", "eventTimer", eventTimer)
 	}
 
-	return od.WriteEntryDefault(stream, bufCopy)
+	return od.WriteEntryDefault(stream, dataCopy)
 }
 
 // [RPDO][TPDO] get communication parameter
