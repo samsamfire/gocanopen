@@ -109,6 +109,94 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 	return od.WriteEntryDefault(stream, dataCopy)
 }
 
+// [TPDO] update communication parameter
+func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
+	if stream == nil || data == nil || len(data) > 4 {
+		return 0, od.ErrDevIncompat
+	}
+	tpdo, ok := stream.Object.(*TPDO)
+	if !ok {
+		return 0, od.ErrDevIncompat
+	}
+	tpdo.mu.Lock()
+	defer tpdo.mu.Unlock()
+
+	pdo := tpdo.pdo
+	dataCopy := slices.Clone(data)
+
+	switch stream.Subindex {
+	case od.SubPdoCobId:
+
+		cobId := binary.LittleEndian.Uint32(data)
+		canId := cobId & CobIdCanIdMask
+		valid := (cobId & CobIdValidBit) == 0
+
+		tpdo.pdo.logger.Debug("updating cob-id",
+			"valid", valid,
+			"canId", fmt.Sprintf("x%x", canId),
+			"cobId", fmt.Sprintf("x%x", cobId),
+		)
+
+		if (cobId&CobIdValidityMask) != 0 ||
+			valid && pdo.Valid && canId != uint32(pdo.configuredId) ||
+			valid && canopen.IsIDRestricted(uint16(canId)) ||
+			valid && pdo.nbMapped == 0 {
+			return 0, od.ErrInvalidValue
+		}
+
+		if valid != pdo.Valid || canId != uint32(pdo.configuredId) {
+			// If the default od value (predefined id) is the same
+			// then we do not keep the node id
+			if canId == uint32(pdo.predefinedId) {
+				binary.LittleEndian.PutUint32(dataCopy, cobId&CobIdCanIdWithoutNodeIdMask)
+			}
+			if !valid {
+				canId = 0
+			}
+			tpdo.txBuffer = canopen.NewFrame(canId, 0, uint8(pdo.dataLength))
+			pdo.Valid = valid
+			pdo.configuredId = uint16(canId)
+		}
+
+	case od.SubPdoTransmissionType:
+
+		transmissionType := data[0]
+		if transmissionType > TransmissionTypeSync240 && transmissionType < TransmissionTypeSyncEventLo {
+			return 0, od.ErrInvalidValue
+		}
+		tpdo.syncCounter = 255
+		tpdo.transmissionType = transmissionType
+		tpdo.sendRequest = true
+		tpdo.inhibitTimer = 0
+		tpdo.eventTimer = 0
+
+	case od.SubPdoInhibitTime:
+
+		if pdo.Valid {
+			return 0, od.ErrInvalidValue
+		}
+		inhibitTime := binary.LittleEndian.Uint16(data)
+		tpdo.inhibitTimeUs = uint32(inhibitTime) * 100
+		tpdo.inhibitTimer = 0
+
+	case od.SubPdoEventTimer:
+
+		eventTime := binary.LittleEndian.Uint16(data)
+		tpdo.eventTimeUs = uint32(eventTime) * 1000
+		tpdo.eventTimer = 0
+
+	case od.SubPdoSyncStart:
+
+		syncStart := data[0]
+		if pdo.Valid || syncStart > 240 {
+			return 0, od.ErrInvalidValue
+		}
+		tpdo.syncStartValue = syncStart
+
+	}
+	return od.WriteEntryDefault(stream, dataCopy)
+}
+
 // [RPDO][TPDO] get communication parameter
 func readEntry14xxOr18xx(stream *od.Stream, data []byte) (uint16, error) {
 	n, err := od.ReadEntryDefault(stream, data)
@@ -200,91 +288,6 @@ func writeEntry16xxOr1Axx(stream *od.Stream, data []byte) (uint16, error) {
 		}
 	}
 	return od.WriteEntryDefault(stream, data)
-}
-
-// [TPDO] update communication parameter
-func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
-	if stream == nil || data == nil || len(data) > 4 {
-		return 0, od.ErrDevIncompat
-	}
-	tpdo, ok := stream.Object.(*TPDO)
-	if !ok {
-		return 0, od.ErrDevIncompat
-	}
-	tpdo.mu.Lock()
-	defer tpdo.mu.Unlock()
-
-	pdo := tpdo.pdo
-	bufCopy := make([]byte, len(data))
-	copy(bufCopy, data)
-
-	switch stream.Subindex {
-	case od.SubPdoCobId:
-		// COB id used by PDO
-		cobId := binary.LittleEndian.Uint32(data)
-		canId := cobId & 0x7FF
-		valid := (cobId & 0x80000000) == 0
-		// - bits 11...29 must be zero
-		// - PDO must be disabled on change
-		// - CAN_ID == 0 is not allowed
-		// - mapping must be configured before enabling the PDO
-		pdo.logger.Debug("updating cob-id", "valid", valid, "canId", canId)
-
-		if (cobId&0x3FFFF800) != 0 ||
-			(valid && pdo.Valid && canId != uint32(pdo.configuredId)) ||
-			(valid && canopen.IsIDRestricted(uint16(canId))) ||
-			(valid && pdo.nbMapped == 0) {
-			return 0, od.ErrInvalidValue
-		}
-
-		// Parameter changed ?
-		if valid != pdo.Valid || canId != uint32(pdo.configuredId) {
-			// If default id is written store to OD without node id
-			if canId == uint32(pdo.predefinedId) {
-				binary.LittleEndian.PutUint32(bufCopy, cobId&0xFFFFFF80)
-			}
-			if !valid {
-				canId = 0
-			}
-			tpdo.txBuffer = canopen.NewFrame(canId, 0, uint8(pdo.dataLength))
-			pdo.Valid = valid
-			pdo.configuredId = uint16(canId)
-		}
-
-	case od.SubPdoTransmissionType:
-
-		transmissionType := data[0]
-		if transmissionType > TransmissionTypeSync240 && transmissionType < TransmissionTypeSyncEventLo {
-			return 0, od.ErrInvalidValue
-		}
-		tpdo.syncCounter = 255
-		tpdo.transmissionType = transmissionType
-		tpdo.sendRequest = true
-		tpdo.inhibitTimer = 0
-		tpdo.eventTimer = 0
-
-	case od.SubPdoInhibitTime:
-		if pdo.Valid {
-			return 0, od.ErrInvalidValue
-		}
-		inhibitTime := binary.LittleEndian.Uint16(data)
-		tpdo.inhibitTimeUs = uint32(inhibitTime) * 100
-		tpdo.inhibitTimer = 0
-
-	case od.SubPdoEventTimer:
-		eventTime := binary.LittleEndian.Uint16(data)
-		tpdo.eventTimeUs = uint32(eventTime) * 1000
-		tpdo.eventTimer = 0
-
-	case od.SubPdoSyncStart:
-		syncStartValue := data[0]
-		if pdo.Valid || syncStartValue > 240 {
-			return 0, od.ErrInvalidValue
-		}
-		tpdo.syncStartValue = syncStartValue
-
-	}
-	return od.WriteEntryDefault(stream, bufCopy)
 }
 
 // [RPDO][TPDO] write method that fakes writing an OD variable
