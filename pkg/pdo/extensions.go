@@ -23,8 +23,9 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 	pdo := rpdo.pdo
 	bufCopy := make([]byte, len(data))
 	copy(bufCopy, data)
+
 	switch stream.Subindex {
-	case 1:
+	case od.SubPdoCobId:
 		// COB id used by PDO
 		cobId := binary.LittleEndian.Uint32(data)
 		canId := cobId & 0x7FF
@@ -74,8 +75,7 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 			)
 		}
 
-	case 2:
-		// Transmission type
+	case od.SubPdoTransmissionType:
 		transmissionType := data[0]
 		if transmissionType > TransmissionTypeSync240 && transmissionType < TransmissionTypeSyncEventLo {
 			return 0, od.ErrInvalidValue
@@ -88,8 +88,7 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 		rpdo.synchronous = synchronous
 		rpdo.pdo.logger.Debug("updated transmission type", "transmissionType", transmissionType)
 
-	case 5:
-		// Event timer
+	case od.SubPdoEventTimer:
 		eventTime := binary.LittleEndian.Uint16(data)
 		rpdo.timeoutTimeUs = uint32(eventTime) * 1000
 		rpdo.timeoutTimer = 0
@@ -102,6 +101,7 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 // [RPDO][TPDO] get communication parameter
 func readEntry14xxOr18xx(stream *od.Stream, data []byte) (uint16, error) {
 	n, err := od.ReadEntryDefault(stream, data)
+
 	// Add node id when reading subindex 1
 	if err == nil && stream.Subindex == 1 && n == 4 {
 		// Get the corresponding object, either TPDO or RPDO
@@ -157,7 +157,7 @@ func writeEntry16xxOr1Axx(stream *od.Stream, data []byte) (uint16, error) {
 	if pdo.Valid || pdo.nbMapped != 0 && stream.Subindex > 0 {
 		return 0, od.ErrUnsuppAccess
 	}
-	if stream.Subindex == 0 {
+	if stream.Subindex == od.SubPdoNbMappings {
 		mappedObjectsCount := data[0]
 		pdoDataLength := uint32(0)
 		// Don't allow number greater than possible mapped objects
@@ -181,7 +181,7 @@ func writeEntry16xxOr1Axx(stream *od.Stream, data []byte) (uint16, error) {
 		}
 		pdo.dataLength = pdoDataLength
 		pdo.nbMapped = mappedObjectsCount
-		pdo.logger.Debug("updated number of mapped objects to", "count", mappedObjectsCount)
+		pdo.logger.Debug("updated number of mapped objects to", "count", mappedObjectsCount, "lengthBytes", pdo.dataLength)
 	} else {
 		err := pdo.configureMap(binary.LittleEndian.Uint32(data), uint32(stream.Subindex)-1, pdo.IsRPDO)
 		if err != nil {
@@ -206,8 +206,9 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 	pdo := tpdo.pdo
 	bufCopy := make([]byte, len(data))
 	copy(bufCopy, data)
+
 	switch stream.Subindex {
-	case 1:
+	case od.SubPdoCobId:
 		// COB id used by PDO
 		cobId := binary.LittleEndian.Uint32(data)
 		canId := cobId & 0x7FF
@@ -239,8 +240,8 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 			pdo.configuredId = uint16(canId)
 		}
 
-	case 2:
-		// Transmission type
+	case od.SubPdoTransmissionType:
+
 		transmissionType := data[0]
 		if transmissionType > TransmissionTypeSync240 && transmissionType < TransmissionTypeSyncEventLo {
 			return 0, od.ErrInvalidValue
@@ -251,8 +252,7 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		tpdo.inhibitTimer = 0
 		tpdo.eventTimer = 0
 
-	case 3:
-		// Inhibit time
+	case od.SubPdoInhibitTime:
 		if pdo.Valid {
 			return 0, od.ErrInvalidValue
 		}
@@ -260,13 +260,12 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		tpdo.inhibitTimeUs = uint32(inhibitTime) * 100
 		tpdo.inhibitTimer = 0
 
-	case 5:
-		// Event timer
+	case od.SubPdoEventTimer:
 		eventTime := binary.LittleEndian.Uint16(data)
 		tpdo.eventTimeUs = uint32(eventTime) * 1000
 		tpdo.eventTimer = 0
 
-	case 6:
+	case od.SubPdoSyncStart:
 		syncStartValue := data[0]
 		if pdo.Valid || syncStartValue > 240 {
 			return 0, od.ErrInvalidValue
