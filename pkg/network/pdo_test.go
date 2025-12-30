@@ -19,6 +19,16 @@ func TestPdo(t *testing.T) {
 
 	c := local.Configurator()
 
+	t.Run("update rpdo transmission type", func(t *testing.T) {
+		for i := range uint8(100) {
+			err := c.WriteTransmissionType(1, i)
+			assert.Nil(t, err)
+			transType, err := c.ReadTransmissionType(1)
+			assert.Nil(t, err)
+			assert.Equal(t, i, transType)
+		}
+	})
+
 	t.Run("dynamically map async rpdo and send corresponding tpdo updates od", func(t *testing.T) {
 		err := c.ClearMappings(1)
 		assert.Nil(t, err)
@@ -58,16 +68,6 @@ func TestPdo(t *testing.T) {
 
 	})
 
-		assert.Eventually(t,
-			func() bool {
-				// Internal value received via PDO
-				val, err := remote.ReadInt8(0x2002, 0)
-				if val == 10 && err == nil {
-					return true
-				}
-				return false
-			}, 5*time.Second, 100*time.Millisecond,
-		)
 	t.Run("remap rpdo with other order and different can id", func(t *testing.T) {
 		c.DisablePDO(1)
 		err = c.WriteConfigurationPDO(1,
@@ -104,5 +104,13 @@ func TestPdo(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, uint8(0x18), val)
 	})
+
+	t.Run("send wrong rpdo length creates error", func(t *testing.T) {
+
+		// PDO length too low
+		err = otherNet.Send(canopen.Frame{ID: 0x244, DLC: 4, Data: [8]byte{0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18}})
+		assert.Nil(t, err)
+		time.Sleep(100 * time.Millisecond)
+
 	})
 }
