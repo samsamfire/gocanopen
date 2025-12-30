@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"slices"
+	"sync"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/od"
@@ -15,6 +16,7 @@ const (
 	// Mask for bits that MUST be zero (bits 11-29 excluding specific flags)
 	CobIdReservedMask           = 0x1FFFF800
 	CobIdCanIdWithoutNodeIdMask = 0xFFFFFF80
+	CanIdWithoutNodeIdMask      = 0xFF80
 	// CobId validity mask
 	// bits 11 to 29 should be 0, pdo should be disabled and can id 0 is prohibited
 	CobIdValidityMask = 0x3FFFF800
@@ -208,39 +210,51 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 
 // [RPDO][TPDO] get communication parameter
 func readEntry14xxOr18xx(stream *od.Stream, data []byte) (uint16, error) {
-	n, err := od.ReadEntryDefault(stream, data)
 
 	// Reading communication parameters does not require
-	// special processing except for cob id information
-
-	// Add node id when reading subindex 1
-	if err == nil && stream.Subindex == 1 && n == 4 {
-		// Get the corresponding object, either TPDO or RPDO
-		var pdo *PDOCommon
-		switch v := stream.Object.(type) {
-		case *RPDO:
-			v.mu.Lock()
-			defer v.mu.Unlock()
-			pdo = v.pdo
-		case *TPDO:
-			v.mu.Lock()
-			defer v.mu.Unlock()
-			pdo = v.pdo
-		default:
-			return n, od.ErrDevIncompat
-		}
-		cobId := binary.LittleEndian.Uint32(data)
-		canId := uint16(cobId & 0x7FF)
-		// Add ID if not contained
-		if canId != 0 && canId == (pdo.predefinedId&0xFF80) {
-			cobId = (cobId & 0xFFFF0000) | uint32(pdo.predefinedId)
-		}
-		// If PDO not valid, set bit 32
-		if !pdo.Valid {
-			cobId |= 0x80000000
-		}
-		binary.LittleEndian.PutUint32(data, cobId)
+	// special post-processing except for cob id sub entry
+	n, err := od.ReadEntryDefault(stream, data)
+	if err != nil || stream.Subindex != od.SubPdoCobId {
+		return n, err
 	}
+
+	if n != 4 {
+		// This should never happen
+		return n, od.ErrTypeMismatch
+	}
+
+	// Get the corresponding object, either TPDO or RPDO
+	var (
+		pdo  *PDOCommon
+		lock sync.Locker
+	)
+	switch v := stream.Object.(type) {
+	case *RPDO:
+		pdo, lock = v.pdo, &v.mu
+	case *TPDO:
+		pdo, lock = v.pdo, &v.mu
+	default:
+		return n, od.ErrDevIncompat
+	}
+
+	lock.Lock()
+	defer lock.Unlock()
+
+	cobId := binary.LittleEndian.Uint32(data)
+	canId := uint16(cobId & CobIdCanIdMask)
+	baseId := pdo.predefinedId & CanIdWithoutNodeIdMask
+
+	// Add node id if not contained
+	if canId != 0 && canId == baseId {
+		// Clear lower 16 bits (CanId) and set the full predefined ID
+		cobId = (cobId & 0xFFFF0000) | uint32(pdo.predefinedId)
+	}
+	// Apply valid bit
+	if !pdo.Valid {
+		cobId |= CobIdValidBit
+	}
+	binary.LittleEndian.PutUint32(data, cobId)
+
 	return n, err
 }
 
