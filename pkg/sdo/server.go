@@ -24,6 +24,7 @@ type SDOServer struct {
 	nodeId              uint8
 	nmtOk               bool
 	rx                  chan SDOMessage
+	rxCancel            func()
 	streamer            *od.Streamer
 	txBuffer            canopen.Frame
 	cobIdClientToServer uint32
@@ -157,7 +158,11 @@ func (s *SDOServer) initRxTx(cobIdClientToServer uint32, cobIdServerToClient uin
 		s.valid = false
 	}
 	// Configure buffers, if initializing then insert in buffer, otherwise, update
-	err := s.Subscribe(uint32(CanIdC2S), 0x7FF, false, s)
+	if s.rxCancel != nil {
+		s.rxCancel()
+	}
+	rxCancel, err := s.Subscribe(uint32(CanIdC2S), 0x7FF, false, s)
+	s.rxCancel = rxCancel
 	if err != nil {
 		s.valid = false
 		return err

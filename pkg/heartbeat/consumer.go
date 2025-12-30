@@ -37,6 +37,7 @@ type hbConsumerEntry struct {
 	timeoutTimer uint32
 	timeUs       uint32
 	rxNew        bool
+	rxCancel     func()
 }
 
 // Hearbeat consumer object for monitoring node hearbeats
@@ -230,10 +231,15 @@ func (consumer *HBConsumer) updateConsumerEntry(index uint8, nodeId uint8, consu
 	entry := consumer.entries[index]
 	entry.update(nodeId, consumerTimeMs)
 
-	// Configure RX buffer for hearbeat reception
+	// Configure RX buffer for hearbeat reception, clear previous subscription if exists
 	if entry.hbState != HeartbeatUnconfigured {
+		if entry.rxCancel != nil {
+			entry.rxCancel()
+		}
 		consumer.logger.Info("will monitor", "monitoredId", entry.nodeId, "timeoutMs", entry.timeUs/1000)
-		return consumer.Subscribe(uint32(entry.cobId), 0x7FF, false, entry)
+		rxCancel, err := consumer.Subscribe(uint32(entry.cobId), 0x7FF, false, entry)
+		entry.rxCancel = rxCancel
+		return err
 	}
 	return nil
 }

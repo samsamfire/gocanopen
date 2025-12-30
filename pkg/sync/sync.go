@@ -34,6 +34,7 @@ type SYNC struct {
 	isProducer          bool
 	cobId               uint32
 	txBuffer            canopen.Frame
+	rxCancel            func()
 }
 
 // Handle [SYNC] related RX CAN frames
@@ -261,7 +262,8 @@ func NewSYNC(
 	sync.isProducer = (cobIdSync & 0x40000000) != 0
 	sync.cobId = cobIdSync & 0x7FF
 
-	err = sync.Subscribe(sync.cobId, 0x7FF, false, sync)
+	rxCancel, err := sync.Subscribe(sync.cobId, 0x7FF, false, sync)
+	sync.rxCancel = rxCancel
 	if err != nil {
 		return nil, err
 	}

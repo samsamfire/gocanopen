@@ -28,6 +28,7 @@ type TIME struct {
 	producerIntervalMs uint32
 	producerTimerMs    uint32
 	cobId              uint32
+	rxCancel           func()
 }
 
 // Handle [TIME] related RX CAN frames
@@ -159,7 +160,8 @@ func NewTIME(
 	t.isProducer = (cobId & 0x40000000) != 0
 	t.cobId = cobId & 0x7FF
 	if t.isConsumer {
-		err := bm.Subscribe(t.cobId, 0x7FF, false, t)
+		rxCancel, err := bm.Subscribe(t.cobId, 0x7FF, false, t)
+		t.rxCancel = rxCancel
 		if err != nil {
 			return nil, canopen.ErrIllegalArgument
 		}

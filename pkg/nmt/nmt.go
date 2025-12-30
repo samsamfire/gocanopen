@@ -83,6 +83,7 @@ type NMT struct {
 	hbTxBuff               canopen.Frame
 	callbacks              map[uint64]func(nmtState uint8)
 	callbackNextId         uint64
+	rxCancel               func()
 }
 
 // Handle [NMT] related RX CAN frames
@@ -313,7 +314,8 @@ func NewNMT(
 	}
 
 	// Configure NMT specific tx/rx buffers
-	err = nmt.Subscribe(uint32(canIdNmtRx), 0x7FF, false, nmt)
+	rxCancel, err := nmt.Subscribe(uint32(canIdNmtRx), 0x7FF, false, nmt)
+	nmt.rxCancel = rxCancel
 	if err != nil {
 		return nil, err
 	}

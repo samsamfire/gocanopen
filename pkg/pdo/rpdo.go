@@ -31,6 +31,7 @@ type RPDO struct {
 	synchronous   bool
 	timeoutTimeUs uint32
 	timeoutTimer  uint32
+	rxCancel      func()
 }
 
 // Handle [RPDO] related RX CAN frames
@@ -191,7 +192,8 @@ func (rpdo *RPDO) configureCOBID(entry14xx *od.Entry, predefinedIdent uint32, er
 	if canId != 0 && canId == (predefinedIdent&0xFF80) {
 		canId = predefinedIdent
 	}
-	err = rpdo.Subscribe(canId, 0x7FF, false, rpdo)
+	rxCancel, err := rpdo.Subscribe(canId, 0x7FF, false, rpdo)
+	rpdo.rxCancel = rxCancel
 	if err != nil {
 		return 0, err
 	}
