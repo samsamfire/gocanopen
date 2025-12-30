@@ -28,7 +28,11 @@ func writeEntry1005(stream *od.Stream, data []byte) (uint16, error) {
 	}
 	// Reconfigure the receive and transmit buffers only if changed
 	if canId != uint16(sync.cobId) {
-		err := sync.Subscribe(uint32(canId), 0x7FF, false, sync)
+		if sync.rxCancel != nil {
+			sync.rxCancel()
+		}
+		rxCancel, err := sync.Subscribe(uint32(canId), 0x7FF, false, sync)
+		sync.rxCancel = rxCancel
 		if err != nil {
 			return 0, od.ErrDevIncompat
 		}

@@ -58,6 +58,7 @@ type SDOClient struct {
 	blockCRCEnabled            bool
 	blockDataUploadLast        [BlockSeqSize]byte
 	blockCRC                   crc.CRC16
+	rxCancel                   func()
 }
 
 // Handle [SDOClient] related RX CAN frames
@@ -144,7 +145,11 @@ func (c *SDOClient) setupServer(cobIdClientToServer uint32, cobIdServerToClient 
 		CanIdS2C = 0
 		c.valid = false
 	}
-	err := c.Subscribe(uint32(CanIdS2C), 0x7FF, false, c)
+	if c.rxCancel != nil {
+		c.rxCancel()
+	}
+	rxCancel, err := c.Subscribe(uint32(CanIdS2C), 0x7FF, false, c)
+	c.rxCancel = rxCancel
 	if err != nil {
 		return err
 	}

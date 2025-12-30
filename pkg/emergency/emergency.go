@@ -274,6 +274,7 @@ type EMCY struct {
 	inhibitTimeUs   uint32 // Changed by writing to object 0x1015
 	inhibitTimer    uint32
 	rxCallback      EMCYRxCallback
+	rxCancel        func()
 }
 
 // Handle [EMCY] related RX CAN frames
@@ -578,5 +579,7 @@ func NewEMCY(
 	if entryStatusBits != nil {
 		entryStatusBits.AddExtension(emcy, readEntryStatusBits, writeEntryStatusBits)
 	}
-	return emcy, emcy.Subscribe(uint32(ServiceId), 0x780, false, emcy)
+	rxCancel, err := emcy.Subscribe(uint32(ServiceId), 0x780, false, emcy)
+	emcy.rxCancel = rxCancel
+	return emcy, err
 }

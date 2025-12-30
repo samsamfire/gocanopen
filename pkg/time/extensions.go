@@ -26,7 +26,11 @@ func writeEntry1012(stream *od.Stream, data []byte) (uint16, error) {
 	t.isProducer = (cobIdTimestamp & 0x40000000) != 0
 	t.isConsumer = (cobIdTimestamp & 0x80000000) != 0
 	if t.isConsumer {
-		err := t.Subscribe(t.cobId, 0x7FF, false, t)
+		if t.rxCancel != nil {
+			t.rxCancel()
+		}
+		rxCancel, err := t.Subscribe(t.cobId, 0x7FF, false, t)
+		t.rxCancel = rxCancel
 		if err != nil {
 			return 0, od.ErrDevIncompat
 		}
