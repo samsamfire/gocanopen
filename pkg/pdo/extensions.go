@@ -216,13 +216,8 @@ func readEntry14xxOr18xx(stream *od.Stream, data []byte) (uint16, error) {
 	// Reading communication parameters does not require
 	// special post-processing except for cob id sub entry
 	n, err := od.ReadEntryDefault(stream, data)
-	if err != nil || stream.Subindex != od.SubPdoCobId {
+	if err != nil {
 		return n, err
-	}
-
-	if n != 4 {
-		// This should never happen
-		return n, od.ErrTypeMismatch
 	}
 
 	// Get the corresponding object, either TPDO or RPDO
@@ -233,10 +228,22 @@ func readEntry14xxOr18xx(stream *od.Stream, data []byte) (uint16, error) {
 	switch v := stream.Object.(type) {
 	case *RPDO:
 		pdo, lock = v.pdo, &v.mu
+		if stream.Subindex == od.SubPdoSyncStart {
+			return 0, od.ErrSubNotExist
+		}
 	case *TPDO:
 		pdo, lock = v.pdo, &v.mu
 	default:
 		return n, od.ErrDevIncompat
+	}
+
+	if stream.Subindex != od.SubPdoCobId {
+		return n, err
+	}
+
+	if n != 4 {
+		// This should never happen
+		return n, od.ErrTypeMismatch
 	}
 
 	lock.Lock()
