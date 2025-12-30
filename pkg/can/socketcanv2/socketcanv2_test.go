@@ -18,14 +18,18 @@ func createSocketCanBus() *Bus {
 	return socketcanbus
 }
 
-func skipCI(t *testing.T) {
+func skipCIorNoVcan(t *testing.T) {
 	if os.Getenv("CI") != "" {
 		t.Skip("test not run in CI environment because of github limitations")
+	}
+	_, err := NewBus("vcan0")
+	if err != nil {
+		t.Skip("vcan0 interface not available, skipping test")
 	}
 }
 
 func TestConnectDisconnect(t *testing.T) {
-	skipCI(t)
+	skipCIorNoVcan(t)
 	sock, err := NewBus("vcan0")
 	assert.Nil(t, err)
 	err = sock.Connect()
@@ -41,7 +45,7 @@ func TestConnectDisconnect(t *testing.T) {
 }
 
 func TestDisconnect(t *testing.T) {
-	skipCI(t)
+	skipCIorNoVcan(t)
 	sock, err := NewBus("vcan0")
 	assert.Nil(t, err)
 	err = sock.Disconnect()
@@ -57,7 +61,7 @@ func (f *frameListener) Handle(frame canopen.Frame) {
 }
 
 func TestSendReceive(t *testing.T) {
-	skipCI(t)
+	skipCIorNoVcan(t)
 	can0 := createSocketCanBus()
 	can1 := createSocketCanBus()
 	defer can0.Disconnect()
@@ -74,7 +78,7 @@ func TestSendReceive(t *testing.T) {
 }
 
 func TestSendReceiveWithReceiveOwn(t *testing.T) {
-	skipCI(t)
+	skipCIorNoVcan(t)
 	listener := &frameListener{frames: make([]canopen.Frame, 0)}
 	sock, err := NewBus("vcan0")
 	assert.Nil(t, err)
@@ -115,7 +119,7 @@ func TestSendReceiveWithReceiveOwn(t *testing.T) {
 }
 
 func TestFilterNoReception(t *testing.T) {
-	skipCI(t)
+	skipCIorNoVcan(t)
 	can0 := createSocketCanBus()
 	can1 := createSocketCanBus()
 	defer can0.Disconnect()
