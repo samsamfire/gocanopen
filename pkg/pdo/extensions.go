@@ -21,6 +21,7 @@ const (
 )
 
 // [RPDO] update communication parameter
+// refer to chapter 7.5.2.35
 func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 	if stream == nil || data == nil || len(data) > 4 {
 		return 0, od.ErrDevIncompat
@@ -100,10 +101,15 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 		rpdo.synchronous = synchronous
 
 	case od.SubPdoEventTimer:
+
 		eventTimer := binary.LittleEndian.Uint16(data)
 		rpdo.timeoutTimeUs = uint32(eventTimer) * 1000
 		rpdo.timeoutTimer = 0
 		rpdo.pdo.logger.Debug("updated event timer", "eventTimer", eventTimer)
+
+	case od.SubPdoSyncStart:
+
+		return 0, od.ErrSubNotExist
 	}
 
 	return od.WriteEntryDefault(stream, dataCopy)
