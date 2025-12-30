@@ -37,8 +37,8 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 	dataCopy := slices.Clone(data)
 
 	switch stream.Subindex {
-	case od.SubPdoCobId:
 
+	case od.SubPdoCobId:
 		cobId := binary.LittleEndian.Uint32(data)
 		canId := cobId & CobIdCanIdMask
 		valid := (cobId & CobIdValidBit) == 0
@@ -88,27 +88,31 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 		}
 
 	case od.SubPdoTransmissionType:
-
-		transmissionType := data[0]
-		if transmissionType > TransmissionTypeSync240 && transmissionType < TransmissionTypeSyncEventLo {
+		transType := data[0]
+		if transType > TransmissionTypeSync240 && transType < TransmissionTypeSyncEventLo {
 			return 0, od.ErrInvalidValue
 		}
-		synchronous := transmissionType <= TransmissionTypeSync240
+		synchronous := transType <= TransmissionTypeSync240
 		if rpdo.synchronous != synchronous {
 			rpdo.rxNew[1] = false
 		}
 		rpdo.pdo.logger.Debug("updated transmission type (synchronous)", "prev", rpdo.synchronous, "new", synchronous)
 		rpdo.synchronous = synchronous
 
-	case od.SubPdoEventTimer:
+	case od.SubPdoInhibitTime:
+		// No particular processing
+		break
 
+	case od.SubPdoReserved:
+		return 0, od.ErrSubNotExist
+
+	case od.SubPdoEventTimer:
 		eventTimer := binary.LittleEndian.Uint16(data)
 		rpdo.timeoutTimeUs = uint32(eventTimer) * 1000
 		rpdo.timeoutTimer = 0
 		rpdo.pdo.logger.Debug("updated event timer", "eventTimer", eventTimer)
 
 	case od.SubPdoSyncStart:
-
 		return 0, od.ErrSubNotExist
 	}
 
@@ -131,8 +135,8 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 	dataCopy := slices.Clone(data)
 
 	switch stream.Subindex {
-	case od.SubPdoCobId:
 
+	case od.SubPdoCobId:
 		cobId := binary.LittleEndian.Uint32(data)
 		canId := cobId & CobIdCanIdMask
 		valid := (cobId & CobIdValidBit) == 0
@@ -165,19 +169,17 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		}
 
 	case od.SubPdoTransmissionType:
-
-		transmissionType := data[0]
-		if transmissionType > TransmissionTypeSync240 && transmissionType < TransmissionTypeSyncEventLo {
+		transType := data[0]
+		if transType > TransmissionTypeSync240 && transType < TransmissionTypeSyncEventLo {
 			return 0, od.ErrInvalidValue
 		}
 		tpdo.syncCounter = 255
-		tpdo.transmissionType = transmissionType
+		tpdo.transmissionType = transType
 		tpdo.sendRequest = true
 		tpdo.inhibitTimer = 0
 		tpdo.eventTimer = 0
 
 	case od.SubPdoInhibitTime:
-
 		if pdo.Valid {
 			return 0, od.ErrInvalidValue
 		}
@@ -185,14 +187,15 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		tpdo.inhibitTimeUs = uint32(inhibitTime) * 100
 		tpdo.inhibitTimer = 0
 
-	case od.SubPdoEventTimer:
+	case od.SubPdoReserved:
+		return 0, od.ErrSubNotExist
 
+	case od.SubPdoEventTimer:
 		eventTime := binary.LittleEndian.Uint16(data)
 		tpdo.eventTimeUs = uint32(eventTime) * 1000
 		tpdo.eventTimer = 0
 
 	case od.SubPdoSyncStart:
-
 		syncStart := data[0]
 		if pdo.Valid || syncStart > 240 {
 			return 0, od.ErrInvalidValue
@@ -206,6 +209,9 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 // [RPDO][TPDO] get communication parameter
 func readEntry14xxOr18xx(stream *od.Stream, data []byte) (uint16, error) {
 	n, err := od.ReadEntryDefault(stream, data)
+
+	// Reading communication parameters does not require
+	// special processing except for cob id information
 
 	// Add node id when reading subindex 1
 	if err == nil && stream.Subindex == 1 && n == 4 {
