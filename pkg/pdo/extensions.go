@@ -122,6 +122,7 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 }
 
 // [TPDO] update communication parameter
+// refer to chapter 7.5.2.37
 func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 	if stream == nil || data == nil || len(data) > 4 {
 		return 0, od.ErrDevIncompat
@@ -209,6 +210,7 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 }
 
 // [RPDO][TPDO] get communication parameter
+// refer to chapter 7.5.2.35 & 7.5.2.37
 func readEntry14xxOr18xx(stream *od.Stream, data []byte) (uint16, error) {
 
 	// Reading communication parameters does not require
@@ -259,60 +261,74 @@ func readEntry14xxOr18xx(stream *od.Stream, data []byte) (uint16, error) {
 }
 
 // [RPDO][TPDO] update mapping parameter
+// refer to chapter 7.5.2.36 & 7.5.2.38
 func writeEntry16xxOr1Axx(stream *od.Stream, data []byte) (uint16, error) {
 	if stream == nil || data == nil || stream.Subindex > od.MaxMappedEntriesPdo {
 		return 0, od.ErrDevIncompat
 	}
 	// Get the corresponding object, either TPDO or RPDO
-	var pdo *PDOCommon
+	var (
+		pdo  *PDOCommon
+		lock sync.Locker
+	)
 	switch v := stream.Object.(type) {
 	case *RPDO:
-		v.mu.Lock()
-		defer v.mu.Unlock()
-		pdo = v.pdo
+		pdo, lock = v.pdo, &v.mu
 	case *TPDO:
-		v.mu.Lock()
-		defer v.mu.Unlock()
-		pdo = v.pdo
+		pdo, lock = v.pdo, &v.mu
 	default:
 		return 0, od.ErrDevIncompat
 	}
-	pdo.logger.Debug("updating mapping parameter")
+	lock.Lock()
+	defer lock.Unlock()
+
 	// PDO must be disabled in order to allow mapping
 	if pdo.Valid || pdo.nbMapped != 0 && stream.Subindex > 0 {
 		return 0, od.ErrUnsuppAccess
 	}
-	if stream.Subindex == od.SubPdoNbMappings {
-		mappedObjectsCount := data[0]
-		pdoDataLength := uint32(0)
-		// Don't allow number greater than possible mapped objects
-		if mappedObjectsCount > od.MaxMappedEntriesPdo {
-			return 0, od.ErrMapLen
-		}
-		for i := range mappedObjectsCount {
-			streamer := pdo.streamers[i]
-			dataLength := streamer.DataLength
-			mappedLength := streamer.DataOffset
-			if mappedLength > dataLength {
-				return 0, od.ErrNoMap
-			}
-			pdoDataLength += mappedLength
-		}
-		if pdoDataLength > uint32(MaxPdoLength) {
-			return 0, od.ErrMapLen
-		}
-		if pdoDataLength == 0 && mappedObjectsCount > 0 {
-			return 0, od.ErrInvalidValue
-		}
-		pdo.dataLength = pdoDataLength
-		pdo.nbMapped = mappedObjectsCount
-		pdo.logger.Debug("updated number of mapped objects to", "count", mappedObjectsCount, "lengthBytes", pdo.dataLength)
-	} else {
+
+	// Change of a mapping parameter
+	if stream.Subindex != od.SubPdoNbMappings {
 		err := pdo.configureMap(binary.LittleEndian.Uint32(data), uint32(stream.Subindex)-1, pdo.IsRPDO)
 		if err != nil {
 			return 0, err
 		}
+		return od.WriteEntryDefault(stream, data)
 	}
+
+	// Change in number of mapped objects
+	nbMapped := data[0]
+	pdoDataLength := uint32(0)
+
+	// Don't allow number greater than possible mapped objects
+	if nbMapped > od.MaxMappedEntriesPdo {
+		return 0, od.ErrMapLen
+	}
+
+	for i := range nbMapped {
+		streamer := pdo.streamers[i]
+		dataLength := streamer.DataLength
+		mappedLength := streamer.DataOffset
+		if mappedLength > dataLength {
+			return 0, od.ErrNoMap
+		}
+		pdoDataLength += mappedLength
+	}
+
+	// Total length should not exceed max PDO length
+	if pdoDataLength > uint32(MaxPdoLength) {
+		return 0, od.ErrMapLen
+	}
+
+	// Total length cannot be zero if there is at least one mapped object
+	if pdoDataLength == 0 && nbMapped > 0 {
+		return 0, od.ErrInvalidValue
+	}
+
+	pdo.dataLength = pdoDataLength
+	pdo.nbMapped = nbMapped
+	pdo.logger.Debug("updated number of mapped objects to", "count", nbMapped, "lengthBytes", pdo.dataLength)
+
 	return od.WriteEntryDefault(stream, data)
 }
 
