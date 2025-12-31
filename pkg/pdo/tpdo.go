@@ -91,9 +91,10 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 				// Sync start value used
 				tpdo.syncCounter = 254
 			} else {
-				tpdo.syncCounter = tpdo.transmissionType/2 + 1
+				tpdo.syncCounter = tpdo.transmissionType
 			}
 		}
+
 		// If sync start value is used , start first TPDO
 		// after sync with matched syncstartvalue
 		switch tpdo.syncCounter {

@@ -1,6 +1,7 @@
 package network
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -10,10 +11,51 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestPdo(t *testing.T) {
+type FrameCollector struct {
+	frames []canopen.Frame
+	mu     sync.Mutex
+}
 
+func (fc *FrameCollector) Handle(frame canopen.Frame) {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	fc.frames = append(fc.frames, frame)
+}
+
+func (fc *FrameCollector) HasFrame(id uint32) bool {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	for _, f := range fc.frames {
+		if f.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (fc *FrameCollector) Count(id uint32) int {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	count := 0
+	for _, f := range fc.frames {
+		if f.ID == id {
+			count++
+		}
+	}
+	return count
+}
+
+func (fc *FrameCollector) Clear() {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	fc.frames = nil
+}
+
+func TestRPDO(t *testing.T) {
 	net := CreateNetworkTest()
 	otherNet := CreateNetworkEmptyTest()
+	defer net.Disconnect()
+	defer otherNet.Disconnect()
 	local, err := net.Local(NodeIdTest)
 	assert.Nil(t, err)
 
@@ -106,11 +148,100 @@ func TestPdo(t *testing.T) {
 	})
 
 	t.Run("send wrong rpdo length creates error", func(t *testing.T) {
+		// Reset value
+		err := local.WriteAnyExact("UNSIGNED8 value", 0, uint8(0))
+		assert.Nil(t, err)
 
 		// PDO length too low
 		err = otherNet.Send(canopen.Frame{ID: 0x244, DLC: 4, Data: [8]byte{0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18}})
 		assert.Nil(t, err)
 		time.Sleep(100 * time.Millisecond)
 
+		// Verify value was NOT updated
+		val, err := local.ReadUint8("UNSIGNED8 value", 0)
+		assert.Nil(t, err)
+		assert.Equal(t, uint8(0), val)
+	})
+}
+
+func TestTPDO(t *testing.T) {
+	net := CreateNetworkTest()
+	otherNet := CreateNetworkEmptyTest()
+	defer net.Disconnect()
+	defer otherNet.Disconnect()
+
+	local, err := net.Local(NodeIdTest)
+	assert.Nil(t, err)
+
+	c := local.Configurator()
+	err = c.ProducerDisableSYNC()
+	c.WriteCommunicationPeriod(0)
+	assert.Nil(t, err)
+	tpdo1 := pdo.MaxRpdoNumber + 1
+	canId := uint32(0x180 + int(NodeIdTest)) // Default TPDO1 ID
+
+	collector := &FrameCollector{}
+	_, err = otherNet.Subscribe(canId, 0x7FF, false, collector)
+	assert.Nil(t, err)
+
+	t.Run("send on sync reception", func(t *testing.T) {
+		c.DisablePDO(tpdo1)
+		collector.Clear()
+		err = c.WriteConfigurationPDO(tpdo1,
+			config.PDOConfigurationParameter{
+				CanId:            uint16(canId),
+				TransmissionType: 1, // Sync every cycle
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(tpdo1)
+		assert.Nil(t, err)
+
+		time.Sleep(100 * time.Millisecond)
+		assert.Equal(t, 0, collector.Count(canId))
+
+		// Send SYNC
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0})
+		assert.Nil(t, err)
+
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 1, collector.Count(canId))
+	})
+
+	t.Run("send on 10th sync", func(t *testing.T) {
+
+		const syncStartCount = 10
+
+		c.DisablePDO(tpdo1)
+		collector.Clear()
+		err = c.WriteConfigurationPDO(tpdo1,
+			config.PDOConfigurationParameter{
+				CanId:            uint16(canId),
+				TransmissionType: syncStartCount,
+				SyncStart:        0,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2008, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(tpdo1)
+		assert.Nil(t, err)
+		assert.Equal(t, 0, collector.Count(canId))
+
+		// From SYNC 1 to 9 we should have 0 frames
+		for range syncStartCount - 1 {
+			// Send SYNC
+			err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0})
+			time.Sleep(100 * time.Millisecond)
+			assert.Nil(t, err)
+			assert.Equal(t, 0, collector.Count(canId))
+		}
+
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0})
+		assert.Nil(t, err)
+		time.Sleep(100 * time.Millisecond)
+		assert.Equal(t, 1, collector.Count(canId))
 	})
 }
