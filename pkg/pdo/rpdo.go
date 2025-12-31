@@ -269,11 +269,11 @@ func NewRPDO(
 		return nil, err
 	}
 	// Configure transmission type
-	transmissionType, err := entry14xx.Uint8(2)
+	transmissionType, err := entry14xx.Uint8(od.SubPdoTransmissionType)
 	if err != nil {
 		rpdo.pdo.logger.Error("reading transmission type failed",
 			"index", fmt.Errorf("x%x", entry14xx.Index),
-			"subindex", 2,
+			"subindex", od.SubPdoTransmissionType,
 			"error", err,
 		)
 		return nil, canopen.ErrOdParameters
@@ -282,11 +282,11 @@ func NewRPDO(
 	rpdo.synchronous = transmissionType <= TransmissionTypeSync240
 
 	// Configure event timer
-	eventTime, err := entry14xx.Uint16(5)
+	eventTime, err := entry14xx.Uint16(od.SubPdoEventTimer)
 	if err != nil {
 		rpdo.pdo.logger.Error("reading event timer failed",
 			"index", fmt.Errorf("x%x", entry14xx.Index),
-			"subindex", 5,
+			"subindex", od.SubPdoEventTimer,
 			"error", err,
 		)
 	}

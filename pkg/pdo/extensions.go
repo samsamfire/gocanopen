@@ -176,7 +176,7 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		if transType > TransmissionTypeSync240 && transType < TransmissionTypeSyncEventLo {
 			return 0, od.ErrInvalidValue
 		}
-		tpdo.syncCounter = 255
+		tpdo.syncCounter = SyncCounterReset
 		tpdo.transmissionType = transType
 		tpdo.sendRequest = true
 		tpdo.inhibitTimer = 0
@@ -200,7 +200,7 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 
 	case od.SubPdoSyncStart:
 		syncStart := data[0]
-		if pdo.Valid || syncStart > 240 {
+		if pdo.Valid || syncStart > TransmissionTypeSync240 {
 			return 0, od.ErrInvalidValue
 		}
 		tpdo.syncStartValue = syncStart

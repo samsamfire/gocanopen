@@ -11,6 +11,11 @@ import (
 	"github.com/samsamfire/gocanopen/pkg/sync"
 )
 
+const (
+	SyncCounterReset        = 255
+	SyncCounterWaitForStart = 254
+)
+
 type TPDO struct {
 	*canopen.BusManager
 	mu               s.Mutex
@@ -86,10 +91,9 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 			return tpdo.send()
 		}
 		// Send synchronous cyclic TPDOs
-		if tpdo.syncCounter == 255 {
+		if tpdo.syncCounter == SyncCounterReset {
 			if tpdo.sync.CounterOverflow() != 0 && tpdo.syncStartValue != 0 {
-				// Sync start value used
-				tpdo.syncCounter = 254
+				tpdo.syncCounter = SyncCounterWaitForStart
 			} else {
 				tpdo.syncCounter = tpdo.transmissionType
 			}
@@ -98,12 +102,14 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 		// If sync start value is used , start first TPDO
 		// after sync with matched syncstartvalue
 		switch tpdo.syncCounter {
-		case 254:
+
+		case SyncCounterWaitForStart:
 			if tpdo.sync.Counter() == tpdo.syncStartValue {
 				tpdo.syncCounter = tpdo.transmissionType
 				tpdo.mu.Unlock()
 				return tpdo.send()
 			}
+
 		case 1:
 			tpdo.syncCounter = tpdo.transmissionType
 			tpdo.mu.Unlock()
@@ -231,6 +237,7 @@ func NewTPDO(
 	}
 
 	tpdo := &TPDO{BusManager: bm}
+
 	// Configure mapping parameters
 	erroneousMap := uint32(0)
 	pdo, err := NewPDO(odict, logger, entry1Axx, false, emcy, &erroneousMap)
@@ -249,22 +256,22 @@ func NewTPDO(
 		return nil, err
 	}
 	// Configure inhibit time (not mandatory)
-	inhibitTime, err := entry18xx.Uint16(3)
+	inhibitTime, err := entry18xx.Uint16(od.SubPdoInhibitTime)
 	if err != nil {
 		tpdo.pdo.logger.Warn("reading inhibit time failed",
 			"index", fmt.Sprintf("x%x", entry18xx.Index),
-			"subindex", 3,
+			"subindex", od.SubPdoInhibitTime,
 			"error", err,
 		)
 	}
 	tpdo.inhibitTimeUs = uint32(inhibitTime) * 100
 
 	// Configure event timer (not mandatory)
-	eventTime, err := entry18xx.Uint16(5)
+	eventTime, err := entry18xx.Uint16(od.SubPdoEventTimer)
 	if err != nil {
 		tpdo.pdo.logger.Warn("reading event timer failed",
 			"index", entry18xx.Index,
-			"subindex", 5,
+			"subindex", od.SubPdoEventTimer,
 			"error", err,
 		)
 
@@ -272,16 +279,16 @@ func NewTPDO(
 	tpdo.eventTimeUs = uint32(eventTime) * 1000
 
 	// Configure sync start value (not mandatory)
-	tpdo.syncStartValue, err = entry18xx.Uint8(6)
+	tpdo.syncStartValue, err = entry18xx.Uint8(od.SubPdoSyncStart)
 	if err != nil {
 		tpdo.pdo.logger.Warn("reading sync start failed",
 			"index", entry18xx.Index,
-			"subindex", 6,
+			"subindex", od.SubPdoSyncStart,
 			"error", err,
 		)
 	}
 	tpdo.sync = sync
-	tpdo.syncCounter = 255
+	tpdo.syncCounter = SyncCounterReset
 
 	// Configure OD extensions
 	pdo.IsRPDO = false
