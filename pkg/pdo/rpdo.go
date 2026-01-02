@@ -202,11 +202,11 @@ func (rpdo *RPDO) configureCOBID(entry14xx *od.Entry, predefinedIdent uint32, er
 	defer rpdo.mu.Unlock()
 
 	pdo := rpdo.pdo
-	cobId, err := entry14xx.Uint32(1)
+	cobId, err := entry14xx.Uint32(od.SubPdoCobId)
 	if err != nil {
 		rpdo.pdo.logger.Error("reading failed",
 			"index", fmt.Errorf("x%x", entry14xx.Index),
-			"subindex", 2,
+			"subindex", od.SubPdoCobId,
 			"error", err,
 		)
 		return 0, canopen.ErrOdParameters
