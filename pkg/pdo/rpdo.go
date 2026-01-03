@@ -281,10 +281,10 @@ func NewRPDO(
 	rpdo.sync = sync
 	rpdo.synchronous = transmissionType <= TransmissionTypeSync240
 
-	// Configure event timer
+	// Configure event timer (not mandatory)
 	eventTime, err := entry14xx.Uint16(od.SubPdoEventTimer)
 	if err != nil {
-		rpdo.pdo.logger.Error("reading event timer failed",
+		rpdo.pdo.logger.Warn("reading event timer failed",
 			"index", fmt.Errorf("x%x", entry14xx.Index),
 			"subindex", od.SubPdoEventTimer,
 			"error", err,
