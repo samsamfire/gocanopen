@@ -11,6 +11,11 @@ import (
 	"github.com/samsamfire/gocanopen/pkg/sync"
 )
 
+const (
+	SyncCounterReset        = 255
+	SyncCounterWaitForStart = 254
+)
+
 type TPDO struct {
 	*canopen.BusManager
 	mu               s.Mutex
@@ -42,67 +47,62 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 		return nil
 	}
 
-	if tpdo.transmissionType == TransmissionTypeSyncAcyclic || tpdo.transmissionType >= TransmissionTypeSyncEventLo {
-		if tpdo.eventTimeUs != 0 {
-			if tpdo.eventTimer > timeDifferenceUs {
-				tpdo.eventTimer -= timeDifferenceUs
-			} else {
-				tpdo.eventTimer = 0
-			}
-			if tpdo.eventTimer == 0 {
-				tpdo.sendRequest = true
-			}
+	if tpdo.eventTimeUs > 0 {
+		tpdo.eventTimer = saturatingSub(tpdo.eventTimer, timeDifferenceUs)
+		if tpdo.eventTimer == 0 {
+			tpdo.sendRequest = true
 		}
-		// Check for tpdo send requests
-		if !tpdo.sendRequest {
-			for i := range pdo.nbMapped {
-				flagPDOByte := pdo.flagPDOByte[i]
-				if flagPDOByte != nil {
-					if (*flagPDOByte & pdo.flagPDOBitmask[i]) == 0 {
-						tpdo.sendRequest = true
-					}
-				}
+	}
+	tpdo.inhibitTimer = saturatingSub(tpdo.inhibitTimer, timeDifferenceUs)
+
+	isEventDriven := tpdo.transmissionType >= TransmissionTypeSyncEventLo
+	isSyncAcyclic := tpdo.transmissionType == TransmissionTypeSyncAcyclic
+
+	if (isSyncAcyclic || isEventDriven) && !tpdo.sendRequest {
+		// Check for app TPDO send requests
+		for i := range tpdo.pdo.nbMapped {
+			flagPtr := tpdo.pdo.flagPDOByte[i]
+			if flagPtr != nil && (*flagPtr&tpdo.pdo.flagPDOBitmask[i]) == 0 {
+				tpdo.sendRequest = true
+				break
 			}
 		}
 	}
-	// Send PDO by application request or event timer
-	if tpdo.transmissionType >= TransmissionTypeSyncEventLo {
-		if tpdo.inhibitTimer > timeDifferenceUs {
-			tpdo.inhibitTimer -= timeDifferenceUs
-		} else {
-			tpdo.inhibitTimer = 0
-		}
+
+	if isEventDriven {
+		// Send if requested and inhibit time elapsed
 		if tpdo.sendRequest && tpdo.inhibitTimer == 0 {
 			tpdo.mu.Unlock()
-			_ = tpdo.send()
-			tpdo.mu.Lock()
+			return tpdo.send()
 		}
 	} else if tpdo.sync != nil && syncWas {
 
 		// Send synchronous acyclic tpdo
-		if tpdo.transmissionType == TransmissionTypeSyncAcyclic &&
-			tpdo.sendRequest {
+		if isSyncAcyclic && tpdo.sendRequest {
 			tpdo.mu.Unlock()
 			return tpdo.send()
 		}
+
 		// Send synchronous cyclic TPDOs
-		if tpdo.syncCounter == 255 {
+		if tpdo.syncCounter == SyncCounterReset {
 			if tpdo.sync.CounterOverflow() != 0 && tpdo.syncStartValue != 0 {
-				// Sync start value used
-				tpdo.syncCounter = 254
+				tpdo.syncCounter = SyncCounterWaitForStart
 			} else {
-				tpdo.syncCounter = tpdo.transmissionType/2 + 1
+				tpdo.syncCounter = tpdo.transmissionType
 			}
 		}
+
 		// If sync start value is used , start first TPDO
 		// after sync with matched syncstartvalue
 		switch tpdo.syncCounter {
-		case 254:
+
+		case SyncCounterWaitForStart:
 			if tpdo.sync.Counter() == tpdo.syncStartValue {
 				tpdo.syncCounter = tpdo.transmissionType
 				tpdo.mu.Unlock()
 				return tpdo.send()
 			}
+
 		case 1:
 			tpdo.syncCounter = tpdo.transmissionType
 			tpdo.mu.Unlock()
@@ -111,7 +111,6 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 		default:
 			tpdo.syncCounter--
 		}
-
 	}
 	tpdo.mu.Unlock()
 	return nil
@@ -121,11 +120,11 @@ func (tpdo *TPDO) configureTransmissionType(entry18xx *od.Entry) error {
 	tpdo.mu.Lock()
 	defer tpdo.mu.Unlock()
 
-	transmissionType, err := entry18xx.Uint8(2)
+	transmissionType, err := entry18xx.Uint8(od.SubPdoTransmissionType)
 	if err != nil {
 		tpdo.pdo.logger.Error("reading failed",
 			"index", fmt.Errorf("x%x", entry18xx.Index),
-			"subindex", 2,
+			"subindex", od.SubPdoTransmissionType,
 			"error", err,
 		)
 		return canopen.ErrOdParameters
@@ -143,11 +142,11 @@ func (tpdo *TPDO) configureCOBID(entry18xx *od.Entry, predefinedIdent uint16, er
 	defer tpdo.mu.Unlock()
 
 	pdo := tpdo.pdo
-	cobId, err := entry18xx.Uint32(1)
+	cobId, err := entry18xx.Uint32(od.SubPdoCobId)
 	if err != nil {
 		tpdo.pdo.logger.Error("reading failed",
 			"index", fmt.Errorf("x%x", entry18xx.Index),
-			"subindex", 1,
+			"subindex", od.SubPdoCobId,
 			"error", err,
 		)
 		return 0, canopen.ErrOdParameters
@@ -230,6 +229,7 @@ func NewTPDO(
 	}
 
 	tpdo := &TPDO{BusManager: bm}
+
 	// Configure mapping parameters
 	erroneousMap := uint32(0)
 	pdo, err := NewPDO(odict, logger, entry1Axx, false, emcy, &erroneousMap)
@@ -248,22 +248,22 @@ func NewTPDO(
 		return nil, err
 	}
 	// Configure inhibit time (not mandatory)
-	inhibitTime, err := entry18xx.Uint16(3)
+	inhibitTime, err := entry18xx.Uint16(od.SubPdoInhibitTime)
 	if err != nil {
 		tpdo.pdo.logger.Warn("reading inhibit time failed",
 			"index", fmt.Sprintf("x%x", entry18xx.Index),
-			"subindex", 3,
+			"subindex", od.SubPdoInhibitTime,
 			"error", err,
 		)
 	}
 	tpdo.inhibitTimeUs = uint32(inhibitTime) * 100
 
 	// Configure event timer (not mandatory)
-	eventTime, err := entry18xx.Uint16(5)
+	eventTime, err := entry18xx.Uint16(od.SubPdoEventTimer)
 	if err != nil {
 		tpdo.pdo.logger.Warn("reading event timer failed",
 			"index", entry18xx.Index,
-			"subindex", 5,
+			"subindex", od.SubPdoEventTimer,
 			"error", err,
 		)
 
@@ -271,16 +271,16 @@ func NewTPDO(
 	tpdo.eventTimeUs = uint32(eventTime) * 1000
 
 	// Configure sync start value (not mandatory)
-	tpdo.syncStartValue, err = entry18xx.Uint8(6)
+	tpdo.syncStartValue, err = entry18xx.Uint8(od.SubPdoSyncStart)
 	if err != nil {
 		tpdo.pdo.logger.Warn("reading sync start failed",
 			"index", entry18xx.Index,
-			"subindex", 6,
+			"subindex", od.SubPdoSyncStart,
 			"error", err,
 		)
 	}
 	tpdo.sync = sync
-	tpdo.syncCounter = 255
+	tpdo.syncCounter = SyncCounterReset
 
 	// Configure OD extensions
 	pdo.IsRPDO = false
@@ -296,4 +296,12 @@ func NewTPDO(
 		"transmission type", tpdo.transmissionType,
 	)
 	return tpdo, nil
+}
+
+// Helper for timer logic to prevent underflow
+func saturatingSub(value uint32, amount uint32) uint32 {
+	if value > amount {
+		return value - amount
+	}
+	return 0
 }

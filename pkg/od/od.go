@@ -96,16 +96,17 @@ func (od *ObjectDictionary) addPDO(pdoNb uint16, isRPDO bool) error {
 
 	pdoComm := NewRecord()
 	_, _ = pdoComm.AddSubObject(0, "Highest sub-index supported", UNSIGNED8, AttributeSdoR, "0x5")
-	_, _ = pdoComm.AddSubObject(1, fmt.Sprintf("COB-ID used by %s", pdoType), UNSIGNED32, AttributeSdoRw, "0x0")
-	_, _ = pdoComm.AddSubObject(2, "Transmission type", UNSIGNED8, AttributeSdoRw, "0x0")
-	_, _ = pdoComm.AddSubObject(3, "Inhibit time", UNSIGNED16, AttributeSdoRw, "0x0")
-	_, _ = pdoComm.AddSubObject(4, "Reserved", UNSIGNED8, AttributeSdoRw, "0x0")
-	_, _ = pdoComm.AddSubObject(5, "Event timer", UNSIGNED16, AttributeSdoRw, "0x0")
+	_, _ = pdoComm.AddSubObject(SubPdoCobId, fmt.Sprintf("COB-ID used by %s", pdoType), UNSIGNED32, AttributeSdoRw, "0x0")
+	_, _ = pdoComm.AddSubObject(SubPdoTransmissionType, "Transmission type", UNSIGNED8, AttributeSdoRw, "0x0")
+	_, _ = pdoComm.AddSubObject(SubPdoInhibitTime, "Inhibit time", UNSIGNED16, AttributeSdoRw, "0x0")
+	_, _ = pdoComm.AddSubObject(SubPdoReserved, "Reserved", UNSIGNED8, AttributeSdoRw, "0x0")
+	_, _ = pdoComm.AddSubObject(SubPdoEventTimer, "Event timer", UNSIGNED16, AttributeSdoRw, "0x0")
+	_, _ = pdoComm.AddSubObject(SubPdoSyncStart, "SYNC start value", UNSIGNED8, AttributeSdoRw, "0x0")
 
 	od.AddVariableList(EntryRPDOCommunicationStart+indexOffset, fmt.Sprintf("%s communication parameter", pdoType), pdoComm)
 
 	pdoMap := NewRecord()
-	_, _ = pdoMap.AddSubObject(0, "Number of mapped application objects in PDO", UNSIGNED8, AttributeSdoRw, "0x0")
+	_, _ = pdoMap.AddSubObject(SubPdoNbMappings, "Number of mapped application objects in PDO", UNSIGNED8, AttributeSdoRw, "0x0")
 	for i := range MaxMappedEntriesPdo {
 		_, _ = pdoMap.AddSubObject(i+1, fmt.Sprintf("Application object %d", i+1), UNSIGNED32, AttributeSdoRw, "0x0")
 	}

@@ -75,10 +75,21 @@ func TestPDOConfiguratorCommon(t *testing.T) {
 			assert.EqualValues(t, 11, transType)
 			err = conf.DisablePDO(pdoNb)
 			assert.Nil(t, err)
-			err = conf.WriteSyncStart(pdoNb, 10)
-			assert.Nil(t, err)
-			syncStart, _ := conf.ReadSyncStart(pdoNb)
-			assert.EqualValues(t, 10, syncStart)
+
+			// Sync start value is only available on TPDOs
+			if pdoNb == pdo.IndexFirstRpdo {
+				err = conf.WriteSyncStart(pdoNb, 10)
+				assert.Equal(t, sdo.AbortSubUnknown, err)
+				syncStart, err := conf.ReadSyncStart(pdoNb)
+				assert.Equal(t, sdo.AbortSubUnknown, err)
+				assert.EqualValues(t, 0, syncStart)
+			} else {
+				err = conf.WriteSyncStart(pdoNb, 10)
+				assert.Nil(t, err)
+				syncStart, _ := conf.ReadSyncStart(pdoNb)
+				assert.EqualValues(t, 10, syncStart)
+			}
+
 			enabled, _ := conf.ReadEnabledPDO(pdoNb)
 			assert.Equal(t, false, enabled)
 			err = conf.ClearMappings(pdoNb)
