@@ -197,6 +197,7 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		eventTime := binary.LittleEndian.Uint16(data)
 		tpdo.eventTimeUs = uint32(eventTime) * 1000
 		tpdo.eventTimer = 0
+		tpdo.pdo.logger.Debug("updated event timer", "eventTimeUs", tpdo.eventTimeUs)
 
 	case od.SubPdoSyncStart:
 		syncStart := data[0]

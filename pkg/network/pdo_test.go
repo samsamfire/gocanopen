@@ -304,4 +304,34 @@ func TestTPDO(t *testing.T) {
 		assert.Equal(t, 3, collector.Count(canId))
 
 	})
+
+	t.Run("event timer", func(t *testing.T) {
+
+		c.DisablePDO(tpdo1)
+		collector.Clear()
+		err = c.WriteConfigurationPDO(tpdo1,
+			config.PDOConfigurationParameter{
+				CanId:            uint16(canId),
+				TransmissionType: pdo.TransmissionTypeSyncEventLo,
+				EventTimer:       500,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(tpdo1)
+		assert.Nil(t, err)
+		// Clear any sent PDO because of transmission type change
+		time.Sleep(100 * time.Millisecond)
+		collector.Clear()
+		assert.Equal(t, 0, collector.Count(canId))
+
+		// Wait another 450ms
+		time.Sleep(450 * time.Millisecond)
+		assert.Equal(t, 1, collector.Count(canId))
+
+		// Wait another 500ms
+		time.Sleep(550 * time.Millisecond)
+		assert.Equal(t, 2, collector.Count(canId))
+	})
 }
