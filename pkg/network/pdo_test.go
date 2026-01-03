@@ -45,6 +45,18 @@ func (fc *FrameCollector) Count(id uint32) int {
 	return count
 }
 
+func (fc *FrameCollector) GetFrames(id uint32) []canopen.Frame {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	var frames []canopen.Frame
+	for _, f := range fc.frames {
+		if f.ID == id {
+			frames = append(frames, f)
+		}
+	}
+	return frames
+}
+
 func (fc *FrameCollector) Clear() {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
@@ -161,6 +173,109 @@ func TestRPDO(t *testing.T) {
 		val, err := local.ReadUint8("UNSIGNED8 value", 0)
 		assert.Nil(t, err)
 		assert.Equal(t, uint8(0), val)
+	})
+
+	t.Run("synchronous rpdo", func(t *testing.T) {
+		// Reset value
+		err := local.WriteAnyExact("UNSIGNED8 value", 0, uint8(0))
+		assert.Nil(t, err)
+
+		// Configure RPDO as Synchronous (Transmission Type 1)
+		c.DisablePDO(1)
+		err = c.WriteConfigurationPDO(1,
+			config.PDOConfigurationParameter{
+				CanId:            0x255,
+				TransmissionType: 1, // Sync
+				InhibitTime:      0,
+				EventTimer:       0,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(1)
+		assert.Nil(t, err)
+
+		time.Sleep(100 * time.Millisecond)
+
+		// Send RPDO with new value 0x42
+		err = otherNet.Send(canopen.Frame{ID: 0x255, DLC: 1, Data: [8]byte{0x42}})
+		assert.Nil(t, err)
+
+		time.Sleep(100 * time.Millisecond)
+		// Value should STILL be 0
+		val, err := local.ReadUint8("UNSIGNED8 value", 0)
+		assert.Nil(t, err)
+		assert.Equal(t, uint8(0), val)
+
+		// Send SYNC
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0})
+		assert.Nil(t, err)
+
+		time.Sleep(100 * time.Millisecond)
+		// Value should NOW be 0x42
+		val, err = local.ReadUint8("UNSIGNED8 value", 0)
+		assert.Nil(t, err)
+		assert.Equal(t, uint8(0x42), val)
+	})
+
+	t.Run("rpdo timeout deadline monitoring", func(t *testing.T) {
+		emcyCollector := &FrameCollector{}
+		_, err := otherNet.Subscribe(0x80+uint32(NodeIdTest), 0x7FF, false, emcyCollector)
+		assert.Nil(t, err)
+
+		c.DisablePDO(1)
+		err = c.WriteConfigurationPDO(1,
+			config.PDOConfigurationParameter{
+				CanId:            0x255,
+				TransmissionType: pdo.TransmissionTypeSyncEventHi,
+				InhibitTime:      0,
+				EventTimer:       200, // 200ms timeout
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(1)
+		assert.Nil(t, err)
+
+		// Send RPDO with value, this will enable timeout monitoring
+		err = otherNet.Send(canopen.Frame{ID: 0x255, DLC: 1, Data: [8]byte{0x33}})
+		assert.Nil(t, err)
+
+		// Reset collector
+		emcyCollector.Clear()
+
+		// Wait 100ms - No timeout yet
+		time.Sleep(100 * time.Millisecond)
+		assert.Equal(t, 0, emcyCollector.Count(0x80+uint32(NodeIdTest)))
+
+		// Wait > 200ms.
+		time.Sleep(200 * time.Millisecond) // Total 300ms
+
+		// Should have received 1 EMCY
+		assert.Equal(t, 1, emcyCollector.Count(0x80+uint32(NodeIdTest)))
+
+		// Verify Content
+		frames := emcyCollector.GetFrames(0x80 + uint32(NodeIdTest))
+		if len(frames) > 0 {
+			f := frames[0]
+			// ErrRpdoTimeout = 0x8250. Little Endian: 50 82
+			assert.Equal(t, uint8(0x50), f.Data[0])
+			assert.Equal(t, uint8(0x82), f.Data[1])
+		}
+
+		// Wait again, should not receive more EMCY
+		time.Sleep(200 * time.Millisecond)
+		assert.Equal(t, 1, emcyCollector.Count(0x80+uint32(NodeIdTest)))
+
+		err = otherNet.Send(canopen.Frame{ID: 0x255, DLC: 1, Data: [8]byte{0x33}})
+		assert.Nil(t, err)
+
+		// Should reset timeout monitoring, so no new EMCY after 200ms
+		emcyCollector.Clear()
+		time.Sleep(250 * time.Millisecond)
+		assert.Equal(t, 1, emcyCollector.Count(0x80+uint32(NodeIdTest)))
 	})
 }
 

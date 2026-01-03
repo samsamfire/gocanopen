@@ -131,6 +131,7 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 	// Handle timeout logic, reset if happened
 	timeoutHappened := rpdo.timeoutTimer > rpdo.timeoutTimeUs
 	if rpdo.timeoutTimeUs > 0 {
+		// Enable timeout monitoring
 		rpdo.timeoutTimer = 1
 	}
 
