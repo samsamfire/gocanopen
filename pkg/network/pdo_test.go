@@ -334,4 +334,34 @@ func TestTPDO(t *testing.T) {
 		time.Sleep(550 * time.Millisecond)
 		assert.Equal(t, 2, collector.Count(canId))
 	})
+
+	t.Run("event timer with inhibit time", func(t *testing.T) {
+		c.DisablePDO(tpdo1)
+		collector.Clear()
+		err = c.WriteConfigurationPDO(tpdo1,
+			config.PDOConfigurationParameter{
+				CanId:            uint16(canId),
+				TransmissionType: pdo.TransmissionTypeSyncEventHi,
+				InhibitTime:      3000,
+				EventTimer:       100,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(tpdo1)
+		assert.Nil(t, err)
+
+		// Wait for first PDO (triggered by enable)
+		time.Sleep(50 * time.Millisecond)
+		collector.Clear()
+
+		// Wait 100ms: Event timer triggered (at 100ms), but inhibit time is 200ms
+		time.Sleep(100 * time.Millisecond)
+		assert.Equal(t, 0, collector.Count(canId))
+
+		// Wait another 200ms (total 350ms): inhibit time should have elapsed
+		time.Sleep(200 * time.Millisecond)
+		assert.Equal(t, 1, collector.Count(canId))
+	})
 }
