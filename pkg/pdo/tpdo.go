@@ -47,49 +47,42 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 		return nil
 	}
 
-	if tpdo.transmissionType == TransmissionTypeSyncAcyclic || tpdo.transmissionType >= TransmissionTypeSyncEventLo {
-		if tpdo.eventTimeUs != 0 {
-			if tpdo.eventTimer > timeDifferenceUs {
-				tpdo.eventTimer -= timeDifferenceUs
-			} else {
-				tpdo.eventTimer = 0
-			}
-			if tpdo.eventTimer == 0 {
-				tpdo.sendRequest = true
-			}
+	if tpdo.eventTimeUs > 0 {
+		tpdo.eventTimer = saturatingSub(tpdo.eventTimer, timeDifferenceUs)
+		if tpdo.eventTimer == 0 {
+			tpdo.sendRequest = true
 		}
-		// Check for tpdo send requests
-		if !tpdo.sendRequest {
-			for i := range pdo.nbMapped {
-				flagPDOByte := pdo.flagPDOByte[i]
-				if flagPDOByte != nil {
-					if (*flagPDOByte & pdo.flagPDOBitmask[i]) == 0 {
-						tpdo.sendRequest = true
-					}
-				}
+	}
+	tpdo.inhibitTimer = saturatingSub(tpdo.inhibitTimer, timeDifferenceUs)
+
+	isEventDriven := tpdo.transmissionType >= TransmissionTypeSyncEventLo
+	isSyncAcyclic := tpdo.transmissionType == TransmissionTypeSyncAcyclic
+
+	if (isSyncAcyclic || isEventDriven) && !tpdo.sendRequest {
+		// Check for app TPDO send requests
+		for i := range tpdo.pdo.nbMapped {
+			flagPtr := tpdo.pdo.flagPDOByte[i]
+			if flagPtr != nil && (*flagPtr&tpdo.pdo.flagPDOBitmask[i]) == 0 {
+				tpdo.sendRequest = true
+				break
 			}
 		}
 	}
-	// Send PDO by application request or event timer
-	if tpdo.transmissionType >= TransmissionTypeSyncEventLo {
-		if tpdo.inhibitTimer > timeDifferenceUs {
-			tpdo.inhibitTimer -= timeDifferenceUs
-		} else {
-			tpdo.inhibitTimer = 0
-		}
+
+	if isEventDriven {
+		// Send if requested and inhibit time elapsed
 		if tpdo.sendRequest && tpdo.inhibitTimer == 0 {
 			tpdo.mu.Unlock()
-			_ = tpdo.send()
-			tpdo.mu.Lock()
+			return tpdo.send()
 		}
 	} else if tpdo.sync != nil && syncWas {
 
 		// Send synchronous acyclic tpdo
-		if tpdo.transmissionType == TransmissionTypeSyncAcyclic &&
-			tpdo.sendRequest {
+		if isSyncAcyclic && tpdo.sendRequest {
 			tpdo.mu.Unlock()
 			return tpdo.send()
 		}
+
 		// Send synchronous cyclic TPDOs
 		if tpdo.syncCounter == SyncCounterReset {
 			if tpdo.sync.CounterOverflow() != 0 && tpdo.syncStartValue != 0 {
@@ -118,7 +111,6 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 		default:
 			tpdo.syncCounter--
 		}
-
 	}
 	tpdo.mu.Unlock()
 	return nil
@@ -304,4 +296,12 @@ func NewTPDO(
 		"transmission type", tpdo.transmissionType,
 	)
 	return tpdo, nil
+}
+
+// Helper for timer logic to prevent underflow
+func saturatingSub(value uint32, amount uint32) uint32 {
+	if value > amount {
+		return value - amount
+	}
+	return 0
 }
