@@ -244,4 +244,64 @@ func TestTPDO(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		assert.Equal(t, 1, collector.Count(canId))
 	})
+
+	t.Run("send on sync reception with sync start value", func(t *testing.T) {
+
+		// This also requires sync counter overflow to be set
+		err = c.WriteCommunicationPeriod(0)
+		assert.Nil(t, err)
+		err = c.WriteCounterOverflow(3)
+		assert.Nil(t, err)
+		err = c.WriteCommunicationPeriod(10_000)
+		assert.Nil(t, err)
+
+		c.DisablePDO(tpdo1)
+		collector.Clear()
+		err = c.WriteConfigurationPDO(tpdo1,
+			config.PDOConfigurationParameter{
+				CanId:            uint16(canId),
+				TransmissionType: 1, // Sync every cycle
+				SyncStart:        3,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(tpdo1)
+		assert.Nil(t, err)
+
+		time.Sleep(100 * time.Millisecond)
+		collector.Clear()
+
+		// Send SYNC 1
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 1, Data: [8]byte{0}})
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 0, collector.Count(canId))
+
+		// Send SYNC 2
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 1, Data: [8]byte{1}})
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 0, collector.Count(canId))
+
+		// Send SYNC 3 - Should trigger
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 1, Data: [8]byte{3}})
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 1, collector.Count(canId))
+
+		// Send SYNC 4 - Should trigger (as transmission type is 1)
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 1, Data: [8]byte{4}})
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 2, collector.Count(canId))
+
+		// Send SYNC 5 - Should trigger (as transmission type is 1)
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 1, Data: [8]byte{5}})
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 3, collector.Count(canId))
+
+	})
 }

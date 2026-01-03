@@ -128,11 +128,11 @@ func (tpdo *TPDO) configureTransmissionType(entry18xx *od.Entry) error {
 	tpdo.mu.Lock()
 	defer tpdo.mu.Unlock()
 
-	transmissionType, err := entry18xx.Uint8(2)
+	transmissionType, err := entry18xx.Uint8(od.SubPdoTransmissionType)
 	if err != nil {
 		tpdo.pdo.logger.Error("reading failed",
 			"index", fmt.Errorf("x%x", entry18xx.Index),
-			"subindex", 2,
+			"subindex", od.SubPdoTransmissionType,
 			"error", err,
 		)
 		return canopen.ErrOdParameters
@@ -150,11 +150,11 @@ func (tpdo *TPDO) configureCOBID(entry18xx *od.Entry, predefinedIdent uint16, er
 	defer tpdo.mu.Unlock()
 
 	pdo := tpdo.pdo
-	cobId, err := entry18xx.Uint32(1)
+	cobId, err := entry18xx.Uint32(od.SubPdoCobId)
 	if err != nil {
 		tpdo.pdo.logger.Error("reading failed",
 			"index", fmt.Errorf("x%x", entry18xx.Index),
-			"subindex", 1,
+			"subindex", od.SubPdoCobId,
 			"error", err,
 		)
 		return 0, canopen.ErrOdParameters
