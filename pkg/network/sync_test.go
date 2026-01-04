@@ -87,7 +87,7 @@ func TestSyncCounter(t *testing.T) {
 		err = c.ProducerEnableSYNC()
 		assert.Nil(t, err)
 
-		time.Sleep(350 * time.Millisecond) // ~7 frames
+		time.Sleep(350*time.Millisecond + 20*time.Millisecond) // ~7 frames
 
 		frames := collector.GetFrames(0x80)
 		assert.GreaterOrEqual(t, len(frames), 6)
