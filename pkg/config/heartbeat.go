@@ -1,24 +1,35 @@
 package config
 
-import "github.com/samsamfire/gocanopen/pkg/od"
+import (
+	"time"
+
+	"github.com/samsamfire/gocanopen/pkg/od"
+)
+
+type MonitoredNode struct {
+	NodeId         uint8
+	HearbeatPeriod time.Duration
+}
 
 // Read current monitored nodes
 // Returns a list of all the entries composed as the id of the monitored node
 // And the expected heartbeat period in ms
-func (config *NodeConfigurator) ReadMonitoredNodes() ([][]uint16, error) {
+func (config *NodeConfigurator) ReadMonitoredNodes() ([]MonitoredNode, error) {
 	nbMonitored, err := config.ReadMaxMonitorableNodes()
 	if err != nil {
 		return nil, err
 	}
-	monitored := make([][]uint16, 0)
+	monitored := make([]MonitoredNode, 0)
 	for i := range nbMonitored {
 		periodAndId, err := config.client.ReadUint32(config.nodeId, od.EntryConsumerHeartbeatTime, i+1)
 		if err != nil {
-			return monitored, err
+			return nil, err
 		}
-		nodeId := uint16((periodAndId >> 16) & 0xFF)
-		period := uint16(periodAndId)
-		monitored = append(monitored, []uint16{nodeId, period})
+		monitoredNode := MonitoredNode{
+			NodeId:         uint8((periodAndId >> 16) & 0xFF),
+			HearbeatPeriod: time.Duration(uint16(periodAndId)) * time.Millisecond,
+		}
+		monitored = append(monitored, monitoredNode)
 	}
 	return monitored, nil
 }
@@ -34,17 +45,22 @@ func (config *NodeConfigurator) ReadMaxMonitorableNodes() (uint8, error) {
 
 // Add or update a node to monitor with the expected heartbeat period
 // Index needs to be between 1 & the max nodes that can be monitored
-func (config *NodeConfigurator) WriteMonitoredNode(index uint8, nodeId uint8, periodMs uint16) error {
-	periodAndId := uint32(nodeId)<<16 + uint32(periodMs&0xFFFF)
+func (config *NodeConfigurator) WriteMonitoredNode(index uint8, nodeId uint8, period time.Duration) error {
+
+	periodAndId := uint32(nodeId)<<16 + uint32(period.Milliseconds()&0xFFFF)
 	return config.client.WriteRaw(config.nodeId, od.EntryConsumerHeartbeatTime, index, periodAndId, false)
 }
 
-// Read a nodes heartbeat period and returns it in milliseconds
-func (config *NodeConfigurator) ReadHeartbeatPeriod() (uint16, error) {
-	return config.client.ReadUint16(config.nodeId, od.EntryProducerHeartbeatTime, 0)
+// Read a nodes heartbeat period
+func (config *NodeConfigurator) ReadHeartbeatPeriod() (time.Duration, error) {
+	period, err := config.client.ReadUint16(config.nodeId, od.EntryProducerHeartbeatTime, 0)
+	if err != nil {
+		return 0, err
+	}
+	return time.Duration(period) * time.Millisecond, nil
 }
 
-// Update a nodes heartbeat period in milliseconds
-func (config *NodeConfigurator) WriteHeartbeatPeriod(periodMs uint16) error {
-	return config.client.WriteRaw(config.nodeId, od.EntryProducerHeartbeatTime, 0, periodMs, false)
+// Update a nodes heartbeat period
+func (config *NodeConfigurator) WriteHeartbeatPeriod(period time.Duration) error {
+	return config.client.WriteRaw(config.nodeId, od.EntryProducerHeartbeatTime, 0, uint16(period.Milliseconds()), false)
 }

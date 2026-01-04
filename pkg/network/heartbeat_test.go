@@ -76,14 +76,14 @@ func TestHeartbeatEventCallback(t *testing.T) {
 
 	// Make consumer monitor producer
 	configConsumer := consumer.Configurator()
-	err = configConsumer.WriteMonitoredNode(1, 0x22, 100)
+	err = configConsumer.WriteMonitoredNode(1, 0x22, 100*time.Millisecond)
 	assert.Nil(t, err)
 
 	t.Run("heartbeat lost event", func(t *testing.T) {
 		// Start heartbeat
 		eventHandler := EventHandler{}
 		consumer.HBConsumer.OnEvent(eventHandler.OnEvent)
-		err = configProducer.WriteHeartbeatPeriod(20)
+		err = configProducer.WriteHeartbeatPeriod(20 * time.Millisecond)
 		assert.Nil(t, err)
 		time.Sleep(minDelayHeartbeat)
 
@@ -97,7 +97,7 @@ func TestHeartbeatEventCallback(t *testing.T) {
 
 		// Enable / Disable heartbeat multiple times
 		for range 5 {
-			configProducer.WriteHeartbeatPeriod(20)
+			configProducer.WriteHeartbeatPeriod(20 * time.Millisecond)
 			time.Sleep(minDelayHeartbeat)
 			configProducer.WriteHeartbeatPeriod(0)
 			time.Sleep(minDelayHeartbeat)
@@ -108,9 +108,9 @@ func TestHeartbeatEventCallback(t *testing.T) {
 	t.Run("heartbeat reset & started event", func(t *testing.T) {
 		eventHandler := EventHandler{}
 		consumer.HBConsumer.OnEvent(eventHandler.OnEvent)
-		err = configProducer.WriteHeartbeatPeriod(100)
+		err = configProducer.WriteHeartbeatPeriod(100 * time.Millisecond)
 		assert.Nil(t, err)
-		err = configConsumer.WriteMonitoredNode(1, 0x22, 150)
+		err = configConsumer.WriteMonitoredNode(1, 0x22, 150*time.Millisecond)
 		assert.Nil(t, err)
 		time.Sleep(minDelayHeartbeat)
 
@@ -119,7 +119,7 @@ func TestHeartbeatEventCallback(t *testing.T) {
 		assert.Nil(t, err)
 		producer, err = network.CreateLocalNode(0x22, od.Default())
 		assert.Nil(t, err)
-		err = configProducer.WriteHeartbeatPeriod(100)
+		err = configProducer.WriteHeartbeatPeriod(100 * time.Millisecond)
 		assert.Nil(t, err)
 		time.Sleep(minDelayHeartbeat)
 		assert.Equal(t, 1, eventHandler.NbEventBoot())
@@ -127,9 +127,9 @@ func TestHeartbeatEventCallback(t *testing.T) {
 	})
 
 	t.Run("heartbeat nmt changed event", func(t *testing.T) {
-		err := configProducer.WriteHeartbeatPeriod(100)
+		err := configProducer.WriteHeartbeatPeriod(100 * time.Millisecond)
 		assert.Nil(t, err)
-		err = configConsumer.WriteMonitoredNode(1, 0x22, 500)
+		err = configConsumer.WriteMonitoredNode(1, 0x22, 500*time.Millisecond)
 		assert.Nil(t, err)
 		time.Sleep(minDelayHeartbeat)
 		eventHandler := EventHandler{}

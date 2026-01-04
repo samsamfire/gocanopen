@@ -230,7 +230,7 @@ func TestRPDO(t *testing.T) {
 				CanId:            0x255,
 				TransmissionType: pdo.TransmissionTypeSyncEventHi,
 				InhibitTime:      0,
-				EventTimer:       200, // 200ms timeout
+				EventTimer:       200 * time.Millisecond,
 				Mappings: []config.PDOMappingParameter{
 					{Index: 0x2005, Subindex: 0, LengthBits: 8},
 				},
@@ -428,7 +428,7 @@ func TestTPDO(t *testing.T) {
 			config.PDOConfigurationParameter{
 				CanId:            uint16(canId),
 				TransmissionType: pdo.TransmissionTypeSyncEventLo,
-				EventTimer:       500,
+				EventTimer:       500 * time.Millisecond,
 				Mappings: []config.PDOMappingParameter{
 					{Index: 0x2005, Subindex: 0, LengthBits: 8},
 				},
@@ -457,8 +457,8 @@ func TestTPDO(t *testing.T) {
 			config.PDOConfigurationParameter{
 				CanId:            uint16(canId),
 				TransmissionType: pdo.TransmissionTypeSyncEventHi,
-				InhibitTime:      3000,
-				EventTimer:       100,
+				InhibitTime:      300 * time.Millisecond,
+				EventTimer:       100 * time.Millisecond,
 				Mappings: []config.PDOMappingParameter{
 					{Index: 0x2005, Subindex: 0, LengthBits: 8},
 				},

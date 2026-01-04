@@ -104,12 +104,12 @@ func (t *TIME) SetInternalTime(internalTime time.Time) {
 	t.logger.Info("since 01/01/1984|00:00:00", "days", days, "ms", ms)
 }
 
-// Update the producer interval time in milliseconds
-func (t *TIME) SetProducerIntervalMs(producerIntervalMs uint32) {
+// Update the producer interval time
+func (t *TIME) SetProducerInterval(interval time.Duration) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.producerIntervalMs = producerIntervalMs
-	t.producerTimerMs = producerIntervalMs
+	t.producerIntervalMs = uint32(interval.Milliseconds())
+	t.producerTimerMs = t.producerIntervalMs
 }
 
 // Get the internal time

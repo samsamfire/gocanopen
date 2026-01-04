@@ -390,7 +390,7 @@ func TestTimeSynchronization(t *testing.T) {
 
 	// Set master node as time producer with interval 100ms
 	masterNode, _ := network.Local(NodeIdTest)
-	masterNode.TIME.SetProducerIntervalMs(100)
+	masterNode.TIME.SetProducerInterval(100 * time.Millisecond)
 	masterNode.Configurator().ProducerDisableTIME()
 
 	time.Sleep(200 * time.Millisecond)

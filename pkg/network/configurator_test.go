@@ -27,10 +27,10 @@ func TestSyncConfigurator(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Test Sync update counter overflow & possible errors
-	err = conf.WriteCommunicationPeriod(100_100)
+	err = conf.WriteCommunicationPeriod(100_100 * time.Microsecond)
 	assert.Nil(t, err)
 	commPeriod, _ := conf.ReadCommunicationPeriod()
-	assert.EqualValues(t, 100_100, commPeriod)
+	assert.EqualValues(t, 100_000*time.Microsecond, commPeriod)
 	err = conf.WriteCounterOverflow(100)
 	assert.Equal(t, sdo.AbortDataDeviceState, err)
 	err = conf.WriteCommunicationPeriod(0)
@@ -42,10 +42,10 @@ func TestSyncConfigurator(t *testing.T) {
 	counterOverflow, err := conf.ReadCounterOverflow()
 	assert.Nil(t, err, err)
 	assert.EqualValues(t, 10, counterOverflow)
-	err = conf.WriteWindowLengthPdos(110)
+	err = conf.WriteWindowLengthPdos(110 * time.Millisecond)
 	assert.Nil(t, err)
 	windowPdos, _ := conf.ReadWindowLengthPdos()
-	assert.EqualValues(t, 110, windowPdos)
+	assert.EqualValues(t, 110*time.Millisecond, windowPdos)
 }
 
 var TEST_MAPPING = []config.PDOMappingParameter{
@@ -65,10 +65,10 @@ func TestPDOConfiguratorCommon(t *testing.T) {
 
 	t.Run("pdo configurations", func(t *testing.T) {
 		for _, pdoNb := range pdos {
-			err := conf.WriteEventTimer(pdoNb, 1111)
+			err := conf.WriteEventTimer(pdoNb, 1111*time.Millisecond)
 			assert.Nil(t, err)
 			eventTimer, _ := conf.ReadEventTimer(pdoNb)
-			assert.EqualValues(t, 1111, eventTimer)
+			assert.EqualValues(t, 1111*time.Millisecond, eventTimer)
 			err = conf.WriteTransmissionType(pdoNb, 11)
 			assert.Nil(t, err)
 			transType, _ := conf.ReadTransmissionType(pdoNb)
@@ -105,8 +105,8 @@ func TestPDOConfiguratorCommon(t *testing.T) {
 			config := config.PDOConfigurationParameter{
 				CanId:            0x255,
 				TransmissionType: 22,
-				EventTimer:       1400,
-				InhibitTime:      1200,
+				EventTimer:       1400 * time.Millisecond,
+				InhibitTime:      1200 * time.Millisecond,
 				Mappings:         TEST_MAPPING,
 			}
 			err = conf.WriteConfigurationPDO(pdoNb, config)
@@ -136,13 +136,13 @@ func TestPDOConfiguratorNotCommon(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
 	conf := network.Configurator(NodeIdTest)
-	err := conf.WriteInhibitTime(pdo.IndexFirstRpdo, 2222)
+	err := conf.WriteInhibitTime(pdo.IndexFirstRpdo, 2222*time.Millisecond)
 	assert.Nil(t, err)
-	err = conf.WriteInhibitTime(pdo.IndexFirstTpdo, 2222)
+	err = conf.WriteInhibitTime(pdo.IndexFirstTpdo, 2222*time.Millisecond)
 	assert.Nil(t, err)
 	inhibitTime, err := conf.ReadInhibitTime(pdo.IndexFirstTpdo)
 	assert.Nil(t, err)
-	assert.EqualValues(t, 2222, inhibitTime)
+	assert.EqualValues(t, 2222*time.Millisecond, inhibitTime)
 }
 
 var receivedErrorCodes []uint16
@@ -157,10 +157,10 @@ func TestHBConfigurator(t *testing.T) {
 	node, _ := network.Local(NodeIdTest)
 	node.EMCY.SetCallback(emCallback)
 	config := network.Configurator(NodeIdTest)
-	err := config.WriteMonitoredNode(1, 0x25, 100)
+	err := config.WriteMonitoredNode(1, 0x25, 100*time.Millisecond)
 	assert.Nil(t, err)
 	// Test duplicate entry
-	err = config.WriteMonitoredNode(3, 0x25, 100)
+	err = config.WriteMonitoredNode(3, 0x25, 100*time.Millisecond)
 	assert.Equal(t, err, sdo.AbortParamIncompat)
 	_, err = network.CreateLocalNode(0x25, od.Default())
 	assert.Nil(t, err)
@@ -174,11 +174,11 @@ func TestHBConfigurator(t *testing.T) {
 	assert.Len(t, monitoredNodes, 8)
 	// Test hearbeat update / read
 	val, _ := config.ReadHeartbeatPeriod()
-	assert.EqualValues(t, 1000, val)
-	err = config.WriteHeartbeatPeriod(900)
+	assert.EqualValues(t, 1000*time.Millisecond, val)
+	err = config.WriteHeartbeatPeriod(900 * time.Millisecond)
 	assert.Nil(t, err)
 	val, _ = config.ReadHeartbeatPeriod()
-	assert.EqualValues(t, val, 900)
+	assert.EqualValues(t, val, 900*time.Millisecond)
 }
 
 func TestTimeConfigurator(t *testing.T) {

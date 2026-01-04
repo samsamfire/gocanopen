@@ -124,8 +124,11 @@ func TestNmt(t *testing.T) {
 		assert.Nil(t, err)
 		defer net2.RemoveNode(NodeIdTest + 1)
 		configConsumer := consumer.Configurator()
-		err = configConsumer.WriteMonitoredNode(1, NodeIdTest, 1000)
+
+		err = configConsumer.WriteMonitoredNode(1, NodeIdTest, 1000*time.Millisecond)
 		assert.Nil(t, err)
+
+		time.Sleep(200 * time.Millisecond)
 
 		eventHandler := EventHandler{}
 		consumer.HBConsumer.OnEvent(eventHandler.OnEvent)
