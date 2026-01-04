@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"time"
 
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/pdo"
@@ -18,8 +19,8 @@ type PDOMappingParameter struct {
 type PDOConfigurationParameter struct {
 	CanId            uint16
 	TransmissionType uint8
-	InhibitTime      uint16
-	EventTimer       uint16
+	InhibitTime      time.Duration
+	EventTimer       time.Duration
 	SyncStart        uint8
 	Mappings         []PDOMappingParameter
 }
@@ -64,14 +65,22 @@ func (config *NodeConfigurator) ReadTransmissionType(pdoNb uint16) (uint8, error
 	return config.client.ReadUint8(config.nodeId, pdoCommIndex, od.SubPdoTransmissionType)
 }
 
-func (config *NodeConfigurator) ReadInhibitTime(pdoNb uint16) (uint16, error) {
+func (config *NodeConfigurator) ReadInhibitTime(pdoNb uint16) (time.Duration, error) {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
-	return config.client.ReadUint16(config.nodeId, pdoCommIndex, od.SubPdoInhibitTime)
+	period, err := config.client.ReadUint16(config.nodeId, pdoCommIndex, od.SubPdoInhibitTime)
+	if err != nil {
+		return 0, err
+	}
+	return time.Duration(period) * time.Microsecond * 100, nil
 }
 
-func (config *NodeConfigurator) ReadEventTimer(pdoNb uint16) (uint16, error) {
+func (config *NodeConfigurator) ReadEventTimer(pdoNb uint16) (time.Duration, error) {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
-	return config.client.ReadUint16(config.nodeId, pdoCommIndex, od.SubPdoEventTimer)
+	period, err := config.client.ReadUint16(config.nodeId, pdoCommIndex, od.SubPdoEventTimer)
+	if err != nil {
+		return 0, err
+	}
+	return time.Duration(period) * time.Millisecond, nil
 }
 
 func (config *NodeConfigurator) ReadSyncStart(pdoNb uint16) (uint8, error) {
@@ -228,14 +237,14 @@ func (config *NodeConfigurator) WriteTransmissionType(pdoNb uint16, transType ui
 	return config.client.WriteRaw(config.nodeId, pdoCommIndex, od.SubPdoTransmissionType, transType, false)
 }
 
-func (config *NodeConfigurator) WriteInhibitTime(pdoNb uint16, inhibitTime uint16) error {
+func (config *NodeConfigurator) WriteInhibitTime(pdoNb uint16, inhibitTime time.Duration) error {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
-	return config.client.WriteRaw(config.nodeId, pdoCommIndex, od.SubPdoInhibitTime, inhibitTime, false)
+	return config.client.WriteRaw(config.nodeId, pdoCommIndex, od.SubPdoInhibitTime, uint16(inhibitTime.Microseconds()/100), false)
 }
 
-func (config *NodeConfigurator) WriteEventTimer(pdoNb uint16, eventTimer uint16) error {
+func (config *NodeConfigurator) WriteEventTimer(pdoNb uint16, eventTimer time.Duration) error {
 	pdoCommIndex := config.getCommunicationIndex(pdoNb)
-	return config.client.WriteRaw(config.nodeId, pdoCommIndex, od.SubPdoEventTimer, eventTimer, false)
+	return config.client.WriteRaw(config.nodeId, pdoCommIndex, od.SubPdoEventTimer, uint16(eventTimer.Milliseconds()), false)
 }
 
 func (config *NodeConfigurator) WriteSyncStart(pdoNb uint16, syncStart uint8) error {
