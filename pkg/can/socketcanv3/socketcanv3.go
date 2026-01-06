@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"os"
 	"sync"
 	"unsafe"
 
@@ -32,7 +31,6 @@ type CANframe struct {
 }
 
 type Bus struct {
-	f          *os.File
 	fd         int
 	rxCallback canopen.FrameListener
 	cancel     context.CancelFunc
@@ -92,7 +90,6 @@ func NewBus(channel string) (canopen.Bus, error) {
 func (b *Bus) Connect(...any) error {
 	var ctx context.Context
 	ctx, b.cancel = context.WithCancel(context.Background())
-	b.f = os.NewFile(uintptr(b.fd), fmt.Sprintf("fd %d", b.fd))
 	b.wg.Add(1)
 	go func() {
 		defer b.wg.Done()
@@ -108,7 +105,7 @@ func (b *Bus) Disconnect() error {
 	}
 	b.cancel()
 	b.wg.Wait()
-	b.f.Close()
+	//b.f.Close()
 	return nil
 }
 
@@ -121,22 +118,24 @@ func (b *Bus) Send(frame canopen.Frame) error {
 	canFrame.data = frame.Data
 
 	rawData := (*(*[16]byte)(unsafe.Pointer(canFrame)))[:]
-	n, err := b.f.Write(rawData)
+	n, err := unix.Write(b.fd, rawData)
 	if n != 16 || err != nil {
 		return err
 	}
 	return nil
 }
-
-// process incoming frames. This is meant to be run inside of a goroutine
 func (b *Bus) processIncoming(ctx context.Context) {
+
+	if err := unix.SetNonblock(b.fd, false); err != nil {
+		b.logger.Error("failed to set blocking mode", "err", err)
+		return
+	}
 
 	canopenFrame := canopen.Frame{}
 	frames := make([]CANFrame, msgBatchSize)
 	iovecs := make([]unix.Iovec, msgBatchSize)
 	mmsgs := make([]Mmsghdr, msgBatchSize)
 
-	// Create I/O vectors and message headers for recvmmsg
 	for i := range msgBatchSize {
 		iovecs[i].Base = (*byte)(unsafe.Pointer(&frames[i]))
 		iovecs[i].SetLen(canFrameSize)
@@ -150,33 +149,33 @@ func (b *Bus) processIncoming(ctx context.Context) {
 			b.logger.Info("exiting CAN bus reception, closed")
 			return
 		default:
+
+			ts := unix.Timespec{
+				Nsec: 10_000_000, // 10ms
+			}
+
 			n, _, errno := unix.Syscall6(
 				unix.SYS_RECVMMSG,
 				uintptr(b.fd),
 				uintptr(unsafe.Pointer(&mmsgs[0])),
 				uintptr(msgBatchSize),
-				0,
-				uintptr(unsafe.Pointer(&defaultTimeSpec)),
+				0, // Flags: 0 means "Wait for full batch or timeout"
+				uintptr(unsafe.Pointer(&ts)),
 				0,
 			)
 
 			if errno != 0 {
-				// If errno is EAGAIN or EWOULDBLOCK, no messages were available.
-				// This is expected in non-blocking mode. We wait and continue.
-				if errno == unix.EAGAIN || errno == unix.EWOULDBLOCK {
+				if errno == unix.EAGAIN || errno == unix.EWOULDBLOCK || errno == unix.EINTR {
 					continue
 				}
-				if errno == unix.EINTR {
-					continue
-				}
-				b.logger.Error("exiting CAN bus reception, syscall error", "err", os.NewSyscallError("recvmmsg", errno))
+				b.logger.Error("syscall error", "err", errno)
 				return
 			}
 
 			nbMsg := int(n)
 			if nbMsg == 0 {
-				b.logger.Info("exiting CAN bus reception, socket closed by peer")
-				break
+				b.logger.Info("socket closed")
+				return
 			}
 
 			for i := range nbMsg {
