@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/internal/crc"
@@ -42,7 +43,7 @@ type SDOClient struct {
 	sizeIndicated              uint32
 	sizeTransferred            uint32
 	state                      internalState
-	processingPeriodUs         int
+	processingPeriod           time.Duration
 	fifo                       *fifo.Fifo
 	rxNew                      bool
 	response                   SDOMessage
@@ -1216,7 +1217,7 @@ func NewSDOClient(
 	c.SetTimeout(DefaultClientTimeout)
 	c.SetTimeoutBlockTransfer(DefaultClientTimeout)
 	c.SetBlockMaxSize(BlockMaxSize)
-	c.SetProcessingPeriod(DefaultClientProcessPeriodUs)
+	c.SetProcessingPeriod(DefaultClientProcessPeriod)
 	rw := &sdoRawReadWriter{
 		client: c,
 	}
@@ -1269,8 +1270,8 @@ func (c *SDOClient) SetTimeoutBlockTransfer(timeoutMs uint32) {
 // Set the processing period for SDO client
 // lower number can increase transfer speeds at the cost
 // of more CPU usage
-func (c *SDOClient) SetProcessingPeriod(periodUs int) {
-	c.processingPeriodUs = periodUs
+func (c *SDOClient) SetProcessingPeriod(period time.Duration) {
+	c.processingPeriod = period
 }
 
 // Set maximum block size to use during block transfers

@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/samsamfire/gocanopen/internal/crc"
 	"github.com/samsamfire/gocanopen/pkg/od"
@@ -15,9 +16,9 @@ var ErrInvalidArgs = errors.New("error in arguments")
 type internalState uint8
 
 const (
-	DefaultClientTimeout         = 1_000
-	DefaultClientProcessPeriodUs = 10_000
-	DefaultClientBufferSize      = 1_000
+	DefaultClientTimeout       = 1_000
+	DefaultClientProcessPeriod = 10 * time.Microsecond
+	DefaultClientBufferSize    = 1_000
 
 	DefaultServerTimeout          = 1_000
 	ClientProtocolSwitchThreshold = 21
