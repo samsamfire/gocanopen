@@ -77,7 +77,7 @@ func (rw *sdoRawReadWriter) Read(b []byte) (n int, err error) {
 		if n >= len(b) {
 			return n, err
 		}
-		time.Sleep(time.Duration(client.processingPeriod) * time.Microsecond)
+		time.Sleep(client.processingPeriod)
 	}
 }
 
@@ -141,7 +141,7 @@ func (rw *sdoRawReadWriter) Write(b []byte) (n int, err error) {
 		case ret == success:
 			return int(nUint32), err
 		}
-		time.Sleep(time.Duration(client.processingPeriod) * time.Microsecond)
+		time.Sleep(client.processingPeriod)
 	}
 }
 

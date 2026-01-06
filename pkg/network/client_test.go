@@ -3,6 +3,7 @@ package network
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/stretchr/testify/assert"
@@ -90,7 +91,7 @@ func TestClientBlock(t *testing.T) {
 
 	t.Run("big block", func(t *testing.T) {
 		data := make([]byte, 10_000)
-		network2.SetProcessingPeriod(100)
+		network2.SetProcessingPeriod(100 * time.Microsecond)
 		w, err := network2.NewRawWriter(NodeIdTest, 0x3333, 0, true, 10_000)
 
 		assert.Nil(t, err)

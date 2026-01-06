@@ -17,7 +17,7 @@ type internalState uint8
 
 const (
 	DefaultClientTimeout       = 1_000
-	DefaultClientProcessPeriod = 10 * time.Microsecond
+	DefaultClientProcessPeriod = 10 * time.Millisecond
 	DefaultClientBufferSize    = 1_000
 
 	DefaultServerTimeout          = 1_000
