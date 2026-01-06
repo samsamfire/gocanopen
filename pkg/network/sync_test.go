@@ -32,8 +32,7 @@ func TestSyncProducer(t *testing.T) {
 	defer rxCancel()
 
 	t.Run("enable sync producer", func(t *testing.T) {
-		// Set period to 100ms (100000 us)
-		err = c.WriteCommunicationPeriod(100000)
+		err = c.WriteCommunicationPeriod(100 * time.Millisecond)
 		assert.Nil(t, err)
 
 		err = c.ProducerEnableSYNC()
@@ -81,8 +80,7 @@ func TestSyncCounter(t *testing.T) {
 		// Set Counter Overflow to 5
 		err = c.WriteCounterOverflow(5)
 		assert.Nil(t, err)
-		// Set period 50ms
-		err = c.WriteCommunicationPeriod(50_000)
+		err = c.WriteCommunicationPeriod(50 * time.Millisecond)
 
 		err = c.ProducerEnableSYNC()
 		assert.Nil(t, err)

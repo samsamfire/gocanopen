@@ -19,7 +19,7 @@ func (config *NodeConfigurator) ReadCommunicationPeriod() (time.Duration, error)
 	if err != nil {
 		return 0, err
 	}
-	return time.Duration(period) * time.Millisecond, nil
+	return time.Duration(period) * time.Microsecond, nil
 }
 
 func (config *NodeConfigurator) ReadWindowLengthPdos() (time.Duration, error) {
@@ -27,7 +27,7 @@ func (config *NodeConfigurator) ReadWindowLengthPdos() (time.Duration, error) {
 	if err != nil {
 		return 0, err
 	}
-	return time.Duration(period) * time.Millisecond, nil
+	return time.Duration(period) * time.Microsecond, nil
 }
 
 func (config *NodeConfigurator) ProducerEnableSYNC() error {
@@ -62,9 +62,9 @@ func (config *NodeConfigurator) WriteCounterOverflow(counter uint8) error {
 }
 
 func (config *NodeConfigurator) WriteCommunicationPeriod(period time.Duration) error {
-	return config.client.WriteRaw(config.nodeId, od.EntryCommunicationCyclePeriod, 0, uint32(period.Milliseconds()), false)
+	return config.client.WriteRaw(config.nodeId, od.EntryCommunicationCyclePeriod, 0, uint32(period.Microseconds()), false)
 }
 
 func (config *NodeConfigurator) WriteWindowLengthPdos(period time.Duration) error {
-	return config.client.WriteRaw(config.nodeId, od.EntrySynchronousWindowLength, 0, uint32(period.Milliseconds()), false)
+	return config.client.WriteRaw(config.nodeId, od.EntrySynchronousWindowLength, 0, uint32(period.Microseconds()), false)
 }

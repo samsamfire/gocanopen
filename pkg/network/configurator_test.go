@@ -30,7 +30,7 @@ func TestSyncConfigurator(t *testing.T) {
 	err = conf.WriteCommunicationPeriod(100_100 * time.Microsecond)
 	assert.Nil(t, err)
 	commPeriod, _ := conf.ReadCommunicationPeriod()
-	assert.EqualValues(t, 100_000*time.Microsecond, commPeriod)
+	assert.EqualValues(t, 100_100*time.Microsecond, commPeriod)
 	err = conf.WriteCounterOverflow(100)
 	assert.Equal(t, sdo.AbortDataDeviceState, err)
 	err = conf.WriteCommunicationPeriod(0)
