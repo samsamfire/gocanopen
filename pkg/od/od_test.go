@@ -67,7 +67,7 @@ func TestReadWriteDisabled(t *testing.T) {
 	od := Default()
 	entry := od.Index(0x2001)
 	assert.NotNil(t, entry)
-	extension := extension{object: nil, read: ReadEntryDisabled, write: WriteEntryDisabled, flagsPDO: [32]uint8{0}}
+	extension := extension{object: nil, read: ReadEntryDisabled, write: WriteEntryDisabled}
 	entry.extension = &extension
 	streamer, err := NewStreamer(entry, 0, false)
 	assert.Nil(t, err)

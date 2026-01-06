@@ -41,10 +41,9 @@ type StreamWriter func(stream *Stream, buff []byte) (uint16, error)
 // extension object, is used for extending functionnality of an OD entry
 // This package has some pre-made extensions for CiA defined entries
 type extension struct {
-	object   any          // Any object to link with extension
-	read     StreamReader // A [StreamReader] that will be called when reading entry
-	write    StreamWriter // A [StreamWriter] that will be called when writing to entry
-	flagsPDO [FlagsPdoSize]uint8
+	object any          // Any object to link with extension
+	read   StreamReader // A [StreamReader] that will be called when reading entry
+	write  StreamWriter // A [StreamWriter] that will be called when writing to entry
 }
 
 // Streamer is created before accessing an OD entry

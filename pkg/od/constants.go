@@ -115,7 +115,6 @@ func (odr ODR) Error() string {
 
 const (
 	MaxMappedEntriesPdo = uint8(8)
-	FlagsPdoSize        = uint8(32)
 )
 
 // Object dictionary object attribute

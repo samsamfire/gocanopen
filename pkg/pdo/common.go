@@ -29,18 +29,16 @@ const (
 
 // Common to TPDO & RPDO
 type PDOCommon struct {
-	od             *od.ObjectDictionary
-	logger         *slog.Logger
-	emcy           *emergency.EMCY
-	streamers      [od.MaxMappedEntriesPdo]od.Streamer
-	Valid          bool
-	dataLength     uint32
-	nbMapped       uint8
-	flagPDOByte    [od.FlagsPdoSize]*byte
-	flagPDOBitmask [od.FlagsPdoSize]byte
-	IsRPDO         bool
-	predefinedId   uint16
-	configuredId   uint16
+	od           *od.ObjectDictionary
+	logger       *slog.Logger
+	emcy         *emergency.EMCY
+	streamers    [od.MaxMappedEntriesPdo]od.Streamer
+	Valid        bool
+	dataLength   uint32
+	nbMapped     uint8
+	IsRPDO       bool
+	predefinedId uint16
+	configuredId uint16
 }
 
 func (base *PDOCommon) attribute() uint8 {
@@ -82,7 +80,6 @@ func (pdo *PDOCommon) configureMap(mapParam uint32, mapIndex uint32, isRPDO bool
 		return nil
 	}
 	// Get entry in OD
-	entry := pdo.od.Index(index)
 	streamerCopy, err := pdo.od.Streamer(index, subIndex, false)
 	if err != nil {
 		pdo.logger.Warn("mapping failed",
@@ -122,12 +119,6 @@ func (pdo *PDOCommon) configureMap(mapParam uint32, mapIndex uint32, isRPDO bool
 
 	if isRPDO {
 		return nil
-	}
-	if uint32(subIndex) < (uint32(od.FlagsPdoSize)*8) && entry.Extension() != nil {
-		pdo.flagPDOByte[mapIndex] = entry.FlagPDOByte(subIndex)
-		pdo.flagPDOBitmask[mapIndex] = 1 << (subIndex & 0x07)
-	} else {
-		pdo.flagPDOByte[mapIndex] = nil
 	}
 	pdo.logger.Info("update mapping successful",
 		"index", fmt.Sprintf("x%x", index),

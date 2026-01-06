@@ -58,17 +58,6 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 	isEventDriven := tpdo.transmissionType >= TransmissionTypeSyncEventLo
 	isSyncAcyclic := tpdo.transmissionType == TransmissionTypeSyncAcyclic
 
-	if (isSyncAcyclic || isEventDriven) && !tpdo.sendRequest {
-		// Check for app TPDO send requests
-		for i := range tpdo.pdo.nbMapped {
-			flagPtr := tpdo.pdo.flagPDOByte[i]
-			if flagPtr != nil && (*flagPtr&tpdo.pdo.flagPDOBitmask[i]) == 0 {
-				tpdo.sendRequest = true
-				break
-			}
-		}
-	}
-
 	if isEventDriven {
 		// Send if requested and inhibit time elapsed
 		if tpdo.sendRequest && tpdo.inhibitTimer == 0 {
@@ -184,8 +173,6 @@ func (tpdo *TPDO) send() error {
 	defer tpdo.mu.Unlock()
 
 	pdo := tpdo.pdo
-	eventDriven := tpdo.transmissionType == TransmissionTypeSyncAcyclic || tpdo.transmissionType >= uint8(TransmissionTypeSyncEventLo)
-
 	totalNbRead := 0
 	var err error
 
@@ -199,17 +186,20 @@ func (tpdo *TPDO) send() error {
 			return err
 		}
 		streamer.DataOffset = mappedLength
-		// Add to tpdo frame only up to mapped length
-		flagPDOByte := pdo.flagPDOByte[i]
-		if flagPDOByte != nil && eventDriven {
-			*flagPDOByte |= pdo.flagPDOBitmask[i]
-		}
 		totalNbRead += int(mappedLength)
 	}
 	tpdo.sendRequest = false
 	tpdo.eventTimer = tpdo.eventTimeUs
 	tpdo.inhibitTimer = tpdo.inhibitTimeUs
 	return tpdo.Send(tpdo.txBuffer)
+}
+
+// Send TPDO asynchronously, next time it is processed
+// This only works for event driven TPDOs
+func (tpdo *TPDO) SendAsync() {
+	tpdo.mu.Lock()
+	defer tpdo.mu.Unlock()
+	tpdo.sendRequest = true
 }
 
 // Create a new TPDO

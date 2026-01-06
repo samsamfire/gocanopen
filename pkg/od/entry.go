@@ -162,10 +162,6 @@ func (entry *Entry) Extension() *extension {
 	return entry.extension
 }
 
-func (entry *Entry) FlagPDOByte(subIndex byte) *uint8 {
-	return &entry.extension.flagsPDO[subIndex>>3]
-}
-
 // Uint8 reads data inside of OD as if it were and UNSIGNED8.
 // It returns an error if length is incorrect or read failed.
 func (entry *Entry) Uint8(subIndex uint8) (uint8, error) {
