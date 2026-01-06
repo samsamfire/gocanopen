@@ -11,5 +11,4 @@ import "golang.org/x/sys/unix"
 type Mmsghdr struct {
 	Hdr unix.Msghdr
 	Len uint32
-	pad [4]byte
 }
