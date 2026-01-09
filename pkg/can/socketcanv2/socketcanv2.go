@@ -1,3 +1,5 @@
+//go:build linux
+
 package socketcanv2
 
 import (
