@@ -4,8 +4,6 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
-
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -38,7 +36,7 @@ type BusManager struct {
 // [listener.Handle] should not be blocking !
 func (bm *BusManager) Handle(frame Frame) {
 
-	canId := frame.ID & unix.CAN_SFF_MASK
+	canId := frame.ID & MaxCanId
 	if canId >= LookupArraySize {
 		return
 	}
