@@ -34,23 +34,6 @@ func NewNodeProcessor(n Node, logger *slog.Logger, processingPeriod time.Duratio
 	}
 }
 
-// background processing for [SYNC],[TPDO],[RPDO] services
-func (c *NodeProcessor) background(ctx context.Context) {
-
-	ticker := time.NewTicker(c.period)
-	//periodUs := uint32(c.period.Microseconds())
-	c.logger.Info("starting node background process")
-	for {
-		select {
-		case <-ctx.Done():
-			c.logger.Info("exited node background process")
-			ticker.Stop()
-			return
-		case <-ticker.C:
-		}
-	}
-}
-
 // Main node processing
 func (c *NodeProcessor) main(ctx context.Context) {
 
@@ -101,12 +84,6 @@ func (c *NodeProcessor) Start(ctx context.Context) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 	c.cancel = cancel
-
-	c.wg.Add(1)
-	go func() {
-		defer c.wg.Done()
-		c.background(ctx)
-	}()
 
 	c.wg.Add(1)
 	go func() {
