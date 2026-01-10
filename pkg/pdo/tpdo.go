@@ -30,6 +30,53 @@ type TPDO struct {
 	eventTimeUs      uint32
 	inhibitTimer     uint32
 	eventTimer       uint32
+	syncCh           chan uint8
+}
+
+func (tpdo *TPDO) syncHandler() {
+	for range tpdo.syncCh {
+		tpdo.mu.Lock()
+		isSyncAcyclic := tpdo.transmissionType == TransmissionTypeSyncAcyclic
+
+		// Send synchronous acyclic tpdo
+		if isSyncAcyclic && tpdo.sendRequest {
+			tpdo.mu.Unlock()
+			_ = tpdo.send()
+			continue
+		}
+
+		// Send synchronous cyclic TPDOs
+		if tpdo.syncCounter == SyncCounterReset {
+			if tpdo.sync.CounterOverflow() != 0 && tpdo.syncStartValue != 0 {
+				tpdo.syncCounter = SyncCounterWaitForStart
+			} else {
+				tpdo.syncCounter = tpdo.transmissionType
+			}
+		}
+
+		// If sync start value is used , start first TPDO
+		// after sync with matched syncstartvalue
+		switch tpdo.syncCounter {
+
+		case SyncCounterWaitForStart:
+			if tpdo.sync.Counter() == tpdo.syncStartValue {
+				tpdo.syncCounter = tpdo.transmissionType
+				tpdo.mu.Unlock()
+				_ = tpdo.send()
+				continue
+			}
+
+		case 1:
+			tpdo.syncCounter = tpdo.transmissionType
+			tpdo.mu.Unlock()
+			_ = tpdo.send()
+			continue
+
+		default:
+			tpdo.syncCounter--
+		}
+		tpdo.mu.Unlock()
+	}
 }
 
 // Process [TPDO] state machine and TX CAN frames
@@ -56,49 +103,12 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 	tpdo.inhibitTimer = saturatingSub(tpdo.inhibitTimer, timeDifferenceUs)
 
 	isEventDriven := tpdo.transmissionType >= TransmissionTypeSyncEventLo
-	isSyncAcyclic := tpdo.transmissionType == TransmissionTypeSyncAcyclic
 
 	if isEventDriven {
 		// Send if requested and inhibit time elapsed
 		if tpdo.sendRequest && tpdo.inhibitTimer == 0 {
 			tpdo.mu.Unlock()
 			return tpdo.send()
-		}
-	} else if tpdo.sync != nil && syncWas {
-
-		// Send synchronous acyclic tpdo
-		if isSyncAcyclic && tpdo.sendRequest {
-			tpdo.mu.Unlock()
-			return tpdo.send()
-		}
-
-		// Send synchronous cyclic TPDOs
-		if tpdo.syncCounter == SyncCounterReset {
-			if tpdo.sync.CounterOverflow() != 0 && tpdo.syncStartValue != 0 {
-				tpdo.syncCounter = SyncCounterWaitForStart
-			} else {
-				tpdo.syncCounter = tpdo.transmissionType
-			}
-		}
-
-		// If sync start value is used , start first TPDO
-		// after sync with matched syncstartvalue
-		switch tpdo.syncCounter {
-
-		case SyncCounterWaitForStart:
-			if tpdo.sync.Counter() == tpdo.syncStartValue {
-				tpdo.syncCounter = tpdo.transmissionType
-				tpdo.mu.Unlock()
-				return tpdo.send()
-			}
-
-		case 1:
-			tpdo.syncCounter = tpdo.transmissionType
-			tpdo.mu.Unlock()
-			return tpdo.send()
-
-		default:
-			tpdo.syncCounter--
 		}
 	}
 	tpdo.mu.Unlock()
@@ -285,6 +295,10 @@ func NewTPDO(
 		"event time", eventTime,
 		"transmission type", tpdo.transmissionType,
 	)
+	if tpdo.transmissionType < TransmissionTypeSyncEventLo && tpdo.sync != nil {
+		tpdo.syncCh = tpdo.sync.Subscribe()
+		go tpdo.syncHandler()
+	}
 	return tpdo, nil
 }
 
