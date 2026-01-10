@@ -73,12 +73,6 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	// Reset timeout timer, if enabled
 	if rpdo.timeoutTimeUs > 0 {
 		if rpdo.timer != nil {
-			if !rpdo.timer.Stop() {
-				select {
-				case <-rpdo.timer.C:
-				default:
-				}
-			}
 			rpdo.timer.Reset(time.Duration(rpdo.timeoutTimeUs) * time.Microsecond)
 		} else {
 			rpdo.timer = time.AfterFunc(time.Duration(rpdo.timeoutTimeUs)*time.Microsecond, rpdo.onTimeoutHandler)
