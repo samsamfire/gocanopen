@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	s "sync"
+	"sync/atomic"
 	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
@@ -31,8 +32,8 @@ type RPDO struct {
 	synchronous   bool
 	timeoutRx     time.Duration
 	timer         *time.Timer
-	inTimeout     bool
-	isOperational bool
+	inTimeout     atomic.Bool
+	isOperational atomic.Bool
 	rxCancel      func()
 	syncCh        chan uint8
 }
@@ -43,7 +44,7 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	defer rpdo.mu.Unlock()
 
 	// Don't process any further if PDO is not valid or NMT operational
-	if !rpdo.pdo.Valid || !rpdo.isOperational {
+	if !rpdo.pdo.Valid || !rpdo.isOperational.Load() {
 		return
 	}
 
@@ -70,7 +71,7 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 		}
 	}
 
-	// Reset timeout timer, if enabled
+	// Reset timeout timer, if enabled i.e. non zero
 	if rpdo.timeoutRx > 0 {
 		if rpdo.timer != nil {
 			rpdo.timer.Reset(rpdo.timeoutRx)
@@ -80,9 +81,9 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	}
 
 	// Reset timeout error if it happened
-	if rpdo.inTimeout {
+	if rpdo.inTimeout.Load() {
 		rpdo.pdo.emcy.ErrorReset(emergency.EmRPDOTimeOut, uint32(rpdo.timeoutRx.Microseconds()))
-		rpdo.inTimeout = false
+		rpdo.inTimeout.Store(false)
 	}
 
 	// For synchronous RPDOs, data is stored in an intermediate buffer, and
@@ -100,27 +101,24 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 
 // Callback on timeout event
 func (rpdo *RPDO) onTimeoutHandler() {
-	rpdo.mu.Lock()
-	defer rpdo.mu.Unlock()
-
-	if !rpdo.isOperational {
+	if !rpdo.isOperational.Load() {
 		return
 	}
 	rpdo.pdo.logger.Warn("timeout", "timoeut", rpdo.timeoutRx)
-	rpdo.inTimeout = true
+	rpdo.inTimeout.Store(true)
 	rpdo.pdo.emcy.ErrorReport(emergency.EmRPDOTimeOut, emergency.ErrRpdoTimeout, uint32(rpdo.timeoutRx.Microseconds()))
 }
 
 func (rpdo *RPDO) SetOperational(operational bool) {
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
-	rpdo.isOperational = operational
+	rpdo.isOperational.Store(operational)
 	if !operational {
 		if rpdo.timer != nil {
 			rpdo.timer.Stop()
 		}
 		rpdo.rxNew = false
-		rpdo.inTimeout = false
+		rpdo.inTimeout.Store(false)
 	}
 }
 
