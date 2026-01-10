@@ -195,6 +195,7 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		if tpdo.isOperational {
 			tpdo.restartEventTimer()
 		}
+		tpdo.pdo.logger.Debug("updated transmission type", "transType", tpdo.transmissionType)
 
 	case od.SubPdoInhibitTime:
 		if pdo.Valid {
@@ -209,15 +210,15 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		return 0, od.ErrSubNotExist
 
 	case od.SubPdoEventTimer:
-		eventTime := binary.LittleEndian.Uint16(data)
-		tpdo.timeEvent = time.Duration(eventTime) * 1000 * time.Microsecond
+		eventTimer := binary.LittleEndian.Uint16(data)
+		tpdo.timeEvent = time.Duration(eventTimer) * 1000 * time.Microsecond
 		if tpdo.timerEvent != nil {
 			tpdo.timerEvent.Stop()
 		}
 		if tpdo.isOperational {
 			tpdo.restartEventTimer()
 		}
-		tpdo.pdo.logger.Debug("updated event timer", "eventTime", tpdo.timeEvent)
+		tpdo.pdo.logger.Debug("updated event time", "eventTimer", tpdo.timeEvent)
 
 	case od.SubPdoSyncStart:
 		syncStart := data[0]
@@ -225,6 +226,7 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 			return 0, od.ErrInvalidValue
 		}
 		tpdo.syncStartValue = syncStart
+		tpdo.pdo.logger.Debug("updated sync start timer", "syncStart", syncStart)
 
 	}
 	return od.WriteEntryDefault(stream, dataCopy)
