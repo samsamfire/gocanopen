@@ -17,7 +17,7 @@ const (
 )
 
 type RPDO struct {
-	*canopen.BusManager
+	bm            *canopen.BusManager
 	mu            s.Mutex
 	pdo           *PDOCommon
 	rxData        [MaxPdoLength]byte
@@ -196,7 +196,7 @@ func (rpdo *RPDO) configureCOBID(entry14xx *od.Entry, predefinedIdent uint32, er
 	if canId != 0 && canId == (predefinedIdent&0xFF80) {
 		canId = predefinedIdent
 	}
-	rxCancel, err := rpdo.Subscribe(canId, 0x7FF, false, rpdo)
+	rxCancel, err := rpdo.bm.Subscribe(canId, 0x7FF, false, rpdo)
 	rpdo.rxCancel = rxCancel
 	if err != nil {
 		return 0, err
@@ -218,7 +218,7 @@ func NewRPDO(
 	if odict == nil || entry14xx == nil || entry16xx == nil || bm == nil || emcy == nil {
 		return nil, canopen.ErrIllegalArgument
 	}
-	rpdo := &RPDO{BusManager: bm}
+	rpdo := &RPDO{bm: bm}
 	// Configure mapping parameters
 	erroneousMap := uint32(0)
 	pdo, err := NewPDO(odict, logger, entry16xx, true, emcy, &erroneousMap)
