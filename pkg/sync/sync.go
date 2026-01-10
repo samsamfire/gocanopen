@@ -17,7 +17,7 @@ const (
 )
 
 type SYNC struct {
-	*canopen.BusManager
+	bm                  *canopen.BusManager
 	logger              *slog.Logger
 	mu                  s.Mutex
 	subMu               s.Mutex
@@ -39,9 +39,9 @@ type SYNC struct {
 	rxCancel            func()
 }
 
-// SubscribeSync returns a channel that receives the sync counter
+// Subscribe returns a channel that receives the sync counter
 // on every valid SYNC message
-func (sync *SYNC) SubscribeSync() chan uint8 {
+func (sync *SYNC) Subscribe() chan uint8 {
 	sync.subMu.Lock()
 	defer sync.subMu.Unlock()
 	ch := make(chan uint8, 1)
@@ -50,7 +50,7 @@ func (sync *SYNC) SubscribeSync() chan uint8 {
 }
 
 // UnsubscribeSync removes the subscriber channel and closes it
-func (sync *SYNC) UnsubscribeSync(ch chan uint8) {
+func (sync *SYNC) Unsubscribe(ch chan uint8) {
 	sync.subMu.Lock()
 	defer sync.subMu.Unlock()
 	for i, sub := range sync.subscribers {
@@ -193,7 +193,7 @@ func (sync *SYNC) send() {
 	sync.mu.Unlock()
 	// When listening to own messages, this will trigger Handle to be called
 	// So make sure sync is unlocked before sending
-	_ = sync.Send(sync.txBuffer)
+	_ = sync.bm.Send(sync.txBuffer)
 }
 
 func (sync *SYNC) Counter() uint8 {
@@ -231,7 +231,7 @@ func NewSYNC(
 		logger = slog.Default()
 	}
 
-	sync := &SYNC{BusManager: bm, logger: logger.With("service", "[SYNC]")}
+	sync := &SYNC{bm: bm, logger: logger.With("service", "[SYNC]")}
 	if entry1005 == nil {
 		return nil, canopen.ErrIllegalArgument
 	}
@@ -301,7 +301,7 @@ func NewSYNC(
 	sync.isProducer = (cobIdSync & 0x40000000) != 0
 	sync.cobId = cobIdSync & 0x7FF
 
-	rxCancel, err := sync.Subscribe(sync.cobId, 0x7FF, false, sync)
+	rxCancel, err := sync.bm.Subscribe(sync.cobId, 0x7FF, false, sync)
 	sync.rxCancel = rxCancel
 	if err != nil {
 		return nil, err
