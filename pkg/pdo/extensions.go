@@ -121,11 +121,11 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 
 	case od.SubPdoEventTimer:
 		eventTimer := binary.LittleEndian.Uint16(data)
-		rpdo.timeoutRx = time.Duration(eventTimer*1000) * time.Microsecond
+		rpdo.timeoutRx = time.Duration(eventTimer) * time.Millisecond
 		if rpdo.timer != nil {
 			rpdo.timer.Stop()
 		}
-		rpdo.pdo.logger.Debug("updated event timer", "eventTimer", eventTimer)
+		rpdo.pdo.logger.Debug("updated event timer", "eventTimer", rpdo.timeoutRx)
 
 	case od.SubPdoSyncStart:
 		return 0, od.ErrSubNotExist
