@@ -30,20 +30,18 @@ type Entry struct {
 	// The OD object type, as cited above.
 	ObjectType uint8
 	// Either a [Variable] or a [VariableList] object
-	object            any
-	extension         *extension
-	subEntriesNameMap map[string]uint8
+	object    any
+	extension *extension
 }
 
 // Create a new [Entry]
 func NewEntry(logger *slog.Logger, index uint16, name string, object any, objectType uint8) *Entry {
 	return &Entry{
-		logger:            logger.With("index", fmt.Sprintf("x%x", index), "name", name),
-		Index:             index,
-		Name:              name,
-		object:            object,
-		ObjectType:        objectType,
-		subEntriesNameMap: map[string]uint8{},
+		logger:     logger.With("index", fmt.Sprintf("x%x", index), "name", name),
+		Index:      index,
+		Name:       name,
+		object:     object,
+		ObjectType: objectType,
 	}
 }
 
@@ -76,14 +74,12 @@ func (entry *Entry) SubIndex(subIndex any) (v *Variable, e error) {
 		return object, nil
 
 	case *VariableList:
+
 		var convertedSubIndex uint8
-		var ok bool
+
 		switch sub := subIndex.(type) {
 		case string:
-			convertedSubIndex, ok = entry.subEntriesNameMap[sub]
-			if !ok {
-				return nil, ErrSubNotExist
-			}
+			return object.GetSubObjectByName(sub)
 		case int:
 			if sub >= 256 {
 				return nil, ErrDevIncompat
@@ -115,12 +111,14 @@ func (entry *Entry) addSectionMember(section *ini.Section, name string, nodeId u
 		return err
 	}
 	switch entry.ObjectType {
+
 	case ObjectTypeARRAY:
 		record.Variables[subIndex] = variable
-		entry.subEntriesNameMap[name] = subIndex
+		record.subEntriesNameMap[name] = subIndex
+
 	case ObjectTypeRECORD:
 		record.Variables = append(record.Variables, variable)
-		entry.subEntriesNameMap[name] = subIndex
+		record.subEntriesNameMap[name] = subIndex
 	default:
 		return fmt.Errorf("add member not supported for ObjectType : %v", entry.ObjectType)
 	}

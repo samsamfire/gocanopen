@@ -3,8 +3,9 @@ package od
 // VariableList is the data representation for
 // storing a "RECORD" or "ARRAY" object type
 type VariableList struct {
-	objectType uint8 // either "RECORD" or "ARRAY"
-	Variables  []*Variable
+	Variables         []*Variable
+	objectType        uint8 // either "RECORD" or "ARRAY"
+	subEntriesNameMap map[string]uint8
 }
 
 // GetSubObject returns the [Variable] corresponding to a given
@@ -23,6 +24,16 @@ func (rec *VariableList) GetSubObject(subindex uint8) (*Variable, error) {
 		}
 	}
 	return nil, ErrSubNotExist
+}
+
+// GetSubObjectByName returns the [Variable] corresponding to a given
+// subindex but by name
+func (rec *VariableList) GetSubObjectByName(subindex string) (*Variable, error) {
+	sub, ok := rec.subEntriesNameMap[subindex]
+	if !ok {
+		return nil, ErrSubNotExist
+	}
+	return rec.GetSubObject(sub)
 }
 
 // AddSubObject adds a [Variable] to the VariableList
@@ -55,6 +66,7 @@ func (rec *VariableList) AddSubObject(
 		if err != nil {
 			return nil, err
 		}
+		rec.subEntriesNameMap[name] = subindex
 		rec.Variables[subindex] = variable
 		return rec.Variables[subindex], nil
 	}
@@ -62,14 +74,19 @@ func (rec *VariableList) AddSubObject(
 	if err != nil {
 		return nil, err
 	}
+	rec.subEntriesNameMap[name] = subindex
 	rec.Variables = append(rec.Variables, variable)
 	return rec.Variables[len(rec.Variables)-1], nil
 }
 
+func newVariableList(length int, objectType uint8) *VariableList {
+	return &VariableList{objectType: objectType, Variables: make([]*Variable, length), subEntriesNameMap: make(map[string]uint8)}
+}
+
 func NewRecord() *VariableList {
-	return &VariableList{objectType: ObjectTypeRECORD, Variables: make([]*Variable, 0)}
+	return newVariableList(0, ObjectTypeRECORD)
 }
 
 func NewArray(length uint8) *VariableList {
-	return &VariableList{objectType: ObjectTypeARRAY, Variables: make([]*Variable, length)}
+	return newVariableList(int(length), ObjectTypeARRAY)
 }

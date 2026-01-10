@@ -56,7 +56,7 @@ func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
 	od := NewOD()
 	od.rawOd = bu.Bytes()
 	entry := &Entry{}
-	vList := &VariableList{}
+	vList := &VariableList{subEntriesNameMap: make(map[string]uint8)}
 	isEntry := false
 	isSubEntry := false
 	subindex := uint8(0)
@@ -150,7 +150,6 @@ func ParseV2(file any, nodeId uint8) (*ObjectDictionary, error) {
 				isEntry = true
 				entry = &Entry{}
 				entry.Index = uint16(idx)
-				entry.subEntriesNameMap = map[string]uint8{}
 				entry.logger = od.logger
 				od.entriesByIndexValue[uint16(idx)] = entry
 
@@ -380,10 +379,11 @@ func populateSubEntry(
 	switch entry.ObjectType {
 	case ObjectTypeARRAY:
 		vlist.Variables[subIndex] = variable
-		entry.subEntriesNameMap[parameterName] = subIndex
+		vlist.subEntriesNameMap[parameterName] = subIndex
+
 	case ObjectTypeRECORD:
 		vlist.Variables = append(vlist.Variables, variable)
-		entry.subEntriesNameMap[parameterName] = subIndex
+		vlist.subEntriesNameMap[parameterName] = subIndex
 	default:
 		return fmt.Errorf("add member not supported for ObjectType : %v", entry.ObjectType)
 	}

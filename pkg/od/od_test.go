@@ -90,3 +90,18 @@ func TestAddReader(t *testing.T) {
 	buffer := bytes.NewReader(make([]byte, 10))
 	od.AddReader(0x1, "hello", buffer)
 }
+
+func TestAddSubEntry(t *testing.T) {
+	od := NewOD()
+	record := NewRecord()
+	record.AddSubObject(1, "sub1", UNSIGNED8, AttributeSdoRw, "0x12")
+	od.AddVariableList(0x3031, "entry3031", record)
+
+	entry := od.Index(0x3031)
+	assert.NotNil(t, entry)
+
+	v, err := entry.SubIndex("sub1")
+	assert.Nil(t, err)
+	assert.NotNil(t, v)
+	assert.Equal(t, "sub1", v.Name)
+}
