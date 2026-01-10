@@ -46,7 +46,14 @@ func writeEntry1005(stream *od.Stream, data []byte) (uint16, error) {
 		sync.cobId = uint32(canId)
 	}
 	// Reset in case sync is producer
+	// Stop any pending timers if for example if producer / consumer changed
 	sync.isProducer = isProducer
+	if sync.timerConsumer != nil {
+		sync.timerConsumer.Stop()
+	}
+	if sync.timerProducer != nil {
+		sync.timerProducer.Stop()
+	}
 	sync.resetTimers()
 	sync.logger.Info("sync type", "isProducer", isProducer)
 	return od.WriteEntryDefault(stream, data)
