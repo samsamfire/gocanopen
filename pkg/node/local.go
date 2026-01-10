@@ -48,10 +48,6 @@ func (node *LocalNode) ProcessPDO(syncWas bool, timeDifferenceUs uint32) {
 	if node.NodeIdUnconfigured {
 		return
 	}
-	isOperational := node.NMT.GetInternalState() == nmt.StateOperational
-	for _, tpdo := range node.TPDOs {
-		tpdo.Process(timeDifferenceUs, isOperational, syncWas)
-	}
 }
 
 func (node *LocalNode) ProcessSYNC(timeDifferenceUs uint32) bool {
@@ -169,6 +165,9 @@ func (node *LocalNode) initPDO() error {
 		isOperational := state == nmt.StateOperational
 		for _, rpdo := range node.RPDOs {
 			rpdo.SetOperational(isOperational)
+		}
+		for _, tpdo := range node.TPDOs {
+			tpdo.SetOperational(isOperational)
 		}
 	})
 
