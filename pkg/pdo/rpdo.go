@@ -106,7 +106,7 @@ func (rpdo *RPDO) onTimeoutHandler() {
 	if !rpdo.isOperational {
 		return
 	}
-
+	rpdo.pdo.logger.Warn("timeout", "timoeut", rpdo.timeoutRx)
 	rpdo.inTimeout = true
 	rpdo.pdo.emcy.ErrorReport(emergency.EmRPDOTimeOut, emergency.ErrRpdoTimeout, uint32(rpdo.timeoutRx.Microseconds()))
 }
@@ -295,7 +295,7 @@ func NewRPDO(
 			"error", err,
 		)
 	}
-	rpdo.timeoutRx = time.Duration(eventTimeUs*1000) * time.Microsecond
+	rpdo.timeoutRx = time.Duration(eventTimeUs) * time.Millisecond
 	pdo.IsRPDO = true
 	pdo.od = odict
 	pdo.predefinedId = predefinedIdent
