@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	s "sync"
+	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
@@ -14,7 +15,6 @@ import (
 const (
 	rpdoRxAckNoError = 0  // No error
 	rpdoRxAckError   = 1  // Error is acknowledged
-	rpdoRxAck        = 10 // Auxiliary value
 	rpdoRxOk         = 11 // Correct RPDO received, not acknowledged
 	rpdoRxShort      = 12 // Too short RPDO received, not acknowledged
 	rpdoRxLong       = 13 // Too long RPDO received, not acknowledged
@@ -30,7 +30,9 @@ type RPDO struct {
 	sync          *sync.SYNC
 	synchronous   bool
 	timeoutTimeUs uint32
-	timeoutTimer  uint32
+	timer         *time.Timer
+	inTimeout     bool
+	isOperational bool
 	rxCancel      func()
 	syncCh        chan uint8
 }
@@ -40,8 +42,8 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
 
-	// Don't process any further if PDO is not valid
-	if !rpdo.pdo.Valid {
+	// Don't process any further if PDO is not valid or not operational
+	if !rpdo.pdo.Valid || !rpdo.isOperational {
 		return
 	}
 
@@ -49,24 +51,44 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 
 	// If frame is too short, set error and don't process
 	if frame.DLC < expectedLength {
-		if rpdo.receiveError == rpdoRxAckNoError {
-			rpdo.receiveError = rpdoRxShort
-		}
+		rpdo.receiveError = rpdoRxShort
+		rpdo.processReceiveErrors(rpdo.pdo)
 		return
 	}
 
 	// If frame is too long, set error but still process
 	if frame.DLC > expectedLength {
-		if rpdo.receiveError == rpdoRxAckNoError {
-			rpdo.receiveError = rpdoRxLong
-		}
+		rpdo.receiveError = rpdoRxLong
+		rpdo.processReceiveErrors(rpdo.pdo)
 	}
 
 	// If frame length is correct, clear any previous error
 	if frame.DLC == expectedLength {
-		if rpdo.receiveError == rpdoRxAckError {
+		if rpdo.receiveError != rpdoRxAckNoError {
 			rpdo.receiveError = rpdoRxOk
+			rpdo.processReceiveErrors(rpdo.pdo)
 		}
+	}
+
+	// Reset timeout timer
+	if rpdo.timeoutTimeUs > 0 {
+		if rpdo.timer != nil {
+			if !rpdo.timer.Stop() {
+				select {
+				case <-rpdo.timer.C:
+				default:
+				}
+			}
+			rpdo.timer.Reset(time.Duration(rpdo.timeoutTimeUs) * time.Microsecond)
+		} else {
+			rpdo.timer = time.AfterFunc(time.Duration(rpdo.timeoutTimeUs)*time.Microsecond, rpdo.timeoutHandler)
+		}
+	}
+
+	// Reset timeout error if it happened
+	if rpdo.inTimeout {
+		rpdo.pdo.emcy.ErrorReset(emergency.EmRPDOTimeOut, 0)
+		rpdo.inTimeout = false
 	}
 
 	// For synchronous RPDOs, data is stored in an intermediate buffer, and
@@ -82,6 +104,32 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	rpdo.copyDataToOd(rpdo.pdo, frame.Data)
 }
 
+func (rpdo *RPDO) timeoutHandler() {
+	rpdo.mu.Lock()
+	defer rpdo.mu.Unlock()
+
+	if !rpdo.isOperational {
+		return
+	}
+
+	rpdo.inTimeout = true
+	// Pass 0 as info for now, as we don't have exact timer value easily or need it
+	rpdo.pdo.emcy.ErrorReport(emergency.EmRPDOTimeOut, emergency.ErrRpdoTimeout, 0)
+}
+
+func (rpdo *RPDO) SetOperational(operational bool) {
+	rpdo.mu.Lock()
+	defer rpdo.mu.Unlock()
+	rpdo.isOperational = operational
+	if !operational {
+		if rpdo.timer != nil {
+			rpdo.timer.Stop()
+		}
+		rpdo.rxNew = false
+		rpdo.inTimeout = false
+	}
+}
+
 func (rpdo *RPDO) syncHandler() {
 	for range rpdo.syncCh {
 		rpdo.mu.Lock()
@@ -93,59 +141,6 @@ func (rpdo *RPDO) syncHandler() {
 		} else {
 			rpdo.mu.Unlock()
 		}
-	}
-}
-
-// Process [RPDO] state machine and TX CAN frames
-// This should be called periodically
-func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWas bool) {
-	rpdo.mu.Lock()
-
-	pdo := rpdo.pdo
-
-	if !pdo.Valid || !nmtIsOperational {
-		rpdo.rxNew = false
-		rpdo.timeoutTimer = 0
-		rpdo.mu.Unlock()
-		return
-	}
-
-	// Check errors in length of received messages
-	if rpdo.receiveError > rpdoRxAck {
-		rpdo.processReceiveErrors(pdo)
-	}
-
-	// Handle timeout logic if RPDO not received
-	if !rpdo.rxNew {
-		if rpdo.timeoutTimeUs > 0 && rpdo.timeoutTimer > 0 && rpdo.timeoutTimer < rpdo.timeoutTimeUs {
-			rpdo.timeoutTimer += timeDifferenceUs
-			if rpdo.timeoutTimer > rpdo.timeoutTimeUs {
-				pdo.emcy.ErrorReport(emergency.EmRPDOTimeOut, emergency.ErrRpdoTimeout, rpdo.timeoutTimer)
-			}
-		}
-		rpdo.mu.Unlock()
-		return
-	}
-
-	// If synchronous, we don't process data here, it is done in syncHandler
-	if rpdo.synchronous {
-		rpdo.mu.Unlock()
-		return
-	}
-
-	rpdo.rxNew = false
-	rpdo.mu.Unlock()
-	rpdo.copyDataToOd(pdo, rpdo.rxData)
-
-	// Handle timeout logic, reset if happened
-	timeoutHappened := rpdo.timeoutTimer > rpdo.timeoutTimeUs
-	if rpdo.timeoutTimeUs > 0 {
-		// Enable timeout monitoring
-		rpdo.timeoutTimer = 1
-	}
-
-	if timeoutHappened && rpdo.timeoutTimeUs > 0 {
-		pdo.emcy.ErrorReset(emergency.EmRPDOTimeOut, rpdo.timeoutTimer)
 	}
 }
 
