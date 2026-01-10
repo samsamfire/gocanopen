@@ -18,32 +18,31 @@ const (
 )
 
 type TPDO struct {
-	bm               *canopen.BusManager
-	mu               s.Mutex
-	sync             *sync.SYNC
-	pdo              *PDOCommon
-	txBuffer         canopen.Frame
-	transmissionType uint8
-	sendRequest      bool
-	syncStartValue   uint8
-	syncCounter      uint8
-	timeInhibit      time.Duration
-	timeEvent        time.Duration
-	timerInhibit     *time.Timer
-	timerEvent       *time.Timer
-	inhibitActive    bool
-	isOperational    bool
-	syncCh           chan uint8
+	bm                    *canopen.BusManager
+	mu                    s.Mutex
+	sync                  *sync.SYNC
+	pdo                   *PDOCommon
+	txBuffer              canopen.Frame
+	transmissionType      uint8
+	sendRequestAsyncEvent bool
+	syncStartValue        uint8
+	syncCounter           uint8
+	timeLastSend          time.Time
+	timeInhibit           time.Duration
+	timeEvent             time.Duration
+	timerEvent            *time.Timer
+	isOperational         bool
+	syncCh                chan uint8
 }
 
 // Process TPDOs on SYNC reception
 func (tpdo *TPDO) syncHandler() {
 	for range tpdo.syncCh {
 		tpdo.mu.Lock()
-		isSyncAcyclic := tpdo.transmissionType == TransmissionTypeSyncAcyclic
+		isAsyclic := tpdo.transmissionType == TransmissionTypeSyncAcyclic
 
 		// Send synchronous acyclic tpdo
-		if isSyncAcyclic && tpdo.sendRequest {
+		if isAsyclic && tpdo.sendRequestAsyncEvent {
 			tpdo.mu.Unlock()
 			_ = tpdo.send()
 			continue
@@ -100,7 +99,7 @@ func (tpdo *TPDO) configureTransmissionType(entry18xx *od.Entry) error {
 		transmissionType = TransmissionTypeSyncEventLo
 	}
 	tpdo.transmissionType = transmissionType
-	tpdo.sendRequest = true
+	tpdo.sendRequestAsyncEvent = false
 	return nil
 }
 
@@ -143,90 +142,76 @@ func (tpdo *TPDO) send() error {
 		streamer.DataOffset = mappedLength
 		totalNbRead += int(mappedLength)
 	}
-	tpdo.sendRequest = false
+	tpdo.sendRequestAsyncEvent = false
 	tpdo.restartEventTimer()
-	tpdo.startInhibitTimer()
+	tpdo.timeLastSend = time.Now()
 	return tpdo.bm.Send(tpdo.txBuffer)
 }
 
-func (tpdo *TPDO) checkAndSend() {
+// Send TPDO asynchronously
+// Rate is limited by the inhibit time, which can be 0
+func (tpdo *TPDO) SendAsync() {
 	tpdo.mu.Lock()
-	if tpdo.inhibitActive {
-		tpdo.sendRequest = true
-		tpdo.mu.Unlock()
+	defer tpdo.mu.Unlock()
+
+	isAcyclic := tpdo.transmissionType == TransmissionTypeSyncAcyclic
+	if isAcyclic {
+		tpdo.sendRequestAsyncEvent = true
 		return
 	}
-	tpdo.mu.Unlock()
-	_ = tpdo.send()
-}
 
-// Send TPDO asynchronously, next time it is processed
-// This only works for event driven TPDOs
-func (tpdo *TPDO) SendAsync() {
-	tpdo.checkAndSend()
+	// If no inhibit, send straight away
+	if tpdo.timeInhibit == 0 {
+		_ = tpdo.send()
+		return
+	}
+
+	// If inhibit, we must cancel any event timers
+	// and send only after the inhibit time is elapsed
+	remaining := time.Since(tpdo.timeLastSend) - tpdo.timeInhibit
+	if tpdo.timerEvent == nil {
+		tpdo.timerEvent = time.AfterFunc(max(0, remaining), tpdo.eventHandler)
+	} else {
+		tpdo.timerEvent.Reset(max(0, remaining))
+	}
+	tpdo.send()
 }
 
 func (tpdo *TPDO) SetOperational(operational bool) {
 	tpdo.mu.Lock()
 	defer tpdo.mu.Unlock()
+
 	tpdo.isOperational = operational
 	if operational {
 		tpdo.restartEventTimer()
-	} else {
-		// Stop timers
-		if tpdo.timerEvent != nil {
-			tpdo.timerEvent.Stop()
-		}
-		if tpdo.timerInhibit != nil {
-			tpdo.timerInhibit.Stop()
-		}
-		tpdo.inhibitActive = false
-	}
-}
-
-func (tpdo *TPDO) startInhibitTimer() {
-	if tpdo.timeInhibit == 0 {
 		return
 	}
-	tpdo.inhibitActive = true
-	if tpdo.timerInhibit == nil {
-		tpdo.timerInhibit = time.AfterFunc(tpdo.timeInhibit, tpdo.inhibitHandler)
-	} else {
-		tpdo.timerInhibit.Reset(tpdo.timeInhibit)
-	}
-}
 
-func (tpdo *TPDO) inhibitHandler() {
-	tpdo.mu.Lock()
-	active := tpdo.isOperational
-	req := tpdo.sendRequest
-	tpdo.inhibitActive = false
-	tpdo.mu.Unlock()
-
-	if active && req {
-		_ = tpdo.send()
+	// Stop timers
+	if tpdo.timerEvent != nil {
+		tpdo.timerEvent.Stop()
 	}
+
 }
 
 func (tpdo *TPDO) restartEventTimer() {
 	if tpdo.timeEvent == 0 {
 		return
 	}
+	// Event timer is used, the next send is limited by the inhibit time
 	if tpdo.timerEvent == nil {
-		tpdo.timerEvent = time.AfterFunc(tpdo.timeEvent, tpdo.eventHandler)
+		tpdo.timerEvent = time.AfterFunc(max(tpdo.timeEvent, tpdo.timeInhibit), tpdo.eventHandler)
 	} else {
-		tpdo.timerEvent.Reset(tpdo.timeEvent)
+		tpdo.timerEvent.Reset(max(tpdo.timeEvent, tpdo.timeInhibit))
 	}
 }
 
 func (tpdo *TPDO) eventHandler() {
 	tpdo.mu.Lock()
-	tpdo.sendRequest = true
-	inhibit := tpdo.inhibitActive
 	operational := tpdo.isOperational
 	tpdo.mu.Unlock()
 
-	if operational && !inhibit {
+	if operational {
 		_ = tpdo.send()
 	}
 }
