@@ -37,15 +37,7 @@ type RemoteNode struct {
 }
 
 func (node *RemoteNode) ProcessPDO(syncWas bool, timeDifferenceUs uint32) {
-	node.mu.Lock()
-	defer node.mu.Unlock()
-
-	for _, tpdo := range node.tpdos {
-		tpdo.Process(timeDifferenceUs, true, syncWas)
-	}
-	for _, rpdo := range node.rpdos {
-		rpdo.Process(timeDifferenceUs, true, syncWas)
-	}
+	// TPDOs are now event-driven
 }
 
 func (node *RemoteNode) ProcessSYNC(timeDifferenceUs uint32) bool {
@@ -182,6 +174,7 @@ func (node *RemoteNode) StartPDOs(useLocal bool) error {
 		if err != nil {
 			return err
 		}
+		rpdo.SetOperational(true)
 		node.rpdos = append(node.rpdos, rpdo)
 		err = localConf.EnablePDO(uint16(i) + 1) // This can fail but not critical
 		if err != nil {
@@ -217,6 +210,7 @@ func (node *RemoteNode) StartPDOs(useLocal bool) error {
 		if err != nil {
 			return err
 		}
+		tpdo.SetOperational(true)
 		node.tpdos = append(node.tpdos, tpdo)
 		err = localConf.EnablePDO(uint16(i) + 1 + pdo.MaxRpdoNumber) // This can fail but not critical
 		if err != nil {

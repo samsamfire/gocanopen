@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	s "sync"
+	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
@@ -12,28 +13,23 @@ import (
 )
 
 const (
-	rpdoRxAckNoError = 0  // No error
-	rpdoRxAckError   = 1  // Error is acknowledged
-	rpdoRxAck        = 10 // Auxiliary value
-	rpdoRxOk         = 11 // Correct RPDO received, not acknowledged
-	rpdoRxShort      = 12 // Too short RPDO received, not acknowledged
-	rpdoRxLong       = 13 // Too long RPDO received, not acknowledged
+// Codes used for reporting specific RPDO length errors
 )
 
-const buffCount = 2
-
 type RPDO struct {
-	*canopen.BusManager
+	bm            *canopen.BusManager
 	mu            s.Mutex
 	pdo           *PDOCommon
-	rxNew         [buffCount]bool
-	rxData        [buffCount][MaxPdoLength]byte
-	receiveError  uint8
+	rxData        [MaxPdoLength]byte
+	rxNew         bool
 	sync          *sync.SYNC
 	synchronous   bool
-	timeoutTimeUs uint32
-	timeoutTimer  uint32
+	timeoutRx     time.Duration
+	timer         *time.Timer
+	inTimeout     bool
+	isOperational bool
 	rxCancel      func()
+	syncCh        chan uint8
 }
 
 // Handle [RPDO] related RX CAN frames
@@ -41,205 +37,144 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
 
-	// Don't process any further if PDO is not valid
-	if !rpdo.pdo.Valid {
+	// Do not process if invalid or NMT not operational
+	if !rpdo.pdo.Valid || !rpdo.isOperational {
 		return
 	}
 
-	expectedLength := uint8(rpdo.pdo.dataLength)
-
-	// If frame is too short, set error and don't process
-	if frame.DLC < expectedLength {
-		if rpdo.receiveError == rpdoRxAckNoError {
-			rpdo.receiveError = rpdoRxShort
-		}
+	// Check for correct legnth, process any errors
+	if !rpdo.validateFrameLength(frame.DLC) {
 		return
 	}
 
-	// If frame is too long, set error but still process
-	if frame.DLC > expectedLength {
-		if rpdo.receiveError == rpdoRxAckNoError {
-			rpdo.receiveError = rpdoRxLong
-		}
+	// Timeout timer logic, if enabled
+	rpdo.restartTimeoutTimer()
+	if rpdo.inTimeout {
+		rpdo.pdo.emcy.ErrorReset(emergency.EmRPDOTimeOut, 0)
+		rpdo.inTimeout = false
 	}
 
-	// If frame length is correct, clear any previous error
-	if frame.DLC == expectedLength {
-		if rpdo.receiveError == rpdoRxAckError {
-			rpdo.receiveError = rpdoRxOk
-		}
+	// If async, copy data to OD straight away
+	if !rpdo.synchronous {
+		rpdo.copyDataToOd(frame.Data)
 	}
 
-	// Process the frame, determine buffer to write to
-	bufIdx := 0
-	if rpdo.synchronous && rpdo.sync != nil && rpdo.sync.RxToggle() {
-		bufIdx = 1
-	}
-
-	rpdo.rxData[bufIdx] = frame.Data
-	rpdo.rxNew[bufIdx] = true
+	// Flag new data, will be processed on SYNC reception
+	rpdo.rxNew = true
+	rpdo.rxData = frame.Data
 }
 
-// Process [RPDO] state machine and TX CAN frames
-// This should be called periodically
-func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWas bool) {
-	rpdo.mu.Lock()
-
-	var buffer []byte
-	pdo := rpdo.pdo
-
-	if !pdo.Valid || !nmtIsOperational {
-		rpdo.rxNew[0] = false
-		rpdo.rxNew[1] = false
-		rpdo.timeoutTimer = 0
-		rpdo.mu.Unlock()
-		return
-	}
-
-	if !syncWas && rpdo.synchronous {
-		rpdo.mu.Unlock()
-		return
-	}
-
-	// Check errors in length of received messages
-	if rpdo.receiveError > rpdoRxAck {
-		rpdo.processReceiveErrors(pdo)
-	}
-
-	// Get the correct rx buffer
-	bufNo := uint8(0)
-	if rpdo.synchronous && rpdo.sync != nil && !rpdo.sync.RxToggle() {
-		bufNo = 1
-	}
-
-	// Handle timeout logic if RPDO not received
-	if !rpdo.rxNew[bufNo] {
-		if rpdo.timeoutTimeUs > 0 && rpdo.timeoutTimer > 0 && rpdo.timeoutTimer < rpdo.timeoutTimeUs {
-			rpdo.timeoutTimer += timeDifferenceUs
-			if rpdo.timeoutTimer > rpdo.timeoutTimeUs {
-				pdo.emcy.ErrorReport(emergency.EmRPDOTimeOut, emergency.ErrRpdoTimeout, rpdo.timeoutTimer)
-			}
+func (rpdo *RPDO) syncHandler() {
+	for range rpdo.syncCh {
+		rpdo.mu.Lock()
+		if rpdo.rxNew {
+			data := rpdo.rxData
+			rpdo.rxNew = false
+			rpdo.copyDataToOd(data)
 		}
 		rpdo.mu.Unlock()
+	}
+}
+
+// Check the frame DLC and manages the receiveError state.
+// Returns true if the frame should be processed, false otherwise.
+func (rpdo *RPDO) validateFrameLength(dlc uint8) bool {
+	expectedLength := uint8(rpdo.pdo.dataLength)
+
+	if dlc == expectedLength {
+		rpdo.pdo.emcy.Error(false, emergency.EmRPDOWrongLength, emergency.ErrNoError, 0)
+		return true
+	}
+
+	errorCode := emergency.ErrPdoLength
+	if dlc > expectedLength {
+		errorCode = emergency.ErrPdoLengthExc
+	}
+
+	rpdo.pdo.emcy.Error(true, emergency.EmRPDOWrongLength, uint16(errorCode), rpdo.pdo.dataLength)
+	return false
+}
+
+func (rpdo *RPDO) restartTimeoutTimer() {
+	if rpdo.timeoutRx == 0 {
+		return
+	}
+	if rpdo.timer == nil {
+		rpdo.timer = time.AfterFunc(rpdo.timeoutRx, rpdo.timeoutHandler)
+	} else {
+		rpdo.timer.Reset(rpdo.timeoutRx)
+	}
+}
+
+func (rpdo *RPDO) timeoutHandler() {
+	rpdo.mu.Lock()
+	defer rpdo.mu.Unlock()
+
+	if !rpdo.isOperational {
 		return
 	}
 
-	localData := rpdo.rxData[bufNo]
-	rpdo.rxNew[bufNo] = false
-	rpdo.mu.Unlock()
+	rpdo.inTimeout = true
+	rpdo.pdo.emcy.ErrorReport(emergency.EmRPDOTimeOut, emergency.ErrRpdoTimeout, 0)
+}
 
-	// Handle timeout logic, reset if happened
-	timeoutHappened := rpdo.timeoutTimer > rpdo.timeoutTimeUs
-	if rpdo.timeoutTimeUs > 0 {
-		// Enable timeout monitoring
-		rpdo.timeoutTimer = 1
+func (rpdo *RPDO) SetOperational(operational bool) {
+	rpdo.mu.Lock()
+	defer rpdo.mu.Unlock()
+
+	rpdo.isOperational = operational
+	if !operational {
+		if rpdo.timer != nil {
+			rpdo.timer.Stop()
+		}
+		rpdo.rxNew = false
+		rpdo.inTimeout = false
 	}
+}
 
-	if timeoutHappened && rpdo.timeoutTimeUs > 0 {
-		pdo.emcy.ErrorReset(emergency.EmRPDOTimeOut, rpdo.timeoutTimer)
-	}
+func (rpdo *RPDO) copyDataToOd(data [8]byte) {
+	// Assumes rpdo.mu is locked by caller
+	pdo := rpdo.pdo
+	offset := uint32(0)
 
-	totalNbWritten := uint32(0)
-	totalMappedLength := uint32(0)
-	rpdo.rxNew[bufNo] = false
-
-	// Iterate over all the mapped objects and copy data from
-	// received RPDO frame to OD via streamer objects.
-	for i := range pdo.nbMapped {
+	for i := 0; i < int(pdo.nbMapped); i++ {
 		streamer := &pdo.streamers[i]
-		mappedLength := streamer.DataOffset
-		dataLength := streamer.DataLength
 
-		// Paranoid check : the accumulated mapped length should never
-		// exceed MaxPdoLength
-		totalMappedLength += mappedLength
-		if totalMappedLength > uint32(MaxPdoLength) {
+		// Determine the slice of data for this object
+		end := offset + streamer.DataLength
+		if end > uint32(len(data)) {
+			// Should not happen if dataLength is consistent with nbMapped/MaxPdoLength
 			break
 		}
 
-		if dataLength > uint32(MaxPdoLength) {
-			dataLength = uint32(MaxPdoLength)
-		}
-
-		buffer = localData[totalNbWritten : totalNbWritten+mappedLength]
-		if dataLength > uint32(mappedLength) {
-			buffer = buffer[:cap(buffer)]
-		}
 		streamer.DataOffset = 0
-		_, err := streamer.Write(buffer)
-		if err != nil {
+		if _, err := streamer.Write(data[offset:end]); err != nil {
 			rpdo.pdo.logger.Warn("failed to write to OD on RPDO reception",
 				"configured id", rpdo.pdo.configuredId,
 				"error", err,
 			)
 		}
 
-		streamer.DataOffset = mappedLength
-		totalNbWritten += mappedLength
-	}
-	// Additional check for total mapped length, should be equal to PDO data length
-	// this should never happen unless software issue.
-	if totalMappedLength > uint32(MaxPdoLength) || totalMappedLength != pdo.dataLength {
-		pdo.emcy.ErrorReport(emergency.EmGenericSoftwareError, emergency.ErrSoftwareInternal, totalMappedLength)
+		streamer.DataOffset = streamer.DataLength
+		offset = end
 	}
 }
 
-func (rpdo *RPDO) processReceiveErrors(pdo *PDOCommon) {
-	setError := rpdo.receiveError != rpdoRxOk
-	errorCode := emergency.ErrPdoLength
-	if rpdo.receiveError != rpdoRxShort {
-		errorCode = emergency.ErrPdoLengthExc
-	}
-	pdo.emcy.Error(setError, emergency.EmRPDOWrongLength, uint16(errorCode), pdo.dataLength)
-	if setError {
-		rpdo.receiveError = rpdoRxAckError
-	} else {
-		rpdo.receiveError = rpdoRxAckNoError
-	}
-}
-
-func (rpdo *RPDO) configureCOBID(entry14xx *od.Entry, predefinedIdent uint32, erroneousMap uint32) (canId uint32, e error) {
+func (rpdo *RPDO) configureCobId(entry14xx *od.Entry, predefinedIdent uint16, erroneousMap uint32) (canId uint16, e error) {
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
 
 	pdo := rpdo.pdo
-	cobId, err := entry14xx.Uint32(od.SubPdoCobId)
+	canId, err := pdo.configureCobId(entry14xx, predefinedIdent, erroneousMap)
 	if err != nil {
-		rpdo.pdo.logger.Error("reading failed",
-			"index", fmt.Errorf("x%x", entry14xx.Index),
-			"subindex", od.SubPdoCobId,
-			"error", err,
-		)
-		return 0, canopen.ErrOdParameters
+		return 0, err
 	}
-	valid := (cobId & 0x80000000) == 0
-	canId = cobId & 0x7FF
-	if valid && (pdo.nbMapped == 0 || canId == 0) {
-		valid = false
-		if erroneousMap == 0 {
-			erroneousMap = 1
-		}
-	}
-	if erroneousMap != 0 {
-		errorInfo := erroneousMap
-		if erroneousMap == 1 {
-			errorInfo = cobId
-		}
-		pdo.emcy.ErrorReport(emergency.EmPDOWrongMapping, emergency.ErrProtocolError, errorInfo)
-	}
-	if !valid {
-		canId = 0
-	}
-	// If default canId is stored in od add node id
-	if canId != 0 && canId == (predefinedIdent&0xFF80) {
-		canId = predefinedIdent
-	}
-	rxCancel, err := rpdo.Subscribe(canId, 0x7FF, false, rpdo)
+	rxCancel, err := rpdo.bm.Subscribe(uint32(canId), 0x7FF, false, rpdo)
 	rpdo.rxCancel = rxCancel
 	if err != nil {
 		return 0, err
 	}
-	pdo.Valid = valid
+	pdo.Valid = canId != 0
 	return canId, nil
 }
 
@@ -256,7 +191,7 @@ func NewRPDO(
 	if odict == nil || entry14xx == nil || entry16xx == nil || bm == nil || emcy == nil {
 		return nil, canopen.ErrIllegalArgument
 	}
-	rpdo := &RPDO{BusManager: bm}
+	rpdo := &RPDO{bm: bm}
 	// Configure mapping parameters
 	erroneousMap := uint32(0)
 	pdo, err := NewPDO(odict, logger, entry16xx, true, emcy, &erroneousMap)
@@ -265,7 +200,7 @@ func NewRPDO(
 	}
 	rpdo.pdo = pdo
 	// Configure communication params
-	canId, err := rpdo.configureCOBID(entry14xx, uint32(predefinedIdent), erroneousMap)
+	canId, err := rpdo.configureCobId(entry14xx, predefinedIdent, erroneousMap)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +226,7 @@ func NewRPDO(
 			"error", err,
 		)
 	}
-	rpdo.timeoutTimeUs = uint32(eventTime) * 1000
+	rpdo.timeoutRx = time.Duration(eventTime) * time.Millisecond
 	pdo.IsRPDO = true
 	pdo.od = odict
 	pdo.predefinedId = predefinedIdent
@@ -304,5 +239,9 @@ func NewRPDO(
 		"event time", eventTime,
 		"synchronous", rpdo.synchronous,
 	)
+	if rpdo.synchronous && rpdo.sync != nil {
+		rpdo.syncCh = rpdo.sync.Subscribe()
+		go rpdo.syncHandler()
+	}
 	return rpdo, nil
 }

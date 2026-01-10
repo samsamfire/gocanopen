@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/od"
@@ -70,7 +71,7 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 			if rpdo.rxCancel != nil {
 				rpdo.rxCancel()
 			}
-			rxCancel, err := rpdo.Subscribe(canId, 0x7FF, false, rpdo)
+			rxCancel, err := rpdo.bm.Subscribe(canId, 0x7FF, false, rpdo)
 			rpdo.rxCancel = rxCancel
 			if valid && err == nil {
 				pdo.Valid = true
@@ -81,8 +82,7 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 				)
 			} else {
 				pdo.Valid = false
-				rpdo.rxNew[0] = false
-				rpdo.rxNew[1] = false
+				rpdo.rxNew = false
 				if err != nil {
 					return 0, od.ErrDevIncompat
 				}
@@ -96,7 +96,18 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 		}
 		synchronous := transType <= TransmissionTypeSync240
 		if rpdo.synchronous != synchronous {
-			rpdo.rxNew[1] = false
+			rpdo.rxNew = false
+			if synchronous {
+				if rpdo.sync != nil && rpdo.syncCh == nil {
+					rpdo.syncCh = rpdo.sync.Subscribe()
+					go rpdo.syncHandler()
+				}
+			} else {
+				if rpdo.sync != nil && rpdo.syncCh != nil {
+					rpdo.sync.Unsubscribe(rpdo.syncCh)
+					rpdo.syncCh = nil
+				}
+			}
 		}
 		rpdo.pdo.logger.Debug("updated transmission type (synchronous)", "prev", rpdo.synchronous, "new", synchronous)
 		rpdo.synchronous = synchronous
@@ -110,9 +121,11 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 
 	case od.SubPdoEventTimer:
 		eventTimer := binary.LittleEndian.Uint16(data)
-		rpdo.timeoutTimeUs = uint32(eventTimer) * 1000
-		rpdo.timeoutTimer = 0
-		rpdo.pdo.logger.Debug("updated event timer", "eventTimer", eventTimer)
+		rpdo.timeoutRx = time.Duration(eventTimer) * time.Millisecond
+		if rpdo.timer != nil {
+			rpdo.timer.Stop()
+		}
+		rpdo.pdo.logger.Debug("updated event timer", "eventTimer", rpdo.timeoutRx)
 
 	case od.SubPdoSyncStart:
 		return 0, od.ErrSubNotExist
@@ -178,26 +191,34 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		}
 		tpdo.syncCounter = SyncCounterReset
 		tpdo.transmissionType = transType
-		tpdo.sendRequest = true
-		tpdo.inhibitTimer = 0
-		tpdo.eventTimer = 0
+		tpdo.timeLastSend = time.Now()
+		if tpdo.isOperational {
+			tpdo.restartEventTimer()
+		}
+		tpdo.pdo.logger.Debug("updated transmission type", "transType", tpdo.transmissionType)
 
 	case od.SubPdoInhibitTime:
 		if pdo.Valid {
 			return 0, od.ErrInvalidValue
 		}
 		inhibitTime := binary.LittleEndian.Uint16(data)
-		tpdo.inhibitTimeUs = uint32(inhibitTime) * 100
-		tpdo.inhibitTimer = 0
+		tpdo.timeInhibit = time.Duration(inhibitTime) * 100 * time.Microsecond
+		tpdo.timeLastSend = time.Now()
+		tpdo.pdo.logger.Debug("updated inhibit time", "inhibit", tpdo.timeInhibit)
 
 	case od.SubPdoReserved:
 		return 0, od.ErrSubNotExist
 
 	case od.SubPdoEventTimer:
-		eventTime := binary.LittleEndian.Uint16(data)
-		tpdo.eventTimeUs = uint32(eventTime) * 1000
-		tpdo.eventTimer = 0
-		tpdo.pdo.logger.Debug("updated event timer", "eventTimeUs", tpdo.eventTimeUs)
+		eventTimer := binary.LittleEndian.Uint16(data)
+		tpdo.timeEvent = time.Duration(eventTimer) * 1000 * time.Microsecond
+		if tpdo.timerEvent != nil {
+			tpdo.timerEvent.Stop()
+		}
+		if tpdo.isOperational {
+			tpdo.restartEventTimer()
+		}
+		tpdo.pdo.logger.Debug("updated event time", "eventTimer", tpdo.timeEvent)
 
 	case od.SubPdoSyncStart:
 		syncStart := data[0]
@@ -205,6 +226,7 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 			return 0, od.ErrInvalidValue
 		}
 		tpdo.syncStartValue = syncStart
+		tpdo.pdo.logger.Debug("updated sync start timer", "syncStart", syncStart)
 
 	}
 	return od.WriteEntryDefault(stream, dataCopy)

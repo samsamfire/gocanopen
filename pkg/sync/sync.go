@@ -17,9 +17,11 @@ const (
 )
 
 type SYNC struct {
-	*canopen.BusManager
+	bm                  *canopen.BusManager
 	logger              *slog.Logger
 	mu                  s.Mutex
+	subMu               s.Mutex
+	subscribers         []chan uint8
 	emcy                *emergency.EMCY
 	rxNew               bool
 	receiveError        uint8
@@ -35,6 +37,41 @@ type SYNC struct {
 	cobId               uint32
 	txBuffer            canopen.Frame
 	rxCancel            func()
+}
+
+// Subscribe returns a channel that receives the sync counter
+// on every valid SYNC message
+func (sync *SYNC) Subscribe() chan uint8 {
+	sync.subMu.Lock()
+	defer sync.subMu.Unlock()
+	ch := make(chan uint8, 1)
+	sync.subscribers = append(sync.subscribers, ch)
+	return ch
+}
+
+// UnsubscribeSync removes the subscriber channel and closes it
+func (sync *SYNC) Unsubscribe(ch chan uint8) {
+	sync.subMu.Lock()
+	defer sync.subMu.Unlock()
+	for i, sub := range sync.subscribers {
+		if sub == ch {
+			sync.subscribers = append(sync.subscribers[:i], sync.subscribers[i+1:]...)
+			close(ch)
+			return
+		}
+	}
+}
+
+func (sync *SYNC) notifySubscribers() {
+	sync.subMu.Lock()
+	defer sync.subMu.Unlock()
+	for _, ch := range sync.subscribers {
+		select {
+		case ch <- sync.counter:
+		default:
+			// Channel full, drop event
+		}
+	}
 }
 
 // Handle [SYNC] related RX CAN frames
@@ -60,6 +97,8 @@ func (sync *SYNC) Handle(frame canopen.Frame) {
 	if syncReceived {
 		sync.rxToggle = !sync.rxToggle
 		sync.rxNew = true
+		// Notify subscribers
+		sync.notifySubscribers()
 	}
 }
 
@@ -154,7 +193,7 @@ func (sync *SYNC) send() {
 	sync.mu.Unlock()
 	// When listening to own messages, this will trigger Handle to be called
 	// So make sure sync is unlocked before sending
-	_ = sync.Send(sync.txBuffer)
+	_ = sync.bm.Send(sync.txBuffer)
 }
 
 func (sync *SYNC) Counter() uint8 {
@@ -192,7 +231,7 @@ func NewSYNC(
 		logger = slog.Default()
 	}
 
-	sync := &SYNC{BusManager: bm, logger: logger.With("service", "[SYNC]")}
+	sync := &SYNC{bm: bm, logger: logger.With("service", "[SYNC]")}
 	if entry1005 == nil {
 		return nil, canopen.ErrIllegalArgument
 	}
@@ -262,7 +301,7 @@ func NewSYNC(
 	sync.isProducer = (cobIdSync & 0x40000000) != 0
 	sync.cobId = cobIdSync & 0x7FF
 
-	rxCancel, err := sync.Subscribe(sync.cobId, 0x7FF, false, sync)
+	rxCancel, err := sync.bm.Subscribe(sync.cobId, 0x7FF, false, sync)
 	sync.rxCancel = rxCancel
 	if err != nil {
 		return nil, err

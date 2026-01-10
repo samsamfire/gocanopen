@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	s "sync"
+	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
@@ -17,59 +18,34 @@ const (
 )
 
 type TPDO struct {
-	*canopen.BusManager
-	mu               s.Mutex
-	sync             *sync.SYNC
-	pdo              *PDOCommon
-	txBuffer         canopen.Frame
-	transmissionType uint8
-	sendRequest      bool
-	syncStartValue   uint8
-	syncCounter      uint8
-	inhibitTimeUs    uint32
-	eventTimeUs      uint32
-	inhibitTimer     uint32
-	eventTimer       uint32
+	bm                    *canopen.BusManager
+	mu                    s.Mutex
+	sync                  *sync.SYNC
+	pdo                   *PDOCommon
+	txBuffer              canopen.Frame
+	transmissionType      uint8
+	sendRequestAsyncEvent bool
+	syncStartValue        uint8
+	syncCounter           uint8
+	timeLastSend          time.Time
+	timeInhibit           time.Duration
+	timeEvent             time.Duration
+	timerEvent            *time.Timer
+	isOperational         bool
+	syncCh                chan uint8
 }
 
-// Process [TPDO] state machine and TX CAN frames
-// This should be called periodically
-func (tpdo *TPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWas bool) error {
-	tpdo.mu.Lock()
-
-	pdo := tpdo.pdo
-	if !pdo.Valid || !nmtIsOperational {
-		tpdo.sendRequest = true
-		tpdo.inhibitTimer = 0
-		tpdo.eventTimer = 0
-		tpdo.syncCounter = 255
-		tpdo.mu.Unlock()
-		return nil
-	}
-
-	if tpdo.eventTimeUs > 0 {
-		tpdo.eventTimer = saturatingSub(tpdo.eventTimer, timeDifferenceUs)
-		if tpdo.eventTimer == 0 {
-			tpdo.sendRequest = true
-		}
-	}
-	tpdo.inhibitTimer = saturatingSub(tpdo.inhibitTimer, timeDifferenceUs)
-
-	isEventDriven := tpdo.transmissionType >= TransmissionTypeSyncEventLo
-	isSyncAcyclic := tpdo.transmissionType == TransmissionTypeSyncAcyclic
-
-	if isEventDriven {
-		// Send if requested and inhibit time elapsed
-		if tpdo.sendRequest && tpdo.inhibitTimer == 0 {
-			tpdo.mu.Unlock()
-			return tpdo.send()
-		}
-	} else if tpdo.sync != nil && syncWas {
+// Process TPDOs on SYNC reception
+func (tpdo *TPDO) syncHandler() {
+	for range tpdo.syncCh {
+		tpdo.mu.Lock()
+		isAsyclic := tpdo.transmissionType == TransmissionTypeSyncAcyclic
 
 		// Send synchronous acyclic tpdo
-		if isSyncAcyclic && tpdo.sendRequest {
+		if isAsyclic && tpdo.sendRequestAsyncEvent {
 			tpdo.mu.Unlock()
-			return tpdo.send()
+			_ = tpdo.send()
+			continue
 		}
 
 		// Send synchronous cyclic TPDOs
@@ -89,20 +65,21 @@ func (tpdo *TPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 			if tpdo.sync.Counter() == tpdo.syncStartValue {
 				tpdo.syncCounter = tpdo.transmissionType
 				tpdo.mu.Unlock()
-				return tpdo.send()
+				_ = tpdo.send()
+				continue
 			}
 
 		case 1:
 			tpdo.syncCounter = tpdo.transmissionType
 			tpdo.mu.Unlock()
-			return tpdo.send()
+			_ = tpdo.send()
+			continue
 
 		default:
 			tpdo.syncCounter--
 		}
+		tpdo.mu.Unlock()
 	}
-	tpdo.mu.Unlock()
-	return nil
 }
 
 func (tpdo *TPDO) configureTransmissionType(entry18xx *od.Entry) error {
@@ -122,48 +99,21 @@ func (tpdo *TPDO) configureTransmissionType(entry18xx *od.Entry) error {
 		transmissionType = TransmissionTypeSyncEventLo
 	}
 	tpdo.transmissionType = transmissionType
-	tpdo.sendRequest = true
+	tpdo.sendRequestAsyncEvent = false
 	return nil
 }
 
-func (tpdo *TPDO) configureCOBID(entry18xx *od.Entry, predefinedIdent uint16, erroneousMap uint32) (canId uint16, e error) {
+func (tpdo *TPDO) configureCobId(entry18xx *od.Entry, predefinedIdent uint16, erroneousMap uint32) (canId uint16, e error) {
 	tpdo.mu.Lock()
 	defer tpdo.mu.Unlock()
 
 	pdo := tpdo.pdo
-	cobId, err := entry18xx.Uint32(od.SubPdoCobId)
+	canId, err := pdo.configureCobId(entry18xx, predefinedIdent, erroneousMap)
 	if err != nil {
-		tpdo.pdo.logger.Error("reading failed",
-			"index", fmt.Errorf("x%x", entry18xx.Index),
-			"subindex", od.SubPdoCobId,
-			"error", err,
-		)
-		return 0, canopen.ErrOdParameters
-	}
-	valid := (cobId & 0x80000000) == 0
-	canId = uint16(cobId & 0x7FF)
-	if valid && (pdo.nbMapped == 0 || canId == 0) {
-		valid = false
-		if erroneousMap == 0 {
-			erroneousMap = 1
-		}
-	}
-	if erroneousMap != 0 {
-		errorInfo := erroneousMap
-		if erroneousMap == 1 {
-			errorInfo = cobId
-		}
-		pdo.emcy.ErrorReport(emergency.EmPDOWrongMapping, emergency.ErrProtocolError, errorInfo)
-	}
-	if !valid {
-		canId = 0
-	}
-	// If default canId is stored in od add node id
-	if canId != 0 && canId == (predefinedIdent&0xFF80) {
-		canId = predefinedIdent
+		return 0, err
 	}
 	tpdo.txBuffer = canopen.NewFrame(uint32(canId), 0, uint8(pdo.dataLength))
-	pdo.Valid = valid
+	pdo.Valid = canId != 0
 	return canId, nil
 
 }
@@ -173,6 +123,10 @@ func (tpdo *TPDO) send() error {
 	defer tpdo.mu.Unlock()
 
 	pdo := tpdo.pdo
+	if !pdo.Valid {
+		return nil
+	}
+
 	totalNbRead := 0
 	var err error
 
@@ -188,18 +142,80 @@ func (tpdo *TPDO) send() error {
 		streamer.DataOffset = mappedLength
 		totalNbRead += int(mappedLength)
 	}
-	tpdo.sendRequest = false
-	tpdo.eventTimer = tpdo.eventTimeUs
-	tpdo.inhibitTimer = tpdo.inhibitTimeUs
-	return tpdo.Send(tpdo.txBuffer)
+	tpdo.sendRequestAsyncEvent = false
+	tpdo.restartEventTimer()
+	tpdo.timeLastSend = time.Now()
+	return tpdo.bm.Send(tpdo.txBuffer)
 }
 
-// Send TPDO asynchronously, next time it is processed
-// This only works for event driven TPDOs
+// Send TPDO asynchronously
+// Rate is limited by the inhibit time, which can be 0
 func (tpdo *TPDO) SendAsync() {
 	tpdo.mu.Lock()
+
+	isAcyclic := tpdo.transmissionType == TransmissionTypeSyncAcyclic
+	if isAcyclic {
+		tpdo.sendRequestAsyncEvent = true
+		tpdo.mu.Unlock()
+		return
+	}
+
+	// If no inhibit, send straight away
+	if tpdo.timeInhibit == 0 {
+		tpdo.mu.Unlock()
+		_ = tpdo.send()
+		return
+	}
+
+	// If inhibit, we must cancel any event timers
+	// and send only after the inhibit time is elapsed
+	remaining := time.Since(tpdo.timeLastSend) - tpdo.timeInhibit
+	if tpdo.timerEvent == nil {
+		tpdo.timerEvent = time.AfterFunc(max(0, remaining), tpdo.eventHandler)
+	} else {
+		tpdo.timerEvent.Reset(max(0, remaining))
+	}
+	tpdo.mu.Unlock()
+	_ = tpdo.send()
+}
+
+func (tpdo *TPDO) SetOperational(operational bool) {
+	tpdo.mu.Lock()
 	defer tpdo.mu.Unlock()
-	tpdo.sendRequest = true
+
+	tpdo.isOperational = operational
+	if operational {
+		tpdo.restartEventTimer()
+		return
+	}
+
+	// Stop timers
+	if tpdo.timerEvent != nil {
+		tpdo.timerEvent.Stop()
+	}
+
+}
+
+func (tpdo *TPDO) restartEventTimer() {
+	if tpdo.timeEvent == 0 {
+		return
+	}
+	// Event timer is used, the next send is limited by the inhibit time
+	if tpdo.timerEvent == nil {
+		tpdo.timerEvent = time.AfterFunc(max(tpdo.timeEvent, tpdo.timeInhibit), tpdo.eventHandler)
+	} else {
+		tpdo.timerEvent.Reset(max(tpdo.timeEvent, tpdo.timeInhibit))
+	}
+}
+
+func (tpdo *TPDO) eventHandler() {
+	tpdo.mu.Lock()
+	operational := tpdo.isOperational
+	tpdo.mu.Unlock()
+
+	if operational {
+		_ = tpdo.send()
+	}
 }
 
 // Create a new TPDO
@@ -218,7 +234,7 @@ func NewTPDO(
 		return nil, canopen.ErrIllegalArgument
 	}
 
-	tpdo := &TPDO{BusManager: bm}
+	tpdo := &TPDO{bm: bm}
 
 	// Configure mapping parameters
 	erroneousMap := uint32(0)
@@ -233,7 +249,7 @@ func NewTPDO(
 		return nil, err
 	}
 	// Configure COB ID
-	canId, err := tpdo.configureCOBID(entry18xx, predefinedIdent, erroneousMap)
+	canId, err := tpdo.configureCobId(entry18xx, predefinedIdent, erroneousMap)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +262,7 @@ func NewTPDO(
 			"error", err,
 		)
 	}
-	tpdo.inhibitTimeUs = uint32(inhibitTime) * 100
+	tpdo.timeInhibit = time.Duration(inhibitTime) * 100 * time.Microsecond
 
 	// Configure event timer (not mandatory)
 	eventTime, err := entry18xx.Uint16(od.SubPdoEventTimer)
@@ -258,7 +274,8 @@ func NewTPDO(
 		)
 
 	}
-	tpdo.eventTimeUs = uint32(eventTime) * 1000
+	tpdo.timeEvent = time.Duration(eventTime) * 1000 * time.Microsecond
+	tpdo.restartEventTimer()
 
 	// Configure sync start value (not mandatory)
 	tpdo.syncStartValue, err = entry18xx.Uint8(od.SubPdoSyncStart)
@@ -285,13 +302,9 @@ func NewTPDO(
 		"event time", eventTime,
 		"transmission type", tpdo.transmissionType,
 	)
-	return tpdo, nil
-}
-
-// Helper for timer logic to prevent underflow
-func saturatingSub(value uint32, amount uint32) uint32 {
-	if value > amount {
-		return value - amount
+	if tpdo.transmissionType < TransmissionTypeSyncEventLo && tpdo.sync != nil {
+		tpdo.syncCh = tpdo.sync.Subscribe()
+		go tpdo.syncHandler()
 	}
-	return 0
+	return tpdo, nil
 }

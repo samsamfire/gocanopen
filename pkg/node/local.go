@@ -44,19 +44,6 @@ func (node *LocalNode) Reset() error {
 	return nil
 }
 
-func (node *LocalNode) ProcessPDO(syncWas bool, timeDifferenceUs uint32) {
-	if node.NodeIdUnconfigured {
-		return
-	}
-	isOperational := node.NMT.GetInternalState() == nmt.StateOperational
-	for _, tpdo := range node.TPDOs {
-		tpdo.Process(timeDifferenceUs, isOperational, syncWas)
-	}
-	for _, rpdo := range node.RPDOs {
-		rpdo.Process(timeDifferenceUs, isOperational, syncWas)
-	}
-}
-
 func (node *LocalNode) ProcessSYNC(timeDifferenceUs uint32) bool {
 	syncWas := false
 	sy := node.SYNC
@@ -166,6 +153,17 @@ func (node *LocalNode) initPDO() error {
 		}
 
 	}
+
+	// Register NMT state change callback for RPDOs
+	_ = node.NMT.AddStateChangeCallback(func(state uint8) {
+		isOperational := state == nmt.StateOperational
+		for _, rpdo := range node.RPDOs {
+			rpdo.SetOperational(isOperational)
+		}
+		for _, tpdo := range node.TPDOs {
+			tpdo.SetOperational(isOperational)
+		}
+	})
 
 	return nil
 }
