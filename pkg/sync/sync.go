@@ -82,8 +82,9 @@ func (sync *SYNC) Handle(frame canopen.Frame) {
 		sync.emcy.Error(false, emergency.EmSyncTimeOut, 0, 0)
 		sync.logger.Warn("reset sync timeout error")
 	}
-
+	sync.mu.Unlock()
 	sync.resetTimers()
+	sync.mu.Lock()
 
 }
 
@@ -133,9 +134,8 @@ func (sync *SYNC) notifySubscribers() {
 	}
 }
 
+// Should be called only if mu is locked
 func (sync *SYNC) resetTimers() {
-	sync.mu.Lock()
-	defer sync.mu.Unlock()
 
 	if sync.syncCyclePeriod == 0 {
 		return
@@ -152,7 +152,7 @@ func (sync *SYNC) resetTimers() {
 	} else {
 		// Allow a bit of slac for consumer
 		timerPeriod = time.Duration(float64(timerPeriod) * 1.5)
-		if sync.timerConsumer != nil {
+		if sync.timerConsumer == nil {
 			sync.timerConsumer = time.AfterFunc(timerPeriod, sync.timerConsumerHandler)
 		} else {
 			sync.timerConsumer.Reset(timerPeriod)
@@ -163,6 +163,8 @@ func (sync *SYNC) resetTimers() {
 func (sync *SYNC) timerProducerHandler() {
 	// Producer timer elapsed send sync
 	sync.send()
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
 	sync.resetTimers()
 }
 

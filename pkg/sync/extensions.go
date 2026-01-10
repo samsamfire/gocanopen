@@ -47,9 +47,7 @@ func writeEntry1005(stream *od.Stream, data []byte) (uint16, error) {
 	}
 	// Reset in case sync is producer
 	sync.isProducer = isProducer
-	sync.mu.Unlock()
 	sync.resetTimers()
-	sync.mu.Lock()
 	sync.logger.Info("sync type", "isProducer", isProducer)
 	return od.WriteEntryDefault(stream, data)
 }
