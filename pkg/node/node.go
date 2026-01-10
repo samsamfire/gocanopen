@@ -22,6 +22,7 @@ const (
 type Node interface {
 	// Reset node
 	Reset() error
+	Stop() error
 	// Cyclic tasks
 	ProcessMain(enableGateway bool, timeDifferenceUs uint32) uint8
 	// Internal servers

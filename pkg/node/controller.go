@@ -42,10 +42,13 @@ func (c *NodeProcessor) main(ctx context.Context) {
 	c.logger.Info("starting node main process")
 	for {
 		select {
+
 		case <-ctx.Done():
 			c.logger.Info("exited node main process")
 			ticker.Stop()
+			c.node.Stop()
 			return
+
 		case <-ticker.C:
 			// Process main
 			state := c.node.ProcessMain(false, periodUs)

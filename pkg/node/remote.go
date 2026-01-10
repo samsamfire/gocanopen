@@ -49,6 +49,13 @@ func (node *RemoteNode) Reset() error {
 	return nil
 }
 
+func (node *RemoteNode) Stop() error {
+	if node.sync != nil {
+		node.sync.Stop()
+	}
+	return nil
+}
+
 // Create a remote node
 func NewRemoteNode(
 	bm *canopen.BusManager,

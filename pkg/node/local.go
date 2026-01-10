@@ -44,6 +44,13 @@ func (node *LocalNode) Reset() error {
 	return nil
 }
 
+func (node *LocalNode) Stop() error {
+	if node.SYNC != nil {
+		node.SYNC.Stop()
+	}
+	return nil
+}
+
 // Process canopen objects that are not RT
 // Does not process SYNC and PDOs
 func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32) uint8 {
