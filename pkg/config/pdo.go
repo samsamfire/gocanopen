@@ -304,8 +304,9 @@ func (config *NodeConfigurator) WriteConfigurationPDO(pdoNb uint16, conf PDOConf
 	if err != nil {
 		return err
 	}
-	err = config.WriteTransmissionType(pdoNb, conf.TransmissionType)
-	if err != nil {
+	// Optional
+	err = config.WriteInhibitTime(pdoNb, conf.InhibitTime)
+	if err != nil && err != sdo.AbortSubUnknown {
 		return err
 	}
 	// Optional
@@ -314,13 +315,12 @@ func (config *NodeConfigurator) WriteConfigurationPDO(pdoNb uint16, conf PDOConf
 		return err
 	}
 	// Optional
-	err = config.WriteInhibitTime(pdoNb, conf.InhibitTime)
+	err = config.WriteSyncStart(pdoNb, conf.SyncStart)
 	if err != nil && err != sdo.AbortSubUnknown {
 		return err
 	}
-	// Optional
-	err = config.WriteSyncStart(pdoNb, conf.SyncStart)
-	if err != nil && err != sdo.AbortSubUnknown {
+	err = config.WriteTransmissionType(pdoNb, conf.TransmissionType)
+	if err != nil {
 		return err
 	}
 	return config.WriteMappings(pdoNb, conf.Mappings)

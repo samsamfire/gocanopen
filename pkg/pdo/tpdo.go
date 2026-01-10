@@ -273,6 +273,7 @@ func NewTPDO(
 
 	}
 	tpdo.timeEvent = time.Duration(eventTime) * 1000 * time.Microsecond
+	tpdo.restartEventTimer()
 
 	// Configure sync start value (not mandatory)
 	tpdo.syncStartValue, err = entry18xx.Uint8(od.SubPdoSyncStart)
