@@ -42,7 +42,7 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
 
-	// Don't process any further if PDO is not valid or not operational
+	// Don't process any further if PDO is not valid or NMT operational
 	if !rpdo.pdo.Valid || !rpdo.isOperational {
 		return
 	}
@@ -70,7 +70,7 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 		}
 	}
 
-	// Reset timeout timer
+	// Reset timeout timer, if enabled
 	if rpdo.timeoutTimeUs > 0 {
 		if rpdo.timer != nil {
 			if !rpdo.timer.Stop() {
@@ -81,13 +81,13 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 			}
 			rpdo.timer.Reset(time.Duration(rpdo.timeoutTimeUs) * time.Microsecond)
 		} else {
-			rpdo.timer = time.AfterFunc(time.Duration(rpdo.timeoutTimeUs)*time.Microsecond, rpdo.timeoutHandler)
+			rpdo.timer = time.AfterFunc(time.Duration(rpdo.timeoutTimeUs)*time.Microsecond, rpdo.onTimeoutHandler)
 		}
 	}
 
 	// Reset timeout error if it happened
 	if rpdo.inTimeout {
-		rpdo.pdo.emcy.ErrorReset(emergency.EmRPDOTimeOut, 0)
+		rpdo.pdo.emcy.ErrorReset(emergency.EmRPDOTimeOut, rpdo.timeoutTimeUs)
 		rpdo.inTimeout = false
 	}
 
@@ -104,7 +104,8 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	rpdo.copyDataToOd(rpdo.pdo, frame.Data)
 }
 
-func (rpdo *RPDO) timeoutHandler() {
+// Callback on timeout event
+func (rpdo *RPDO) onTimeoutHandler() {
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
 
@@ -113,8 +114,7 @@ func (rpdo *RPDO) timeoutHandler() {
 	}
 
 	rpdo.inTimeout = true
-	// Pass 0 as info for now, as we don't have exact timer value easily or need it
-	rpdo.pdo.emcy.ErrorReport(emergency.EmRPDOTimeOut, emergency.ErrRpdoTimeout, 0)
+	rpdo.pdo.emcy.ErrorReport(emergency.EmRPDOTimeOut, emergency.ErrRpdoTimeout, rpdo.timeoutTimeUs)
 }
 
 func (rpdo *RPDO) SetOperational(operational bool) {
