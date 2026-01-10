@@ -29,7 +29,7 @@ type RPDO struct {
 	receiveError  uint8
 	sync          *sync.SYNC
 	synchronous   bool
-	timeoutTimeUs uint32
+	timeoutRx     time.Duration
 	timer         *time.Timer
 	inTimeout     bool
 	isOperational bool
@@ -71,17 +71,17 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	}
 
 	// Reset timeout timer, if enabled
-	if rpdo.timeoutTimeUs > 0 {
+	if rpdo.timeoutRx > 0 {
 		if rpdo.timer != nil {
-			rpdo.timer.Reset(time.Duration(rpdo.timeoutTimeUs) * time.Microsecond)
+			rpdo.timer.Reset(rpdo.timeoutRx)
 		} else {
-			rpdo.timer = time.AfterFunc(time.Duration(rpdo.timeoutTimeUs)*time.Microsecond, rpdo.onTimeoutHandler)
+			rpdo.timer = time.AfterFunc(rpdo.timeoutRx, rpdo.onTimeoutHandler)
 		}
 	}
 
 	// Reset timeout error if it happened
 	if rpdo.inTimeout {
-		rpdo.pdo.emcy.ErrorReset(emergency.EmRPDOTimeOut, rpdo.timeoutTimeUs)
+		rpdo.pdo.emcy.ErrorReset(emergency.EmRPDOTimeOut, uint32(rpdo.timeoutRx.Microseconds()))
 		rpdo.inTimeout = false
 	}
 
@@ -108,7 +108,7 @@ func (rpdo *RPDO) onTimeoutHandler() {
 	}
 
 	rpdo.inTimeout = true
-	rpdo.pdo.emcy.ErrorReport(emergency.EmRPDOTimeOut, emergency.ErrRpdoTimeout, rpdo.timeoutTimeUs)
+	rpdo.pdo.emcy.ErrorReport(emergency.EmRPDOTimeOut, emergency.ErrRpdoTimeout, uint32(rpdo.timeoutRx.Microseconds()))
 }
 
 func (rpdo *RPDO) SetOperational(operational bool) {
@@ -287,7 +287,7 @@ func NewRPDO(
 	rpdo.synchronous = transmissionType <= TransmissionTypeSync240
 
 	// Configure event timer (not mandatory)
-	eventTime, err := entry14xx.Uint16(od.SubPdoEventTimer)
+	eventTimeUs, err := entry14xx.Uint16(od.SubPdoEventTimer)
 	if err != nil {
 		rpdo.pdo.logger.Warn("reading event timer failed",
 			"index", fmt.Errorf("x%x", entry14xx.Index),
@@ -295,7 +295,7 @@ func NewRPDO(
 			"error", err,
 		)
 	}
-	rpdo.timeoutTimeUs = uint32(eventTime) * 1000
+	rpdo.timeoutRx = time.Duration(eventTimeUs*1000) * time.Microsecond
 	pdo.IsRPDO = true
 	pdo.od = odict
 	pdo.predefinedId = predefinedIdent
@@ -305,7 +305,7 @@ func NewRPDO(
 	rpdo.pdo.logger.Debug("finished initializing",
 		"canId", canId,
 		"valid", pdo.Valid,
-		"event time", eventTime,
+		"event time", eventTimeUs,
 		"synchronous", rpdo.synchronous,
 	)
 	if rpdo.synchronous && rpdo.sync != nil {

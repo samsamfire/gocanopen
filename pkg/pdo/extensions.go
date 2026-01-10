@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/od"
@@ -120,8 +121,10 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 
 	case od.SubPdoEventTimer:
 		eventTimer := binary.LittleEndian.Uint16(data)
-		rpdo.timeoutTimeUs = uint32(eventTimer) * 1000
-		rpdo.timeoutTimer = 0
+		rpdo.timeoutRx = time.Duration(eventTimer*1000) * time.Microsecond
+		if rpdo.timer != nil {
+			rpdo.timer.Stop()
+		}
 		rpdo.pdo.logger.Debug("updated event timer", "eventTimer", eventTimer)
 
 	case od.SubPdoSyncStart:
