@@ -1,10 +1,13 @@
 package network
 
 import (
+	"bytes"
+	"log/slog"
 	"testing"
 	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
+	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -102,12 +105,18 @@ func TestSyncCounter(t *testing.T) {
 }
 
 func TestSyncConsumer(t *testing.T) {
-	net := CreateNetworkTest()
+	net := CreateNetworkEmptyTest()
 	otherNet := CreateNetworkEmptyTest()
 	defer net.Disconnect()
 	defer otherNet.Disconnect()
 
-	local, err := net.Local(NodeIdTest)
+	// Setup Log Capture
+	var logBuf bytes.Buffer
+	handler := slog.NewTextHandler(&logBuf, nil)
+	logger := slog.New(handler)
+	net.SetLogger(logger)
+
+	local, err := net.CreateLocalNode(NodeIdTest, od.Default())
 	assert.Nil(t, err)
 
 	// Ensure local node is NOT producer
@@ -139,5 +148,31 @@ func TestSyncConsumer(t *testing.T) {
 
 		time.Sleep(50 * time.Millisecond)
 		assert.Equal(t, uint8(3), local.SYNC.Counter())
+	})
+
+	t.Run("consumer timeout if not sync received", func(t *testing.T) {
+		// Configure as Consumer
+		c := local.Configurator()
+		// Set Period (100ms)
+		err = c.WriteCommunicationPeriod(100 * time.Millisecond)
+		assert.Nil(t, err)
+
+		// Ensure Producer disabled
+		err = c.ProducerDisableSYNC()
+		assert.Nil(t, err)
+
+		// Start Node (Operational)
+		// Send NMT Start Remote Node command
+		// NMT Start (0x01) Target (NodeIdTest)
+		data := [8]byte{0x01, NodeIdTest}
+		err = otherNet.Send(canopen.Frame{ID: 0, DLC: 2, Data: data})
+		assert.Nil(t, err)
+
+		// Wait for timeout (Period 100ms * 1.5 = 150ms). Wait 250ms.
+		time.Sleep(250 * time.Millisecond)
+
+		// Check logs
+		logStr := logBuf.String()
+		assert.Contains(t, logStr, "timeout error")
 	})
 }
