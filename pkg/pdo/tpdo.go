@@ -18,7 +18,7 @@ const (
 )
 
 type TPDO struct {
-	*canopen.BusManager
+	bm               *canopen.BusManager
 	mu               s.Mutex
 	sync             *sync.SYNC
 	pdo              *PDOCommon
@@ -172,7 +172,7 @@ func (tpdo *TPDO) send() error {
 	tpdo.sendRequest = false
 	tpdo.restartEventTimer()
 	tpdo.startInhibitTimer()
-	return tpdo.Send(tpdo.txBuffer)
+	return tpdo.bm.Send(tpdo.txBuffer)
 }
 
 func (tpdo *TPDO) checkAndSend() {
@@ -275,7 +275,7 @@ func NewTPDO(
 		return nil, canopen.ErrIllegalArgument
 	}
 
-	tpdo := &TPDO{BusManager: bm}
+	tpdo := &TPDO{bm: bm}
 
 	// Configure mapping parameters
 	erroneousMap := uint32(0)

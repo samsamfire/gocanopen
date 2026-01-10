@@ -71,7 +71,7 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 			if rpdo.rxCancel != nil {
 				rpdo.rxCancel()
 			}
-			rxCancel, err := rpdo.Subscribe(canId, 0x7FF, false, rpdo)
+			rxCancel, err := rpdo.bm.Subscribe(canId, 0x7FF, false, rpdo)
 			rpdo.rxCancel = rxCancel
 			if valid && err == nil {
 				pdo.Valid = true
