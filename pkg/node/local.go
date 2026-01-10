@@ -44,12 +44,6 @@ func (node *LocalNode) Reset() error {
 	return nil
 }
 
-func (node *LocalNode) ProcessPDO(syncWas bool, timeDifferenceUs uint32) {
-	if node.NodeIdUnconfigured {
-		return
-	}
-}
-
 func (node *LocalNode) ProcessSYNC(timeDifferenceUs uint32) bool {
 	syncWas := false
 	sy := node.SYNC
