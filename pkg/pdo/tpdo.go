@@ -152,16 +152,17 @@ func (tpdo *TPDO) send() error {
 // Rate is limited by the inhibit time, which can be 0
 func (tpdo *TPDO) SendAsync() {
 	tpdo.mu.Lock()
-	defer tpdo.mu.Unlock()
 
 	isAcyclic := tpdo.transmissionType == TransmissionTypeSyncAcyclic
 	if isAcyclic {
 		tpdo.sendRequestAsyncEvent = true
+		tpdo.mu.Unlock()
 		return
 	}
 
 	// If no inhibit, send straight away
 	if tpdo.timeInhibit == 0 {
+		tpdo.mu.Unlock()
 		_ = tpdo.send()
 		return
 	}
@@ -174,7 +175,8 @@ func (tpdo *TPDO) SendAsync() {
 	} else {
 		tpdo.timerEvent.Reset(max(0, remaining))
 	}
-	tpdo.send()
+	tpdo.mu.Unlock()
+	_ = tpdo.send()
 }
 
 func (tpdo *TPDO) SetOperational(operational bool) {
