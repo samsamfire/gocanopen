@@ -27,8 +27,8 @@ type TPDO struct {
 	sendRequest      bool
 	syncStartValue   uint8
 	syncCounter      uint8
-	inhibitTimeUs    uint32
-	eventTimeUs      uint32
+	timeInhibit      time.Duration
+	timeEvent        time.Duration
 	timerInhibit     *time.Timer
 	timerEvent       *time.Timer
 	inhibitActive    bool
@@ -36,6 +36,7 @@ type TPDO struct {
 	syncCh           chan uint8
 }
 
+// Process TPDOs on SYNC reception
 func (tpdo *TPDO) syncHandler() {
 	for range tpdo.syncCh {
 		tpdo.mu.Lock()
@@ -211,15 +212,14 @@ func (tpdo *TPDO) SetOperational(operational bool) {
 }
 
 func (tpdo *TPDO) startInhibitTimer() {
-	if tpdo.inhibitTimeUs == 0 {
+	if tpdo.timeInhibit == 0 {
 		return
 	}
 	tpdo.inhibitActive = true
-	duration := time.Duration(tpdo.inhibitTimeUs) * time.Microsecond
 	if tpdo.timerInhibit == nil {
-		tpdo.timerInhibit = time.AfterFunc(duration, tpdo.inhibitHandler)
+		tpdo.timerInhibit = time.AfterFunc(tpdo.timeInhibit, tpdo.inhibitHandler)
 	} else {
-		tpdo.timerInhibit.Reset(duration)
+		tpdo.timerInhibit.Reset(tpdo.timeInhibit)
 	}
 }
 
@@ -236,14 +236,13 @@ func (tpdo *TPDO) inhibitHandler() {
 }
 
 func (tpdo *TPDO) restartEventTimer() {
-	if tpdo.eventTimeUs == 0 {
+	if tpdo.timeEvent == 0 {
 		return
 	}
-	duration := time.Duration(tpdo.eventTimeUs) * time.Microsecond
 	if tpdo.timerEvent == nil {
-		tpdo.timerEvent = time.AfterFunc(duration, tpdo.eventHandler)
+		tpdo.timerEvent = time.AfterFunc(tpdo.timeEvent, tpdo.eventHandler)
 	} else {
-		tpdo.timerEvent.Reset(duration)
+		tpdo.timerEvent.Reset(tpdo.timeEvent)
 	}
 }
 
@@ -303,7 +302,7 @@ func NewTPDO(
 			"error", err,
 		)
 	}
-	tpdo.inhibitTimeUs = uint32(inhibitTime) * 100
+	tpdo.timeInhibit = time.Duration(inhibitTime) * 100 * time.Microsecond
 
 	// Configure event timer (not mandatory)
 	eventTime, err := entry18xx.Uint16(od.SubPdoEventTimer)
@@ -315,7 +314,7 @@ func NewTPDO(
 		)
 
 	}
-	tpdo.eventTimeUs = uint32(eventTime) * 1000
+	tpdo.timeEvent = time.Duration(eventTime) * 1000 * time.Microsecond
 
 	// Configure sync start value (not mandatory)
 	tpdo.syncStartValue, err = entry18xx.Uint8(od.SubPdoSyncStart)

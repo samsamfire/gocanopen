@@ -205,7 +205,7 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 			return 0, od.ErrInvalidValue
 		}
 		inhibitTime := binary.LittleEndian.Uint16(data)
-		tpdo.inhibitTimeUs = uint32(inhibitTime) * 100
+		tpdo.timeInhibit = time.Duration(inhibitTime) * 100 * time.Microsecond
 		tpdo.inhibitActive = false
 		if tpdo.timerInhibit != nil {
 			tpdo.timerInhibit.Stop()
@@ -216,7 +216,7 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 
 	case od.SubPdoEventTimer:
 		eventTime := binary.LittleEndian.Uint16(data)
-		tpdo.eventTimeUs = uint32(eventTime) * 1000
+		tpdo.timeEvent = time.Duration(eventTime) * 1000 * time.Microsecond
 		tpdo.sendRequest = true
 		if tpdo.timerEvent != nil {
 			tpdo.timerEvent.Stop()
@@ -224,7 +224,7 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		if tpdo.isOperational {
 			tpdo.restartEventTimer()
 		}
-		tpdo.pdo.logger.Debug("updated event timer", "eventTimeUs", tpdo.eventTimeUs)
+		tpdo.pdo.logger.Debug("updated event timer", "eventTime", tpdo.timeEvent)
 
 	case od.SubPdoSyncStart:
 		syncStart := data[0]
