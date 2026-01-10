@@ -258,7 +258,7 @@ func (b *Bus) SetReceiveOwn(enabled bool) error {
 
 func (b *Bus) SetFilters(filters []unix.CanFilter) error {
 	// Apply to TX socket only, does not affect AF_PACKET RX
-	return unix.SetsockoptCanRawFilter(b.txFd, unix.SOL_CAN_RAW, unix.CAN_RAW_FILTER, filters)
+	return unix.SetsockoptCanRawFilter(b.rxFd, unix.SOL_CAN_RAW, unix.CAN_RAW_FILTER, filters)
 }
 
 // Update polling period for RX
