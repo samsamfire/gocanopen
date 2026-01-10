@@ -13,11 +13,7 @@ import (
 )
 
 const (
-	rpdoRxAckNoError = 0  // No error
-	rpdoRxAckError   = 1  // Error is acknowledged
-	rpdoRxOk         = 11 // Correct RPDO received, not acknowledged
-	rpdoRxShort      = 12 // Too short RPDO received, not acknowledged
-	rpdoRxLong       = 13 // Too long RPDO received, not acknowledged
+// Codes used for reporting specific RPDO length errors
 )
 
 type RPDO struct {
@@ -26,7 +22,6 @@ type RPDO struct {
 	pdo           *PDOCommon
 	rxData        [MaxPdoLength]byte
 	rxNew         bool
-	receiveError  uint8
 	sync          *sync.SYNC
 	synchronous   bool
 	timeoutRx     time.Duration
@@ -53,7 +48,7 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	}
 
 	// Timeout timer logic, if enabled
-	rpdo.restartTimer()
+	rpdo.restartTimeoutTimer()
 	if rpdo.inTimeout {
 		rpdo.pdo.emcy.ErrorReset(emergency.EmRPDOTimeOut, 0)
 		rpdo.inTimeout = false
@@ -87,23 +82,20 @@ func (rpdo *RPDO) validateFrameLength(dlc uint8) bool {
 	expectedLength := uint8(rpdo.pdo.dataLength)
 
 	if dlc == expectedLength {
-		if rpdo.receiveError != rpdoRxAckNoError {
-			rpdo.receiveError = rpdoRxOk
-			rpdo.processReceiveErrors()
-		}
+		rpdo.pdo.emcy.Error(false, emergency.EmRPDOWrongLength, emergency.ErrNoError, 0)
 		return true
 	}
 
-	if dlc < expectedLength {
-		rpdo.receiveError = rpdoRxShort
-	} else {
-		rpdo.receiveError = rpdoRxLong
+	errorCode := emergency.ErrPdoLength
+	if dlc > expectedLength {
+		errorCode = emergency.ErrPdoLengthExc
 	}
-	rpdo.processReceiveErrors()
+
+	rpdo.pdo.emcy.Error(true, emergency.EmRPDOWrongLength, uint16(errorCode), rpdo.pdo.dataLength)
 	return false
 }
 
-func (rpdo *RPDO) restartTimer() {
+func (rpdo *RPDO) restartTimeoutTimer() {
 	if rpdo.timeoutRx == 0 {
 		return
 	}
@@ -165,24 +157,6 @@ func (rpdo *RPDO) copyDataToOd(data [8]byte) {
 
 		streamer.DataOffset = streamer.DataLength
 		offset = end
-	}
-}
-
-func (rpdo *RPDO) processReceiveErrors() {
-
-	setError := rpdo.receiveError != rpdoRxOk
-
-	errorCode := emergency.ErrPdoLength
-	if rpdo.receiveError != rpdoRxShort {
-		errorCode = emergency.ErrPdoLengthExc
-	}
-
-	rpdo.pdo.emcy.Error(setError, emergency.EmRPDOWrongLength, uint16(errorCode), rpdo.pdo.dataLength)
-
-	if setError {
-		rpdo.receiveError = rpdoRxAckError
-	} else {
-		rpdo.receiveError = rpdoRxAckNoError
 	}
 }
 
