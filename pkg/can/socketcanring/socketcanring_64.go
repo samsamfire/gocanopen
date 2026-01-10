@@ -13,5 +13,5 @@ import (
 type Mmsghdr struct {
 	Hdr unix.Msghdr
 	Len uint32
-	pad [4]byte
+	_   [4]byte
 }

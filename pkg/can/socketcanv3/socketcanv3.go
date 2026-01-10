@@ -107,7 +107,6 @@ func (b *Bus) Disconnect() error {
 	}
 	b.cancel()
 	b.wg.Wait()
-	//b.f.Close()
 	return nil
 }
 
