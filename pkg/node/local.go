@@ -52,9 +52,6 @@ func (node *LocalNode) ProcessPDO(syncWas bool, timeDifferenceUs uint32) {
 	for _, tpdo := range node.TPDOs {
 		tpdo.Process(timeDifferenceUs, isOperational, syncWas)
 	}
-	for _, rpdo := range node.RPDOs {
-		rpdo.Process(timeDifferenceUs, isOperational, syncWas)
-	}
 }
 
 func (node *LocalNode) ProcessSYNC(timeDifferenceUs uint32) bool {
@@ -166,6 +163,14 @@ func (node *LocalNode) initPDO() error {
 		}
 
 	}
+
+	// Register NMT state change callback for RPDOs
+	_ = node.NMT.AddStateChangeCallback(func(state uint8) {
+		isOperational := state == nmt.StateOperational
+		for _, rpdo := range node.RPDOs {
+			rpdo.SetOperational(isOperational)
+		}
+	})
 
 	return nil
 }
