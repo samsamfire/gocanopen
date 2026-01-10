@@ -20,6 +20,8 @@ type SYNC struct {
 	*canopen.BusManager
 	logger              *slog.Logger
 	mu                  s.Mutex
+	subMu               s.Mutex
+	subscribers         []chan uint8
 	emcy                *emergency.EMCY
 	rxNew               bool
 	receiveError        uint8
@@ -35,6 +37,41 @@ type SYNC struct {
 	cobId               uint32
 	txBuffer            canopen.Frame
 	rxCancel            func()
+}
+
+// SubscribeSync returns a channel that receives the sync counter
+// on every valid SYNC message
+func (sync *SYNC) SubscribeSync() chan uint8 {
+	sync.subMu.Lock()
+	defer sync.subMu.Unlock()
+	ch := make(chan uint8, 1)
+	sync.subscribers = append(sync.subscribers, ch)
+	return ch
+}
+
+// UnsubscribeSync removes the subscriber channel and closes it
+func (sync *SYNC) UnsubscribeSync(ch chan uint8) {
+	sync.subMu.Lock()
+	defer sync.subMu.Unlock()
+	for i, sub := range sync.subscribers {
+		if sub == ch {
+			sync.subscribers = append(sync.subscribers[:i], sync.subscribers[i+1:]...)
+			close(ch)
+			return
+		}
+	}
+}
+
+func (sync *SYNC) notifySubscribers() {
+	sync.subMu.Lock()
+	defer sync.subMu.Unlock()
+	for _, ch := range sync.subscribers {
+		select {
+		case ch <- sync.counter:
+		default:
+			// Channel full, drop event
+		}
+	}
 }
 
 // Handle [SYNC] related RX CAN frames
@@ -60,6 +97,8 @@ func (sync *SYNC) Handle(frame canopen.Frame) {
 	if syncReceived {
 		sync.rxToggle = !sync.rxToggle
 		sync.rxNew = true
+		// Notify subscribers
+		sync.notifySubscribers()
 	}
 }
 
