@@ -128,6 +128,42 @@ func (pdo *PDOCommon) configureMap(mapParam uint32, mapIndex uint32, isRPDO bool
 
 }
 
+func (pdo *PDOCommon) configureCobId(entry *od.Entry, predefinedIdent uint16, erroneousMap uint32) (canId uint16, err error) {
+
+	cobId, err := entry.Uint32(od.SubPdoCobId)
+	if err != nil {
+		pdo.logger.Error("reading COB-ID failed",
+			"index", fmt.Errorf("x%x", entry.Index),
+			"subindex", od.SubPdoCobId,
+			"error", err,
+		)
+		return 0, canopen.ErrOdParameters
+	}
+	valid := (cobId & CobIdValidBit) == 0
+	canId = uint16(cobId & 0x7FF)
+	if valid && (pdo.nbMapped == 0 || canId == 0) {
+		valid = false
+		if erroneousMap == 0 {
+			erroneousMap = 1
+		}
+	}
+	if erroneousMap != 0 {
+		errorInfo := erroneousMap
+		if erroneousMap == 1 {
+			errorInfo = cobId
+		}
+		pdo.emcy.ErrorReport(emergency.EmPDOWrongMapping, emergency.ErrProtocolError, errorInfo)
+	}
+	if !valid {
+		canId = 0
+	}
+	// If default canId is stored in od add node id
+	if canId != 0 && canId == (predefinedIdent&0xFF80) {
+		canId = predefinedIdent
+	}
+	return canId, err
+}
+
 // Create and initialize a common PDO object
 func NewPDO(
 	odict *od.ObjectDictionary,
