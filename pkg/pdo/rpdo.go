@@ -20,14 +20,12 @@ const (
 	rpdoRxLong       = 13 // Too long RPDO received, not acknowledged
 )
 
-const buffCount = 2
-
 type RPDO struct {
 	*canopen.BusManager
 	mu            s.Mutex
 	pdo           *PDOCommon
-	rxNew         [buffCount]bool
-	rxData        [buffCount][MaxPdoLength]byte
+	rxData        [MaxPdoLength]byte
+	rxNew         bool
 	receiveError  uint8
 	sync          *sync.SYNC
 	synchronous   bool
@@ -70,14 +68,18 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 		}
 	}
 
-	// Process the frame, determine buffer to write to
-	bufIdx := 0
-	if rpdo.synchronous && rpdo.sync != nil && rpdo.sync.RxToggle() {
-		bufIdx = 1
+	// For synchronous RPDOs, data is stored in an intermediate buffer, and
+	// propagated to OD, only after a SYNC reception.
+	// For asynchronous RPDOs, data is directly propagated to OD
+
+	// TODO : get the NMT state
+	if rpdo.synchronous {
+		rpdo.rxNew = true
+		rpdo.rxData = frame.Data
+		return
 	}
 
-	rpdo.rxData[bufIdx] = frame.Data
-	rpdo.rxNew[bufIdx] = true
+	rpdo.copyDataToOd(rpdo.pdo, frame.Data)
 }
 
 // Process [RPDO] state machine and TX CAN frames
@@ -85,12 +87,10 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWas bool) {
 	rpdo.mu.Lock()
 
-	var buffer []byte
 	pdo := rpdo.pdo
 
 	if !pdo.Valid || !nmtIsOperational {
-		rpdo.rxNew[0] = false
-		rpdo.rxNew[1] = false
+		rpdo.rxNew = false
 		rpdo.timeoutTimer = 0
 		rpdo.mu.Unlock()
 		return
@@ -106,14 +106,8 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 		rpdo.processReceiveErrors(pdo)
 	}
 
-	// Get the correct rx buffer
-	bufNo := uint8(0)
-	if rpdo.synchronous && rpdo.sync != nil && !rpdo.sync.RxToggle() {
-		bufNo = 1
-	}
-
 	// Handle timeout logic if RPDO not received
-	if !rpdo.rxNew[bufNo] {
+	if !rpdo.rxNew {
 		if rpdo.timeoutTimeUs > 0 && rpdo.timeoutTimer > 0 && rpdo.timeoutTimer < rpdo.timeoutTimeUs {
 			rpdo.timeoutTimer += timeDifferenceUs
 			if rpdo.timeoutTimer > rpdo.timeoutTimeUs {
@@ -124,9 +118,9 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 		return
 	}
 
-	localData := rpdo.rxData[bufNo]
-	rpdo.rxNew[bufNo] = false
+	rpdo.rxNew = false
 	rpdo.mu.Unlock()
+	rpdo.copyDataToOd(pdo, rpdo.rxData)
 
 	// Handle timeout logic, reset if happened
 	timeoutHappened := rpdo.timeoutTimer > rpdo.timeoutTimeUs
@@ -138,14 +132,18 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 	if timeoutHappened && rpdo.timeoutTimeUs > 0 {
 		pdo.emcy.ErrorReset(emergency.EmRPDOTimeOut, rpdo.timeoutTimer)
 	}
+}
 
+func (rpdo *RPDO) copyDataToOd(pdo *PDOCommon, data [8]byte) {
+
+	var buffer []byte
 	totalNbWritten := uint32(0)
 	totalMappedLength := uint32(0)
-	rpdo.rxNew[bufNo] = false
 
 	// Iterate over all the mapped objects and copy data from
 	// received RPDO frame to OD via streamer objects.
 	for i := range pdo.nbMapped {
+
 		streamer := &pdo.streamers[i]
 		mappedLength := streamer.DataOffset
 		dataLength := streamer.DataLength
@@ -161,7 +159,7 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 			dataLength = uint32(MaxPdoLength)
 		}
 
-		buffer = localData[totalNbWritten : totalNbWritten+mappedLength]
+		buffer = data[totalNbWritten : totalNbWritten+mappedLength]
 		if dataLength > uint32(mappedLength) {
 			buffer = buffer[:cap(buffer)]
 		}
@@ -177,11 +175,13 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 		streamer.DataOffset = mappedLength
 		totalNbWritten += mappedLength
 	}
+
 	// Additional check for total mapped length, should be equal to PDO data length
 	// this should never happen unless software issue.
 	if totalMappedLength > uint32(MaxPdoLength) || totalMappedLength != pdo.dataLength {
 		pdo.emcy.ErrorReport(emergency.EmGenericSoftwareError, emergency.ErrSoftwareInternal, totalMappedLength)
 	}
+
 }
 
 func (rpdo *RPDO) processReceiveErrors(pdo *PDOCommon) {
