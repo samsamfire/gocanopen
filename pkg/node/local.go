@@ -44,25 +44,6 @@ func (node *LocalNode) Reset() error {
 	return nil
 }
 
-func (node *LocalNode) ProcessSYNC(timeDifferenceUs uint32) bool {
-	syncWas := false
-	sy := node.SYNC
-	if !node.NodeIdUnconfigured && sy != nil {
-
-		nmtState := node.NMT.GetInternalState()
-		nmtIsPreOrOperational := nmtState == nmt.StatePreOperational || nmtState == nmt.StateOperational
-		syncProcess := sy.Process(nmtIsPreOrOperational, timeDifferenceUs)
-
-		switch syncProcess {
-		case s.EventRxOrTx:
-			syncWas = true
-		case s.EventPassedWindow:
-		default:
-		}
-	}
-	return syncWas
-}
-
 // Process canopen objects that are not RT
 // Does not process SYNC and PDOs
 func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32) uint8 {

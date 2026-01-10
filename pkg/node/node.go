@@ -23,7 +23,6 @@ type Node interface {
 	// Reset node
 	Reset() error
 	// Cyclic tasks
-	ProcessSYNC(timeDifferenceUs uint32) bool
 	ProcessMain(enableGateway bool, timeDifferenceUs uint32) uint8
 	// Internal servers
 	Servers() []*sdo.SDOServer
