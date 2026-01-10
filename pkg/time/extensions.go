@@ -29,7 +29,7 @@ func writeEntry1012(stream *od.Stream, data []byte) (uint16, error) {
 		if t.rxCancel != nil {
 			t.rxCancel()
 		}
-		rxCancel, err := t.Subscribe(t.cobId, 0x7FF, false, t)
+		rxCancel, err := t.bm.Subscribe(t.cobId, 0x7FF, false, t)
 		t.rxCancel = rxCancel
 		if err != nil {
 			return 0, od.ErrDevIncompat

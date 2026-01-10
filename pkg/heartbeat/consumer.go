@@ -42,7 +42,7 @@ type hbConsumerEntry struct {
 
 // Hearbeat consumer object for monitoring node hearbeats
 type HBConsumer struct {
-	*canopen.BusManager
+	bm                        *canopen.BusManager
 	logger                    *slog.Logger
 	mu                        sync.Mutex
 	emcy                      *emergency.EMCY
@@ -237,7 +237,7 @@ func (consumer *HBConsumer) updateConsumerEntry(index uint8, nodeId uint8, consu
 			entry.rxCancel()
 		}
 		consumer.logger.Info("will monitor", "monitoredId", entry.nodeId, "timeoutMs", entry.timeUs/1000)
-		rxCancel, err := consumer.Subscribe(uint32(entry.cobId), 0x7FF, false, entry)
+		rxCancel, err := consumer.bm.Subscribe(uint32(entry.cobId), 0x7FF, false, entry)
 		entry.rxCancel = rxCancel
 		return err
 	}
@@ -263,7 +263,7 @@ func NewHBConsumer(bm *canopen.BusManager, logger *slog.Logger, emcy *emergency.
 		logger = slog.Default()
 	}
 
-	consumer := &HBConsumer{BusManager: bm, logger: logger.With("service", "[HB]"), emcy: emcy}
+	consumer := &HBConsumer{bm: bm, logger: logger.With("service", "[HB]"), emcy: emcy}
 
 	// Get number of nodes to monitor and create a monitor for each node
 	nbEntries := uint8(entry1016.SubCount() - 1)

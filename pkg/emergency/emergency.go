@@ -256,7 +256,7 @@ type EMCYRxCallback func(ident uint16, errorCode uint16, errorRegister byte, err
 
 // Emergency object for receiving & transmitting emergencies
 type EMCY struct {
-	*canopen.BusManager
+	bm              *canopen.BusManager
 	logger          *slog.Logger
 	mu              sync.Mutex
 	nodeId          byte
@@ -301,7 +301,7 @@ func (emcy *EMCY) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) {
 	emcy.mu.Lock()
 	defer emcy.mu.Unlock()
 	// Check errors from driver
-	canErrStatus := emcy.BusManager.Error()
+	canErrStatus := emcy.bm.Error()
 	if canErrStatus != emcy.canErrorOld {
 		canErrStatusChanged := canErrStatus ^ emcy.canErrorOld
 		emcy.canErrorOld = canErrStatus
@@ -386,7 +386,7 @@ func (emcy *EMCY) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) {
 
 			emcy.fifo[fifoPpPtr].msg |= uint32(errorRegister) << 16
 			binary.LittleEndian.PutUint32(emcy.txBuffer.Data[:4], emcy.fifo[fifoPpPtr].msg)
-			_ = emcy.Send(emcy.txBuffer)
+			_ = emcy.bm.Send(emcy.txBuffer)
 			// Also report own emergency message
 			if emcy.rxCallback != nil {
 				errMsg := uint32(emcy.fifo[fifoPpPtr].msg)
@@ -545,7 +545,7 @@ func NewEMCY(
 	if logger == nil {
 		logger = slog.Default()
 	}
-	emcy := &EMCY{BusManager: bm, logger: logger.With("service", "[EMCY]")}
+	emcy := &EMCY{bm: bm, logger: logger.With("service", "[EMCY]")}
 	// TODO handle error register ptr
 	// emergency.errorRegister
 	fifoSize := entry1003.SubCount()
@@ -579,7 +579,7 @@ func NewEMCY(
 	if entryStatusBits != nil {
 		entryStatusBits.AddExtension(emcy, readEntryStatusBits, writeEntryStatusBits)
 	}
-	rxCancel, err := emcy.Subscribe(uint32(ServiceId), 0x780, false, emcy)
+	rxCancel, err := emcy.bm.Subscribe(uint32(ServiceId), 0x780, false, emcy)
 	emcy.rxCancel = rxCancel
 	return emcy, err
 }

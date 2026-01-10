@@ -68,7 +68,7 @@ var CommandDescription = map[Command]string{
 
 // NMT object for processing NMT behaviour, slave or master
 type NMT struct {
-	*canopen.BusManager
+	bm                     *canopen.BusManager
 	logger                 *slog.Logger
 	mu                     sync.Mutex
 	emcy                   *emergency.EMCY
@@ -124,7 +124,7 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32) uint8 {
 	if nmtInit || (nmt.hearbeatProducerTimeUs != 0 && (nmt.hearbeatProducerTimer == 0 || nmtStateCopy != nmt.operatingStatePrev)) {
 		nmt.hbTxBuff.Data[0] = nmtStateCopy
 		nmt.mu.Unlock()
-		_ = nmt.Send(nmt.hbTxBuff)
+		_ = nmt.bm.Send(nmt.hbTxBuff)
 		nmt.mu.Lock()
 		if nmtStateCopy == StateInitializing {
 			if nmt.control&StartupToOperational != 0 {
@@ -244,7 +244,7 @@ func (nmt *NMT) SendCommand(command Command, nodeId uint8) error {
 	// Send NMT command
 	nmt.nmtTxBuff.Data[0] = uint8(command)
 	nmt.nmtTxBuff.Data[1] = nodeId
-	return nmt.Send(nmt.nmtTxBuff)
+	return nmt.bm.Send(nmt.nmtTxBuff)
 }
 
 // Add a callback func to be called on NMT state change
@@ -282,7 +282,7 @@ func NewNMT(
 		logger = slog.Default()
 	}
 
-	nmt := &NMT{BusManager: bm, logger: logger.With("service", "[NMT]")}
+	nmt := &NMT{bm: bm, logger: logger.With("service", "[NMT]")}
 	if entry1017 == nil || bm == nil {
 		return nil, canopen.ErrIllegalArgument
 	}
@@ -314,7 +314,7 @@ func NewNMT(
 	}
 
 	// Configure NMT specific tx/rx buffers
-	rxCancel, err := nmt.Subscribe(uint32(canIdNmtRx), 0x7FF, false, nmt)
+	rxCancel, err := nmt.bm.Subscribe(uint32(canIdNmtRx), 0x7FF, false, nmt)
 	nmt.rxCancel = rxCancel
 	if err != nil {
 		return nil, err

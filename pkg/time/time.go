@@ -15,7 +15,7 @@ import (
 var timestampOrigin = time.Date(1984, time.January, 1, 0, 0, 0, 0, time.Local)
 
 type TIME struct {
-	*canopen.BusManager
+	bm                 *canopen.BusManager
 	logger             *slog.Logger
 	mu                 sync.Mutex
 	rawTimestamp       [6]byte
@@ -81,7 +81,7 @@ func (t *TIME) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) (boo
 		frame := canopen.NewFrame(t.cobId, 0, 6)
 		binary.LittleEndian.PutUint32(frame.Data[0:4], t.ms)
 		binary.LittleEndian.PutUint16(frame.Data[4:6], t.days)
-		return timestampReceived, t.Send(frame)
+		return timestampReceived, t.bm.Send(frame)
 
 	}
 	t.producerTimerMs = t.producerIntervalMs
@@ -144,7 +144,7 @@ func NewTIME(
 		logger = slog.Default()
 	}
 
-	t := &TIME{BusManager: bm, logger: logger.With("service", "[TIME]")}
+	t := &TIME{bm: bm, logger: logger.With("service", "[TIME]")}
 	// Read param from OD
 	cobId, err := entry1012.Uint32(0)
 	if err != nil {
