@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	s "sync"
+	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
@@ -17,26 +18,84 @@ const (
 )
 
 type SYNC struct {
-	bm                  *canopen.BusManager
-	logger              *slog.Logger
-	mu                  s.Mutex
-	subMu               s.Mutex
-	subscribers         []chan uint8
-	emcy                *emergency.EMCY
-	rxNew               bool
-	receiveError        uint8
-	rxToggle            bool
-	timeoutError        uint8
-	counterOverflow     uint8
-	counter             uint8
-	syncIsOutsideWindow bool
-	timer               uint32
-	commCyclePeriod     *od.Entry
-	syncWindowLength    *od.Entry
-	isProducer          bool
-	cobId               uint32
-	txBuffer            canopen.Frame
-	rxCancel            func()
+	bm               *canopen.BusManager
+	mu               s.Mutex
+	logger           *slog.Logger
+	subMu            s.Mutex
+	subscribers      []chan uint8
+	emcy             *emergency.EMCY
+	rxToggle         bool
+	counterOverflow  uint8
+	counter          uint8
+	isProducer       bool
+	cobId            uint32
+	syncCyclePeriod  time.Duration
+	syncWindowLength time.Duration // Unused
+	timerProducer    *time.Timer
+	timerConsumer    *time.Timer
+	timeLastRxTx     time.Time
+	inTimeout        bool
+	isOperational    bool
+	txBuffer         canopen.Frame
+	rxCancel         func()
+}
+
+// Handle [SYNC] related RX CAN frames
+func (sync *SYNC) Handle(frame canopen.Frame) {
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
+
+	syncReceived := false
+	receiveError := uint8(0)
+	if sync.counterOverflow == 0 {
+		if frame.DLC == 0 {
+			syncReceived = true
+		} else {
+			receiveError = frame.DLC | 0x40
+		}
+	} else {
+		if frame.DLC == 1 {
+			sync.counter = frame.Data[0]
+			syncReceived = true
+		} else {
+			receiveError = frame.DLC | 0x80
+		}
+	}
+
+	if !syncReceived {
+		return
+	}
+
+	sync.timeLastRxTx = time.Now()
+	sync.rxToggle = !sync.rxToggle
+	sync.notifySubscribers()
+
+	if receiveError != 0 {
+		elapsed := time.Since(sync.timeLastRxTx)
+		sync.emcy.Error(true, emergency.EmSyncLength, emergency.ErrSyncDataLength, uint32(elapsed))
+		sync.logger.Warn("reception error", "error", receiveError, "timer", elapsed)
+	}
+
+	// Check if we have any "timeouts"
+	if sync.inTimeout {
+		sync.inTimeout = false
+		sync.emcy.Error(false, emergency.EmSyncTimeOut, 0, 0)
+		sync.logger.Warn("reset sync timeout error")
+	}
+
+	sync.resetTimers()
+
+}
+
+func (sync *SYNC) SetOperational(operational bool) {
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
+
+	sync.isOperational = operational
+	if !operational {
+		sync.inTimeout = false
+		sync.counter = 0
+	}
 }
 
 // Subscribe returns a channel that receives the sync counter
@@ -74,32 +133,44 @@ func (sync *SYNC) notifySubscribers() {
 	}
 }
 
-// Handle [SYNC] related RX CAN frames
-func (sync *SYNC) Handle(frame canopen.Frame) {
+func (sync *SYNC) resetTimers() {
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
 
-	syncReceived := false
-	if sync.counterOverflow == 0 {
-		if frame.DLC == 0 {
-			syncReceived = true
+	if sync.syncCyclePeriod == 0 {
+		return
+	}
+
+	timerPeriod := sync.syncCyclePeriod
+
+	if sync.isProducer {
+		if sync.timerProducer == nil {
+			sync.timerProducer = time.AfterFunc(timerPeriod, sync.timerProducerHandler)
 		} else {
-			sync.receiveError = frame.DLC | 0x40
+			sync.timerProducer.Reset(timerPeriod)
 		}
 	} else {
-		if frame.DLC == 1 {
-			sync.counter = frame.Data[0]
-			syncReceived = true
+		// Allow a bit of slac for consumer
+		timerPeriod = time.Duration(float64(timerPeriod) * 1.5)
+		if sync.timerConsumer != nil {
+			sync.timerConsumer = time.AfterFunc(timerPeriod, sync.timerConsumerHandler)
 		} else {
-			sync.receiveError = frame.DLC | 0x80
+			sync.timerConsumer.Reset(timerPeriod)
 		}
 	}
-	if syncReceived {
-		sync.rxToggle = !sync.rxToggle
-		sync.rxNew = true
-		// Notify subscribers
-		sync.notifySubscribers()
-	}
+}
+
+func (sync *SYNC) timerProducerHandler() {
+	// Producer timer elapsed send sync
+	sync.send()
+	sync.resetTimers()
+}
+
+func (sync *SYNC) timerConsumerHandler() {
+	// This means that a timemout has occured
+	sync.inTimeout = true
+	sync.emcy.Error(true, emergency.EmSyncTimeOut, emergency.ErrCommunication, uint32(sync.syncCyclePeriod.Microseconds()))
+	sync.logger.Warn("timeout error", "timeout", sync.syncCyclePeriod)
 }
 
 // Process [SYNC] state machine and TX CAN frames
@@ -110,73 +181,6 @@ func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) u
 	defer sync.mu.Unlock()
 
 	status := EventNone
-	if !nmtIsPreOrOperational {
-		sync.rxNew = false
-		sync.receiveError = 0
-		sync.counter = 0
-		sync.timer = 0
-		return EventNone
-	}
-
-	timerNew := sync.timer + timeDifferenceUs
-	if timerNew > sync.timer {
-		sync.timer = timerNew
-	}
-	if sync.rxNew {
-		sync.timer = 0
-		sync.rxNew = false
-		status = EventRxOrTx
-	}
-	commCyclePeriod, err := sync.commCyclePeriod.Uint32(0)
-	if err != nil {
-		sync.logger.Warn("failed to read comm cycle period", "error", err)
-	}
-	if commCyclePeriod > 0 {
-		if sync.isProducer {
-			if sync.timer >= commCyclePeriod {
-				status = EventRxOrTx
-				sync.mu.Unlock()
-				sync.send()
-				sync.mu.Lock()
-			}
-		} else if sync.timeoutError == 1 {
-			periodTimeout := commCyclePeriod + commCyclePeriod>>1
-			if periodTimeout < commCyclePeriod {
-				periodTimeout = 0xFFFFFFFF
-			}
-			if sync.timer > periodTimeout {
-				sync.emcy.Error(true, emergency.EmSyncTimeOut, emergency.ErrCommunication, sync.timer)
-				sync.logger.Warn("timeout error", "timer", sync.timer, "period", periodTimeout)
-				sync.timeoutError = 2
-			}
-		}
-	}
-	synchronousWindowLength, err := sync.syncWindowLength.Uint32(0)
-	if err != nil {
-		sync.logger.Warn("failed to read sync window length", "error", err)
-	}
-	if synchronousWindowLength > 0 && sync.timer > synchronousWindowLength {
-		if !sync.syncIsOutsideWindow {
-			status = EventPassedWindow
-		}
-		sync.syncIsOutsideWindow = true
-	} else {
-		sync.syncIsOutsideWindow = false
-	}
-
-	// Check reception errors in handler
-	if sync.receiveError != 0 {
-		sync.emcy.Error(true, emergency.EmSyncLength, emergency.ErrSyncDataLength, sync.timer)
-		sync.logger.Warn("reception error", "error", sync.receiveError, "timer", sync.timer)
-		sync.receiveError = 0
-	}
-	if status == EventRxOrTx {
-		if sync.timeoutError == 2 {
-			sync.emcy.Error(false, emergency.EmSyncTimeOut, 0, 0)
-			sync.logger.Warn("reset error")
-		}
-		sync.timeoutError = 1
-	}
 	return status
 }
 
@@ -187,7 +191,7 @@ func (sync *SYNC) send() {
 	if sync.counter > sync.counterOverflow {
 		sync.counter = 1
 	}
-	sync.timer = 0
+	sync.timeLastRxTx = time.Now()
 	sync.rxToggle = !sync.rxToggle
 	sync.txBuffer.Data[0] = sync.counter
 	sync.mu.Unlock()
@@ -260,7 +264,7 @@ func NewSYNC(
 		sync.logger.Error("read error", "index", "x1006", "name", entry1006.Name, "error", err)
 		return nil, canopen.ErrOdParameters
 	}
-	sync.commCyclePeriod = entry1006
+	sync.syncCyclePeriod = time.Duration(commCyclePeriod) * time.Microsecond
 	sync.logger.Info("communication cycle period", "index", "x1006", "period", commCyclePeriod)
 
 	entry1007.AddExtension(sync, od.ReadEntryDefault, writeEntry1007)
@@ -269,7 +273,7 @@ func NewSYNC(
 		sync.logger.Error("read error", "index", "x1007", "name", entry1007.Name, "error", err)
 		return nil, canopen.ErrOdParameters
 	}
-	sync.syncWindowLength = entry1007
+	sync.syncWindowLength = time.Duration(syncWindowLength) * time.Microsecond
 	sync.logger.Info("sync window length",
 		"index", "x1007",
 		"name", entry1007.Name,
@@ -310,6 +314,8 @@ func NewSYNC(
 	if syncCounterOverflow != 0 {
 		frameSize = 1
 	}
+
+	sync.resetTimers()
 	sync.txBuffer = canopen.NewFrame(sync.cobId, 0, frameSize)
 	sync.logger.Info("initialization finished")
 	return sync, nil

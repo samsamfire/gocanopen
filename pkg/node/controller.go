@@ -38,7 +38,7 @@ func NewNodeProcessor(n Node, logger *slog.Logger, processingPeriod time.Duratio
 func (c *NodeProcessor) background(ctx context.Context) {
 
 	ticker := time.NewTicker(c.period)
-	periodUs := uint32(c.period.Microseconds())
+	//periodUs := uint32(c.period.Microseconds())
 	c.logger.Info("starting node background process")
 	for {
 		select {
@@ -47,7 +47,6 @@ func (c *NodeProcessor) background(ctx context.Context) {
 			ticker.Stop()
 			return
 		case <-ticker.C:
-			c.node.ProcessSYNC(periodUs)
 		}
 	}
 }

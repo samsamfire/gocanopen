@@ -154,7 +154,7 @@ func (node *LocalNode) initPDO() error {
 
 	}
 
-	// Register NMT state change callback for RPDOs
+	// Register NMT state change callback for RPDOs & TPDOs
 	_ = node.NMT.AddStateChangeCallback(func(state uint8) {
 		isOperational := state == nmt.StateOperational
 		for _, rpdo := range node.RPDOs {
@@ -319,6 +319,10 @@ func NewLocalNode(
 	} else {
 		node.SYNC = sync
 	}
+	_ = node.NMT.AddStateChangeCallback(func(state uint8) {
+		isPreOrOperational := state == nmt.StateOperational
+		node.SYNC.SetOperational(isPreOrOperational)
+	})
 
 	// Add EDS storage if supported, library supports either plain ascii
 	// Or zipped format
@@ -351,7 +355,9 @@ func NewLocalNode(
 			return nil, fmt.Errorf("invalid EDS storage format %v", format)
 		}
 	}
+
 	err = node.initPDO()
+
 	return node, err
 }
 
