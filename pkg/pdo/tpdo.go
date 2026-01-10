@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	s "sync"
+	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
@@ -28,8 +29,10 @@ type TPDO struct {
 	syncCounter      uint8
 	inhibitTimeUs    uint32
 	eventTimeUs      uint32
-	inhibitTimer     uint32
-	eventTimer       uint32
+	timerInhibit     *time.Timer
+	timerEvent       *time.Timer
+	inhibitActive    bool
+	isOperational    bool
 	syncCh           chan uint8
 }
 
@@ -77,42 +80,6 @@ func (tpdo *TPDO) syncHandler() {
 		}
 		tpdo.mu.Unlock()
 	}
-}
-
-// Process [TPDO] state machine and TX CAN frames
-// This should be called periodically
-func (tpdo *TPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWas bool) error {
-	tpdo.mu.Lock()
-
-	pdo := tpdo.pdo
-	if !pdo.Valid || !nmtIsOperational {
-		tpdo.sendRequest = true
-		tpdo.inhibitTimer = 0
-		tpdo.eventTimer = 0
-		tpdo.syncCounter = 255
-		tpdo.mu.Unlock()
-		return nil
-	}
-
-	if tpdo.eventTimeUs > 0 {
-		tpdo.eventTimer = saturatingSub(tpdo.eventTimer, timeDifferenceUs)
-		if tpdo.eventTimer == 0 {
-			tpdo.sendRequest = true
-		}
-	}
-	tpdo.inhibitTimer = saturatingSub(tpdo.inhibitTimer, timeDifferenceUs)
-
-	isEventDriven := tpdo.transmissionType >= TransmissionTypeSyncEventLo
-
-	if isEventDriven {
-		// Send if requested and inhibit time elapsed
-		if tpdo.sendRequest && tpdo.inhibitTimer == 0 {
-			tpdo.mu.Unlock()
-			return tpdo.send()
-		}
-	}
-	tpdo.mu.Unlock()
-	return nil
 }
 
 func (tpdo *TPDO) configureTransmissionType(entry18xx *od.Entry) error {
@@ -183,6 +150,10 @@ func (tpdo *TPDO) send() error {
 	defer tpdo.mu.Unlock()
 
 	pdo := tpdo.pdo
+	if !pdo.Valid {
+		return nil
+	}
+
 	totalNbRead := 0
 	var err error
 
@@ -199,17 +170,93 @@ func (tpdo *TPDO) send() error {
 		totalNbRead += int(mappedLength)
 	}
 	tpdo.sendRequest = false
-	tpdo.eventTimer = tpdo.eventTimeUs
-	tpdo.inhibitTimer = tpdo.inhibitTimeUs
+	tpdo.restartEventTimer()
+	tpdo.startInhibitTimer()
 	return tpdo.Send(tpdo.txBuffer)
+}
+
+func (tpdo *TPDO) checkAndSend() {
+	tpdo.mu.Lock()
+	if tpdo.inhibitActive {
+		tpdo.sendRequest = true
+		tpdo.mu.Unlock()
+		return
+	}
+	tpdo.mu.Unlock()
+	_ = tpdo.send()
 }
 
 // Send TPDO asynchronously, next time it is processed
 // This only works for event driven TPDOs
 func (tpdo *TPDO) SendAsync() {
+	tpdo.checkAndSend()
+}
+
+func (tpdo *TPDO) SetOperational(operational bool) {
 	tpdo.mu.Lock()
 	defer tpdo.mu.Unlock()
+	tpdo.isOperational = operational
+	if operational {
+		tpdo.restartEventTimer()
+	} else {
+		// Stop timers
+		if tpdo.timerEvent != nil {
+			tpdo.timerEvent.Stop()
+		}
+		if tpdo.timerInhibit != nil {
+			tpdo.timerInhibit.Stop()
+		}
+		tpdo.inhibitActive = false
+	}
+}
+
+func (tpdo *TPDO) startInhibitTimer() {
+	if tpdo.inhibitTimeUs == 0 {
+		return
+	}
+	tpdo.inhibitActive = true
+	duration := time.Duration(tpdo.inhibitTimeUs) * time.Microsecond
+	if tpdo.timerInhibit == nil {
+		tpdo.timerInhibit = time.AfterFunc(duration, tpdo.inhibitHandler)
+	} else {
+		tpdo.timerInhibit.Reset(duration)
+	}
+}
+
+func (tpdo *TPDO) inhibitHandler() {
+	tpdo.mu.Lock()
+	active := tpdo.isOperational
+	req := tpdo.sendRequest
+	tpdo.inhibitActive = false
+	tpdo.mu.Unlock()
+
+	if active && req {
+		_ = tpdo.send()
+	}
+}
+
+func (tpdo *TPDO) restartEventTimer() {
+	if tpdo.eventTimeUs == 0 {
+		return
+	}
+	duration := time.Duration(tpdo.eventTimeUs) * time.Microsecond
+	if tpdo.timerEvent == nil {
+		tpdo.timerEvent = time.AfterFunc(duration, tpdo.eventHandler)
+	} else {
+		tpdo.timerEvent.Reset(duration)
+	}
+}
+
+func (tpdo *TPDO) eventHandler() {
+	tpdo.mu.Lock()
 	tpdo.sendRequest = true
+	inhibit := tpdo.inhibitActive
+	operational := tpdo.isOperational
+	tpdo.mu.Unlock()
+
+	if operational && !inhibit {
+		_ = tpdo.send()
+	}
 }
 
 // Create a new TPDO
@@ -300,12 +347,4 @@ func NewTPDO(
 		go tpdo.syncHandler()
 	}
 	return tpdo, nil
-}
-
-// Helper for timer logic to prevent underflow
-func saturatingSub(value uint32, amount uint32) uint32 {
-	if value > amount {
-		return value - amount
-	}
-	return 0
 }
