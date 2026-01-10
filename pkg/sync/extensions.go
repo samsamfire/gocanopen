@@ -31,7 +31,7 @@ func writeEntry1005(stream *od.Stream, data []byte) (uint16, error) {
 		if sync.rxCancel != nil {
 			sync.rxCancel()
 		}
-		rxCancel, err := sync.Subscribe(uint32(canId), 0x7FF, false, sync)
+		rxCancel, err := sync.bm.Subscribe(uint32(canId), 0x7FF, false, sync)
 		sync.rxCancel = rxCancel
 		if err != nil {
 			return 0, od.ErrDevIncompat

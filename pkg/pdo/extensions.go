@@ -96,6 +96,17 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 		synchronous := transType <= TransmissionTypeSync240
 		if rpdo.synchronous != synchronous {
 			rpdo.rxNew = false
+			if synchronous {
+				if rpdo.sync != nil && rpdo.syncCh == nil {
+					rpdo.syncCh = rpdo.sync.Subscribe()
+					go rpdo.syncHandler()
+				}
+			} else {
+				if rpdo.sync != nil && rpdo.syncCh != nil {
+					rpdo.sync.Unsubscribe(rpdo.syncCh)
+					rpdo.syncCh = nil
+				}
+			}
 		}
 		rpdo.pdo.logger.Debug("updated transmission type (synchronous)", "prev", rpdo.synchronous, "new", synchronous)
 		rpdo.synchronous = synchronous

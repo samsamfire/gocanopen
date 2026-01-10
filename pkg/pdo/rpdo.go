@@ -32,6 +32,7 @@ type RPDO struct {
 	timeoutTimeUs uint32
 	timeoutTimer  uint32
 	rxCancel      func()
+	syncCh        chan uint8
 }
 
 // Handle [RPDO] related RX CAN frames
@@ -72,7 +73,6 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	// propagated to OD, only after a SYNC reception.
 	// For asynchronous RPDOs, data is directly propagated to OD
 
-	// TODO : get the NMT state
 	if rpdo.synchronous {
 		rpdo.rxNew = true
 		rpdo.rxData = frame.Data
@@ -80,6 +80,20 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	}
 
 	rpdo.copyDataToOd(rpdo.pdo, frame.Data)
+}
+
+func (rpdo *RPDO) syncHandler() {
+	for range rpdo.syncCh {
+		rpdo.mu.Lock()
+		if rpdo.rxNew {
+			data := rpdo.rxData
+			rpdo.rxNew = false
+			rpdo.mu.Unlock()
+			rpdo.copyDataToOd(rpdo.pdo, data)
+		} else {
+			rpdo.mu.Unlock()
+		}
+	}
 }
 
 // Process [RPDO] state machine and TX CAN frames
@@ -92,11 +106,6 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 	if !pdo.Valid || !nmtIsOperational {
 		rpdo.rxNew = false
 		rpdo.timeoutTimer = 0
-		rpdo.mu.Unlock()
-		return
-	}
-
-	if !syncWas && rpdo.synchronous {
 		rpdo.mu.Unlock()
 		return
 	}
@@ -114,6 +123,12 @@ func (rpdo *RPDO) Process(timeDifferenceUs uint32, nmtIsOperational bool, syncWa
 				pdo.emcy.ErrorReport(emergency.EmRPDOTimeOut, emergency.ErrRpdoTimeout, rpdo.timeoutTimer)
 			}
 		}
+		rpdo.mu.Unlock()
+		return
+	}
+
+	// If synchronous, we don't process data here, it is done in syncHandler
+	if rpdo.synchronous {
 		rpdo.mu.Unlock()
 		return
 	}
@@ -304,5 +319,9 @@ func NewRPDO(
 		"event time", eventTime,
 		"synchronous", rpdo.synchronous,
 	)
+	if rpdo.synchronous && rpdo.sync != nil {
+		rpdo.syncCh = rpdo.sync.Subscribe()
+		go rpdo.syncHandler()
+	}
 	return rpdo, nil
 }
