@@ -1,4 +1,4 @@
-//go:build 386 || arm || mips || mipsle || ppc
+//go:build linux && (386 || arm || mips || mipsle || ppc)
 
 package socketcanv3
 
