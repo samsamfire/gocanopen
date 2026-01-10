@@ -45,36 +45,22 @@ func (sync *SYNC) Handle(frame canopen.Frame) {
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
 
-	syncReceived := false
-	receiveError := uint8(0)
 	if sync.counterOverflow == 0 {
-		if frame.DLC == 0 {
-			syncReceived = true
-		} else {
-			receiveError = frame.DLC | 0x40
+		if frame.DLC != 0 {
+			sync.processError(frame.DLC | 0x40)
+			return
 		}
 	} else {
-		if frame.DLC == 1 {
-			sync.counter = frame.Data[0]
-			syncReceived = true
-		} else {
-			receiveError = frame.DLC | 0x80
+		if frame.DLC != 1 {
+			sync.processError(frame.DLC | 0x80)
+			return
 		}
-	}
-
-	if !syncReceived {
-		return
+		sync.counter = frame.Data[0]
 	}
 
 	sync.timeLastRxTx = time.Now()
 	sync.rxToggle = !sync.rxToggle
 	sync.notifySubscribers()
-
-	if receiveError != 0 {
-		elapsed := time.Since(sync.timeLastRxTx)
-		sync.emcy.Error(true, emergency.EmSyncLength, emergency.ErrSyncDataLength, uint32(elapsed))
-		sync.logger.Warn("reception error", "error", receiveError, "timer", elapsed)
-	}
 
 	// Check if we have any "timeouts"
 	if sync.inTimeout {
@@ -96,6 +82,14 @@ func (sync *SYNC) SetOperational(operational bool) {
 	if !operational {
 		sync.inTimeout = false
 		sync.counter = 0
+	}
+}
+
+func (sync *SYNC) processError(error uint8) {
+	if error != 0 {
+		elapsed := time.Since(sync.timeLastRxTx)
+		sync.emcy.Error(true, emergency.EmSyncLength, emergency.ErrSyncDataLength, uint32(elapsed))
+		sync.logger.Warn("reception error", "error", error, "timer", elapsed)
 	}
 }
 
@@ -132,6 +126,21 @@ func (sync *SYNC) notifySubscribers() {
 			// Channel full, drop event
 		}
 	}
+}
+
+func (sync *SYNC) Stop() {
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
+	if sync.timerConsumer != nil {
+		sync.timerConsumer.Stop()
+	}
+	if sync.timerProducer != nil {
+		sync.timerProducer.Stop()
+	}
+}
+
+func (sync *SYNC) Start() {
+	sync.resetTimers()
 }
 
 // Should be called only if mu is locked

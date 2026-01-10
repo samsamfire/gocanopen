@@ -150,9 +150,7 @@ func TestSyncConsumer(t *testing.T) {
 		assert.Equal(t, uint8(3), local.SYNC.Counter())
 	})
 
-	t.Run("consumer timeout if not sync received", func(t *testing.T) {
-		// Configure as Consumer
-		c := local.Configurator()
+	t.Run("consumer timeout if not sync received then reset", func(t *testing.T) {
 		// Set Period (100ms)
 		err = c.WriteCommunicationPeriod(100 * time.Millisecond)
 		assert.Nil(t, err)
@@ -161,18 +159,27 @@ func TestSyncConsumer(t *testing.T) {
 		err = c.ProducerDisableSYNC()
 		assert.Nil(t, err)
 
-		// Start Node (Operational)
-		// Send NMT Start Remote Node command
-		// NMT Start (0x01) Target (NodeIdTest)
-		data := [8]byte{0x01, NodeIdTest}
-		err = otherNet.Send(canopen.Frame{ID: 0, DLC: 2, Data: data})
-		assert.Nil(t, err)
-
 		// Wait for timeout (Period 100ms * 1.5 = 150ms). Wait 250ms.
 		time.Sleep(250 * time.Millisecond)
 
 		// Check logs
-		logStr := logBuf.String()
-		assert.Contains(t, logStr, "timeout error")
+		assert.Contains(t, logBuf.String(), "timeout error")
+
+		// Check we have a reset after send
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 1, Data: [8]byte{0x00}})
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		assert.Contains(t, logBuf.String(), "reset sync timeout error")
+
+	})
+
+	t.Run("consumer error if sync incorrect size", func(t *testing.T) {
+
+		time.Sleep(50 * time.Millisecond)
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0, Data: [8]byte{}})
+		assert.Nil(t, err)
+
+		time.Sleep(100 * time.Millisecond)
+		assert.Contains(t, logBuf.String(), "reception error")
 	})
 }
