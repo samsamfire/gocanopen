@@ -173,17 +173,6 @@ func (sync *SYNC) timerConsumerHandler() {
 	sync.logger.Warn("timeout error", "timeout", sync.syncCyclePeriod)
 }
 
-// Process [SYNC] state machine and TX CAN frames
-// It returns the according sync event
-// This should be called periodically
-func (sync *SYNC) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) uint8 {
-	sync.mu.Lock()
-	defer sync.mu.Unlock()
-
-	status := EventNone
-	return status
-}
-
 func (sync *SYNC) send() {
 	sync.mu.Lock()
 

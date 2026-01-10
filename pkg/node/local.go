@@ -301,7 +301,7 @@ func NewLocalNode(
 		node.SYNC = sync
 	}
 	_ = node.NMT.AddStateChangeCallback(func(state uint8) {
-		isPreOrOperational := state == nmt.StateOperational
+		isPreOrOperational := state == nmt.StateOperational || state == nmt.StatePreOperational
 		node.SYNC.SetOperational(isPreOrOperational)
 	})
 
