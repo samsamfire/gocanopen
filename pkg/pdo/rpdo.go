@@ -160,48 +160,21 @@ func (rpdo *RPDO) copyDataToOd(data [8]byte) {
 	}
 }
 
-func (rpdo *RPDO) configureCOBID(entry14xx *od.Entry, predefinedIdent uint32, erroneousMap uint32) (canId uint32, e error) {
+func (rpdo *RPDO) configureCobId(entry14xx *od.Entry, predefinedIdent uint16, erroneousMap uint32) (canId uint16, e error) {
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
 
 	pdo := rpdo.pdo
-	cobId, err := entry14xx.Uint32(od.SubPdoCobId)
+	canId, err := pdo.configureCobId(entry14xx, predefinedIdent, erroneousMap)
 	if err != nil {
-		rpdo.pdo.logger.Error("reading failed",
-			"index", fmt.Errorf("x%x", entry14xx.Index),
-			"subindex", od.SubPdoCobId,
-			"error", err,
-		)
-		return 0, canopen.ErrOdParameters
+		return 0, err
 	}
-	valid := (cobId & 0x80000000) == 0
-	canId = cobId & 0x7FF
-	if valid && (pdo.nbMapped == 0 || canId == 0) {
-		valid = false
-		if erroneousMap == 0 {
-			erroneousMap = 1
-		}
-	}
-	if erroneousMap != 0 {
-		errorInfo := erroneousMap
-		if erroneousMap == 1 {
-			errorInfo = cobId
-		}
-		pdo.emcy.ErrorReport(emergency.EmPDOWrongMapping, emergency.ErrProtocolError, errorInfo)
-	}
-	if !valid {
-		canId = 0
-	}
-	// If default canId is stored in od add node id
-	if canId != 0 && canId == (predefinedIdent&0xFF80) {
-		canId = predefinedIdent
-	}
-	rxCancel, err := rpdo.bm.Subscribe(canId, 0x7FF, false, rpdo)
+	rxCancel, err := rpdo.bm.Subscribe(uint32(canId), 0x7FF, false, rpdo)
 	rpdo.rxCancel = rxCancel
 	if err != nil {
 		return 0, err
 	}
-	pdo.Valid = valid
+	pdo.Valid = canId != 0
 	return canId, nil
 }
 
@@ -227,7 +200,7 @@ func NewRPDO(
 	}
 	rpdo.pdo = pdo
 	// Configure communication params
-	canId, err := rpdo.configureCOBID(entry14xx, uint32(predefinedIdent), erroneousMap)
+	canId, err := rpdo.configureCobId(entry14xx, predefinedIdent, erroneousMap)
 	if err != nil {
 		return nil, err
 	}

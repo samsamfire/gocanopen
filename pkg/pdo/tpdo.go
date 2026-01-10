@@ -104,44 +104,17 @@ func (tpdo *TPDO) configureTransmissionType(entry18xx *od.Entry) error {
 	return nil
 }
 
-func (tpdo *TPDO) configureCOBID(entry18xx *od.Entry, predefinedIdent uint16, erroneousMap uint32) (canId uint16, e error) {
+func (tpdo *TPDO) configureCobId(entry18xx *od.Entry, predefinedIdent uint16, erroneousMap uint32) (canId uint16, e error) {
 	tpdo.mu.Lock()
 	defer tpdo.mu.Unlock()
 
 	pdo := tpdo.pdo
-	cobId, err := entry18xx.Uint32(od.SubPdoCobId)
+	canId, err := pdo.configureCobId(entry18xx, predefinedIdent, erroneousMap)
 	if err != nil {
-		tpdo.pdo.logger.Error("reading failed",
-			"index", fmt.Errorf("x%x", entry18xx.Index),
-			"subindex", od.SubPdoCobId,
-			"error", err,
-		)
-		return 0, canopen.ErrOdParameters
-	}
-	valid := (cobId & 0x80000000) == 0
-	canId = uint16(cobId & 0x7FF)
-	if valid && (pdo.nbMapped == 0 || canId == 0) {
-		valid = false
-		if erroneousMap == 0 {
-			erroneousMap = 1
-		}
-	}
-	if erroneousMap != 0 {
-		errorInfo := erroneousMap
-		if erroneousMap == 1 {
-			errorInfo = cobId
-		}
-		pdo.emcy.ErrorReport(emergency.EmPDOWrongMapping, emergency.ErrProtocolError, errorInfo)
-	}
-	if !valid {
-		canId = 0
-	}
-	// If default canId is stored in od add node id
-	if canId != 0 && canId == (predefinedIdent&0xFF80) {
-		canId = predefinedIdent
+		return 0, err
 	}
 	tpdo.txBuffer = canopen.NewFrame(uint32(canId), 0, uint8(pdo.dataLength))
-	pdo.Valid = valid
+	pdo.Valid = canId != 0
 	return canId, nil
 
 }
@@ -289,7 +262,7 @@ func NewTPDO(
 		return nil, err
 	}
 	// Configure COB ID
-	canId, err := tpdo.configureCOBID(entry18xx, predefinedIdent, erroneousMap)
+	canId, err := tpdo.configureCobId(entry18xx, predefinedIdent, erroneousMap)
 	if err != nil {
 		return nil, err
 	}
