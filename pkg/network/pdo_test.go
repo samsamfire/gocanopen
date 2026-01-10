@@ -72,6 +72,8 @@ func TestRPDO(t *testing.T) {
 	assert.Nil(t, err)
 
 	c := local.Configurator()
+	c.WriteCommunicationPeriod(0)
+	c.ProducerDisableSYNC()
 
 	t.Run("update rpdo transmission type", func(t *testing.T) {
 		for i := range uint8(100) {
