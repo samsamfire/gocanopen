@@ -47,7 +47,9 @@ func writeEntry1005(stream *od.Stream, data []byte) (uint16, error) {
 	}
 	// Reset in case sync is producer
 	sync.isProducer = isProducer
+	sync.mu.Unlock()
 	sync.resetTimers()
+	sync.mu.Lock()
 	sync.logger.Info("sync type", "isProducer", isProducer)
 	return od.WriteEntryDefault(stream, data)
 }
@@ -79,11 +81,12 @@ func writeEntry1007(stream *od.Stream, data []byte) (uint16, error) {
 	if !ok {
 		return 0, od.ErrDevIncompat
 	}
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
+
 	windowLengthUs := binary.LittleEndian.Uint32(data)
 	sync.syncWindowLength = time.Duration(windowLengthUs) * time.Microsecond
 	sync.logger.Info("updating synchronous window length", "windowLength", sync.syncWindowLength)
-	sync.mu.Lock()
-	defer sync.mu.Unlock()
 
 	return od.WriteEntryDefault(stream, data)
 }
