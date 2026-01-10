@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"sync"
+	"time"
 	"unsafe"
 
 	canopen "github.com/samsamfire/gocanopen"
@@ -37,16 +38,20 @@ type CANFrame struct {
 	Data [8]byte
 }
 
+// This implementation uses a kernel ring buffer for reception
+// which can significantly reduce CPU usage for large amounts
+// of read data, with low requirements on latency.
+// It uses regular socket for sending
 type Bus struct {
-	txFd       int
-	rxFd       int
-	rxCallback canopen.FrameListener
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
-	logger     *slog.Logger
-
-	ringBuffer []byte
-	ringReq    unix.TpacketReq
+	txFd          int
+	rxFd          int
+	rxCallback    canopen.FrameListener
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
+	logger        *slog.Logger
+	pollingPeriod time.Duration
+	ringBuffer    []byte
+	ringReq       unix.TpacketReq
 }
 
 func NewBus(channel string) (canopen.Bus, error) {
@@ -55,7 +60,7 @@ func NewBus(channel string) (canopen.Bus, error) {
 		return nil, err
 	}
 
-	// 1. Setup TX Socket (Standard AF_CAN)
+	// Setup TX Socket (Standard AF_CAN)
 	txFd, err := unix.Socket(unix.AF_CAN, unix.SOCK_RAW, unix.CAN_RAW)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TX socket: %v", err)
@@ -66,22 +71,22 @@ func NewBus(channel string) (canopen.Bus, error) {
 		return nil, fmt.Errorf("failed to bind TX socket: %v", err)
 	}
 
-	// 2. Setup RX Socket (AF_PACKET)
+	// Setup RX Socket (AF_PACKET)
 	// Using ETH_P_ALL to ensure protocol setup doesn't interfere
-	rxFd, err := unix.Socket(unix.AF_PACKET, unix.SOCK_RAW, int(htons(unix.ETH_P_ALL)))
+	rxFd, err := unix.Socket(unix.AF_PACKET, unix.SOCK_RAW, int(htons(unix.ETH_P_CAN)))
 	if err != nil {
 		unix.Close(txFd)
 		return nil, fmt.Errorf("failed to create RX socket: %v", err)
 	}
 
-	// 3. Set Packet Version to V1 (MATCHING TCPDUMP)
+	// Set Packet Version to V1 (matches tcpdump)
 	if err := unix.SetsockoptInt(rxFd, unix.SOL_PACKET, unix.PACKET_VERSION, TPACKET_V1); err != nil {
 		unix.Close(rxFd)
 		unix.Close(txFd)
 		return nil, fmt.Errorf("failed to set TPACKET_V1: %v", err)
 	}
 
-	// 4. Set Packet Reserve (MATCHING TCPDUMP)
+	// Set Packet Reserve (matches tcpdump)
 	// tcpdump reserves 4 bytes. This often fixes alignment issues on ARM.
 	if err := unix.SetsockoptInt(rxFd, unix.SOL_PACKET, unix.PACKET_RESERVE, 4); err != nil {
 		unix.Close(rxFd)
@@ -89,9 +94,7 @@ func NewBus(channel string) (canopen.Bus, error) {
 		return nil, fmt.Errorf("failed to set PACKET_RESERVE: %v", err)
 	}
 
-	// 5. Ring Parameters
-	// We go back to 4096 blocks because V1 handles small blocks much better than V2/V3.
-	// Frame size 256 is safe for V1 (Header is smaller).
+	// Ring Parameters
 	blockSize := 4096
 	frameSize := 256
 	blockNr := 64
@@ -103,14 +106,14 @@ func NewBus(channel string) (canopen.Bus, error) {
 		Frame_nr:   uint32((blockSize / frameSize) * blockNr),
 	}
 
-	// 6. Request Ring Buffer
+	// Request Ring Buffer
 	if err := unix.SetsockoptTpacketReq(rxFd, unix.SOL_PACKET, unix.PACKET_RX_RING, &req); err != nil {
 		unix.Close(rxFd)
 		unix.Close(txFd)
 		return nil, fmt.Errorf("failed to set PACKET_RX_RING (req=%+v): %v", req, err)
 	}
 
-	// 7. Memory Map
+	// Memory map
 	totalSize := int(req.Block_size * req.Block_nr)
 	data, err := unix.Mmap(rxFd, 0, totalSize, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_SHARED)
 	if err != nil {
@@ -119,11 +122,12 @@ func NewBus(channel string) (canopen.Bus, error) {
 		return nil, fmt.Errorf("failed to mmap: %v", err)
 	}
 
-	// 8. Bind RX Socket
+	// Bind RX Socket
 	sll := &unix.SockaddrLinklayer{
 		Protocol: htons(ETH_P_CAN),
 		Ifindex:  iface.Index,
 	}
+
 	if err := unix.Bind(rxFd, sll); err != nil {
 		unix.Munmap(data)
 		unix.Close(rxFd)
@@ -132,11 +136,12 @@ func NewBus(channel string) (canopen.Bus, error) {
 	}
 
 	return &Bus{
-		txFd:       txFd,
-		rxFd:       rxFd,
-		ringBuffer: data,
-		ringReq:    req,
-		logger:     slog.Default(),
+		txFd:          txFd,
+		rxFd:          rxFd,
+		ringBuffer:    data,
+		ringReq:       req,
+		logger:        slog.Default(),
+		pollingPeriod: 10 * time.Millisecond,
 	}, nil
 }
 
@@ -179,44 +184,35 @@ func (b *Bus) Send(frame canopen.Frame) error {
 }
 
 func (b *Bus) processIncoming(ctx context.Context) {
+
 	frameIdx := 0
 	totalFrames := int(b.ringReq.Frame_nr)
 	frameSize := int(b.ringReq.Frame_size)
+	ticker := time.NewTicker(b.pollingPeriod)
+	defer ticker.Stop()
 
-	pfd := []unix.PollFd{
-		{Fd: int32(b.rxFd), Events: unix.POLLIN},
-	}
-
-	canopenFrame := canopen.Frame{}
+	var canopenFrame canopen.Frame
 
 	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
+		// SWEEP: Process ALL frames currently in the buffer
+		for {
+			// Calculate Offset
 			offset := frameIdx * frameSize
 			if offset >= len(b.ringBuffer) {
 				frameIdx = 0
 				offset = 0
 			}
 
-			// READ V1 HEADER (Different struct than V2!)
-			// TpacketHdr is the V1 header struct in Go unix package
+			// Read V1 Header
 			headerBuf := b.ringBuffer[offset : offset+int(unsafe.Sizeof(unix.TpacketHdr{}))]
 			hdr := (*unix.TpacketHdr)(unsafe.Pointer(&headerBuf[0]))
 
+			// If Kernel owns the frame, we are caught up. Stop sweeping.
 			if uint64(hdr.Status)&uint64(unix.TP_STATUS_USER) == 0 {
-				_, err := unix.Poll(pfd, 100)
-				if err != nil && err != unix.EINTR {
-					b.logger.Error("poll error", "err", err)
-				}
-				continue
+				break
 			}
 
-			// Calculate Data Pointer for V1
-			// Mac is the offset to the MAC header (Ethernet/CAN header)
 			dataStart := offset + int(hdr.Mac)
-
 			if dataStart+16 <= len(b.ringBuffer) {
 				rawFrame := b.ringBuffer[dataStart : dataStart+16]
 				canFrame := (*CANFrame)(unsafe.Pointer(&rawFrame[0]))
@@ -232,7 +228,16 @@ func (b *Bus) processIncoming(ctx context.Context) {
 
 			// Return ownership to Kernel
 			hdr.Status = unix.TP_STATUS_KERNEL
+
+			// Move to next frame immediately
 			frameIdx = (frameIdx + 1) % totalFrames
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			continue
 		}
 	}
 }
@@ -254,6 +259,11 @@ func (b *Bus) SetReceiveOwn(enabled bool) error {
 func (b *Bus) SetFilters(filters []unix.CanFilter) error {
 	// Apply to TX socket only, does not affect AF_PACKET RX
 	return unix.SetsockoptCanRawFilter(b.txFd, unix.SOL_CAN_RAW, unix.CAN_RAW_FILTER, filters)
+}
+
+// Update polling period for RX
+func (b *Bus) SetPollRx(period time.Duration) {
+	b.pollingPeriod = period
 }
 
 func htons(v uint16) uint16 {
