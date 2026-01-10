@@ -12,6 +12,17 @@ Currently, this library comes with 3 supported devices :
 > - CFLAGS: -g -Wall -I/path_to_kvaser/canlib/include
 > - LDFLAGS: -L/path_to_kvaser/canlib
 
+# SocketCAN
+
+Multiple versions of the socketcan driver exists, in particular :
+
+- socketcan (standard socket recv/write)
+- socketcanv3 (standard socket write, reads are done using recvmmsg)
+- socketcanring (standard socket write, reads are done using an rx buffer ring)
+
+In particular the **socketcanring** implementation can drastically boost RX performance on smaller embedded systems
+if latency is not an issue.
+
 ## Creating a custom driver
 
 More transceivers can be added by creating your own driver and implementing the following
