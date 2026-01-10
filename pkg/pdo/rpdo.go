@@ -285,7 +285,7 @@ func NewRPDO(
 	rpdo.synchronous = transmissionType <= TransmissionTypeSync240
 
 	// Configure event timer (not mandatory)
-	eventTimeUs, err := entry14xx.Uint16(od.SubPdoEventTimer)
+	eventTime, err := entry14xx.Uint16(od.SubPdoEventTimer)
 	if err != nil {
 		rpdo.pdo.logger.Warn("reading event timer failed",
 			"index", fmt.Errorf("x%x", entry14xx.Index),
@@ -293,7 +293,7 @@ func NewRPDO(
 			"error", err,
 		)
 	}
-	rpdo.timeoutRx = time.Duration(eventTimeUs) * time.Millisecond
+	rpdo.timeoutRx = time.Duration(eventTime) * time.Millisecond
 	pdo.IsRPDO = true
 	pdo.od = odict
 	pdo.predefinedId = predefinedIdent
@@ -303,7 +303,7 @@ func NewRPDO(
 	rpdo.pdo.logger.Debug("finished initializing",
 		"canId", canId,
 		"valid", pdo.Valid,
-		"event time", eventTimeUs,
+		"event time", eventTime,
 		"synchronous", rpdo.synchronous,
 	)
 	if rpdo.synchronous && rpdo.sync != nil {
