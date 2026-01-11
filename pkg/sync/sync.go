@@ -70,12 +70,17 @@ func (sync *SYNC) Handle(frame canopen.Frame) {
 
 func (sync *SYNC) SetOperational(operational bool) {
 	sync.mu.Lock()
-	defer sync.mu.Unlock()
-
 	sync.isOperational = operational
 	if !operational {
 		sync.inTimeout = false
 		sync.counter = 0
+	}
+	sync.mu.Unlock()
+
+	if operational {
+		sync.Start()
+	} else {
+		sync.Stop()
 	}
 }
 
@@ -134,6 +139,8 @@ func (sync *SYNC) Stop() {
 }
 
 func (sync *SYNC) Start() {
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
 	sync.resetTimers()
 }
 

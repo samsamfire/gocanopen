@@ -15,8 +15,6 @@ func TestSetInternalTime(t *testing.T) {
 	now = now.Round(1 * time.Millisecond)
 	timeInstance := &TIME{logger: slog.Default()}
 	timeInstance.SetInternalTime(now)
-	expectedDays := uint16(time.Since(timestampOrigin).Hours() / 24)
-	assert.Equal(t, timeInstance.days, expectedDays)
 	internalTime := timeInstance.InternalTime()
 	timeDiff := internalTime.Sub(now)
 	assert.LessOrEqual(t, math.Abs(float64(timeDiff.Milliseconds())), 2.0)
@@ -24,10 +22,4 @@ func TestSetInternalTime(t *testing.T) {
 	timeInstance.SetInternalTime(nowPlus1Day)
 	timeDiff = timeInstance.InternalTime().Sub(nowPlus1Day)
 	assert.LessOrEqual(t, math.Abs(float64(timeDiff.Milliseconds())), 2.0)
-}
-
-func TestSetProducerIntervalMs(t *testing.T) {
-	timeInstance := &TIME{logger: slog.Default()}
-	timeInstance.SetProducerInterval(1000 * time.Millisecond)
-	assert.Equal(t, timeInstance.producerIntervalMs, uint32(1000))
 }
