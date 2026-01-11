@@ -11,12 +11,6 @@ import (
 	"github.com/samsamfire/gocanopen/pkg/od"
 )
 
-const (
-	EventNone         uint8 = 0 // No SYNC event in last cycle
-	EventRxOrTx       uint8 = 1 // SYNC message was received or transmitted in last cycle
-	EventPassedWindow uint8 = 2 // Time has just passed SYNC window in last cycle (0x1007)
-)
-
 type SYNC struct {
 	bm               *canopen.BusManager
 	mu               s.Mutex
