@@ -2,6 +2,7 @@ package sync
 
 import (
 	"encoding/binary"
+	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/od"
@@ -45,14 +46,16 @@ func writeEntry1005(stream *od.Stream, data []byte) (uint16, error) {
 		sync.cobId = uint32(canId)
 	}
 	// Reset in case sync is producer
+	// Stop any pending timers if for example if producer / consumer changed
 	sync.isProducer = isProducer
-	if isProducer {
-		sync.logger.Info("is producer")
-		sync.counter = 0
-		sync.timer = 0
-	} else {
-		sync.logger.Info("not producer")
+	if sync.timerConsumer != nil {
+		sync.timerConsumer.Stop()
 	}
+	if sync.timerProducer != nil {
+		sync.timerProducer.Stop()
+	}
+	sync.resetTimers()
+	sync.logger.Info("sync type", "isProducer", isProducer)
 	return od.WriteEntryDefault(stream, data)
 }
 
@@ -69,7 +72,8 @@ func writeEntry1006(stream *od.Stream, data []byte) (uint16, error) {
 	defer sync.mu.Unlock()
 
 	cyclePeriodUs := binary.LittleEndian.Uint32(data)
-	sync.logger.Info("updating communication cycle", "periodMs", cyclePeriodUs/1000)
+	sync.syncCyclePeriod = time.Duration(cyclePeriodUs) * time.Microsecond
+	sync.logger.Info("updating communication cycle", "cyclePeriod", sync.syncCyclePeriod)
 	return od.WriteEntryDefault(stream, data)
 }
 
@@ -82,10 +86,12 @@ func writeEntry1007(stream *od.Stream, data []byte) (uint16, error) {
 	if !ok {
 		return 0, od.ErrDevIncompat
 	}
-	windowLengthUs := binary.LittleEndian.Uint32(data)
-	sync.logger.Info("updating synchronous window length", "lengthMs", windowLengthUs/1000)
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
+
+	windowLengthUs := binary.LittleEndian.Uint32(data)
+	sync.syncWindowLength = time.Duration(windowLengthUs) * time.Microsecond
+	sync.logger.Info("updating synchronous window length", "windowLength", sync.syncWindowLength)
 
 	return od.WriteEntryDefault(stream, data)
 }
@@ -106,10 +112,11 @@ func writeEntry1019(stream *od.Stream, data []byte) (uint16, error) {
 	if syncCounterOverflow == 1 || syncCounterOverflow > 240 {
 		return 0, od.ErrInvalidValue
 	}
-	commCyclePeriod, err := sync.commCyclePeriod.Uint32(0)
-	if commCyclePeriod != 0 || err != nil {
+
+	if sync.syncCyclePeriod != 0 {
 		return 0, od.ErrDataDevState
 	}
+
 	var nbBytes = uint8(0)
 	if syncCounterOverflow != 0 {
 		nbBytes = 1

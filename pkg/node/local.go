@@ -44,23 +44,11 @@ func (node *LocalNode) Reset() error {
 	return nil
 }
 
-func (node *LocalNode) ProcessSYNC(timeDifferenceUs uint32) bool {
-	syncWas := false
-	sy := node.SYNC
-	if !node.NodeIdUnconfigured && sy != nil {
-
-		nmtState := node.NMT.GetInternalState()
-		nmtIsPreOrOperational := nmtState == nmt.StatePreOperational || nmtState == nmt.StateOperational
-		syncProcess := sy.Process(nmtIsPreOrOperational, timeDifferenceUs)
-
-		switch syncProcess {
-		case s.EventRxOrTx:
-			syncWas = true
-		case s.EventPassedWindow:
-		default:
-		}
+func (node *LocalNode) Stop() error {
+	if node.SYNC != nil {
+		node.SYNC.Stop()
 	}
-	return syncWas
+	return nil
 }
 
 // Process canopen objects that are not RT
@@ -154,7 +142,7 @@ func (node *LocalNode) initPDO() error {
 
 	}
 
-	// Register NMT state change callback for RPDOs
+	// Register NMT state change callback for RPDOs & TPDOs
 	_ = node.NMT.AddStateChangeCallback(func(state uint8) {
 		isOperational := state == nmt.StateOperational
 		for _, rpdo := range node.RPDOs {
@@ -319,6 +307,10 @@ func NewLocalNode(
 	} else {
 		node.SYNC = sync
 	}
+	_ = node.NMT.AddStateChangeCallback(func(state uint8) {
+		isPreOrOperational := state == nmt.StateOperational || state == nmt.StatePreOperational
+		node.SYNC.SetOperational(isPreOrOperational)
+	})
 
 	// Add EDS storage if supported, library supports either plain ascii
 	// Or zipped format
@@ -351,7 +343,9 @@ func NewLocalNode(
 			return nil, fmt.Errorf("invalid EDS storage format %v", format)
 		}
 	}
+
 	err = node.initPDO()
+
 	return node, err
 }
 

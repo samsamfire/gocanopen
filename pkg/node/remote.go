@@ -36,24 +36,6 @@ type RemoteNode struct {
 	emcyForLogging *emergency.EMCY      // Emergency consumer (fake producer for logging internal errors)
 }
 
-func (node *RemoteNode) ProcessPDO(syncWas bool, timeDifferenceUs uint32) {
-	// TPDOs are now event-driven
-}
-
-func (node *RemoteNode) ProcessSYNC(timeDifferenceUs uint32) bool {
-	syncWas := false
-	if node.sync != nil {
-		event := node.sync.Process(true, timeDifferenceUs)
-
-		switch event {
-		case sync.EventNone, sync.EventRxOrTx:
-			syncWas = true
-		case sync.EventPassedWindow:
-		}
-	}
-	return syncWas
-}
-
 func (node *RemoteNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32) uint8 {
 	return nmt.ResetNot
 }
@@ -64,6 +46,13 @@ func (node *RemoteNode) Servers() []*sdo.SDOServer {
 
 func (node *RemoteNode) Reset() error {
 	// Nothing to do for a remote node
+	return nil
+}
+
+func (node *RemoteNode) Stop() error {
+	if node.sync != nil {
+		node.sync.Stop()
+	}
 	return nil
 }
 
