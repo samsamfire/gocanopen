@@ -37,7 +37,8 @@ func (t *TIME) Handle(frame canopen.Frame) {
 	}
 
 	if t.isConsumer {
-		t.timeInternal = convertByteToTime(frame.Data[:])
+		t.timeInternal = convertByteToTime(frame.Data)
+		t.logger.Debug("setting internal time to", "internal", t.timeInternal.String())
 	}
 }
 
@@ -82,7 +83,8 @@ func (t *TIME) resetTimerProducer() {
 func (t *TIME) timerProducerHandler() {
 	t.mu.Lock()
 	frame := canopen.NewFrame(t.cobId, 0, 6)
-	convertTimeToByte(t.timeInternal, frame.Data)
+	buff := convertTimeToByte(t.timeInternal)
+	frame.Data = buff
 	t.mu.Unlock()
 	_ = t.bm.Send(frame)
 	t.Start()
@@ -169,22 +171,19 @@ func NewTIME(
 }
 
 // Convert from raw []byte to [time.Time]
-func convertByteToTime(data []byte) time.Time {
-	if len(data) != 6 {
+func convertByteToTime(data [8]byte) time.Time {
+	if len(data) < 6 {
 		return time.Time{}
 	}
 	ms := int(binary.LittleEndian.Uint32(data[0:4]) & 0x0FFFFFFF)
 	days := int(binary.LittleEndian.Uint16(data[4:6]))
-
 	internalTime := TimestampOrigin.AddDate(0, 0, days)
 	return internalTime.Add(time.Duration(ms) * time.Millisecond)
 }
 
 // Convert from [time.Time] to raw []byte
-func convertTimeToByte(t time.Time, data [8]byte) {
-	if len(data) < 6 {
-		return
-	}
+func convertTimeToByte(t time.Time) [8]byte {
+	var data [8]byte
 	// Get the total number of days since 1st of jan 1984
 	days := uint16(t.Sub(TimestampOrigin).Hours() / 24)
 	// Get number of milliseconds after midnight
@@ -193,4 +192,5 @@ func convertTimeToByte(t time.Time, data [8]byte) {
 
 	binary.LittleEndian.PutUint32(data[0:4], uint32(ms))
 	binary.LittleEndian.PutUint16(data[4:6], uint16(days))
+	return data
 }
