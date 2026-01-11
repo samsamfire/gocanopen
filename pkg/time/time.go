@@ -99,9 +99,9 @@ func (t *TIME) SetInternalTime(internalTime time.Time) {
 // Update the producer interval time
 func (t *TIME) SetProducerInterval(interval time.Duration) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.Stop()
 	t.timeProducer = interval
+	t.mu.Unlock()
+	t.Stop()
 	t.Start()
 }
 
