@@ -12,23 +12,20 @@ import (
 )
 
 // time origin is 1st of jan 1984
-var timestampOrigin = time.Date(1984, time.January, 1, 0, 0, 0, 0, time.Local)
+var TimestampOrigin = time.Date(1984, time.January, 1, 0, 0, 0, 0, time.Local)
 
 type TIME struct {
-	bm                 *canopen.BusManager
-	logger             *slog.Logger
-	mu                 sync.Mutex
-	rawTimestamp       [6]byte
-	ms                 uint32 // Milliseconds after midnight
-	days               uint16 // Days since 1st january 1984
-	residualUs         uint16 // Residual Us calculated when processed
-	isConsumer         bool
-	isProducer         bool
-	rxNew              bool
-	producerIntervalMs uint32
-	producerTimerMs    uint32
-	cobId              uint32
-	rxCancel           func()
+	bm            *canopen.BusManager
+	logger        *slog.Logger
+	mu            sync.Mutex
+	isConsumer    bool
+	isProducer    bool
+	timeInternal  time.Time
+	timeProducer  time.Duration
+	timerProducer *time.Timer
+	cobId         uint32
+	isOperational bool
+	rxCancel      func()
 }
 
 // Handle [TIME] related RX CAN frames
@@ -38,86 +35,81 @@ func (t *TIME) Handle(frame canopen.Frame) {
 	if frame.DLC != 6 {
 		return
 	}
-	copy(t.rawTimestamp[:], frame.Data[:])
-	t.rxNew = true
+
+	if t.isConsumer {
+		t.timeInternal = convertByteToTime(frame.Data[:])
+	}
 }
 
-// Process [TIME] state machine and TX CAN frames
-// This returns whether timestamp has been received and if any error occured
-// This should be called periodically
-func (t *TIME) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) (bool, error) {
+func (t *TIME) SetOperational(operational bool) {
+	t.mu.Lock()
+	t.isOperational = operational
+	t.mu.Unlock()
+	if operational {
+		t.Start()
+	} else {
+		t.Stop()
+	}
+}
+
+func (t *TIME) Start() {
+	t.resetTimerProducer()
+}
+
+func (t *TIME) Stop() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	timestampReceived := false
-	if nmtIsPreOrOperational && t.isConsumer {
-		if t.rxNew {
-			t.ms = binary.LittleEndian.Uint32(t.rawTimestamp[0:4]) & 0x0FFFFFFF
-			t.days = binary.LittleEndian.Uint16(t.rawTimestamp[4:6])
-			t.residualUs = 0
-			timestampReceived = true
-			t.rxNew = false
-		}
-	} else {
-		t.rxNew = false
+	if t.timerProducer != nil {
+		t.timerProducer.Stop()
 	}
-	ms := uint32(0)
-	if !timestampReceived && (timeDifferenceUs > 0) {
-		us := timeDifferenceUs + uint32(t.residualUs)
-		ms = us / 1000
-		t.residualUs = uint16(us % 1000)
-		t.ms += ms
-		if t.ms >= 1000*60*60*24 {
-			t.ms -= 1000 * 60 * 60 * 24
-			t.days += 1
-		}
-	}
-	var err error
-	if nmtIsPreOrOperational && t.isProducer && t.producerIntervalMs > 0 {
-		if t.producerTimerMs < t.producerIntervalMs {
-			t.producerTimerMs += ms
-			return timestampReceived, nil
-		}
-		t.producerTimerMs -= t.producerIntervalMs
-		frame := canopen.NewFrame(t.cobId, 0, 6)
-		binary.LittleEndian.PutUint32(frame.Data[0:4], t.ms)
-		binary.LittleEndian.PutUint16(frame.Data[4:6], t.days)
-		return timestampReceived, t.bm.Send(frame)
+}
 
+func (t *TIME) resetTimerProducer() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if !t.isProducer {
+		return
 	}
-	t.producerTimerMs = t.producerIntervalMs
-	return timestampReceived, err
+
+	if t.timerProducer == nil {
+		t.timerProducer = time.AfterFunc(t.timeProducer, t.timerProducerHandler)
+	} else {
+		t.timerProducer.Reset(t.timeProducer)
+	}
+}
+
+func (t *TIME) timerProducerHandler() {
+	t.mu.Lock()
+	frame := canopen.NewFrame(t.cobId, 0, 6)
+	convertTimeToByte(t.timeInternal, frame.Data)
+	t.mu.Unlock()
+	_ = t.bm.Send(frame)
+	t.Start()
 }
 
 // Sets the internal time
 func (t *TIME) SetInternalTime(internalTime time.Time) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	// Get the total number of days since 1st of jan 1984
-	days := uint16(internalTime.Sub(timestampOrigin).Hours() / 24)
-	// Get number of milliseconds after midnight
-	midnight := time.Date(internalTime.Year(), internalTime.Month(), internalTime.Day(), 0, 0, 0, 0, time.Local)
-	ms := internalTime.Sub(midnight).Milliseconds()
-	t.residualUs = 0
-	t.ms = uint32(ms)
-	t.days = days
-	t.logger.Info("setting date", "internal time", internalTime)
-	t.logger.Info("since 01/01/1984|00:00:00", "days", days, "ms", ms)
+	t.timeInternal = internalTime
+	t.logger.Info("setting date", "internal time", t.timeInternal)
 }
 
 // Update the producer interval time
 func (t *TIME) SetProducerInterval(interval time.Duration) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.producerIntervalMs = uint32(interval.Milliseconds())
-	t.producerTimerMs = t.producerIntervalMs
+	t.Stop()
+	t.timeProducer = interval
+	t.Start()
 }
 
 // Get the internal time
 func (t *TIME) InternalTime() time.Time {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	internalTime := timestampOrigin.AddDate(0, 0, int(t.days))
-	return internalTime.Add(time.Duration(t.ms)*time.Millisecond + time.Duration(t.residualUs)*time.Microsecond)
+	return t.timeInternal
 }
 
 // Check if time producer
@@ -134,7 +126,7 @@ func NewTIME(
 	bm *canopen.BusManager,
 	logger *slog.Logger,
 	entry1012 *od.Entry,
-	producerIntervalMs uint32,
+	producerInterval time.Duration,
 ) (*TIME, error) {
 	if entry1012 == nil || bm == nil {
 		return nil, canopen.ErrIllegalArgument
@@ -166,12 +158,39 @@ func NewTIME(
 			return nil, canopen.ErrIllegalArgument
 		}
 	}
+	t.timeProducer = producerInterval
 	t.SetInternalTime(time.Now())
-	t.producerIntervalMs = producerIntervalMs
-	t.producerTimerMs = producerIntervalMs
 	t.logger.Info("initialized time object", "producer", t.isProducer, "consumer", t.isConsumer)
 	if t.isProducer {
-		t.logger.Info("publish period", "ms", producerIntervalMs)
+		t.Start()
+		t.logger.Info("publish period", "period", producerInterval)
 	}
 	return t, err
+}
+
+// Convert from raw []byte to [time.Time]
+func convertByteToTime(data []byte) time.Time {
+	if len(data) != 6 {
+		return time.Time{}
+	}
+	ms := int(binary.LittleEndian.Uint32(data[0:4]) & 0x0FFFFFFF)
+	days := int(binary.LittleEndian.Uint16(data[4:6]))
+
+	internalTime := TimestampOrigin.AddDate(0, 0, days)
+	return internalTime.Add(time.Duration(ms) * time.Millisecond)
+}
+
+// Convert from [time.Time] to raw []byte
+func convertTimeToByte(t time.Time, data [8]byte) {
+	if len(data) < 6 {
+		return
+	}
+	// Get the total number of days since 1st of jan 1984
+	days := uint16(t.Sub(TimestampOrigin).Hours() / 24)
+	// Get number of milliseconds after midnight
+	midnight := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.Local)
+	ms := t.Sub(midnight).Milliseconds()
+
+	binary.LittleEndian.PutUint32(data[0:4], uint32(ms))
+	binary.LittleEndian.PutUint16(data[4:6], uint16(days))
 }

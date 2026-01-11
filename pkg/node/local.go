@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
@@ -48,6 +49,9 @@ func (node *LocalNode) Stop() error {
 	if node.SYNC != nil {
 		node.SYNC.Stop()
 	}
+	if node.TIME != nil {
+		node.TIME.Stop()
+	}
 	return nil
 }
 
@@ -67,10 +71,6 @@ func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32) 
 	NMTisPreOrOperational = (NMTState == nmt.StatePreOperational) || (NMTState == nmt.StateOperational)
 
 	node.HBConsumer.Process(NMTisPreOrOperational, timeDifferenceUs)
-
-	if node.TIME != nil {
-		node.TIME.Process(NMTisPreOrOperational, timeDifferenceUs)
-	}
 
 	return reset
 
@@ -285,11 +285,15 @@ func NewLocalNode(
 	}
 
 	// Initialize TIME
-	time, err := t.NewTIME(bm, logger, odict.Index(od.EntryCobIdTIME), 1000) // hardcoded for now
+	time, err := t.NewTIME(bm, logger, odict.Index(od.EntryCobIdTIME), time.Second)
 	if err != nil {
 		node.logger.Error("init failed [TIME]", "error", err)
 	} else {
 		node.TIME = time
+		_ = node.NMT.AddStateChangeCallback(func(state uint8) {
+			isPreOrOperational := state == nmt.StateOperational || state == nmt.StatePreOperational
+			node.TIME.SetOperational(isPreOrOperational)
+		})
 	}
 
 	// Initialize SYNC
@@ -306,11 +310,11 @@ func NewLocalNode(
 		node.logger.Error("init failed [SYNC]", "error", err)
 	} else {
 		node.SYNC = sync
+		_ = node.NMT.AddStateChangeCallback(func(state uint8) {
+			isPreOrOperational := state == nmt.StateOperational || state == nmt.StatePreOperational
+			node.SYNC.SetOperational(isPreOrOperational)
+		})
 	}
-	_ = node.NMT.AddStateChangeCallback(func(state uint8) {
-		isPreOrOperational := state == nmt.StateOperational || state == nmt.StatePreOperational
-		node.SYNC.SetOperational(isPreOrOperational)
-	})
 
 	// Add EDS storage if supported, library supports either plain ascii
 	// Or zipped format

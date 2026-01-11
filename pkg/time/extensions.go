@@ -35,5 +35,9 @@ func writeEntry1012(stream *od.Stream, data []byte) (uint16, error) {
 			return 0, od.ErrDevIncompat
 		}
 	}
+	t.mu.Unlock()
+	t.Stop()
+	t.Start()
+	t.mu.Lock()
 	return od.WriteEntryDefault(stream, data)
 }
