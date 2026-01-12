@@ -143,9 +143,12 @@ func (tpdo *TPDO) send() error {
 		totalNbRead += int(mappedLength)
 	}
 	tpdo.sendRequestAsyncEvent = false
-	tpdo.restartEventTimer()
 	tpdo.timeLastSend = time.Now()
-	return tpdo.bm.Send(tpdo.txBuffer)
+	_ = tpdo.bm.Send(tpdo.txBuffer)
+	tpdo.mu.Unlock()
+	tpdo.restartEventTimer()
+	tpdo.mu.Lock()
+	return err
 }
 
 // Send TPDO asynchronously
@@ -179,27 +182,53 @@ func (tpdo *TPDO) SendAsync() {
 	_ = tpdo.send()
 }
 
-func (tpdo *TPDO) SetOperational(operational bool) {
+// Start relevant timers & sybscribe to SYNC messages
+func (tpdo *TPDO) Start() {
+	tpdo.mu.Lock()
+	if tpdo.transmissionType < TransmissionTypeSyncEventLo && tpdo.sync != nil && tpdo.syncCh == nil {
+		tpdo.syncCh = tpdo.sync.Subscribe()
+		go tpdo.syncHandler()
+	}
+	tpdo.mu.Unlock()
+
+	tpdo.restartEventTimer()
+}
+
+// Stop any timers & unsubscribe from SYNC messages
+func (tpdo *TPDO) Stop() {
 	tpdo.mu.Lock()
 	defer tpdo.mu.Unlock()
 
-	tpdo.isOperational = operational
-	if operational {
-		tpdo.restartEventTimer()
-		return
+	if tpdo.syncCh != nil && tpdo.sync != nil {
+		tpdo.sync.Unsubscribe(tpdo.syncCh)
+		tpdo.syncCh = nil
 	}
 
-	// Stop timers
 	if tpdo.timerEvent != nil {
 		tpdo.timerEvent.Stop()
 	}
+}
 
+func (tpdo *TPDO) SetOperational(operational bool) {
+	tpdo.mu.Lock()
+	tpdo.isOperational = operational
+	tpdo.mu.Unlock()
+
+	if operational {
+		tpdo.Start()
+	} else {
+		tpdo.Stop()
+	}
 }
 
 func (tpdo *TPDO) restartEventTimer() {
-	if tpdo.timeEvent == 0 {
+	tpdo.mu.Lock()
+	defer tpdo.mu.Unlock()
+
+	if tpdo.timeEvent == 0 || !tpdo.isOperational {
 		return
 	}
+
 	// Event timer is used, the next send is limited by the inhibit time
 	if tpdo.timerEvent == nil {
 		tpdo.timerEvent = time.AfterFunc(max(tpdo.timeEvent, tpdo.timeInhibit), tpdo.eventHandler)
@@ -275,7 +304,6 @@ func NewTPDO(
 
 	}
 	tpdo.timeEvent = time.Duration(eventTime) * 1000 * time.Microsecond
-	tpdo.restartEventTimer()
 
 	// Configure sync start value (not mandatory)
 	tpdo.syncStartValue, err = entry18xx.Uint8(od.SubPdoSyncStart)
@@ -302,9 +330,6 @@ func NewTPDO(
 		"event time", eventTime,
 		"transmission type", tpdo.transmissionType,
 	)
-	if tpdo.transmissionType < TransmissionTypeSyncEventLo && tpdo.sync != nil {
-		tpdo.syncCh = tpdo.sync.Subscribe()
-		go tpdo.syncHandler()
-	}
+	tpdo.Start()
 	return tpdo, nil
 }

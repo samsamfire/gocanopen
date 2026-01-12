@@ -123,6 +123,7 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 		eventTimer := binary.LittleEndian.Uint16(data)
 		rpdo.timeoutRx = time.Duration(eventTimer) * time.Millisecond
 		if rpdo.timer != nil {
+			// Only activated if an RPDO is received
 			rpdo.timer.Stop()
 		}
 		rpdo.pdo.logger.Debug("updated event timer", "eventTimer", rpdo.timeoutRx)
@@ -192,9 +193,9 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		tpdo.syncCounter = SyncCounterReset
 		tpdo.transmissionType = transType
 		tpdo.timeLastSend = time.Now()
-		if tpdo.isOperational {
-			tpdo.restartEventTimer()
-		}
+		tpdo.mu.Unlock()
+		tpdo.restartEventTimer()
+		tpdo.mu.Lock()
 		tpdo.pdo.logger.Debug("updated transmission type", "transType", tpdo.transmissionType)
 
 	case od.SubPdoInhibitTime:
@@ -215,9 +216,9 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		if tpdo.timerEvent != nil {
 			tpdo.timerEvent.Stop()
 		}
-		if tpdo.isOperational {
-			tpdo.restartEventTimer()
-		}
+		tpdo.mu.Unlock()
+		tpdo.restartEventTimer()
+		tpdo.mu.Lock()
 		tpdo.pdo.logger.Debug("updated event time", "eventTimer", tpdo.timeEvent)
 
 	case od.SubPdoSyncStart:

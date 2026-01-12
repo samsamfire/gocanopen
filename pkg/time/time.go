@@ -47,14 +47,39 @@ func (t *TIME) SetOperational(operational bool) {
 	t.isOperational = operational
 	t.mu.Unlock()
 	if operational {
-		t.Start()
+		if err := t.Start(); err != nil {
+			t.logger.Warn("failed to start", "error", err)
+		}
 	} else {
 		t.Stop()
 	}
 }
 
-func (t *TIME) Start() {
-	t.resetTimerProducer()
+func (t *TIME) Start() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.isConsumer && t.rxCancel == nil {
+		rxCancel, err := t.bm.Subscribe(t.cobId, 0x7FF, false, t)
+		if err != nil {
+			return err
+		}
+		t.rxCancel = rxCancel
+	}
+
+	if t.isProducer {
+		if t.timerProducer == nil {
+			t.timerProducer = time.AfterFunc(t.timeProducer, t.timerProducerHandler)
+		} else {
+			t.timerProducer.Reset(t.timeProducer)
+		}
+	}
+	t.logger.Debug("started time object",
+		"producer", t.isProducer,
+		"consumer", t.isConsumer,
+		"period", t.timeProducer,
+	)
+	return nil
 }
 
 func (t *TIME) Stop() {
@@ -63,21 +88,15 @@ func (t *TIME) Stop() {
 	if t.timerProducer != nil {
 		t.timerProducer.Stop()
 	}
-}
-
-func (t *TIME) resetTimerProducer() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	if !t.isProducer {
-		return
+	if t.rxCancel != nil {
+		t.rxCancel()
+		t.rxCancel = nil
 	}
-
-	if t.timerProducer == nil {
-		t.timerProducer = time.AfterFunc(t.timeProducer, t.timerProducerHandler)
-	} else {
-		t.timerProducer.Reset(t.timeProducer)
-	}
+	t.logger.Debug("stopped time object",
+		"producer", t.isProducer,
+		"consumer", t.isConsumer,
+		"period", t.timeProducer,
+	)
 }
 
 func (t *TIME) timerProducerHandler() {
@@ -87,7 +106,7 @@ func (t *TIME) timerProducerHandler() {
 	frame.Data = buff
 	t.mu.Unlock()
 	_ = t.bm.Send(frame)
-	t.Start()
+	_ = t.Start()
 }
 
 // Sets the internal time
@@ -104,7 +123,7 @@ func (t *TIME) SetProducerInterval(interval time.Duration) {
 	t.timeProducer = interval
 	t.mu.Unlock()
 	t.Stop()
-	t.Start()
+	_ = t.Start()
 }
 
 // Get the internal time
@@ -153,21 +172,15 @@ func NewTIME(
 	t.isConsumer = (cobId & 0x80000000) != 0
 	t.isProducer = (cobId & 0x40000000) != 0
 	t.cobId = cobId & 0x7FF
-	if t.isConsumer {
-		rxCancel, err := bm.Subscribe(t.cobId, 0x7FF, false, t)
-		t.rxCancel = rxCancel
-		if err != nil {
-			return nil, canopen.ErrIllegalArgument
-		}
-	}
+
 	t.timeProducer = producerInterval
 	t.SetInternalTime(time.Now())
-	t.logger.Info("initialized time object", "producer", t.isProducer, "consumer", t.isConsumer)
-	if t.isProducer {
-		t.Start()
-		t.logger.Info("publish period", "period", producerInterval)
+
+	if err := t.Start(); err != nil {
+		return nil, err
 	}
-	return t, err
+
+	return t, nil
 }
 
 // Convert from raw []byte to [time.Time]

@@ -48,13 +48,10 @@ func writeEntry1005(stream *od.Stream, data []byte) (uint16, error) {
 	// Reset in case sync is producer
 	// Stop any pending timers if for example if producer / consumer changed
 	sync.isProducer = isProducer
-	if sync.timerConsumer != nil {
-		sync.timerConsumer.Stop()
-	}
-	if sync.timerProducer != nil {
-		sync.timerProducer.Stop()
-	}
-	sync.resetTimers()
+	sync.mu.Unlock()
+	sync.Stop()
+	sync.Start()
+	sync.mu.Lock()
 	sync.logger.Info("sync type", "isProducer", isProducer)
 	return od.WriteEntryDefault(stream, data)
 }
@@ -73,6 +70,12 @@ func writeEntry1006(stream *od.Stream, data []byte) (uint16, error) {
 
 	cyclePeriodUs := binary.LittleEndian.Uint32(data)
 	sync.syncCyclePeriod = time.Duration(cyclePeriodUs) * time.Microsecond
+
+	if sync.syncCyclePeriod != 0 {
+		sync.mu.Unlock()
+		sync.resetTimers()
+		sync.mu.Lock()
+	}
 	sync.logger.Info("updating communication cycle", "cyclePeriod", sync.syncCyclePeriod)
 	return od.WriteEntryDefault(stream, data)
 }
