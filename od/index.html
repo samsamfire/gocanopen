@@ -1,0 +1,1214 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../network/">
+      
+      
+        <link rel="next" href="../can/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>Object Dictionary - Gocanopen</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="light-green" data-md-color-accent="deep-orange">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#objectdictionary" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Gocanopen" class="md-header__button md-logo" aria-label="Gocanopen" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4.93 3.93A9.97 9.97 0 0 0 2 11c0 2.76 1.12 5.26 2.93 7.07l1.41-1.41A7.94 7.94 0 0 1 4 11c0-2.21.89-4.22 2.34-5.66zm14.14 0-1.41 1.41A7.96 7.96 0 0 1 20 11c0 2.22-.89 4.22-2.34 5.66l1.41 1.41A9.97 9.97 0 0 0 22 11c0-2.76-1.12-5.26-2.93-7.07M7.76 6.76A5.98 5.98 0 0 0 6 11c0 1.65.67 3.15 1.76 4.24l1.41-1.41A4 4 0 0 1 8 11c0-1.11.45-2.11 1.17-2.83zm8.48 0-1.41 1.41A4 4 0 0 1 16 11c0 1.11-.45 2.11-1.17 2.83l1.41 1.41A5.98 5.98 0 0 0 18 11c0-1.65-.67-3.15-1.76-4.24M12 9a2 2 0 0 0-2 2 2 2 0 0 0 2 2 2 2 0 0 0 2-2 2 2 0 0 0-2-2m-1 6v4h-1a1 1 0 0 0-1 1H2v2h7a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1h7v-2h-7a1 1 0 0 0-1-1h-1v-4z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Gocanopen
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Object Dictionary
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="light-green" data-md-color-accent="deep-orange"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="light-green" data-md-color-accent="deep-orange"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/samsamfire/gocanopen" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    samsamfire/gocanopen
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../network/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Network
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Object Dictionary
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../can/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  CAN driver
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../configurator/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Configurator
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../sdo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  SDO
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../local/" class="md-tabs__link">
+          
+  
+  
+  Nodes
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Gocanopen" class="md-nav__button md-logo" aria-label="Gocanopen" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4.93 3.93A9.97 9.97 0 0 0 2 11c0 2.76 1.12 5.26 2.93 7.07l1.41-1.41A7.94 7.94 0 0 1 4 11c0-2.21.89-4.22 2.34-5.66zm14.14 0-1.41 1.41A7.96 7.96 0 0 1 20 11c0 2.22-.89 4.22-2.34 5.66l1.41 1.41A9.97 9.97 0 0 0 22 11c0-2.76-1.12-5.26-2.93-7.07M7.76 6.76A5.98 5.98 0 0 0 6 11c0 1.65.67 3.15 1.76 4.24l1.41-1.41A4 4 0 0 1 8 11c0-1.11.45-2.11 1.17-2.83zm8.48 0-1.41 1.41A4 4 0 0 1 16 11c0 1.11-.45 2.11-1.17 2.83l1.41 1.41A5.98 5.98 0 0 0 18 11c0-1.65-.67-3.15-1.76-4.24M12 9a2 2 0 0 0-2 2 2 2 0 0 0 2 2 2 2 0 0 0 2-2 2 2 0 0 0-2-2m-1 6v4h-1a1 1 0 0 0-1 1H2v2h7a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1h7v-2h-7a1 1 0 0 0-1-1h-1v-4z"/></svg>
+
+    </a>
+    Gocanopen
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/samsamfire/gocanopen" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    samsamfire/gocanopen
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../network/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Object Dictionary
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Object Dictionary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#supported-datatypes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Datatypes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#basic-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Usage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exporting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exporting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#special-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Special entries
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../can/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CAN driver
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configurator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configurator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sdo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SDO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nodes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Nodes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../local/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local Node
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#supported-datatypes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Datatypes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#basic-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Usage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exporting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exporting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#special-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Special entries
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+  
+
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="objectdictionary">ObjectDictionary</h1>
+<p>Every CANopen node has an <strong>ObjectDictionary</strong>. An ObjectDictionary consists of <strong>Entries</strong> with a given index
+between 0 and 0xFFFF. An entry may also have a subindex for some specific CANopen types like RECORD or ARRAY types.
+This subindex must be between 0 and 0xFF.
+All of this information is stored inside of an EDS file as defined by CiA.
+This library can parse a standard EDS file and create the corresponding CANopen objects (SDO, NMT, etc...). </p>
+<h2 id="supported-datatypes">Supported Datatypes</h2>
+<p>The library supports the standard CANopen datatypes defined in CiA 301.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Name</th>
+<th style="text-align: left;">Code</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">BOOLEAN</td>
+<td style="text-align: left;">0x01</td>
+<td style="text-align: left;">Boolean (true/false)</td>
+</tr>
+<tr>
+<td style="text-align: left;">INTEGER8</td>
+<td style="text-align: left;">0x02</td>
+<td style="text-align: left;">8-bit signed integer</td>
+</tr>
+<tr>
+<td style="text-align: left;">INTEGER16</td>
+<td style="text-align: left;">0x03</td>
+<td style="text-align: left;">16-bit signed integer</td>
+</tr>
+<tr>
+<td style="text-align: left;">INTEGER32</td>
+<td style="text-align: left;">0x04</td>
+<td style="text-align: left;">32-bit signed integer</td>
+</tr>
+<tr>
+<td style="text-align: left;">UNSIGNED8</td>
+<td style="text-align: left;">0x05</td>
+<td style="text-align: left;">8-bit unsigned integer</td>
+</tr>
+<tr>
+<td style="text-align: left;">UNSIGNED16</td>
+<td style="text-align: left;">0x06</td>
+<td style="text-align: left;">16-bit unsigned integer</td>
+</tr>
+<tr>
+<td style="text-align: left;">UNSIGNED32</td>
+<td style="text-align: left;">0x07</td>
+<td style="text-align: left;">32-bit unsigned integer</td>
+</tr>
+<tr>
+<td style="text-align: left;">REAL32</td>
+<td style="text-align: left;">0x08</td>
+<td style="text-align: left;">32-bit floating point</td>
+</tr>
+<tr>
+<td style="text-align: left;">VISIBLE_STRING</td>
+<td style="text-align: left;">0x09</td>
+<td style="text-align: left;">ASCII string</td>
+</tr>
+<tr>
+<td style="text-align: left;">OCTET_STRING</td>
+<td style="text-align: left;">0x0A</td>
+<td style="text-align: left;">Byte array</td>
+</tr>
+<tr>
+<td style="text-align: left;">UNICODE_STRING</td>
+<td style="text-align: left;">0x0B</td>
+<td style="text-align: left;">Unicode string</td>
+</tr>
+<tr>
+<td style="text-align: left;">DOMAIN</td>
+<td style="text-align: left;">0x0F</td>
+<td style="text-align: left;">Large variable data (e.g., file transfer)</td>
+</tr>
+<tr>
+<td style="text-align: left;">REAL64</td>
+<td style="text-align: left;">0x11</td>
+<td style="text-align: left;">64-bit floating point</td>
+</tr>
+<tr>
+<td style="text-align: left;">INTEGER64</td>
+<td style="text-align: left;">0x15</td>
+<td style="text-align: left;">64-bit signed integer</td>
+</tr>
+<tr>
+<td style="text-align: left;">UNSIGNED64</td>
+<td style="text-align: left;">0x1B</td>
+<td style="text-align: left;">64-bit unsigned integer</td>
+</tr>
+</tbody>
+</table>
+<h2 id="basic-usage">Basic Usage</h2>
+<p>To create an <strong>ObjectDictionary</strong> directly :</p>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="s">&quot;github.com/samsamfire/gocanopen/pkg/od&quot;</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nx">odict</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">od</span><span class="p">.</span><span class="nx">Parse</span><span class="p">(</span><span class="s">&quot;../testdata/base.eds&quot;</span><span class="p">,</span><span class="w"> </span><span class="mh">0x20</span><span class="p">)</span><span class="w"> </span><span class="c1">// parse EDS for node id 0x20</span>
+</span></code></pre></div>
+<p>The node id is required but is only useful when the EDS uses the special variable $NODE_ID.
+Usually, the ObjectDictionary is created when adding / creating a node on the network.
+Accessing OD entries and subentries directly is possible either by name or by value.</p>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nx">odict</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">od</span><span class="p">.</span><span class="nx">Parse</span><span class="p">(</span><span class="s">&quot;../testdata/base.eds&quot;</span><span class="p">,</span><span class="w"> </span><span class="mh">0x20</span><span class="p">)</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nx">odict</span><span class="p">.</span><span class="nx">Index</span><span class="p">(</span><span class="mh">0x201B</span><span class="p">)</span><span class="w"> </span><span class="c1">// get entry index by value</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nx">odict</span><span class="p">.</span><span class="nx">Index</span><span class="p">(</span><span class="s">&quot;UNSIGNED64 value&quot;</span><span class="p">)</span><span class="w"> </span><span class="c1">// accessing with the actual name is also possible</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="nx">odict</span><span class="p">.</span><span class="nx">Index</span><span class="p">(</span><span class="mh">0x201B</span><span class="p">).</span><span class="nx">SubIndex</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="c1">// returns the associated Variable object (for VAR types, subindex is always 0)</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="nx">odict</span><span class="p">.</span><span class="nx">Index</span><span class="p">(</span><span class="mh">0x1018</span><span class="p">).</span><span class="nx">SubIndex</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="c1">// access sub-object of array</span>
+</span></code></pre></div>
+<p>You can also iterate over all entries:</p>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nx">entries</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">odict</span><span class="p">.</span><span class="nx">Entries</span><span class="p">()</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">for</span><span class="w"> </span><span class="nx">idx</span><span class="p">,</span><span class="w"> </span><span class="nx">entry</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="k">range</span><span class="w"> </span><span class="nx">entries</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Printf</span><span class="p">(</span><span class="s">&quot;Index: %X, Name: %s\n&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">idx</span><span class="p">,</span><span class="w"> </span><span class="nx">entry</span><span class="p">.</span><span class="nx">Name</span><span class="p">)</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="p">}</span>
+</span></code></pre></div>
+<p>It is also possible to create new dictionary entries dynamically :</p>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nx">odict</span><span class="p">.</span><span class="nx">AddVariableType</span><span class="p">(</span><span class="nx">index</span><span class="p">,</span><span class="w"> </span><span class="nx">indexName</span><span class="p">,</span><span class="w"> </span><span class="nx">od</span><span class="p">.</span><span class="nx">DOMAIN</span><span class="p">,</span><span class="w"> </span><span class="nx">od</span><span class="p">.</span><span class="nx">AttributeSdoRw</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="p">)</span><span class="w"> </span><span class="c1">// add a DOMAIN entry, and returns it</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nx">odict</span><span class="p">.</span><span class="nx">AddVariableType</span><span class="p">(</span><span class="mh">0x2500</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;a number&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">od</span><span class="p">.</span><span class="nx">UNSIGNED32</span><span class="p">,</span><span class="w"> </span><span class="nx">od</span><span class="p">.</span><span class="nx">AttributeSdoRw</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;0x1000&quot;</span><span class="p">)</span><span class="w"> </span><span class="c1">// add an UNSIGNED32 entry, readable and writable</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nx">record</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">od</span><span class="p">.</span><span class="nx">NewRecord</span><span class="p">()</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nx">record</span><span class="p">.</span><span class="nx">AddSubObject</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;sub0&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">od</span><span class="p">.</span><span class="nx">UNSIGNED8</span><span class="p">,</span><span class="w"> </span><span class="nx">od</span><span class="p">.</span><span class="nx">AttributeSdoRw</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;0x11&quot;</span><span class="p">)</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nx">odict</span><span class="p">.</span><span class="nx">AddVariableList</span><span class="p">(</span><span class="mh">0x3030</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;record&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">record</span><span class="p">)</span><span class="w"> </span><span class="c1">// add a RECORD entry</span>
+</span></code></pre></div>
+<p>Some more complex objects can be created dynamically, currently only a few are supported :</p>
+<p><div class="language-go highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nx">odict</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">od</span><span class="p">.</span><span class="nx">Parse</span><span class="p">(</span><span class="s">&quot;../testdata/base.eds&quot;</span><span class="p">,</span><span class="w"> </span><span class="mh">0x20</span><span class="p">)</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nx">odict</span><span class="p">.</span><span class="nx">AddRPDO</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="c1">// adds an rpdo object to EDS. i.e. new communication param at 0x1400 and mapping param at 0x1600</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nx">odict</span><span class="p">.</span><span class="nx">AddTPDO</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="c1">// adds a tpdo object to EDS. i.e. new communication param at 0x1800 and mapping param at 0x1A00</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nx">odict</span><span class="p">.</span><span class="nx">AddSYNC</span><span class="p">()</span><span class="w"> </span><span class="c1">// adds sync object as well as extensions (1005,1006,1007,1019)</span>
+</span></code></pre></div>
+Note that currently adding these objects will not update the underlying EDS file on the system, meaning that
+downloading EDS through object 0x1021 for example will still return the original EDS file.</p>
+<p>A default CANopen EDS is embedded inside of this package. It can be useful for testing purposes, and can be used
+like so :</p>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nx">odict</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">od</span><span class="p">.</span><span class="nx">Default</span><span class="p">()</span><span class="w"> </span><span class="c1">// this creates a default object dictionary with pre-configured values</span>
+</span></code></pre></div>
+<h2 id="exporting">Exporting</h2>
+<p>Exporting OD to an EDS file is also possible. OD can be exported with default or current values.</p>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="w">    </span><span class="nx">od</span><span class="p">.</span><span class="nx">ExportEDS</span><span class="p">(</span><span class="nx">odict</span><span class="p">,</span><span class="kc">true</span><span class="p">,</span><span class="s">&quot;path_to_exported.eds&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<h2 id="special-entries">Special entries</h2>
+<p>CiA 301 defines a certain number of CANopen communication specific objects inside the object dictionary. 
+These objects are inside of the <strong>Communication Profile Area</strong> and range between 0x1000 - 0x1FFF. 
+Some of them are mandatory and others are optional.
+The following table lists the available objects, and the ones that are currently implemented in this stack.</p>
+<table>
+<thead>
+<tr>
+<th>Index</th>
+<th>Name</th>
+<th>Implemented</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1000</td>
+<td>device type</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1001</td>
+<td>error register</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1003</td>
+<td>manufacturer status register</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1005</td>
+<td>COB-ID SYNC</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1006</td>
+<td>communication cycle period</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1007</td>
+<td>synchronous window length</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1008</td>
+<td>manufacturer device name</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1009</td>
+<td>manufacturer hardware version</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>100A</td>
+<td>manufacturer software version</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>100C</td>
+<td>gard time</td>
+<td>no</td>
+</tr>
+<tr>
+<td>100D</td>
+<td>life time factor</td>
+<td>no</td>
+</tr>
+<tr>
+<td>1010</td>
+<td>store parameters</td>
+<td>no</td>
+</tr>
+<tr>
+<td>1011</td>
+<td>restore default parameters</td>
+<td>no</td>
+</tr>
+<tr>
+<td>1012</td>
+<td>COB-ID TIME</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1013</td>
+<td>high resolution time stamp</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1014</td>
+<td>COB-ID EMCY</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1015</td>
+<td>Inhibit Time EMCY</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1016</td>
+<td>Consumer heartbeat time</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1017</td>
+<td>Producer heartbeat time</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1018</td>
+<td>Identity Object</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1021</td>
+<td>Store EDS</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1022</td>
+<td>Storage Format</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1400-15FF</td>
+<td>RPDO Communication Parameter</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1600-17FF</td>
+<td>RPDO Mapping Parameter</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1800-19FF</td>
+<td>TPDO Communication Parameter</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>1A00-1BFF</td>
+<td>TPDO Mapping Parameter</td>
+<td>yes</td>
+</tr>
+</tbody>
+</table>
+<p>Check <a href="../configurator/">configuration</a> on how to access these entries.</p>
+<p>These entries are different than regular OD entries as they use special extensions
+that can perform various operations on the running CANopen node.
+You can define your own CANopen extensions for this, you need to create two functions :</p>
+<ul>
+<li>An <strong>od.StreamReader</strong> that will be called on entry read access</li>
+<li>An <strong>od.StreamWriter</strong> that will be called on entry write access</li>
+</ul>
+<p>The default implementations, i.e. for regular reading and writing are <strong>od.ReadEntryDefault</strong> and
+<strong>od.WriteEntryDefault</strong>.</p>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nx">odict</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">od</span><span class="p">.</span><span class="nx">Parse</span><span class="p">(</span><span class="nx">od</span><span class="p">.</span><span class="nx">Default</span><span class="p">(),</span><span class="w"> </span><span class="mh">0x20</span><span class="p">)</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nx">entry</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">odict</span><span class="p">.</span><span class="nx">AddVariableType</span><span class="p">(</span><span class="nx">index</span><span class="p">,</span><span class="w"> </span><span class="nx">indexName</span><span class="p">,</span><span class="w"> </span><span class="nx">od</span><span class="p">.</span><span class="nx">DOMAIN</span><span class="p">,</span><span class="w"> </span><span class="nx">od</span><span class="p">.</span><span class="nx">AttributeSdoRw</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="p">)</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nx">entry</span><span class="p">.</span><span class="nx">AddExtension</span><span class="p">(</span><span class="nx">someObject</span><span class="p">,</span><span class="nx">od</span><span class="p">.</span><span class="nx">ReadEntryDefault</span><span class="p">,</span><span class="nx">od</span><span class="p">.</span><span class="nx">WriteEntryDefault</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Some pre-made extensions are available :</p>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nx">odict</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">od</span><span class="p">.</span><span class="nx">Parse</span><span class="p">(</span><span class="nx">od</span><span class="p">.</span><span class="nx">Default</span><span class="p">(),</span><span class="w"> </span><span class="mh">0x20</span><span class="p">)</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1">// this will create a file on disk that will be accessible by SDO block transfer</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nx">entry</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">odict</span><span class="p">.</span><span class="nx">AddFile</span><span class="p">(</span><span class="mh">0x3333</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;File entry&quot;</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;./path_to_file.txt&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">os</span><span class="p">.</span><span class="nx">O_RDWR</span><span class="o">|</span><span class="nx">os</span><span class="p">.</span><span class="nx">O_CREATE</span><span class="p">,</span><span class="w"> </span><span class="nx">os</span><span class="p">.</span><span class="nx">O_RDWR</span><span class="o">|</span><span class="nx">os</span><span class="p">.</span><span class="nx">O_CREATE</span><span class="p">)</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1">// Add an io.Reader as a DOMAIN entry (read-only)</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="nx">odict</span><span class="p">.</span><span class="nx">AddReader</span><span class="p">(</span><span class="mh">0x3334</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;Reader entry&quot;</span><span class="p">,</span><span class="w"> </span><span class="nx">myReader</span><span class="p">)</span>
+</span></code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+      <div class="md-progress" data-md-component="progress" role="progressbar"></div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.copy", "content.tooltips", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.top", "navigation.path", "toc.follow", "search.suggest", "search.highlight", "search.share"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
