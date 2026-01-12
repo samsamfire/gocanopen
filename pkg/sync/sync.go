@@ -65,7 +65,6 @@ func (sync *SYNC) Handle(frame canopen.Frame) {
 	sync.mu.Unlock()
 	sync.resetTimers()
 	sync.mu.Lock()
-
 }
 
 func (sync *SYNC) SetOperational(operational bool) {
@@ -127,9 +126,28 @@ func (sync *SYNC) notifySubscribers() {
 	}
 }
 
+func (sync *SYNC) Start() error {
+	sync.mu.Lock()
+	if sync.rxCancel == nil {
+		rxCancel, err := sync.bm.Subscribe(sync.cobId, 0x7FF, false, sync)
+		sync.rxCancel = rxCancel
+		if err != nil {
+			return err
+		}
+	}
+	sync.mu.Unlock()
+	sync.resetTimers()
+	return nil
+}
+
 func (sync *SYNC) Stop() {
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
+
+	if sync.rxCancel != nil {
+		sync.rxCancel()
+		sync.rxCancel = nil
+	}
 	if sync.timerConsumer != nil {
 		sync.timerConsumer.Stop()
 	}
@@ -138,28 +156,27 @@ func (sync *SYNC) Stop() {
 	}
 }
 
-func (sync *SYNC) Start() {
-	sync.mu.Lock()
-	defer sync.mu.Unlock()
-	sync.resetTimers()
-}
-
 // Should be called only if mu is locked
 func (sync *SYNC) resetTimers() {
+	sync.mu.Lock()
+	defer sync.mu.Unlock()
 
 	if sync.syncCyclePeriod == 0 {
+		if sync.timerProducer != nil {
+			sync.timerProducer.Stop()
+		}
 		return
 	}
 
 	timerPeriod := sync.syncCyclePeriod
 
-	if sync.isProducer {
+	if sync.isProducer && sync.isOperational {
 		if sync.timerProducer == nil {
 			sync.timerProducer = time.AfterFunc(timerPeriod, sync.timerProducerHandler)
 		} else {
 			sync.timerProducer.Reset(timerPeriod)
 		}
-	} else {
+	} else if !sync.isProducer && sync.isOperational {
 		// Allow a bit of slac for consumer
 		timerPeriod = time.Duration(float64(timerPeriod) * 1.5)
 		if sync.timerConsumer == nil {
@@ -173,8 +190,6 @@ func (sync *SYNC) resetTimers() {
 func (sync *SYNC) timerProducerHandler() {
 	// Producer timer elapsed send sync
 	sync.send()
-	sync.mu.Lock()
-	defer sync.mu.Unlock()
 	sync.resetTimers()
 }
 
@@ -306,17 +321,13 @@ func NewSYNC(
 	sync.isProducer = (cobIdSync & 0x40000000) != 0
 	sync.cobId = cobIdSync & 0x7FF
 
-	rxCancel, err := sync.bm.Subscribe(sync.cobId, 0x7FF, false, sync)
-	sync.rxCancel = rxCancel
-	if err != nil {
-		return nil, err
-	}
 	var frameSize uint8 = 0
 	if syncCounterOverflow != 0 {
 		frameSize = 1
 	}
-
-	sync.resetTimers()
+	if err := sync.Start(); err != nil {
+		return nil, err
+	}
 	sync.txBuffer = canopen.NewFrame(sync.cobId, 0, frameSize)
 	sync.logger.Info("initialization finished")
 	return sync, nil

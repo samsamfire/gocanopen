@@ -76,6 +76,50 @@ func (rpdo *RPDO) syncHandler() {
 	}
 }
 
+// Start subscription & timers
+func (rpdo *RPDO) Start() error {
+	rpdo.mu.Lock()
+	defer rpdo.mu.Unlock()
+
+	if rpdo.rxCancel == nil {
+		rxCancel, err := rpdo.bm.Subscribe(uint32(rpdo.pdo.configuredId), 0x7FF, false, rpdo)
+		rpdo.rxCancel = rxCancel
+		if err != nil {
+			return err
+		}
+	}
+
+	if rpdo.synchronous && rpdo.sync != nil {
+		rpdo.syncCh = rpdo.sync.Subscribe()
+		go rpdo.syncHandler()
+	}
+
+	return nil
+}
+
+// Stop any subscriptions & timers
+func (rpdo *RPDO) Stop() {
+	rpdo.mu.Lock()
+	defer rpdo.mu.Unlock()
+
+	if rpdo.rxCancel != nil {
+		rpdo.rxCancel()
+		rpdo.rxCancel = nil
+	}
+
+	if rpdo.timer != nil {
+		rpdo.timer.Stop()
+	}
+
+	if rpdo.sync != nil && rpdo.syncCh != nil {
+		rpdo.sync.Unsubscribe(rpdo.syncCh)
+		rpdo.syncCh = nil
+	}
+
+	rpdo.rxNew = false
+	rpdo.inTimeout = false
+}
+
 // Check the frame DLC and manages the receiveError state.
 // Returns true if the frame should be processed, false otherwise.
 func (rpdo *RPDO) validateFrameLength(dlc uint8) bool {
@@ -120,15 +164,13 @@ func (rpdo *RPDO) timeoutHandler() {
 
 func (rpdo *RPDO) SetOperational(operational bool) {
 	rpdo.mu.Lock()
-	defer rpdo.mu.Unlock()
-
 	rpdo.isOperational = operational
-	if !operational {
-		if rpdo.timer != nil {
-			rpdo.timer.Stop()
-		}
-		rpdo.rxNew = false
-		rpdo.inTimeout = false
+	rpdo.mu.Unlock()
+
+	if operational {
+		rpdo.Start()
+	} else {
+		rpdo.Stop()
 	}
 }
 
@@ -166,11 +208,6 @@ func (rpdo *RPDO) configureCobId(entry14xx *od.Entry, predefinedIdent uint16, er
 
 	pdo := rpdo.pdo
 	canId, err := pdo.configureCobId(entry14xx, predefinedIdent, erroneousMap)
-	if err != nil {
-		return 0, err
-	}
-	rxCancel, err := rpdo.bm.Subscribe(uint32(canId), 0x7FF, false, rpdo)
-	rpdo.rxCancel = rxCancel
 	if err != nil {
 		return 0, err
 	}
@@ -233,15 +270,12 @@ func NewRPDO(
 	pdo.configuredId = uint16(canId)
 	entry14xx.AddExtension(rpdo, readEntry14xxOr18xx, writeEntry14xx)
 	entry16xx.AddExtension(rpdo, od.ReadEntryDefault, writeEntry16xxOr1Axx)
+	err = rpdo.Start()
 	rpdo.pdo.logger.Debug("finished initializing",
 		"canId", canId,
 		"valid", pdo.Valid,
 		"event time", eventTime,
 		"synchronous", rpdo.synchronous,
 	)
-	if rpdo.synchronous && rpdo.sync != nil {
-		rpdo.syncCh = rpdo.sync.Subscribe()
-		go rpdo.syncHandler()
-	}
-	return rpdo, nil
+	return rpdo, err
 }

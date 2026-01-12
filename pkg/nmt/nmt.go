@@ -224,6 +224,15 @@ func (nmt *NMT) Reset() {
 	nmt.operatingState = StateInitializing
 }
 
+// Stop NMT processing
+func (nmt *NMT) Stop() {
+	nmt.mu.Lock()
+	defer nmt.mu.Unlock()
+	// Remove any callbacks
+	nmt.callbacks = make(map[uint64]func(nmtState uint8))
+	nmt.callbackNextId = 1
+}
+
 // Send NMT command to self, don't send on network
 func (nmt *NMT) SendInternalCommand(command uint8) {
 	nmt.mu.Lock()

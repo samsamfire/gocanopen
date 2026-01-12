@@ -46,11 +46,21 @@ func (node *LocalNode) Reset() error {
 }
 
 func (node *LocalNode) Stop() error {
+
+	if node.NMT != nil {
+		node.NMT.Stop()
+	}
 	if node.SYNC != nil {
 		node.SYNC.Stop()
 	}
 	if node.TIME != nil {
 		node.TIME.Stop()
+	}
+	for _, pdo := range node.TPDOs {
+		pdo.Stop()
+	}
+	for _, pdo := range node.RPDOs {
+		pdo.Stop()
 	}
 	return nil
 }
