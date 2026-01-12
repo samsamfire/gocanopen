@@ -107,7 +107,10 @@ func (t *TIME) timerProducerHandler() {
 	buff := convertTimeToByte(t.timeInternal)
 	frame.Data = buff
 	t.mu.Unlock()
-	_ = t.bm.Send(frame)
+	err := t.bm.Send(frame)
+	if err != nil {
+		t.logger.Warn("failed to send", "err", err)
+	}
 	_ = t.Start()
 }
 

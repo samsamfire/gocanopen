@@ -114,6 +114,14 @@ func (c *SDOClient) Handle(frame canopen.Frame) {
 
 }
 
+func (c *SDOClient) send(frame canopen.Frame) error {
+	err := c.bm.Send(frame)
+	if err != nil {
+		c.logger.Error("failed to send", "err", err)
+	}
+	return err
+}
+
 // Setup the client for communication with an SDO server
 func (c *SDOClient) setupServer(cobIdClientToServer uint32, cobIdServerToClient uint32, nodeIdServer uint8) error {
 	c.mu.Lock()
@@ -471,7 +479,7 @@ func (c *SDOClient) downloadInitiate(forceSegmented bool) error {
 		)
 	}
 	c.timeoutTimer = 0
-	return c.bm.Send(c.txBuffer)
+	return c.send(c.txBuffer)
 }
 
 // Write value to OD locally
@@ -593,7 +601,7 @@ func (c *SDOClient) downloadSegment(bufferPartial bool) error {
 		"subindex", fmt.Sprintf("x%x", c.subindex),
 		"raw", c.txBuffer.Data,
 	)
-	return c.bm.Send(c.txBuffer)
+	return c.send(c.txBuffer)
 }
 
 // Helper function for initiating a block download
@@ -607,7 +615,7 @@ func (c *SDOClient) downloadBlockInitiate() error {
 		binary.LittleEndian.PutUint32(c.txBuffer.Data[4:], c.sizeIndicated)
 	}
 	c.timeoutTimer = 0
-	return c.bm.Send(c.txBuffer)
+	return c.send(c.txBuffer)
 }
 
 // Helper function for downloading a sub-block
@@ -636,7 +644,7 @@ func (c *SDOClient) downloadBlock(bufferPartial bool) error {
 		c.state = stateDownloadBlkSubblockRsp
 	}
 	c.timeoutTimer = 0
-	return c.bm.Send(c.txBuffer)
+	return c.send(c.txBuffer)
 }
 
 // Helper function for end of block
@@ -645,7 +653,7 @@ func (c *SDOClient) downloadBlockEnd() {
 	c.txBuffer.Data[1] = byte(c.blockCRC)
 	c.txBuffer.Data[2] = byte(c.blockCRC >> 8)
 	c.timeoutTimer = 0
-	_ = c.bm.Send(c.txBuffer)
+	_ = c.send(c.txBuffer)
 }
 
 // Create & send abort on bus
@@ -663,7 +671,7 @@ func (c *SDOClient) abort(abortCode Abort) {
 		"code", code,
 		"description", abortCode,
 	)
-	_ = c.bm.Send(c.txBuffer)
+	_ = c.send(c.txBuffer)
 }
 
 /////////////////////////////////////
@@ -1051,7 +1059,7 @@ func (c *SDOClient) upload(
 			c.txBuffer.Data[2] = byte(c.index >> 8)
 			c.txBuffer.Data[3] = c.subindex
 			c.timeoutTimer = 0
-			_ = c.bm.Send(c.txBuffer)
+			_ = c.send(c.txBuffer)
 			c.state = stateUploadInitiateRsp
 			c.logger.Debug("[TX] upload segment",
 				"server", c.nodeIdServer,
@@ -1067,7 +1075,7 @@ func (c *SDOClient) upload(
 			}
 			c.txBuffer.Data[0] = 0x60 | c.toggle
 			c.timeoutTimer = 0
-			_ = c.bm.Send(c.txBuffer)
+			_ = c.send(c.txBuffer)
 			c.state = stateUploadSegmentRsp
 			c.logger.Debug("[TX] upload segment",
 				"server", c.nodeIdServer,
@@ -1094,7 +1102,7 @@ func (c *SDOClient) upload(
 			c.txBuffer.Data[4] = c.blockSize
 			c.txBuffer.Data[5] = ClientProtocolSwitchThreshold
 			c.timeoutTimer = 0
-			_ = c.bm.Send(c.txBuffer)
+			_ = c.send(c.txBuffer)
 			c.state = stateUploadBlkInitiateRsp
 			c.logger.Debug("[TX] block upload initiate",
 				"server", c.nodeIdServer,
@@ -1112,7 +1120,7 @@ func (c *SDOClient) upload(
 			c.blockCRC = crc.CRC16(0)
 			c.state = stateUploadBlkSubblockSreq
 			c.rxNew = false
-			_ = c.bm.Send(c.txBuffer)
+			_ = c.send(c.txBuffer)
 
 		case stateUploadBlkSubblockCrsp:
 			c.txBuffer.Data[0] = 0xA2
@@ -1146,14 +1154,14 @@ func (c *SDOClient) upload(
 			}
 			c.txBuffer.Data[2] = c.blockSize
 			c.timeoutTimerBlock = 0
-			_ = c.bm.Send(c.txBuffer)
+			_ = c.send(c.txBuffer)
 			if transferShort && !c.finished {
 				c.logger.Warn("sub-block restarted", "seqnoPrev", seqnoStart, "blksize", c.blockSize)
 			}
 
 		case stateUploadBlkEndCrsp:
 			c.txBuffer.Data[0] = 0xA1
-			_ = c.bm.Send(c.txBuffer)
+			_ = c.send(c.txBuffer)
 			c.state = stateIdle
 			ret = success
 

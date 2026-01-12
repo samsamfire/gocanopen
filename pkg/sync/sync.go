@@ -215,7 +215,10 @@ func (sync *SYNC) send() {
 	sync.mu.Unlock()
 	// When listening to own messages, this will trigger Handle to be called
 	// So make sure sync is unlocked before sending
-	_ = sync.bm.Send(sync.txBuffer)
+	err := sync.bm.Send(sync.txBuffer)
+	if err != nil {
+		sync.logger.Error("failed to send", "err", err)
+	}
 }
 
 func (sync *SYNC) Counter() uint8 {

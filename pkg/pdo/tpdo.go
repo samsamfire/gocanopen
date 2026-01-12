@@ -145,7 +145,10 @@ func (tpdo *TPDO) send() error {
 	}
 	tpdo.sendRequestAsyncEvent = false
 	tpdo.timeLastSend = time.Now()
-	_ = tpdo.bm.Send(tpdo.txBuffer)
+	err = tpdo.bm.Send(tpdo.txBuffer)
+	if err != nil {
+		tpdo.pdo.logger.Error("failed to send", "err", err)
+	}
 	tpdo.mu.Unlock()
 	tpdo.restartEventTimer()
 	tpdo.mu.Lock()

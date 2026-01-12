@@ -386,7 +386,10 @@ func (emcy *EMCY) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) {
 
 			emcy.fifo[fifoPpPtr].msg |= uint32(errorRegister) << 16
 			binary.LittleEndian.PutUint32(emcy.txBuffer.Data[:4], emcy.fifo[fifoPpPtr].msg)
-			_ = emcy.bm.Send(emcy.txBuffer)
+			err := emcy.bm.Send(emcy.txBuffer)
+			if err != nil {
+				emcy.logger.Error("failed to send", "err", err)
+			}
 			// Also report own emergency message
 			if emcy.rxCallback != nil {
 				errMsg := uint32(emcy.fifo[fifoPpPtr].msg)
