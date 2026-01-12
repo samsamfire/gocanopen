@@ -82,7 +82,7 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 				)
 			} else {
 				pdo.Valid = false
-				rpdo.rxNew = false
+				rpdo.rxData = nil
 				if err != nil {
 					return 0, od.ErrDevIncompat
 				}
@@ -96,7 +96,7 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 		}
 		synchronous := transType <= TransmissionTypeSync240
 		if rpdo.synchronous != synchronous {
-			rpdo.rxNew = false
+			rpdo.rxData = nil
 			if synchronous {
 				if rpdo.sync != nil && rpdo.syncCh == nil {
 					rpdo.syncCh = rpdo.sync.Subscribe()

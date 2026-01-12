@@ -21,8 +21,7 @@ type RPDO struct {
 	bm            *canopen.BusManager
 	mu            s.Mutex
 	pdo           *PDOCommon
-	rxData        [MaxPdoLength]byte
-	rxNew         bool
+	rxData        []byte
 	sync          *sync.SYNC
 	synchronous   bool
 	timeoutRx     time.Duration
@@ -57,21 +56,20 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 
 	// If async, copy data to OD straight away
 	if !rpdo.synchronous {
-		rpdo.copyDataToOd(frame.Data)
+		rpdo.copyDataToOd(frame.Data[:])
 	}
 
-	// Flag new data, will be processed on SYNC reception
-	rpdo.rxNew = true
-	rpdo.rxData = frame.Data
+	// Buffer RX data
+	rpdo.rxData = frame.Data[:]
 }
 
 func (rpdo *RPDO) syncHandler() {
 	for range rpdo.syncCh {
 		rpdo.mu.Lock()
-		if rpdo.rxNew {
+		if rpdo.rxData != nil {
 			data := rpdo.rxData
-			rpdo.rxNew = false
 			rpdo.copyDataToOd(data)
+			rpdo.rxData = nil
 		}
 		rpdo.mu.Unlock()
 	}
@@ -117,7 +115,7 @@ func (rpdo *RPDO) Stop() {
 		rpdo.syncCh = nil
 	}
 
-	rpdo.rxNew = false
+	rpdo.rxData = nil
 	rpdo.inTimeout = false
 }
 
@@ -176,7 +174,7 @@ func (rpdo *RPDO) OnStateChange(state uint8) {
 	}
 }
 
-func (rpdo *RPDO) copyDataToOd(data [8]byte) {
+func (rpdo *RPDO) copyDataToOd(data []byte) {
 	// Assumes rpdo.mu is locked by caller
 	pdo := rpdo.pdo
 	offset := uint32(0)
