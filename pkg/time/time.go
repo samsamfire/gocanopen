@@ -8,6 +8,7 @@ import (
 	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
+	"github.com/samsamfire/gocanopen/pkg/nmt"
 	"github.com/samsamfire/gocanopen/pkg/od"
 )
 
@@ -42,7 +43,8 @@ func (t *TIME) Handle(frame canopen.Frame) {
 	}
 }
 
-func (t *TIME) SetOperational(operational bool) {
+func (t *TIME) OnStateChange(state uint8) {
+	operational := state == nmt.StateOperational || state == nmt.StatePreOperational
 	t.mu.Lock()
 	t.isOperational = operational
 	t.mu.Unlock()

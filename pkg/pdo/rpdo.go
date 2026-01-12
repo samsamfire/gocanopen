@@ -8,6 +8,7 @@ import (
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
+	"github.com/samsamfire/gocanopen/pkg/nmt"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/sync"
 )
@@ -162,7 +163,8 @@ func (rpdo *RPDO) timeoutHandler() {
 	rpdo.pdo.emcy.ErrorReport(emergency.EmRPDOTimeOut, emergency.ErrRpdoTimeout, 0)
 }
 
-func (rpdo *RPDO) SetOperational(operational bool) {
+func (rpdo *RPDO) OnStateChange(state uint8) {
+	operational := state == nmt.StateOperational
 	rpdo.mu.Lock()
 	rpdo.isOperational = operational
 	rpdo.mu.Unlock()
