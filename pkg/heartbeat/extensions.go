@@ -13,11 +13,10 @@ func writeEntry1016(stream *od.Stream, data []byte) (uint16, error) {
 		return 0, od.ErrDevIncompat
 	}
 	consumer.mu.Lock()
-	nbEntries := len(consumer.entries)
-	consumer.mu.Unlock()
+	defer consumer.mu.Unlock()
 
 	if stream == nil || stream.Subindex < 1 ||
-		int(stream.Subindex) > nbEntries ||
+		int(stream.Subindex) > len(consumer.entries) ||
 		len(data) != 4 {
 		return 0, od.ErrDevIncompat
 	}

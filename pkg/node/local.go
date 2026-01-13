@@ -75,7 +75,12 @@ func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32) 
 
 	node.BusManager.Process()
 	node.EMCY.Process(NMTisPreOrOperational, timeDifferenceUs)
-	reset := node.NMT.GetPendingReset()
+	reset := node.NMT.Process(&NMTState, timeDifferenceUs)
+
+	// Update NMTisPreOrOperational
+	NMTisPreOrOperational = (NMTState == nmt.StatePreOperational) || (NMTState == nmt.StateOperational)
+
+	node.HBConsumer.Process(NMTisPreOrOperational, timeDifferenceUs)
 
 	return reset
 
@@ -93,9 +98,6 @@ func (node *LocalNode) onStateChange(state uint8) {
 	}
 	if node.TIME != nil {
 		node.TIME.OnStateChange(state)
-	}
-	if node.HBConsumer != nil {
-		node.HBConsumer.OnStateChange(state)
 	}
 	for _, server := range node.SDOServers {
 		server.OnNmtStateChange(state)
