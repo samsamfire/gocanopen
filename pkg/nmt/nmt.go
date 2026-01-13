@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
@@ -78,7 +79,8 @@ type NMT struct {
 	nodeId                 uint8
 	control                uint16
 	hearbeatProducerTimeUs uint32
-	hearbeatProducerTimer  uint32
+	timer                  *time.Timer
+	resetCommand           uint8
 	nmtTxBuff              canopen.Frame
 	hbTxBuff               canopen.Frame
 	callbacks              map[uint64]func(nmtState uint8)
@@ -98,113 +100,86 @@ func (nmt *NMT) Handle(frame canopen.Frame) {
 	command := Command(data[0])
 	nodeId := data[1]
 	if nodeId == 0 || nodeId == nmt.nodeId {
-		nmt.internalCommand = command
+		fmt.Println("processing via handle")
+		nmt.processCommand(command)
 	}
 }
 
-// Process [NMT] state machine and TX CAN frames
-// It returns a computed global state request for the node
-// This should be called periodically
-func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32) uint8 {
+func (nmt *NMT) processCommand(command Command) {
+	nmtStateCopy := nmt.operatingState
+
+	switch command {
+	case CommandEnterOperational:
+		nmtStateCopy = StateOperational
+
+	case CommandEnterStopped:
+		nmtStateCopy = StateStopped
+
+	case CommandEnterPreOperational:
+		nmtStateCopy = StatePreOperational
+
+	case CommandResetNode:
+		nmt.resetCommand = ResetApp
+
+	case CommandResetCommunication:
+		nmt.resetCommand = ResetComm
+	}
+
+	if nmt.resetCommand != ResetNot {
+		nmt.logger.Debug("this reset command should be handled by user", "command", CommandDescription[command])
+	}
+
+	fmt.Println("prev", stateMap[nmt.operatingState], "new", stateMap[nmtStateCopy])
+
+	if nmtStateCopy != nmt.operatingState {
+		nmt.setState(nmtStateCopy)
+	}
+}
+
+func (nmt *NMT) setState(newState uint8) {
+	if newState != nmt.operatingState {
+		prev := stateMap[nmt.operatingState]
+		nmt.logger.Info("nmt state changed", "previous", prev, "new", stateMap[newState])
+		nmt.operatingState = newState
+
+		// Heartbeat is sent on three events :
+		// - a hearbeat producer timeout (cyclic)
+		// - state has changed
+		// - startup
+		nmt.sendHeartbeat()
+
+		for _, callback := range nmt.callbacks {
+			callback(newState)
+		}
+	}
+}
+
+// Send a hearbeat with the current nmt state
+// this will trigger an automatic reschedule if hearbeat producer is active
+func (nmt *NMT) sendHeartbeat() {
+	nmt.hbTxBuff.Data[0] = nmt.operatingState
+	_ = nmt.send(nmt.hbTxBuff)
+
+	fmt.Println("sending heartbeat", "period", nmt.hearbeatProducerTimeUs, "state", stateMap[nmt.operatingState])
+
+	// Reset timer
+	if nmt.hearbeatProducerTimeUs > 0 {
+		if nmt.timer == nil {
+			nmt.timer = time.AfterFunc(time.Duration(nmt.hearbeatProducerTimeUs)*time.Microsecond, nmt.heartbeatTimeout)
+		} else {
+			nmt.timer.Reset(time.Duration(nmt.hearbeatProducerTimeUs) * time.Microsecond)
+		}
+	}
+}
+
+func (nmt *NMT) heartbeatTimeout() {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
-
-	nmtStateCopy := nmt.operatingState
-	resetCommand := ResetNot
-	nmtInit := nmtStateCopy == StateInitializing
-	if nmt.hearbeatProducerTimer > timeDifferenceUs {
-		nmt.hearbeatProducerTimer -= timeDifferenceUs
-	} else {
-		nmt.hearbeatProducerTimer = 0
-	}
 	// Heartbeat is sent on three events :
 	// - a hearbeat producer timeout (cyclic)
 	// - state has changed
 	// - startup
-	if nmtInit || (nmt.hearbeatProducerTimeUs != 0 && (nmt.hearbeatProducerTimer == 0 || nmtStateCopy != nmt.operatingStatePrev)) {
-		nmt.hbTxBuff.Data[0] = nmtStateCopy
-		nmt.mu.Unlock()
-		_ = nmt.send(nmt.hbTxBuff)
-		nmt.mu.Lock()
-		if nmtStateCopy == StateInitializing {
-			if nmt.control&StartupToOperational != 0 {
-				nmtStateCopy = StateOperational
-			} else {
-				nmtStateCopy = StatePreOperational
-			}
-		} else {
-			nmt.hearbeatProducerTimer = nmt.hearbeatProducerTimeUs
-
-		}
-	}
-	nmt.operatingStatePrev = nmtStateCopy
-
-	// Process internal NMT commands either from RX buffer or nmt send command
-	if nmt.internalCommand != CommandEmpty {
-		switch nmt.internalCommand {
-		case CommandEnterOperational:
-			nmtStateCopy = StateOperational
-
-		case CommandEnterStopped:
-			nmtStateCopy = StateStopped
-
-		case CommandEnterPreOperational:
-			nmtStateCopy = StatePreOperational
-
-		case CommandResetNode:
-			resetCommand = ResetApp
-
-		case CommandResetCommunication:
-			resetCommand = ResetComm
-
-		}
-		if resetCommand != ResetNot {
-			nmt.logger.Debug("this reset command should be handled by user", "command", CommandDescription[nmt.internalCommand])
-		}
-		nmt.internalCommand = CommandEmpty
-	}
-
-	busOff_HB := nmt.control&nmtErrOnBusOffHb != 0 &&
-		(nmt.emcy.IsError(emergency.EmCanTXBusPassive) ||
-			nmt.emcy.IsError(emergency.EmHeartbeatConsumer) ||
-			nmt.emcy.IsError(emergency.EmHBConsumerRemoteReset))
-
-	errRegMasked := (nmt.control&nmtErrOnErrReg != 0) &&
-		((nmt.emcy.GetErrorRegister() & byte(nmt.control)) != 0)
-
-	if nmtStateCopy == StateOperational && (busOff_HB || errRegMasked) {
-		if nmt.control&nmtErrToStopped != 0 {
-			nmtStateCopy = StateStopped
-		} else {
-			nmtStateCopy = StatePreOperational
-		}
-	} else if (nmt.control&nmtErrFreeToOperational) != 0 &&
-		nmtStateCopy == StatePreOperational &&
-		!busOff_HB &&
-		!errRegMasked {
-
-		nmtStateCopy = StateOperational
-	}
-
-	// Callback on change
-	if nmt.operatingStatePrev != nmtStateCopy || nmtInit {
-		prev := ""
-		if nmtInit {
-			prev = stateMap[StateInitializing]
-		} else {
-			prev = stateMap[nmt.operatingStatePrev]
-		}
-		nmt.logger.Info("nmt state changed", "previous", prev, "new", stateMap[nmtStateCopy])
-		for _, callback := range nmt.callbacks {
-			callback(nmtStateCopy)
-		}
-	}
-
-	nmt.operatingState = nmtStateCopy
-	*internalState = nmtStateCopy
-
-	return resetCommand
-
+	nmt.sendHeartbeat()
 }
 
 func (nmt *NMT) send(frame canopen.Frame) error {
@@ -222,23 +197,57 @@ func (nmt *NMT) GetInternalState() uint8 {
 	}
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
+	fmt.Println("oparting state", "state", stateMap[nmt.operatingState])
 	return nmt.operatingState
+}
+
+// Get and clear pending reset command
+func (nmt *NMT) GetPendingReset() uint8 {
+	nmt.mu.Lock()
+	defer nmt.mu.Unlock()
+	cmd := nmt.resetCommand
+	nmt.resetCommand = ResetNot
+	return cmd
 }
 
 // Reset internal NMT state machine
 func (nmt *NMT) Reset() {
 	nmt.mu.Lock()
-	defer nmt.mu.Unlock()
 	nmt.operatingState = StateInitializing
+	nmt.mu.Unlock()
+	nmt.Start()
 }
 
 // Stop NMT processing
 func (nmt *NMT) Stop() {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
+
+	if nmt.timer != nil {
+		nmt.timer.Stop()
+	}
 	// Remove any callbacks
 	nmt.callbacks = make(map[uint64]func(nmtState uint8))
 	nmt.callbackNextId = 1
+}
+
+// Start NMT processing (this will trigger sending a heartbeat because equivalent to bootup)
+func (nmt *NMT) Start() {
+	nmt.mu.Lock()
+	defer nmt.mu.Unlock()
+
+	// Heartbeat is sent on three events :
+	// - a hearbeat producer timeout (cyclic)
+	// - state has changed
+	// - startup
+	nmt.sendHeartbeat()
+	if nmt.operatingState == StateInitializing {
+		if nmt.control&StartupToOperational != 0 {
+			nmt.operatingState = StateOperational
+		} else {
+			nmt.operatingState = StatePreOperational
+		}
+	}
 }
 
 // Send NMT command to self, don't send on network
@@ -246,7 +255,7 @@ func (nmt *NMT) SendInternalCommand(command uint8) {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
 
-	nmt.internalCommand = Command(command)
+	nmt.processCommand(Command(command))
 }
 
 // Send an NMT command to the network
@@ -256,7 +265,7 @@ func (nmt *NMT) SendCommand(command Command, nodeId uint8) error {
 
 	// Also apply to node if concerned
 	if nodeId == 0 || nodeId == nmt.nodeId {
-		nmt.internalCommand = command
+		nmt.processCommand(command)
 	}
 	// Send NMT command
 	nmt.nmtTxBuff.Data[0] = uint8(command)
@@ -309,7 +318,6 @@ func NewNMT(
 	nmt.nodeId = nodeId
 	nmt.control = control
 	nmt.emcy = emergency
-	nmt.hearbeatProducerTimer = uint32(firstHbTimeMs * 1000)
 	nmt.callbacks = make(map[uint64]func(nmtState uint8))
 	nmt.callbackNextId = 1
 
@@ -326,10 +334,6 @@ func NewNMT(
 	// Extension needs to be initialized
 	entry1017.AddExtension(nmt, od.ReadEntryDefault, writeEntry1017)
 
-	if nmt.hearbeatProducerTimer > nmt.hearbeatProducerTimeUs {
-		nmt.hearbeatProducerTimer = nmt.hearbeatProducerTimeUs
-	}
-
 	// Configure NMT specific tx/rx buffers
 	rxCancel, err := nmt.bm.Subscribe(uint32(canIdNmtRx), 0x7FF, false, nmt)
 	nmt.rxCancel = rxCancel
@@ -338,5 +342,9 @@ func NewNMT(
 	}
 	nmt.nmtTxBuff = canopen.NewFrame(uint32(canIdNmtTx), 0, 2)
 	nmt.hbTxBuff = canopen.NewFrame(uint32(canIdHbTx), 0, 1)
+
+	// Start heartbeat
+	nmt.Start()
+
 	return nmt, nil
 }

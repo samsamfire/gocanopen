@@ -1,6 +1,7 @@
 package network
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -138,7 +139,7 @@ func TestNmt(t *testing.T) {
 
 		assert.Eventually(t, func() bool {
 			return eventHandler.NbEventBoot() == 1 && local.NMT.GetInternalState() == nmt.StateOperational
-		}, 2*time.Second, 20*time.Millisecond)
+		}, 2*time.Second, 20*time.Millisecond, fmt.Sprintf("%v,%v", eventHandler.NbEventBoot(), local.NMT.GetInternalState()))
 
 	})
 

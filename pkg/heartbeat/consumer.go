@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
@@ -28,29 +29,29 @@ const (
 
 // Node specific hearbeat consumer part
 type hbConsumerEntry struct {
+	parent       *HBConsumer
 	mu           sync.Mutex
 	nodeId       uint8
 	cobId        uint16
 	nmtState     uint8
 	nmtStatePrev uint8
 	hbState      uint8
-	timeoutTimer uint32
 	timeUs       uint32
-	rxNew        bool
 	rxCancel     func()
+	timer        *time.Timer
 }
 
 // Hearbeat consumer object for monitoring node hearbeats
 type HBConsumer struct {
-	bm                        *canopen.BusManager
-	logger                    *slog.Logger
-	mu                        sync.Mutex
-	emcy                      *emergency.EMCY
-	entries                   []*hbConsumerEntry
-	allMonitoredActive        bool
-	allMonitoredOperational   bool
-	nmtIsPreOrOperationalPrev bool
-	eventCallback             HBEventCallback
+	bm                      *canopen.BusManager
+	logger                  *slog.Logger
+	mu                      sync.Mutex
+	emcy                    *emergency.EMCY
+	entries                 []*hbConsumerEntry
+	allMonitoredActive      bool
+	allMonitoredOperational bool
+	isOperational           bool
+	eventCallback           HBEventCallback
 }
 
 type HBEventCallback func(event uint8, index uint8, nodeId uint8, nmtState uint8)
@@ -58,22 +59,125 @@ type HBEventCallback func(event uint8, index uint8, nodeId uint8, nmtState uint8
 // Handle [HBConsumer] related RX CAN frames
 func (entry *hbConsumerEntry) Handle(frame canopen.Frame) {
 	entry.mu.Lock()
-	defer entry.mu.Unlock()
-
 	if frame.DLC != 1 {
+		entry.mu.Unlock()
 		return
 	}
-	entry.nmtState = frame.Data[0]
-	entry.rxNew = true
+
+	// Reset timer
+	if entry.timer != nil {
+		entry.timer.Reset(time.Duration(entry.timeUs) * time.Microsecond)
+	}
+
+	newState := frame.Data[0]
+	
+	// Boot up message
+	if newState == nmt.StateInitializing {
+		// If previously active, it's a reboot (remote reset)
+		if entry.hbState == HeartbeatActive {
+			entry.parent.emcy.ErrorReport(emergency.EmHBConsumerRemoteReset, emergency.ErrHeartbeat, uint32(entry.nodeId))
+		}
+		
+		entry.hbState = HeartbeatUnknown
+		
+		// Signal Boot-up
+		if entry.parent.eventCallback != nil {
+			entry.parent.eventCallback(
+				EventBoot,
+				entry.nodeId,
+				entry.nodeId, // Note: index not easily available here, using nodeId or need to store index
+				nmt.StateInitializing,
+			)
+		}
+	} else {
+		// Normal heartbeat
+		if entry.hbState != HeartbeatActive {
+			// Signal Started
+			if entry.parent.eventCallback != nil {
+				entry.parent.eventCallback(
+					EventStarted,
+					entry.nodeId,
+					entry.nodeId,
+					nmt.StateInitializing,
+				)
+			}
+		}
+		entry.hbState = HeartbeatActive
+	}
+
+	nmtChanged := false
+	if entry.nmtState != newState {
+		entry.nmtState = newState
+		nmtChanged = true
+		entry.nmtStatePrev = entry.nmtState
+	}
+	// Unlock before calling callbacks that might lock parent or check global state
+	entry.mu.Unlock()
+
+	if nmtChanged && entry.parent.eventCallback != nil {
+		entry.parent.eventCallback(
+			EventChanged,
+			entry.nodeId,
+			entry.nodeId,
+			newState,
+		)
+	}
+
+	// Check global state
+	entry.parent.checkGlobalState()
 }
 
+func (entry *hbConsumerEntry) timeoutHandler() {
+	entry.mu.Lock()
+	if entry.hbState == HeartbeatActive {
+		entry.parent.emcy.ErrorReport(emergency.EmHBConsumerRemoteReset, emergency.ErrHeartbeat, uint32(entry.nodeId))
+		entry.nmtState = nmt.StateUnknown
+		entry.hbState = HeartbeatTimeout
+		entry.mu.Unlock()
+		
+		if entry.parent.eventCallback != nil {
+			entry.parent.eventCallback(
+				EventTimeout,
+				entry.nodeId,
+				entry.nodeId,
+				nmt.StateUnknown,
+			)
+		}
+		entry.parent.checkGlobalState()
+	} else {
+		entry.mu.Unlock()
+	}
+}
+
+func (entry *hbConsumerEntry) startTimeoutTimer() {
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+
+	if entry.timeUs == 0 {
+		return
+	}
+
+	if entry.timer == nil {
+		entry.timer = time.AfterFunc(time.Duration(entry.timeUs)*time.Microsecond, entry.timeoutHandler)
+	} else {
+		entry.timer.Reset(time.Duration(entry.timeUs) * time.Microsecond)
+	}
+}
+
+func (entry *hbConsumerEntry) stopTimeoutTimer() {
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+
+	if entry.timer != nil {
+		entry.timer.Stop()
+	}
+}
 // Update a heartbeat consumer entry to monitor a new node id & with expected period
 func (entry *hbConsumerEntry) update(nodeId uint8, consumerTimeMs uint16) {
 	entry.nodeId = nodeId
 	entry.timeUs = uint32(consumerTimeMs) * 1000
 	entry.nmtState = nmt.StateUnknown
 	entry.nmtStatePrev = nmt.StateUnknown
-	entry.rxNew = false
 
 	if entry.nodeId != 0 && entry.timeUs != 0 {
 		entry.cobId = uint16(entry.nodeId) + ServiceId
@@ -85,123 +189,86 @@ func (entry *hbConsumerEntry) update(nodeId uint8, consumerTimeMs uint16) {
 	}
 }
 
-// Process [HBConsumer] state machine and TX CAN frames
-// This should be called periodically
-func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) {
+func (consumer *HBConsumer) Start() {
+	consumer.mu.Lock()
+	defer consumer.mu.Unlock()
+
+	for _, entry := range consumer.entries {
+		// Configure RX buffer for hearbeat reception, clear previous subscription if exists
+		if entry.hbState != HeartbeatUnconfigured && entry.rxCancel == nil {
+			consumer.logger.Info("will monitor", "monitoredId", entry.nodeId, "timeoutMs", entry.timeUs/1000)
+			rxCancel, err := consumer.bm.Subscribe(uint32(entry.cobId), 0x7FF, false, entry)
+			if err == nil {
+				entry.rxCancel = rxCancel
+				// Start timer
+				entry.startTimeoutTimer()
+			} else {
+				consumer.logger.Error("failed to subscribe", "error", err)
+			}
+		} else if entry.hbState != HeartbeatUnconfigured && entry.rxCancel != nil {
+			entry.startTimeoutTimer()
+		}
+	}
+}
+
+func (consumer *HBConsumer) Stop() {
+	consumer.mu.Lock()
+	defer consumer.mu.Unlock()
+
+	for _, entry := range consumer.entries {
+		entry.stopTimeoutTimer()
+		if entry.rxCancel != nil {
+			entry.rxCancel()
+			entry.rxCancel = nil
+		}
+
+		// Reset states
+		entry.mu.Lock()
+		entry.nmtState = nmt.StateUnknown
+		entry.nmtStatePrev = nmt.StateUnknown
+		if entry.hbState != HeartbeatUnconfigured {
+			entry.hbState = HeartbeatUnknown
+		}
+		entry.mu.Unlock()
+	}
+	consumer.allMonitoredActive = false
+	consumer.allMonitoredOperational = false
+}
+
+func (consumer *HBConsumer) OnStateChange(state uint8) {
+	operational := state == nmt.StateOperational || state == nmt.StatePreOperational
+	consumer.mu.Lock()
+	consumer.isOperational = operational
+	consumer.mu.Unlock()
+
+	if operational {
+		consumer.Start()
+	} else {
+		consumer.Stop()
+	}
+}
+
+func (consumer *HBConsumer) checkGlobalState() {
 	consumer.mu.Lock()
 	defer consumer.mu.Unlock()
 
 	allMonitoredActiveCurrent := true
 	allMonitoredOperationalCurrent := true
-	if nmtIsPreOrOperational && consumer.nmtIsPreOrOperationalPrev {
-		for i := range consumer.entries {
-			monitoredNode := consumer.entries[i]
-			monitoredNode.mu.Lock()
 
-			timeDifferenceUsCopy := timeDifferenceUs
-			// If unconfigured skip to next iteration
-			if monitoredNode.hbState == HeartbeatUnconfigured {
-				monitoredNode.mu.Unlock()
-				continue
-			}
-			if monitoredNode.rxNew {
-				if monitoredNode.nmtState == nmt.StateInitializing {
-					// Boot up message is an error if previously received (means reboot)
-					if monitoredNode.hbState == HeartbeatActive {
-						consumer.emcy.ErrorReport(emergency.EmHBConsumerRemoteReset, emergency.ErrHeartbeat, uint32(i))
-					}
-					// Signal reboot
-					consumer.mu.Unlock()
-					if consumer.eventCallback != nil {
-						consumer.eventCallback(
-							EventBoot,
-							monitoredNode.nodeId,
-							uint8(i+1),
-							nmt.StateInitializing,
-						)
-					}
-					consumer.mu.Lock()
-					monitoredNode.hbState = HeartbeatUnknown
-				} else {
-					// Signal Boot-up
-					consumer.mu.Unlock()
-					if monitoredNode.hbState != HeartbeatActive && consumer.eventCallback != nil {
-						consumer.eventCallback(
-							EventStarted,
-							monitoredNode.nodeId,
-							uint8(i+1),
-							nmt.StateInitializing,
-						)
-					}
-					consumer.mu.Lock()
-					// Heartbeat message
-					monitoredNode.hbState = HeartbeatActive
-					monitoredNode.timeoutTimer = 0
-					timeDifferenceUsCopy = 0
-				}
-				monitoredNode.rxNew = false
-			}
-			// Check timeout
-			if monitoredNode.hbState == HeartbeatActive {
-				monitoredNode.timeoutTimer += timeDifferenceUsCopy
-				if monitoredNode.timeoutTimer >= monitoredNode.timeUs {
-					// Timeout is expired
-					consumer.emcy.ErrorReport(emergency.EmHBConsumerRemoteReset, emergency.ErrHeartbeat, uint32(i))
-					monitoredNode.nmtState = nmt.StateUnknown
-					monitoredNode.hbState = HeartbeatTimeout
-					// Signal timeout
-					consumer.mu.Unlock()
-					if consumer.eventCallback != nil {
-						consumer.eventCallback(
-							EventTimeout,
-							monitoredNode.nodeId,
-							uint8(i+1),
-							nmt.StateUnknown,
-						)
-					}
-					consumer.mu.Lock()
-				}
-			}
-
-			if monitoredNode.hbState != HeartbeatActive {
-				allMonitoredActiveCurrent = false
-			}
-			if monitoredNode.nmtState != nmt.StateOperational {
-				allMonitoredOperationalCurrent = false
-			}
-
-			if monitoredNode.nmtState != monitoredNode.nmtStatePrev {
-				// Signal NMT change
-				consumer.mu.Unlock()
-				if consumer.eventCallback != nil {
-					consumer.eventCallback(
-						EventChanged,
-						monitoredNode.nodeId,
-						uint8(i+1),
-						monitoredNode.nmtState,
-					)
-				}
-				consumer.mu.Lock()
-				monitoredNode.nmtStatePrev = monitoredNode.nmtState
-			}
-			monitoredNode.mu.Unlock()
+	for _, entry := range consumer.entries {
+		entry.mu.Lock()
+		if entry.hbState == HeartbeatUnconfigured {
+			entry.mu.Unlock()
+			continue
 		}
-	} else if nmtIsPreOrOperational || consumer.nmtIsPreOrOperationalPrev {
-		// pre or operational state changed, clear vars
-		for i := range consumer.entries {
-			monitoredNode := consumer.entries[i]
-			monitoredNode.mu.Lock()
 
-			monitoredNode.nmtState = nmt.StateUnknown
-			monitoredNode.nmtStatePrev = nmt.StateUnknown
-			monitoredNode.rxNew = false
-			if monitoredNode.hbState != HeartbeatUnconfigured {
-				monitoredNode.hbState = HeartbeatUnknown
-			}
-			monitoredNode.mu.Unlock()
+		if entry.hbState != HeartbeatActive {
+			allMonitoredActiveCurrent = false
 		}
-		allMonitoredActiveCurrent = false
-		allMonitoredOperationalCurrent = false
+		if entry.nmtState != nmt.StateOperational {
+			allMonitoredOperationalCurrent = false
+		}
+		entry.mu.Unlock()
 	}
 
 	// Clear emergencies when all monitored nodes become active
@@ -211,7 +278,6 @@ func (consumer *HBConsumer) Process(nmtIsPreOrOperational bool, timeDifferenceUs
 	}
 	consumer.allMonitoredActive = allMonitoredActiveCurrent
 	consumer.allMonitoredOperational = allMonitoredOperationalCurrent
-	consumer.nmtIsPreOrOperationalPrev = nmtIsPreOrOperational
 }
 
 // Add a consumer node, index is 0-based
@@ -231,15 +297,24 @@ func (consumer *HBConsumer) updateConsumerEntry(index uint8, nodeId uint8, consu
 	entry := consumer.entries[index]
 	entry.update(nodeId, consumerTimeMs)
 
-	// Configure RX buffer for hearbeat reception, clear previous subscription if exists
-	if entry.hbState != HeartbeatUnconfigured {
-		if entry.rxCancel != nil {
-			entry.rxCancel()
+	// If already operational, update subscription immediately
+	consumer.mu.Lock()
+	isOperational := consumer.isOperational
+	consumer.mu.Unlock()
+
+	if isOperational {
+		if entry.hbState != HeartbeatUnconfigured {
+			if entry.rxCancel != nil {
+				entry.rxCancel()
+			}
+			consumer.logger.Info("will monitor", "monitoredId", entry.nodeId, "timeoutMs", entry.timeUs/1000)
+			rxCancel, err := consumer.bm.Subscribe(uint32(entry.cobId), 0x7FF, false, entry)
+			entry.rxCancel = rxCancel
+			if err == nil {
+				entry.startTimeoutTimer()
+			}
+			return err
 		}
-		consumer.logger.Info("will monitor", "monitoredId", entry.nodeId, "timeoutMs", entry.timeUs/1000)
-		rxCancel, err := consumer.bm.Subscribe(uint32(entry.cobId), 0x7FF, false, entry)
-		entry.rxCancel = rxCancel
-		return err
 	}
 	return nil
 }
@@ -270,7 +345,7 @@ func NewHBConsumer(bm *canopen.BusManager, logger *slog.Logger, emcy *emergency.
 	consumer.logger.Info("number of entries to monitor nodes", "nb", nbEntries)
 	consumer.entries = make([]*hbConsumerEntry, nbEntries)
 	for i := range consumer.entries {
-		consumer.entries[i] = &hbConsumerEntry{}
+		consumer.entries[i] = &hbConsumerEntry{parent: consumer}
 	}
 
 	// For each entry, get expected heartbeat period and node id to monitor
