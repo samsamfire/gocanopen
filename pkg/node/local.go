@@ -78,9 +78,9 @@ func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32) 
 	reset := node.NMT.Process(&NMTState, timeDifferenceUs)
 
 	// Update NMTisPreOrOperational
-	NMTisPreOrOperational = (NMTState == nmt.StatePreOperational) || (NMTState == nmt.StateOperational)
+	//NMTisPreOrOperational = (NMTState == nmt.StatePreOperational) || (NMTState == nmt.StateOperational)
 
-	node.HBConsumer.Process(NMTisPreOrOperational, timeDifferenceUs)
+	//node.HBConsumer.Process(NMTisPreOrOperational, timeDifferenceUs)
 
 	return reset
 
@@ -102,6 +102,7 @@ func (node *LocalNode) onStateChange(state uint8) {
 	for _, server := range node.SDOServers {
 		server.OnNmtStateChange(state)
 	}
+	node.HBConsumer.OnStateChange(state)
 }
 
 func (node *LocalNode) Servers() []*sdo.SDOServer {
