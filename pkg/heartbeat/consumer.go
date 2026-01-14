@@ -21,17 +21,19 @@ const (
 )
 
 const (
-	EventStarted = 0x01
-	EventTimeout = 0x02
-	EventChanged = 0x03
-	EventBoot    = 0x04
+	EventNone = uint8(iota)
+	EventStarted
+	EventTimeout
+	EventChanged
+	EventBoot
 )
 
 // Hearbeat consumer object for monitoring node hearbeats
+// Composed of multiple sub [hbConsumerEntry] entries
 type HBConsumer struct {
 	bm                      *canopen.BusManager
-	logger                  *slog.Logger
 	mu                      sync.Mutex
+	logger                  *slog.Logger
 	emcy                    *emergency.EMCY
 	entries                 []*hbConsumerEntry
 	allMonitoredActive      bool
@@ -84,7 +86,7 @@ func (consumer *HBConsumer) updateConsumerEntry(index uint8, nodeId uint8, perio
 	// Check duplicate entries : monitor node id more than once
 	if period != 0 && nodeId != 0 {
 		for i, entry := range consumer.entries {
-			if int(index) != i && entry.period != 0 && entry.nodeId == nodeId {
+			if int(index) != i && entry.timeoutPeriod != 0 && entry.nodeId == nodeId {
 				return canopen.ErrIllegalArgument
 			}
 		}
@@ -124,8 +126,8 @@ func (consumer *HBConsumer) Start() {
 
 	for _, entry := range consumer.entries {
 		entry.mu.Lock()
-		if entry.hbState != HeartbeatUnconfigured && entry.timer == nil {
-			entry.timer = time.AfterFunc(entry.period, entry.timerHandler)
+		if entry.hbState != HeartbeatUnconfigured {
+			entry.restartTimeoutTimer()
 		}
 		entry.mu.Unlock()
 	}
@@ -186,7 +188,7 @@ func NewHBConsumer(bm *canopen.BusManager, logger *slog.Logger, emcy *emergency.
 	consumer.logger.Info("number of entries to monitor nodes", "nb", nbEntries)
 	consumer.entries = make([]*hbConsumerEntry, nbEntries)
 	for i := range consumer.entries {
-		consumer.entries[i] = &hbConsumerEntry{parent: consumer, index: i}
+		consumer.entries[i] = &hbConsumerEntry{parent: consumer, odIndex: i}
 	}
 
 	// For each entry, get expected heartbeat period and node id to monitor
