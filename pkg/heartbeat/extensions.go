@@ -2,6 +2,7 @@ package heartbeat
 
 import (
 	"encoding/binary"
+	"time"
 
 	"github.com/samsamfire/gocanopen/pkg/od"
 )
@@ -23,8 +24,8 @@ func writeEntry1016(stream *od.Stream, data []byte) (uint16, error) {
 
 	hbConsValue := binary.LittleEndian.Uint32(data)
 	nodeId := uint8(hbConsValue >> 16)
-	periodMs := uint16(hbConsValue & 0xFFFF)
-	err := consumer.updateConsumerEntry(stream.Subindex-1, nodeId, periodMs)
+	period := uint16(hbConsValue & 0xFFFF)
+	err := consumer.updateConsumerEntry(stream.Subindex-1, nodeId, time.Duration(period)*time.Millisecond)
 	if err != nil {
 		return 0, od.ErrParIncompat
 	}

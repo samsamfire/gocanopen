@@ -35,8 +35,8 @@ type hbConsumerEntry struct {
 	nmtState     uint8
 	nmtStatePrev uint8
 	hbState      uint8
+	period       time.Duration
 	timer        *time.Timer
-	timeUs       uint32
 	rxCancel     func()
 	parent       *HBConsumer
 	index        int
@@ -93,9 +93,9 @@ func (entry *hbConsumerEntry) Handle(frame canopen.Frame) {
 
 	// Reset timer
 	if entry.timer != nil {
-		entry.timer.Reset(time.Duration(entry.timeUs) * time.Microsecond)
+		entry.timer.Reset(entry.period)
 	} else {
-		entry.timer = time.AfterFunc(time.Duration(entry.timeUs)*time.Microsecond, entry.timerHandler)
+		entry.timer = time.AfterFunc(entry.period, entry.timerHandler)
 	}
 
 	nmtChanged := entry.nmtState != entry.nmtStatePrev
@@ -158,18 +158,18 @@ func (entry *hbConsumerEntry) timerHandler() {
 }
 
 // Update a heartbeat consumer entry to monitor a new node id & with expected period
-func (entry *hbConsumerEntry) update(nodeId uint8, consumerTimeMs uint16) {
+func (entry *hbConsumerEntry) update(nodeId uint8, period time.Duration) {
 	entry.nodeId = nodeId
-	entry.timeUs = uint32(consumerTimeMs) * 1000
+	entry.period = period
 	entry.nmtState = nmt.StateUnknown
 	entry.nmtStatePrev = nmt.StateUnknown
 
-	if entry.nodeId != 0 && entry.timeUs != 0 {
+	if entry.nodeId != 0 && entry.period != 0 {
 		entry.cobId = uint16(entry.nodeId) + ServiceId
 		entry.hbState = HeartbeatUnknown
 	} else {
 		entry.cobId = 0
-		entry.timeUs = 0
+		entry.period = 0
 		entry.hbState = HeartbeatUnconfigured
 	}
 }
@@ -209,14 +209,14 @@ func (consumer *HBConsumer) checkAllMonitored() {
 }
 
 // Add a consumer node, index is 0-based
-func (consumer *HBConsumer) updateConsumerEntry(index uint8, nodeId uint8, consumerTimeMs uint16) error {
+func (consumer *HBConsumer) updateConsumerEntry(index uint8, nodeId uint8, period time.Duration) error {
 	if int(index) >= len(consumer.entries) {
 		return canopen.ErrIllegalArgument
 	}
 	// Check duplicate entries : monitor node id more than once
-	if consumerTimeMs != 0 && nodeId != 0 {
+	if period != 0 && nodeId != 0 {
 		for i, entry := range consumer.entries {
-			if int(index) != i && entry.timeUs != 0 && entry.nodeId == nodeId {
+			if int(index) != i && entry.period != 0 && entry.nodeId == nodeId {
 				return canopen.ErrIllegalArgument
 			}
 		}
@@ -224,7 +224,7 @@ func (consumer *HBConsumer) updateConsumerEntry(index uint8, nodeId uint8, consu
 	// Update corresponding entry
 	entry := consumer.entries[index]
 	entry.mu.Lock()
-	entry.update(nodeId, consumerTimeMs)
+	entry.update(nodeId, period)
 	entry.mu.Unlock()
 
 	// Configure RX buffer for hearbeat reception, clear previous subscription if exists
@@ -232,7 +232,7 @@ func (consumer *HBConsumer) updateConsumerEntry(index uint8, nodeId uint8, consu
 		if entry.rxCancel != nil {
 			entry.rxCancel()
 		}
-		consumer.logger.Info("will monitor", "monitoredId", entry.nodeId, "timeoutMs", entry.timeUs/1000)
+		consumer.logger.Info("will monitor", "monitoredId", entry.nodeId, "timeout", period)
 		rxCancel, err := consumer.bm.Subscribe(uint32(entry.cobId), 0x7FF, false, entry)
 		entry.rxCancel = rxCancel
 		return err
@@ -257,7 +257,7 @@ func (consumer *HBConsumer) Start() {
 	for _, entry := range consumer.entries {
 		entry.mu.Lock()
 		if entry.hbState != HeartbeatUnconfigured && entry.timer == nil {
-			entry.timer = time.AfterFunc(time.Duration(entry.timeUs)*time.Microsecond, entry.timerHandler)
+			entry.timer = time.AfterFunc(entry.period, entry.timerHandler)
 		}
 		entry.mu.Unlock()
 	}
@@ -334,8 +334,8 @@ func NewHBConsumer(bm *canopen.BusManager, logger *slog.Logger, emcy *emergency.
 			return nil, canopen.ErrOdParameters
 		}
 		nodeId := uint8(hbConsValue >> 16)
-		time := uint16(hbConsValue & 0xFFFF)
-		err = consumer.updateConsumerEntry(uint8(i), nodeId, time)
+		period := uint16(hbConsValue & 0xFFFF)
+		err = consumer.updateConsumerEntry(uint8(i), nodeId, time.Duration(period)*time.Millisecond)
 		if err != nil {
 			return nil, err
 		}
