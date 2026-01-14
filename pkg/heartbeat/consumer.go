@@ -93,21 +93,8 @@ func (consumer *HBConsumer) updateConsumerEntry(index uint8, nodeId uint8, perio
 	}
 	// Update corresponding entry
 	entry := consumer.entries[index]
-	entry.mu.Lock()
-	entry.update(nodeId, period)
-	entry.mu.Unlock()
-
-	// Configure RX buffer for hearbeat reception, clear previous subscription if exists
-	if entry.hbState != HeartbeatUnconfigured {
-		if entry.rxCancel != nil {
-			entry.rxCancel()
-		}
-		consumer.logger.Info("will monitor", "monitoredId", entry.nodeId, "timeout", period)
-		rxCancel, err := consumer.bm.Subscribe(uint32(entry.cobId), 0x7FF, false, entry)
-		entry.rxCancel = rxCancel
-		return err
-	}
-	return nil
+	entry.stop()
+	return entry.start(nodeId, period)
 }
 
 // Callback on event for heartbeat consumer
@@ -125,7 +112,7 @@ func (consumer *HBConsumer) Start() {
 	defer consumer.mu.Unlock()
 
 	for _, entry := range consumer.entries {
-		entry.start()
+		entry.start(entry.nodeId, entry.timeoutPeriod)
 	}
 }
 
@@ -172,8 +159,14 @@ func NewHBConsumer(bm *canopen.BusManager, logger *slog.Logger, emcy *emergency.
 	nbEntries := uint8(entry1016.SubCount() - 1)
 	consumer.logger.Info("number of entries to monitor nodes", "nb", nbEntries)
 	consumer.entries = make([]*hbConsumerEntry, nbEntries)
+
 	for i := range consumer.entries {
-		consumer.entries[i] = &hbConsumerEntry{parent: consumer, odIndex: i}
+		consumer.entries[i] = &hbConsumerEntry{
+			parent:  consumer,
+			logger:  logger,
+			bm:      bm,
+			odIndex: i,
+		}
 	}
 
 	// For each entry, get expected heartbeat period and node id to monitor

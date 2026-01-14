@@ -1,6 +1,7 @@
 package heartbeat
 
 import (
+	"log/slog"
 	"sync"
 	"time"
 
@@ -11,7 +12,9 @@ import (
 
 // Node specific hearbeat consumer part
 type hbConsumerEntry struct {
+	bm            *canopen.BusManager
 	mu            sync.Mutex
+	logger        *slog.Logger
 	nodeId        uint8
 	cobId         uint16
 	nmtState      uint8
@@ -85,10 +88,34 @@ func (entry *hbConsumerEntry) Handle(frame canopen.Frame) {
 	consumer.checkAllMonitored()
 }
 
-func (entry *hbConsumerEntry) start() {
-	if entry.hbState != HeartbeatUnconfigured {
-		entry.restartTimeoutTimer()
+func (entry *hbConsumerEntry) start(nodeId uint8, timeout time.Duration) error {
+
+	entry.nodeId = nodeId
+	entry.timeoutPeriod = timeout
+
+	if entry.nodeId != 0 && entry.timeoutPeriod != 0 {
+		entry.cobId = uint16(entry.nodeId) + ServiceId
+		entry.hbState = HeartbeatUnknown
+	} else {
+		entry.cobId = 0
+		entry.timeoutPeriod = 0
+		entry.hbState = HeartbeatUnconfigured
 	}
+
+	if entry.hbState != HeartbeatUnconfigured {
+		// Configure RX buffer for hearbeat reception, clear previous subscription if exists
+		if entry.rxCancel != nil {
+			entry.rxCancel()
+		}
+		entry.logger.Info("will monitor", "nodeId", entry.nodeId, "timeout", entry.timeoutPeriod)
+		rxCancel, err := entry.bm.Subscribe(uint32(entry.cobId), 0x7FF, false, entry)
+		entry.rxCancel = rxCancel
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (entry *hbConsumerEntry) stop() {
@@ -97,6 +124,12 @@ func (entry *hbConsumerEntry) stop() {
 	if entry.timer != nil {
 		entry.timer.Stop()
 	}
+
+	if entry.rxCancel != nil {
+		entry.rxCancel()
+		entry.rxCancel = nil
+	}
+
 	// Reset states
 	entry.nmtState = nmt.StateUnknown
 	entry.nmtStatePrev = nmt.StateUnknown
@@ -144,21 +177,4 @@ func (entry *hbConsumerEntry) timeoutHandler() {
 		)
 	}
 	parent.checkAllMonitored()
-}
-
-// Update a heartbeat consumer entry to monitor a new node id & with expected period
-func (entry *hbConsumerEntry) update(nodeId uint8, period time.Duration) {
-	entry.nodeId = nodeId
-	entry.timeoutPeriod = period
-	entry.nmtState = nmt.StateUnknown
-	entry.nmtStatePrev = nmt.StateUnknown
-
-	if entry.nodeId != 0 && entry.timeoutPeriod != 0 {
-		entry.cobId = uint16(entry.nodeId) + ServiceId
-		entry.hbState = HeartbeatUnknown
-	} else {
-		entry.cobId = 0
-		entry.timeoutPeriod = 0
-		entry.hbState = HeartbeatUnconfigured
-	}
 }
