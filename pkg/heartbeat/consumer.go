@@ -125,11 +125,7 @@ func (consumer *HBConsumer) Start() {
 	defer consumer.mu.Unlock()
 
 	for _, entry := range consumer.entries {
-		entry.mu.Lock()
-		if entry.hbState != HeartbeatUnconfigured {
-			entry.restartTimeoutTimer()
-		}
-		entry.mu.Unlock()
+		entry.start()
 	}
 }
 
@@ -139,18 +135,7 @@ func (consumer *HBConsumer) Stop() {
 	defer consumer.mu.Unlock()
 
 	for _, entry := range consumer.entries {
-		entry.mu.Lock()
-		if entry.timer != nil {
-			entry.timer.Stop()
-			entry.timer = nil
-		}
-		// Reset states
-		entry.nmtState = nmt.StateUnknown
-		entry.nmtStatePrev = nmt.StateUnknown
-		if entry.hbState != HeartbeatUnconfigured {
-			entry.hbState = HeartbeatUnknown
-		}
-		entry.mu.Unlock()
+		entry.stop()
 	}
 	consumer.allMonitoredActive = false
 	consumer.allMonitoredOperational = false

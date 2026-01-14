@@ -85,6 +85,26 @@ func (entry *hbConsumerEntry) Handle(frame canopen.Frame) {
 	consumer.checkAllMonitored()
 }
 
+func (entry *hbConsumerEntry) start() {
+	if entry.hbState != HeartbeatUnconfigured {
+		entry.restartTimeoutTimer()
+	}
+}
+
+func (entry *hbConsumerEntry) stop() {
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+	if entry.timer != nil {
+		entry.timer.Stop()
+	}
+	// Reset states
+	entry.nmtState = nmt.StateUnknown
+	entry.nmtStatePrev = nmt.StateUnknown
+	if entry.hbState != HeartbeatUnconfigured {
+		entry.hbState = HeartbeatUnknown
+	}
+}
+
 func (entry *hbConsumerEntry) restartTimeoutTimer() {
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
