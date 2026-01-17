@@ -119,8 +119,6 @@ func (entry *hbConsumerEntry) start(nodeId uint8, timeout time.Duration) error {
 }
 
 func (entry *hbConsumerEntry) stop() {
-	entry.mu.Lock()
-	defer entry.mu.Unlock()
 	if entry.timer != nil {
 		entry.timer.Stop()
 	}
