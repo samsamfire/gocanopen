@@ -89,6 +89,8 @@ func (entry *hbConsumerEntry) Handle(frame canopen.Frame) {
 }
 
 func (entry *hbConsumerEntry) start(nodeId uint8, timeout time.Duration) error {
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
 
 	entry.nodeId = nodeId
 	entry.timeoutPeriod = timeout
@@ -119,8 +121,12 @@ func (entry *hbConsumerEntry) start(nodeId uint8, timeout time.Duration) error {
 }
 
 func (entry *hbConsumerEntry) stop() {
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+
 	if entry.timer != nil {
 		entry.timer.Stop()
+		entry.timer = nil
 	}
 
 	if entry.rxCancel != nil {

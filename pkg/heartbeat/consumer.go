@@ -77,15 +77,21 @@ func (c *HBConsumer) checkAllMonitored() {
 
 // Add a consumer node, index is 0-based
 func (c *HBConsumer) updateConsumerEntry(index uint8, nodeId uint8, period time.Duration) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if int(index) >= len(c.entries) {
 		return canopen.ErrIllegalArgument
 	}
-	// Check duplicate entries : monitor node id more than once
+	// Check duplicate entries : monitor node id not more than once
 	if period != 0 && nodeId != 0 {
 		for i, entry := range c.entries {
+			entry.mu.Lock()
 			if int(index) != i && entry.timeoutPeriod != 0 && entry.nodeId == nodeId {
+				entry.mu.Unlock()
 				return canopen.ErrIllegalArgument
 			}
+			entry.mu.Unlock()
 		}
 	}
 	// Update corresponding entry
