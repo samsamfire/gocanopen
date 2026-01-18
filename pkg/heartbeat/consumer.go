@@ -31,115 +31,112 @@ const (
 // Hearbeat consumer object for monitoring node hearbeats
 // Composed of multiple sub [hbConsumerEntry] entries
 type HBConsumer struct {
-	bm                      *canopen.BusManager
-	mu                      sync.Mutex
-	logger                  *slog.Logger
-	emcy                    *emergency.EMCY
-	entries                 []*hbConsumerEntry
-	allMonitoredActive      bool
-	allMonitoredOperational bool
-	eventCallback           HBEventCallback
-	isOperational           bool
+	bm             *canopen.BusManager
+	mu             sync.Mutex
+	logger         *slog.Logger
+	emcy           *emergency.EMCY
+	entries        []*hbConsumerEntry
+	allActive      bool
+	allOperational bool
+	eventCallback  HBEventCallback
+	isOperational  bool
 }
 
 type HBEventCallback func(event uint8, index uint8, nodeId uint8, nmtState uint8)
 
-func (consumer *HBConsumer) checkAllMonitored() {
-	consumer.mu.Lock()
-	defer consumer.mu.Unlock()
+func (c *HBConsumer) checkAllMonitored() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	allMonitoredActiveCurrent := true
-	allMonitoredOperationalCurrent := true
+	allActive, allOperational := true, true
 
-	for i := range consumer.entries {
-		monitoredNode := consumer.entries[i]
-		monitoredNode.mu.Lock()
+	for _, node := range c.entries {
+		node.mu.Lock()
+		hState, nState := node.hbState, node.nmtState
+		node.mu.Unlock()
 
-		if monitoredNode.hbState == HeartbeatUnconfigured {
-			monitoredNode.mu.Unlock()
+		if hState == HeartbeatUnconfigured {
 			continue
 		}
-
-		if monitoredNode.hbState != HeartbeatActive {
-			allMonitoredActiveCurrent = false
+		if hState != HeartbeatActive {
+			allActive = false
 		}
-		if monitoredNode.nmtState != nmt.StateOperational {
-			allMonitoredOperationalCurrent = false
+		if nState != nmt.StateOperational {
+			allOperational = false
 		}
-		monitoredNode.mu.Unlock()
 	}
 
-	// Clear emergencies when all monitored nodes become active
-	if !consumer.allMonitoredActive && allMonitoredActiveCurrent {
-		consumer.emcy.ErrorReset(emergency.EmHeartbeatConsumer, 0)
-		consumer.emcy.ErrorReset(emergency.EmHBConsumerRemoteReset, 0)
+	if !c.allActive && allActive {
+		c.emcy.ErrorReset(emergency.EmHeartbeatConsumer, 0)
+		c.emcy.ErrorReset(emergency.EmHBConsumerRemoteReset, 0)
 	}
-	consumer.allMonitoredActive = allMonitoredActiveCurrent
-	consumer.allMonitoredOperational = allMonitoredOperationalCurrent
+
+	c.allActive = allActive
+	c.allOperational = allOperational
 }
 
 // Add a consumer node, index is 0-based
-func (consumer *HBConsumer) updateConsumerEntry(index uint8, nodeId uint8, period time.Duration) error {
-	if int(index) >= len(consumer.entries) {
+func (c *HBConsumer) updateConsumerEntry(index uint8, nodeId uint8, period time.Duration) error {
+	if int(index) >= len(c.entries) {
 		return canopen.ErrIllegalArgument
 	}
 	// Check duplicate entries : monitor node id more than once
 	if period != 0 && nodeId != 0 {
-		for i, entry := range consumer.entries {
+		for i, entry := range c.entries {
 			if int(index) != i && entry.timeoutPeriod != 0 && entry.nodeId == nodeId {
 				return canopen.ErrIllegalArgument
 			}
 		}
 	}
 	// Update corresponding entry
-	entry := consumer.entries[index]
+	entry := c.entries[index]
 	entry.stop()
 	return entry.start(nodeId, period)
 }
 
 // Callback on event for heartbeat consumer
 // Events can be : boot-up, timeout, nmt change, ...
-func (consumer *HBConsumer) OnEvent(callback HBEventCallback) {
-	consumer.mu.Lock()
-	defer consumer.mu.Unlock()
+func (c *HBConsumer) OnEvent(callback HBEventCallback) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	consumer.eventCallback = callback
+	c.eventCallback = callback
 }
 
 // Start relevant timers
-func (consumer *HBConsumer) Start() {
-	consumer.mu.Lock()
-	defer consumer.mu.Unlock()
+func (c *HBConsumer) Start() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	for _, entry := range consumer.entries {
+	for _, entry := range c.entries {
 		entry.start(entry.nodeId, entry.timeoutPeriod)
 	}
 }
 
 // Stop any timers
-func (consumer *HBConsumer) Stop() {
-	consumer.mu.Lock()
-	defer consumer.mu.Unlock()
+func (c *HBConsumer) Stop() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	for _, entry := range consumer.entries {
+	for _, entry := range c.entries {
 		entry.stop()
 	}
-	consumer.allMonitoredActive = false
-	consumer.allMonitoredOperational = false
+	c.allActive = false
+	c.allOperational = false
 }
 
-func (consumer *HBConsumer) OnStateChange(state uint8) {
+func (c *HBConsumer) OnStateChange(state uint8) {
 	isOperational := (state == nmt.StateOperational) || (state == nmt.StatePreOperational)
 
-	consumer.mu.Lock()
-	prevOperational := consumer.isOperational
-	consumer.isOperational = isOperational
-	consumer.mu.Unlock()
+	c.mu.Lock()
+	prevOperational := c.isOperational
+	c.isOperational = isOperational
+	c.mu.Unlock()
 
 	if isOperational && !prevOperational {
-		consumer.Start()
+		c.Start()
 	} else if !isOperational && prevOperational {
-		consumer.Stop()
+		c.Stop()
 	}
 }
 
