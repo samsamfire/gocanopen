@@ -62,6 +62,9 @@ func (node *LocalNode) Stop() error {
 	for _, pdo := range node.RPDOs {
 		pdo.Stop()
 	}
+	if node.HBConsumer != nil {
+		node.HBConsumer.Stop()
+	}
 	return nil
 }
 
@@ -77,13 +80,29 @@ func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32) 
 	node.EMCY.Process(NMTisPreOrOperational, timeDifferenceUs)
 	reset := node.NMT.Process(&NMTState, timeDifferenceUs)
 
-	// Update NMTisPreOrOperational
-	NMTisPreOrOperational = (NMTState == nmt.StatePreOperational) || (NMTState == nmt.StateOperational)
-
-	node.HBConsumer.Process(NMTisPreOrOperational, timeDifferenceUs)
-
 	return reset
 
+}
+
+func (node *LocalNode) onStateChange(state uint8) {
+	for _, rpdo := range node.RPDOs {
+		rpdo.OnStateChange(state)
+	}
+	for _, tpdo := range node.TPDOs {
+		tpdo.OnStateChange(state)
+	}
+	if node.SYNC != nil {
+		node.SYNC.OnStateChange(state)
+	}
+	if node.TIME != nil {
+		node.TIME.OnStateChange(state)
+	}
+	for _, server := range node.SDOServers {
+		server.OnNmtStateChange(state)
+	}
+	if node.HBConsumer != nil {
+		node.HBConsumer.OnStateChange(state)
+	}
 }
 
 func (node *LocalNode) Servers() []*sdo.SDOServer {
@@ -151,17 +170,6 @@ func (node *LocalNode) initPDO() error {
 		}
 
 	}
-
-	// Register NMT state change callback for RPDOs & TPDOs
-	_ = node.NMT.AddStateChangeCallback(func(state uint8) {
-		isOperational := state == nmt.StateOperational
-		for _, rpdo := range node.RPDOs {
-			rpdo.SetOperational(isOperational)
-		}
-		for _, tpdo := range node.TPDOs {
-			tpdo.SetOperational(isOperational)
-		}
-	})
 
 	return nil
 }
@@ -272,8 +280,6 @@ func NewLocalNode(
 			node.SDOServers = sdoServers
 			logger.Info("[SDOServer] initialized")
 		}
-		// Register NMT state change callback for sdo servers
-		_ = node.NMT.AddStateChangeCallback(server.OnNmtStateChange)
 	}
 
 	// Initialize SDO clients if any
@@ -300,10 +306,6 @@ func NewLocalNode(
 		node.logger.Error("init failed [TIME]", "error", err)
 	} else {
 		node.TIME = time
-		_ = node.NMT.AddStateChangeCallback(func(state uint8) {
-			isPreOrOperational := state == nmt.StateOperational || state == nmt.StatePreOperational
-			node.TIME.SetOperational(isPreOrOperational)
-		})
 	}
 
 	// Initialize SYNC
@@ -320,10 +322,6 @@ func NewLocalNode(
 		node.logger.Error("init failed [SYNC]", "error", err)
 	} else {
 		node.SYNC = sync
-		_ = node.NMT.AddStateChangeCallback(func(state uint8) {
-			isPreOrOperational := state == nmt.StateOperational || state == nmt.StatePreOperational
-			node.SYNC.SetOperational(isPreOrOperational)
-		})
 	}
 
 	// Add EDS storage if supported, library supports either plain ascii
@@ -359,6 +357,8 @@ func NewLocalNode(
 	}
 
 	err = node.initPDO()
+	// Register NMT state change callback
+	_ = node.NMT.AddStateChangeCallback(node.onStateChange)
 
 	return node, err
 }

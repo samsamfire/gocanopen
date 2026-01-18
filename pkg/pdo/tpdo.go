@@ -8,6 +8,7 @@ import (
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
+	"github.com/samsamfire/gocanopen/pkg/nmt"
 	"github.com/samsamfire/gocanopen/pkg/od"
 	"github.com/samsamfire/gocanopen/pkg/sync"
 )
@@ -144,7 +145,10 @@ func (tpdo *TPDO) send() error {
 	}
 	tpdo.sendRequestAsyncEvent = false
 	tpdo.timeLastSend = time.Now()
-	_ = tpdo.bm.Send(tpdo.txBuffer)
+	err = tpdo.bm.Send(tpdo.txBuffer)
+	if err != nil {
+		tpdo.pdo.logger.Error("failed to send", "err", err)
+	}
 	tpdo.mu.Unlock()
 	tpdo.restartEventTimer()
 	tpdo.mu.Lock()
@@ -209,7 +213,8 @@ func (tpdo *TPDO) Stop() {
 	}
 }
 
-func (tpdo *TPDO) SetOperational(operational bool) {
+func (tpdo *TPDO) OnStateChange(state uint8) {
+	operational := state == nmt.StateOperational
 	tpdo.mu.Lock()
 	tpdo.isOperational = operational
 	tpdo.mu.Unlock()

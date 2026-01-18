@@ -138,7 +138,7 @@ func (s *SDOServer) txUploadBlockInitiate() {
 		"subindex", fmt.Sprintf("x%x", s.subindex),
 		"raw", s.txBuffer.Data,
 	)
-	s.Send(s.txBuffer)
+	_ = s.send(s.txBuffer)
 	s.state = stateUploadBlkInitiateReq2
 }
 
@@ -183,8 +183,7 @@ func (s *SDOServer) txUploadBlockSubBlock() error {
 			"raw", s.txBuffer.Data,
 		)
 	}
-	s.Send(s.txBuffer)
-	return nil
+	return s.send(s.txBuffer)
 }
 
 func (s *SDOServer) txUploadBlockEnd() {
@@ -198,6 +197,6 @@ func (s *SDOServer) txUploadBlockEnd() {
 		"crc", s.blockCRC,
 		"raw", s.txBuffer.Data,
 	)
-	s.Send(s.txBuffer)
+	_ = s.send(s.txBuffer)
 	s.state = stateUploadBlkEndCrsp
 }

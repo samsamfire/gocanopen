@@ -53,7 +53,7 @@ func (s *SDOServer) txDownloadSegment() {
 		"subindex", fmt.Sprintf("x%x", s.subindex),
 		"raw", s.txBuffer.Data,
 	)
-	_ = s.Send(s.txBuffer)
+	_ = s.send(s.txBuffer)
 	if s.finished {
 		s.state = stateIdle
 		return

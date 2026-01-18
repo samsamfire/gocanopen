@@ -8,6 +8,7 @@ import (
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/emergency"
+	"github.com/samsamfire/gocanopen/pkg/nmt"
 	"github.com/samsamfire/gocanopen/pkg/od"
 )
 
@@ -67,7 +68,8 @@ func (sync *SYNC) Handle(frame canopen.Frame) {
 	sync.mu.Lock()
 }
 
-func (sync *SYNC) SetOperational(operational bool) {
+func (sync *SYNC) OnStateChange(state uint8) {
+	operational := state == nmt.StateOperational || state == nmt.StatePreOperational
 	sync.mu.Lock()
 	sync.isOperational = operational
 	if !operational {
@@ -77,7 +79,7 @@ func (sync *SYNC) SetOperational(operational bool) {
 	sync.mu.Unlock()
 
 	if operational {
-		sync.Start()
+		_ = sync.Start()
 	} else {
 		sync.Stop()
 	}
@@ -213,7 +215,10 @@ func (sync *SYNC) send() {
 	sync.mu.Unlock()
 	// When listening to own messages, this will trigger Handle to be called
 	// So make sure sync is unlocked before sending
-	_ = sync.bm.Send(sync.txBuffer)
+	err := sync.bm.Send(sync.txBuffer)
+	if err != nil {
+		sync.logger.Error("failed to send", "err", err)
+	}
 }
 
 func (sync *SYNC) Counter() uint8 {
