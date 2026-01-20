@@ -36,7 +36,7 @@ func (s *SDOServer) txUploadInitiate() {
 	s.txBuffer.Data[2] = byte(s.index >> 8)
 	s.txBuffer.Data[3] = s.subindex
 	binary.LittleEndian.PutUint32(s.txBuffer.Data[4:], s.sizeIndicated)
-	_ = s.Send(s.txBuffer)
+	_ = s.send(s.txBuffer)
 }
 
 func (s *SDOServer) txUploadSegment() error {
@@ -76,6 +76,6 @@ func (s *SDOServer) txUploadSegment() error {
 		"subindex", fmt.Sprintf("x%x", s.subindex),
 		"raw", s.txBuffer.Data,
 	)
-	_ = s.Send(s.txBuffer)
+	_ = s.send(s.txBuffer)
 	return nil
 }

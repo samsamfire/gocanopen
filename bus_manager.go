@@ -2,7 +2,6 @@ package canopen
 
 import (
 	"errors"
-	"log/slog"
 	"sync"
 )
 
@@ -22,9 +21,8 @@ type subscriber struct {
 // Bus manager is a wrapper around the CAN bus interface
 // Used by the CANopen stack to control errors, callbacks for specific IDs, etc.
 type BusManager struct {
-	logger *slog.Logger
-	mu     sync.Mutex
-	bus    Bus
+	mu  sync.Mutex
+	bus Bus
 	// CAN id indexed subscribers
 	listeners [LookupArraySize][]subscriber
 	nextSubId uint64
@@ -67,9 +65,6 @@ func (bm *BusManager) Bus() Bus {
 // Limited error handling
 func (bm *BusManager) Send(frame Frame) error {
 	err := bm.bus.Send(frame)
-	if err != nil {
-		bm.logger.Warn("error sending frame", "err", err)
-	}
 	return err
 }
 
@@ -129,11 +124,12 @@ func (bm *BusManager) Error() uint16 {
 }
 
 func NewBusManager(bus Bus) *BusManager {
+
 	bm := &BusManager{
 		bus:       bus,
-		logger:    slog.Default(),
 		listeners: [LookupArraySize][]subscriber{},
 		canError:  0,
 	}
+
 	return bm
 }

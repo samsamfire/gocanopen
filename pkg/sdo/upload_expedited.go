@@ -27,7 +27,7 @@ func (s *SDOServer) txUploadExpedited() {
 	s.txBuffer.Data[1] = byte(s.index)
 	s.txBuffer.Data[2] = byte(s.index >> 8)
 	s.txBuffer.Data[3] = s.subindex
-	_ = s.Send(s.txBuffer)
+	_ = s.send(s.txBuffer)
 	s.logger.Debug("[TX] expedited upload resp",
 		"index", fmt.Sprintf("x%x", s.index),
 		"subindex", fmt.Sprintf("x%x", s.subindex),

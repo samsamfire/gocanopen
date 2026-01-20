@@ -17,7 +17,7 @@ import (
 )
 
 type SDOServer struct {
-	*canopen.BusManager
+	bm                  *canopen.BusManager
 	logger              *slog.Logger
 	mu                  sync.Mutex
 	od                  *od.ObjectDictionary
@@ -129,6 +129,14 @@ func (s *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 	}
 }
 
+func (s *SDOServer) send(frame canopen.Frame) error {
+	err := s.bm.Send(frame)
+	if err != nil {
+		s.logger.Error("failed to send", "err", err)
+	}
+	return err
+}
+
 func (s *SDOServer) initRxTx(cobIdClientToServer uint32, cobIdServerToClient uint32) error {
 
 	// Only proceed if parameters change (i.e. different client)
@@ -161,7 +169,7 @@ func (s *SDOServer) initRxTx(cobIdClientToServer uint32, cobIdServerToClient uin
 	if s.rxCancel != nil {
 		s.rxCancel()
 	}
-	rxCancel, err := s.Subscribe(uint32(CanIdC2S), 0x7FF, false, s)
+	rxCancel, err := s.bm.Subscribe(uint32(CanIdC2S), 0x7FF, false, s)
 	s.rxCancel = rxCancel
 	if err != nil {
 		s.valid = false
@@ -414,7 +422,7 @@ func (server *SDOServer) SendAbort(abortCode Abort) {
 	server.txBuffer.Data[2] = uint8(server.index >> 8)
 	server.txBuffer.Data[3] = server.subindex
 	binary.LittleEndian.PutUint32(server.txBuffer.Data[4:], code)
-	server.Send(server.txBuffer)
+	_ = server.send(server.txBuffer)
 	server.logger.Warn("[TX] server abort",
 		"index", fmt.Sprintf("x%x", server.index),
 		"subindex", fmt.Sprintf("x%x", server.subindex),
@@ -443,7 +451,7 @@ func NewSDOServer(
 	timeoutMs uint32,
 	entry12xx *od.Entry,
 ) (*SDOServer, error) {
-	server := &SDOServer{BusManager: bm}
+	server := &SDOServer{bm: bm}
 
 	if odict == nil || bm == nil || entry12xx == nil {
 		return nil, canopen.ErrIllegalArgument

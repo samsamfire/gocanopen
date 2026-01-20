@@ -124,7 +124,7 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32) uint8 {
 	if nmtInit || (nmt.hearbeatProducerTimeUs != 0 && (nmt.hearbeatProducerTimer == 0 || nmtStateCopy != nmt.operatingStatePrev)) {
 		nmt.hbTxBuff.Data[0] = nmtStateCopy
 		nmt.mu.Unlock()
-		_ = nmt.bm.Send(nmt.hbTxBuff)
+		_ = nmt.send(nmt.hbTxBuff)
 		nmt.mu.Lock()
 		if nmtStateCopy == StateInitializing {
 			if nmt.control&StartupToOperational != 0 {
@@ -207,6 +207,14 @@ func (nmt *NMT) Process(internalState *uint8, timeDifferenceUs uint32) uint8 {
 
 }
 
+func (nmt *NMT) send(frame canopen.Frame) error {
+	err := nmt.bm.Send(frame)
+	if err != nil {
+		nmt.logger.Error("failed to send", "err", err)
+	}
+	return err
+}
+
 // Get a NMT state
 func (nmt *NMT) GetInternalState() uint8 {
 	if nmt == nil {
@@ -253,7 +261,7 @@ func (nmt *NMT) SendCommand(command Command, nodeId uint8) error {
 	// Send NMT command
 	nmt.nmtTxBuff.Data[0] = uint8(command)
 	nmt.nmtTxBuff.Data[1] = nodeId
-	return nmt.bm.Send(nmt.nmtTxBuff)
+	return nmt.send(nmt.nmtTxBuff)
 }
 
 // Add a callback func to be called on NMT state change

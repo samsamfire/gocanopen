@@ -87,7 +87,7 @@ func (s *SDOServer) txDownloadInitiate() {
 	s.txBuffer.Data[1] = byte(s.index)
 	s.txBuffer.Data[2] = byte(s.index >> 8)
 	s.txBuffer.Data[3] = s.subindex
-	_ = s.Send(s.txBuffer)
+	_ = s.send(s.txBuffer)
 	if s.finished {
 		s.logger.Debug("[TX] expedited download",
 			"index", fmt.Sprintf("x%x", s.index),

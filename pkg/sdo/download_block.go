@@ -169,7 +169,7 @@ func (s *SDOServer) txDownloadBlockInitiate() {
 		"subindex", fmt.Sprintf("x%x", s.subindex),
 		"raw", s.txBuffer.Data,
 	)
-	_ = s.Send(s.txBuffer)
+	_ = s.send(s.txBuffer)
 }
 
 func (s *SDOServer) txDownloadBlockSubBlock() error {
@@ -184,7 +184,7 @@ func (s *SDOServer) txDownloadBlockSubBlock() error {
 	// Check if last segment to send
 	if s.finished {
 		s.state = stateDownloadBlkEndReq
-		_ = s.Send(s.txBuffer)
+		_ = s.send(s.txBuffer)
 		s.logger.Debug("[TX] block download segment",
 			"index", fmt.Sprintf("x%x", s.index),
 			"subindex", fmt.Sprintf("x%x", s.subindex),
@@ -213,7 +213,7 @@ func (s *SDOServer) txDownloadBlockSubBlock() error {
 	s.blockSequenceNb = 0
 	s.txBuffer.Data[2] = s.blockSize
 	s.state = stateDownloadBlkSubblockReq
-	_ = s.Send(s.txBuffer)
+	_ = s.send(s.txBuffer)
 
 	if retransmit {
 		s.logger.Debug("[TX] block download restart",
@@ -242,6 +242,6 @@ func (s *SDOServer) txDownloadBlockEnd() {
 		"subindex", fmt.Sprintf("x%x", s.subindex),
 		"raw", s.txBuffer.Data,
 	)
-	_ = s.Send(s.txBuffer)
+	_ = s.send(s.txBuffer)
 	s.state = stateIdle
 }

@@ -163,7 +163,7 @@ func (node *RemoteNode) StartPDOs(useLocal bool) error {
 		if err != nil {
 			return err
 		}
-		rpdo.SetOperational(true)
+		rpdo.OnStateChange(nmt.StateOperational)
 		node.rpdos = append(node.rpdos, rpdo)
 		err = localConf.EnablePDO(uint16(i) + 1) // This can fail but not critical
 		if err != nil {
@@ -199,7 +199,7 @@ func (node *RemoteNode) StartPDOs(useLocal bool) error {
 		if err != nil {
 			return err
 		}
-		tpdo.SetOperational(true)
+		tpdo.OnStateChange(nmt.StateOperational)
 		node.tpdos = append(node.tpdos, tpdo)
 		err = localConf.EnablePDO(uint16(i) + 1 + pdo.MaxRpdoNumber) // This can fail but not critical
 		if err != nil {
