@@ -1,21 +1,38 @@
-//go:build kvaser
+//go:build windows
 
 package kvaser
 
-/*
-#cgo LDFLAGS: -lcanlib
-
-#include <canlib.h>
-*/
-import "C"
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
+	"syscall"
 	"unsafe"
 
 	canopen "github.com/samsamfire/gocanopen"
 	"github.com/samsamfire/gocanopen/pkg/can"
+)
+
+// Dynamically load Kvaser's canlib32.dll
+var (
+	canlib = syscall.NewLazyDLL("canlib32.dll")
+
+	procInitializeLibrary   = canlib.NewProc("canInitializeLibrary")
+	procGetErrorText        = canlib.NewProc("canGetErrorText")
+	procOpenChannel         = canlib.NewProc("canOpenChannel")
+	procSetBusParams        = canlib.NewProc("canSetBusParams")
+	procSetBusOutputControl = canlib.NewProc("canSetBusOutputControl")
+	procBusOn               = canlib.NewProc("canBusOn")
+	procBusOff              = canlib.NewProc("canBusOff")
+	procClose               = canlib.NewProc("canClose")
+	procWrite               = canlib.NewProc("canWrite")
+	procWriteSync           = canlib.NewProc("canWriteSync")
+	procReadWait            = canlib.NewProc("canReadWait")
+	procGetVersion          = canlib.NewProc("canGetVersion")
+	procGetNumberOfChannels = canlib.NewProc("canGetNumberOfChannels")
 )
 
 const (
@@ -23,26 +40,36 @@ const (
 	defaultWriteTimeoutMs = defaultReadTimeoutMs
 )
 
+// Kvaser Constants (Mapped from canlib.h)
+// As we are not using CGO, we need to manually set the equivalent
+// canlib enums. A lot of these enums are missing here, only the ones
+// being used have been copied.
 const (
-	OpenExclusive         int = C.canOPEN_EXCLUSIVE           // Exclusive access
-	OpenRequireExtended   int = C.canOPEN_REQUIRE_EXTENDED    // Fail if can't use extended mode
-	OpenAcceptVirtual     int = C.canOPEN_ACCEPT_VIRTUAL      // Allow use of virtual CAN
-	OpenOverrideExclusive int = C.canOPEN_OVERRIDE_EXCLUSIVE  // Open, even if in exclusive access
-	OpenRequireInitAccess int = C.canOPEN_REQUIRE_INIT_ACCESS // Init access to bus
-	OpenNoInitAccess      int = C.canOPEN_NO_INIT_ACCESS
-	OpenAcceptLargeDlc    int = C.canOPEN_ACCEPT_LARGE_DLC
-	OpenCanFd             int = C.canOPEN_CAN_FD
-	OpenCanFdNonIso       int = C.canOPEN_CAN_FD_NONISO
-	OpenInternalL         int = C.canOPEN_INTERNAL_L
-)
+	StatusOk         = 0
+	canERR_NOMSG     = -2
+	canDRIVER_NORMAL = 4
+	canMSG_STD       = 2
 
-const (
-	StatusOk int = C.canOK
+	OpenExclusive         = 0x0008
+	OpenRequireExtended   = 0x0010
+	OpenAcceptVirtual     = 0x0020
+	OpenOverrideExclusive = 0x0040
+	OpenRequireInitAccess = 0x0080
+	OpenNoInitAccess      = 0x0100
+	OpenAcceptLargeDlc    = 0x0200
+	OpenCanFd             = 0x0400
+	OpenCanFdNonIso       = 0x0800
+	OpenInternalL         = 0x1000
+
+	Bitrate125k = -4
+	Bitrate250k = -3
+	Bitrate500k = -2
+	Bitrate1M   = -1
 )
 
 var (
-	ErrNoMsg error = NewKvaserError(C.canERR_NOMSG)
-	ErrArgs  error = errors.New("error in arguments")
+	ErrNoMsg = NewKvaserError(canERR_NOMSG)
+	ErrArgs  = errors.New("error in arguments")
 )
 
 func init() {
@@ -50,12 +77,13 @@ func init() {
 }
 
 type KvaserBus struct {
-	handle       C.canHandle
+	handle       int
 	logger       *slog.Logger
 	rxCallback   canopen.FrameListener
 	timeoutRead  int
 	timeoutWrite int
-	exit         chan bool
+	cancel       context.CancelFunc
+	wg           sync.WaitGroup
 }
 
 type KvaserError struct {
@@ -67,16 +95,31 @@ func (ke *KvaserError) Error() string {
 	return fmt.Sprintf("%v (%v)", ke.Description, ke.Code)
 }
 
+func (ke *KvaserError) Is(target error) bool {
+	t, ok := target.(*KvaserError)
+	if !ok {
+		return false
+	}
+	return ke.Code == t.Code
+}
+
 func NewKvaserError(code int) error {
 	if code >= StatusOk {
 		return nil
 	}
-	msg := [64]C.char{}
-	status := int(C.canGetErrorText(C.canStatus(code), &msg[0], C.uint(unsafe.Sizeof(msg))))
-	if status < StatusOk {
-		return fmt.Errorf("unable to get description for error code %v (%v)", code, status)
+	var msg [64]byte
+	r1, _, _ := procGetErrorText.Call(
+		uintptr(code),
+		uintptr(unsafe.Pointer(&msg[0])),
+		uintptr(len(msg)),
+	)
+
+	if int(r1) < StatusOk {
+		return fmt.Errorf("unable to get description for error code %v", code)
 	}
-	return &KvaserError{Code: code, Description: C.GoString(&msg[0])}
+
+	cleanMsg := string(bytes.TrimRight(msg[:], "\x00"))
+	return &KvaserError{Code: code, Description: cleanMsg}
 }
 
 func NewKvaserBus(name string) (canopen.Bus, error) {
@@ -84,22 +127,19 @@ func NewKvaserBus(name string) (canopen.Bus, error) {
 	bus.timeoutRead = defaultReadTimeoutMs
 	bus.timeoutWrite = defaultWriteTimeoutMs
 	bus.logger = slog.Default()
-	bus.exit = make(chan bool)
-	// Call lib init, any error here is silent
-	// and will happen when trying to open port
-	// calling this multiple times has no effect.
-	C.canInitializeLibrary()
+
+	procInitializeLibrary.Call()
 	return bus, nil
 }
 
 // Open channel with specific flags
 func (k *KvaserBus) Open(channel int, flags int) error {
-	handle := C.canOpenChannel(C.int(channel), C.int(flags))
-	err := NewKvaserError(int(handle))
+	r1, _, _ := procOpenChannel.Call(uintptr(channel), uintptr(flags))
+	err := NewKvaserError(int(r1))
 	if err != nil {
 		return err
 	}
-	k.handle = handle
+	k.handle = int(r1)
 	return nil
 }
 
@@ -111,62 +151,96 @@ func (k *KvaserBus) Connect(args ...any) error {
 	if !ok {
 		return ErrArgs
 	}
-	open, ok := args[1].(int)
+	flags, ok := args[1].(int)
 	if !ok {
 		return ErrArgs
 	}
-	err := k.Open(channel, open)
+
+	err := k.Open(channel, flags)
 	if err != nil {
 		return err
 	}
-	status := C.canSetBusParams(k.handle, C.canBITRATE_500K, 0, 0, 0, 0, 0)
-	err = NewKvaserError(int(status))
+
+	bitrate := int32(Bitrate500k)
+
+	r1, _, _ := procSetBusParams.Call(
+		uintptr(k.handle),
+		uintptr(uint32(bitrate)),
+		0, 0, 0, 0, 0,
+	)
+	err = NewKvaserError(int(r1))
 	if err != nil {
 		return err
 	}
-	status = C.canSetBusOutputControl(k.handle, C.canDRIVER_NORMAL)
-	err = NewKvaserError(int(status))
+
+	r1, _, _ = procSetBusOutputControl.Call(uintptr(k.handle), uintptr(canDRIVER_NORMAL))
+	err = NewKvaserError(int(r1))
 	if err != nil {
 		return err
 	}
-	return k.On()
+
+	err = k.On()
+	if err != nil {
+		return err
+	}
+
+	var ctx context.Context
+	ctx, k.cancel = context.WithCancel(context.Background())
+	k.wg.Add(1)
+	go func() {
+		defer k.wg.Done()
+		k.processIncoming(ctx)
+	}()
+
+	return nil
 }
 
 func (k *KvaserBus) Disconnect() error {
-	if k.rxCallback != nil {
-		k.exit <- true
+	if k.cancel != nil {
+		k.cancel()
+		k.wg.Wait()
 	}
 	k.Off()
-	status := C.canClose(k.handle)
-	return NewKvaserError(int(status))
+	r1, _, _ := procClose.Call(uintptr(k.handle))
+	return NewKvaserError(int(r1))
 }
 
 func (k *KvaserBus) Send(frame canopen.Frame) error {
-	id := C.long(frame.ID)
-	status := C.canWrite(k.handle, id, unsafe.Pointer(&frame.Data[0]), C.uint(frame.DLC), C.canMSG_STD)
-	err := NewKvaserError(int(status))
+	r1, _, _ := procWrite.Call(
+		uintptr(k.handle),
+		uintptr(frame.ID),
+		uintptr(unsafe.Pointer(&frame.Data[0])),
+		uintptr(frame.DLC),
+		uintptr(canMSG_STD),
+	)
+
+	err := NewKvaserError(int(r1))
 	if err != nil {
 		return err
 	}
-	status = C.canWriteSync(k.handle, defaultWriteTimeoutMs)
-	return NewKvaserError(int(status))
+
+	r1, _, _ = procWriteSync.Call(uintptr(k.handle), uintptr(k.timeoutWrite))
+	return NewKvaserError(int(r1))
 }
 
 func (k *KvaserBus) Subscribe(callback canopen.FrameListener) error {
 	k.rxCallback = callback
-	go k.handleReception()
 	return nil
 }
 
-func (k *KvaserBus) handleReception() {
-	fmt.Println("handling reception")
+func (k *KvaserBus) processIncoming(ctx context.Context) {
+	k.logger.Info("handling reception")
 	for {
 		select {
-		case <-k.exit:
+		case <-ctx.Done():
+			k.logger.Info("exiting CAN bus reception, closed")
 			return
 		default:
 			frame, err := k.Recv()
-			if err != nil && err.Error() != ErrNoMsg.Error() {
+			if err != nil {
+				if errors.Is(err, ErrNoMsg) {
+					continue
+				}
 				k.logger.Error("listening routine has closed because", "err", err)
 				return
 			}
@@ -179,48 +253,56 @@ func (k *KvaserBus) handleReception() {
 
 // Read a single CAN frame with a timeout
 func (k *KvaserBus) Recv() (canopen.Frame, error) {
-	id := C.long(0)
+	var id int32
 	var data [8]byte
-	dlc := C.uint(0)
-	flags := C.uint(0)
-	time := C.ulong(0)
-	timeout := C.ulong(k.timeoutRead)
+	var dlc uint32
+	var flags uint32
+	var time uint32
 
-	status := C.canReadWait(k.handle, &id, unsafe.Pointer(&data), &dlc, &flags, &time, timeout)
-	err := NewKvaserError(int(status))
+	r1, _, _ := procReadWait.Call(
+		uintptr(k.handle),
+		uintptr(unsafe.Pointer(&id)),
+		uintptr(unsafe.Pointer(&data[0])),
+		uintptr(unsafe.Pointer(&dlc)),
+		uintptr(unsafe.Pointer(&flags)),
+		uintptr(unsafe.Pointer(&time)),
+		uintptr(k.timeoutRead),
+	)
+
+	err := NewKvaserError(int(r1))
 	if err != nil {
 		return canopen.Frame{}, err
 	}
+
 	frame := canopen.NewFrame(uint32(id), 0, uint8(dlc))
 	frame.Data = data
 	return frame, nil
-
 }
 
 // Turn bus On
 func (k *KvaserBus) On() error {
-	status := int(C.canBusOn(k.handle))
-	return NewKvaserError(status)
+	r1, _, _ := procBusOn.Call(uintptr(k.handle))
+	return NewKvaserError(int(r1))
 }
 
 // Turn bus Off
 func (k *KvaserBus) Off() error {
-	status := int(C.canBusOff(k.handle))
-	return NewKvaserError(status)
+	r1, _, _ := procBusOff.Call(uintptr(k.handle))
+	return NewKvaserError(int(r1))
 }
 
 // Get canlib version as a string X.Y
-func GerVersion() string {
-	version := C.canGetVersion()
+func GetVersion() string {
+	r1, _, _ := procGetVersion.Call()
+	version := int(r1)
 	low := version & 0xFF
 	high := version >> 8
 	return fmt.Sprintf("%v.%v", high, low)
-
 }
 
 // Get number of channels, also counts virtual channels
 func GetNbChannels() int {
-	nb := C.int(0)
-	C.canGetNumberOfChannels(&nb)
+	var nb int32
+	procGetNumberOfChannels.Call(uintptr(unsafe.Pointer(&nb)))
 	return int(nb)
 }
