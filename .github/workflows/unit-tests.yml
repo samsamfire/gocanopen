@@ -54,13 +54,14 @@ jobs:
           mv ../target/release/virtualcan ~/vcan
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.26"
+          cache: true
 
       - name: Install Go deps
         run: |
-          go get . &
+          go get .
           go install gotest.tools/gotestsum@latest
 
       - name: Build gocanopen
