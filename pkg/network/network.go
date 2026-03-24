@@ -113,7 +113,7 @@ func (network *Network) Connect(args ...any) error {
 		bus = network.Bus()
 	}
 	// Connect to CAN bus and subscribe to CAN message reception
-	err = bus.Connect(args)
+	err = bus.Connect(args...)
 	if err != nil {
 		return err
 	}
