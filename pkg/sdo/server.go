@@ -86,6 +86,9 @@ func (s *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 
 		select {
 		case <-ctx.Done():
+			if s.rxCancel != nil {
+				s.rxCancel()
+			}
 			s.logger.Info("exiting sdo server process")
 			return
 		default:
