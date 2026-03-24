@@ -33,6 +33,7 @@ type SYNC struct {
 	isOperational    bool
 	txBuffer         canopen.Frame
 	rxCancel         func()
+	stopped          bool
 }
 
 // Handle [SYNC] related RX CAN frames
@@ -130,6 +131,7 @@ func (sync *SYNC) notifySubscribers() {
 
 func (sync *SYNC) Start() error {
 	sync.mu.Lock()
+	sync.stopped = false
 	if sync.rxCancel == nil {
 		rxCancel, err := sync.bm.Subscribe(sync.cobId, 0x7FF, false, sync)
 		sync.rxCancel = rxCancel
@@ -145,6 +147,7 @@ func (sync *SYNC) Start() error {
 func (sync *SYNC) Stop() {
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
+	sync.stopped = true
 
 	if sync.rxCancel != nil {
 		sync.rxCancel()
@@ -163,7 +166,7 @@ func (sync *SYNC) resetTimers() {
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
 
-	if sync.syncCyclePeriod == 0 {
+	if sync.stopped || sync.syncCyclePeriod == 0 {
 		if sync.timerProducer != nil {
 			sync.timerProducer.Stop()
 		}
