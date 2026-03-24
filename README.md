@@ -35,7 +35,7 @@
 ### Advanced Capabilities
 
 - **Dynamic EDS Parsing**: Load `.eds` files at runtime to configure nodes instantly.
-- **No CGO Required**: Pure Go implementation for maximum portability (except when using specific C-based drivers like Kvaser). 
+- **No CGO Required**: Pure Go implementation for maximum portability. 
 - **Extensible Bus Interface**: Plug-and-play support for different CAN interfaces.
 
 ## 📦 Supported Hardware / Transceivers
@@ -44,7 +44,7 @@
 | :--- | :--- |
 | **SocketCAN** | Standard Linux CAN interface. Native Go support. |
 | **VirtualCAN** | TCP/IP based virtual bus, great for testing/CI. |
-| **Kvaser** | Requires `canlib` installed (CGO). |
+| **Kvaser** | Uses Kvaser canlib drivers (necessary for windows support) |
 
 *Want to add your own? Implement the simple `Bus` interface!*
 
