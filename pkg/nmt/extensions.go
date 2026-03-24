@@ -2,6 +2,7 @@ package nmt
 
 import (
 	"encoding/binary"
+	"time"
 
 	"github.com/samsamfire/gocanopen/pkg/od"
 )
@@ -16,10 +17,11 @@ func writeEntry1017(stream *od.Stream, data []byte) (uint16, error) {
 		return 0, od.ErrDevIncompat
 	}
 	nmt.mu.Lock()
-	defer nmt.mu.Unlock()
-
-	nmt.hearbeatProducerTimeUs = uint32(binary.LittleEndian.Uint16(data)) * 1000
-	nmt.hearbeatProducerTimer = 0
-	nmt.logger.Debug("updated heartbeat period", "periodMs", nmt.hearbeatProducerTimeUs/1000)
+	nmt.periodProducer = time.Duration(binary.LittleEndian.Uint16(data)) * time.Millisecond
+	nmt.mu.Unlock()
+	if nmt.rxCancel != nil {
+		nmt.restartTimerProducer(nmt.periodProducer)
+	}
+	nmt.logger.Debug("updated heartbeat period", "period", nmt.periodProducer)
 	return od.WriteEntryDefault(stream, data)
 }

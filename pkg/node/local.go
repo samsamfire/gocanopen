@@ -72,15 +72,11 @@ func (node *LocalNode) Stop() error {
 // Does not process SYNC and PDOs
 func (node *LocalNode) ProcessMain(enableGateway bool, timeDifferenceUs uint32) uint8 {
 
-	// Process all objects
-	NMTState := node.NMT.GetInternalState()
-	NMTisPreOrOperational := (NMTState == nmt.StatePreOperational) || (NMTState == nmt.StateOperational)
-
+	nmtState := node.NMT.GetInternalState()
+	isPreOpOrOp := (nmtState == nmt.StatePreOperational) || (nmtState == nmt.StateOperational)
 	node.BusManager.Process()
-	node.EMCY.Process(NMTisPreOrOperational, timeDifferenceUs)
-	reset := node.NMT.Process(&NMTState, timeDifferenceUs)
-
-	return reset
+	node.EMCY.Process(isPreOpOrOp, timeDifferenceUs)
+	return node.NMT.CheckResetAndClear()
 
 }
 
@@ -183,7 +179,7 @@ func NewLocalNode(
 	emcy *emergency.EMCY,
 	nodeId uint8,
 	nmtControl uint16,
-	firstHbTimeMs uint16,
+	firstHbTime time.Duration,
 	sdoServerTimeoutMs uint32,
 	sdoClientTimeoutMs uint32,
 	blockTransferEnabled bool,
@@ -236,7 +232,7 @@ func NewLocalNode(
 			emcy,
 			nodeId,
 			nmtControl,
-			firstHbTimeMs,
+			firstHbTime,
 			nmt.ServiceId,
 			nmt.ServiceId,
 			heartbeat.ServiceId+uint16(nodeId),
@@ -359,6 +355,8 @@ func NewLocalNode(
 	err = node.initPDO()
 	// Register NMT state change callback
 	_ = node.NMT.AddStateChangeCallback(node.onStateChange)
+
+	node.NMT.Start()
 
 	return node, err
 }

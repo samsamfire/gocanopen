@@ -39,8 +39,9 @@ func (c *NodeProcessor) main(ctx context.Context) {
 
 	ticker := time.NewTicker(c.period)
 	periodUs := uint32(c.period.Microseconds())
-	c.logger.Info("starting node main process")
+	c.logger.Info("starting node main process", "period", c.period)
 	for {
+
 		select {
 
 		case <-ctx.Done():
@@ -51,18 +52,19 @@ func (c *NodeProcessor) main(ctx context.Context) {
 
 		case <-ticker.C:
 			// Process main
-			state := c.node.ProcessMain(false, periodUs)
-			if state == nmt.ResetComm {
+			reset := c.node.ProcessMain(false, periodUs)
+			if reset == nmt.ResetComm {
+				c.logger.Info("reset comm has been requested")
 				// Currently nothing specific is done here.
 				// We could in the future "recreate" the node here.
 				break
 			}
-			if state == nmt.ResetApp {
+			if reset == nmt.ResetApp {
 				c.logger.Info("reset has been requested")
 				if c.resetHandler != nil {
 					// Custom logic to apply
 					c.logger.Info("executing custom reset handler")
-					err := c.resetHandler(c.node, state)
+					err := c.resetHandler(c.node, reset)
 					if err != nil {
 						c.logger.Error("error occured executing custom reset handler", "err", err)
 					}
