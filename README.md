@@ -4,7 +4,7 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/samsamfire/gocanopen.svg)](https://pkg.go.dev/github.com/samsamfire/gocanopen)
 [![Go Report Card](https://goreportcard.com/badge/github.com/samsamfire/gocanopen)](https://goreportcard.com/report/github.com/samsamfire/gocanopen)
-[![Unit testing golang](https://github.com/samsamfire/gocanopen/actions/workflows/go_tests.yml/badge.svg)](https://github.com/samsamfire/gocanopen/actions/workflows/unit-tests.yml)
+[![Unit testing golang](https://github.com/samsamfire/gocanopen/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/samsamfire/gocanopen/actions/workflows/unit-tests.yml)
 [![License](https://img.shields.io/github/license/samsamfire/gocanopen)](LICENSE)
 
 ---
