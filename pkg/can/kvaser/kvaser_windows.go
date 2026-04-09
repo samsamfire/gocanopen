@@ -68,7 +68,7 @@ const (
 )
 
 var (
-	ErrNoMsg = NewKvaserError(canERR_NOMSG)
+	ErrNoMsg = &KvaserError{Code: canERR_NOMSG, Description: "No message"}
 	ErrArgs  = errors.New("error in arguments")
 )
 
