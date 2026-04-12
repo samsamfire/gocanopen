@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/samsamfire/gocanopen/internal/crc"
+	"github.com/samsamfire/gocanopen/v2/internal/crc"
 )
 
 func (s *SDOServer) rxUploadBlockInitiate(rx SDOMessage) error {

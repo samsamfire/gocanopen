@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/samsamfire/gocanopen/pkg/network"
-	"github.com/samsamfire/gocanopen/pkg/od"
+	"github.com/samsamfire/gocanopen/v2/pkg/network"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
 )
 
 func main() {

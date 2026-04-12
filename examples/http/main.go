@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/samsamfire/gocanopen/pkg/gateway/http"
-	"github.com/samsamfire/gocanopen/pkg/network"
+	"github.com/samsamfire/gocanopen/v2/pkg/gateway/http"
+	"github.com/samsamfire/gocanopen/v2/pkg/network"
 )
 
 const (

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/samsamfire/gocanopen/internal/crc"
-	"github.com/samsamfire/gocanopen/pkg/od"
+	"github.com/samsamfire/gocanopen/v2/internal/crc"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
 )
 
 var ErrWrongClientReturnValue = errors.New("wrong client return value")

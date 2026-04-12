@@ -3,8 +3,8 @@ package sdo
 import (
 	"encoding/binary"
 
-	canopen "github.com/samsamfire/gocanopen"
-	"github.com/samsamfire/gocanopen/pkg/od"
+	canopen "github.com/samsamfire/gocanopen/v2"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
 )
 
 // [SDO server] update server parameters

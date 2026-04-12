@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/samsamfire/gocanopen/pkg/can/virtual"
-	"github.com/samsamfire/gocanopen/pkg/od"
+	"github.com/samsamfire/gocanopen/v2/pkg/can/virtual"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/samsamfire/gocanopen/pkg/heartbeat"
-	"github.com/samsamfire/gocanopen/pkg/nmt"
-	"github.com/samsamfire/gocanopen/pkg/od"
+	"github.com/samsamfire/gocanopen/v2/pkg/heartbeat"
+	"github.com/samsamfire/gocanopen/v2/pkg/nmt"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
 	"github.com/stretchr/testify/assert"
 )
 

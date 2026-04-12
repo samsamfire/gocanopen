@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	canopen "github.com/samsamfire/gocanopen"
-	"github.com/samsamfire/gocanopen/pkg/config"
-	"github.com/samsamfire/gocanopen/pkg/pdo"
+	canopen "github.com/samsamfire/gocanopen/v2"
+	"github.com/samsamfire/gocanopen/v2/pkg/config"
+	"github.com/samsamfire/gocanopen/v2/pkg/pdo"
 	"github.com/stretchr/testify/assert"
 )
 

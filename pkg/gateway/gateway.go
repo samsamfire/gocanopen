@@ -3,10 +3,10 @@ package gateway
 import (
 	"log/slog"
 
-	"github.com/samsamfire/gocanopen/pkg/network"
-	"github.com/samsamfire/gocanopen/pkg/nmt"
-	"github.com/samsamfire/gocanopen/pkg/od"
-	"github.com/samsamfire/gocanopen/pkg/sdo"
+	"github.com/samsamfire/gocanopen/v2/pkg/network"
+	"github.com/samsamfire/gocanopen/v2/pkg/nmt"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
+	"github.com/samsamfire/gocanopen/v2/pkg/sdo"
 )
 
 // BaseGateway implements the basic gateway features defined by CiA 309

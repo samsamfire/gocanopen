@@ -13,8 +13,8 @@ import (
 	"syscall"
 	"unsafe"
 
-	canopen "github.com/samsamfire/gocanopen"
-	can "github.com/samsamfire/gocanopen/pkg/can"
+	canopen "github.com/samsamfire/gocanopen/v2"
+	can "github.com/samsamfire/gocanopen/v2/pkg/can"
 	"golang.org/x/sys/unix"
 )
 

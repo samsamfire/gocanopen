@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	canopen "github.com/samsamfire/gocanopen"
-	"github.com/samsamfire/gocanopen/internal/crc"
-	"github.com/samsamfire/gocanopen/internal/fifo"
-	"github.com/samsamfire/gocanopen/pkg/od"
+	canopen "github.com/samsamfire/gocanopen/v2"
+	"github.com/samsamfire/gocanopen/v2/internal/crc"
+	"github.com/samsamfire/gocanopen/v2/internal/fifo"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
 )
 
 const (

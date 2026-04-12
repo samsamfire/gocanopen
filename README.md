@@ -56,6 +56,13 @@ Visit [docs](https://samsamfire.github.io/gocanopen/)
 
 Here is a complete example of setting up a Network Master and scanning for nodes on a SocketCAN bus.
 
+Download gocanopen:
+
+```bash
+go get github.com/samsamfire/gocanopen/v2
+```
+
+
 ```go
 package main
 

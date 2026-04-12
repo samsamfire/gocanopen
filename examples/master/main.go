@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/samsamfire/gocanopen/pkg/network"
+	"github.com/samsamfire/gocanopen/v2/pkg/network"
 )
 
 var DEFAULT_NODE_ID = uint8(0x20)

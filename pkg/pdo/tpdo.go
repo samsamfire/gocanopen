@@ -6,11 +6,11 @@ import (
 	s "sync"
 	"time"
 
-	canopen "github.com/samsamfire/gocanopen"
-	"github.com/samsamfire/gocanopen/pkg/emergency"
-	"github.com/samsamfire/gocanopen/pkg/nmt"
-	"github.com/samsamfire/gocanopen/pkg/od"
-	"github.com/samsamfire/gocanopen/pkg/sync"
+	canopen "github.com/samsamfire/gocanopen/v2"
+	"github.com/samsamfire/gocanopen/v2/pkg/emergency"
+	"github.com/samsamfire/gocanopen/v2/pkg/nmt"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
+	"github.com/samsamfire/gocanopen/v2/pkg/sync"
 )
 
 const (

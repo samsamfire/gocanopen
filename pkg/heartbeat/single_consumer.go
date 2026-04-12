@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	canopen "github.com/samsamfire/gocanopen"
-	"github.com/samsamfire/gocanopen/pkg/emergency"
-	"github.com/samsamfire/gocanopen/pkg/nmt"
+	canopen "github.com/samsamfire/gocanopen/v2"
+	"github.com/samsamfire/gocanopen/v2/pkg/emergency"
+	"github.com/samsamfire/gocanopen/v2/pkg/nmt"
 )
 
 // Node specific hearbeat consumer part

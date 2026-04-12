@@ -3,7 +3,7 @@ package config
 import (
 	"time"
 
-	"github.com/samsamfire/gocanopen/pkg/od"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
 )
 
 func (config *NodeConfigurator) ReadCobIdSYNC() (cobId uint32, err error) {

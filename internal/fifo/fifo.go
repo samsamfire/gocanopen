@@ -1,6 +1,6 @@
 package fifo
 
-import "github.com/samsamfire/gocanopen/internal/crc"
+import "github.com/samsamfire/gocanopen/v2/internal/crc"
 
 // Circular Fifo object used in some modules like SDO client
 type Fifo struct {

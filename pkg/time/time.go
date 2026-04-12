@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	canopen "github.com/samsamfire/gocanopen"
-	"github.com/samsamfire/gocanopen/pkg/nmt"
-	"github.com/samsamfire/gocanopen/pkg/od"
+	canopen "github.com/samsamfire/gocanopen/v2"
+	"github.com/samsamfire/gocanopen/v2/pkg/nmt"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
 )
 
 // time origin is 1st of jan 1984

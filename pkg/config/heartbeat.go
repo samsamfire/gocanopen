@@ -3,7 +3,7 @@ package config
 import (
 	"time"
 
-	"github.com/samsamfire/gocanopen/pkg/od"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
 )
 
 type MonitoredNode struct {

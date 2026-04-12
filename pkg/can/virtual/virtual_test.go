@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	canopen "github.com/samsamfire/gocanopen"
+	canopen "github.com/samsamfire/gocanopen/v2"
 	"github.com/stretchr/testify/assert"
 )
 

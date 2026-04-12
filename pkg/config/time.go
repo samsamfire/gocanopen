@@ -1,6 +1,6 @@
 package config
 
-import "github.com/samsamfire/gocanopen/pkg/od"
+import "github.com/samsamfire/gocanopen/v2/pkg/od"
 
 func (config *NodeConfigurator) ReadCobIdTIME() (cobId uint32, err error) {
 	return config.client.ReadUint32(config.nodeId, od.EntryCobIdTIME, 0)

@@ -1,8 +1,8 @@
 package network_test
 
 import (
-	"github.com/samsamfire/gocanopen/pkg/can/virtual"
-	"github.com/samsamfire/gocanopen/pkg/network"
+	"github.com/samsamfire/gocanopen/v2/pkg/can/virtual"
+	"github.com/samsamfire/gocanopen/v2/pkg/network"
 )
 
 const NODE_ID_TEST uint8 = 0x30

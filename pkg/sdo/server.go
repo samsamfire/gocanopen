@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	canopen "github.com/samsamfire/gocanopen"
-	"github.com/samsamfire/gocanopen/internal/crc"
-	"github.com/samsamfire/gocanopen/pkg/nmt"
-	"github.com/samsamfire/gocanopen/pkg/od"
+	canopen "github.com/samsamfire/gocanopen/v2"
+	"github.com/samsamfire/gocanopen/v2/internal/crc"
+	"github.com/samsamfire/gocanopen/v2/pkg/nmt"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
 )
 
 type SDOServer struct {

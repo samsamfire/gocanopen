@@ -5,10 +5,10 @@ import (
 	"log/slog"
 	"sync"
 
-	canopen "github.com/samsamfire/gocanopen"
-	"github.com/samsamfire/gocanopen/pkg/config"
-	"github.com/samsamfire/gocanopen/pkg/od"
-	"github.com/samsamfire/gocanopen/pkg/sdo"
+	canopen "github.com/samsamfire/gocanopen/v2"
+	"github.com/samsamfire/gocanopen/v2/pkg/config"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
+	"github.com/samsamfire/gocanopen/v2/pkg/sdo"
 )
 
 const (

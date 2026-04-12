@@ -9,15 +9,15 @@ import (
 	"log/slog"
 	"time"
 
-	canopen "github.com/samsamfire/gocanopen"
-	"github.com/samsamfire/gocanopen/pkg/emergency"
-	"github.com/samsamfire/gocanopen/pkg/heartbeat"
-	"github.com/samsamfire/gocanopen/pkg/nmt"
-	"github.com/samsamfire/gocanopen/pkg/od"
-	"github.com/samsamfire/gocanopen/pkg/pdo"
-	"github.com/samsamfire/gocanopen/pkg/sdo"
-	s "github.com/samsamfire/gocanopen/pkg/sync"
-	t "github.com/samsamfire/gocanopen/pkg/time"
+	canopen "github.com/samsamfire/gocanopen/v2"
+	"github.com/samsamfire/gocanopen/v2/pkg/emergency"
+	"github.com/samsamfire/gocanopen/v2/pkg/heartbeat"
+	"github.com/samsamfire/gocanopen/v2/pkg/nmt"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
+	"github.com/samsamfire/gocanopen/v2/pkg/pdo"
+	"github.com/samsamfire/gocanopen/v2/pkg/sdo"
+	s "github.com/samsamfire/gocanopen/v2/pkg/sync"
+	t "github.com/samsamfire/gocanopen/v2/pkg/time"
 )
 
 // A [LocalNode] is a CiA 301 compliant CANopen node

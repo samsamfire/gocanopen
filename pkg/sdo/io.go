@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/samsamfire/gocanopen/pkg/od"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
 )
 
 type sdoRawReadWriter struct {

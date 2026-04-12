@@ -11,14 +11,14 @@ import (
 	"sync"
 	"time"
 
-	canopen "github.com/samsamfire/gocanopen"
-	can "github.com/samsamfire/gocanopen/pkg/can"
-	_ "github.com/samsamfire/gocanopen/pkg/can/all"
-	"github.com/samsamfire/gocanopen/pkg/config"
-	"github.com/samsamfire/gocanopen/pkg/nmt"
-	n "github.com/samsamfire/gocanopen/pkg/node"
-	"github.com/samsamfire/gocanopen/pkg/od"
-	"github.com/samsamfire/gocanopen/pkg/sdo"
+	canopen "github.com/samsamfire/gocanopen/v2"
+	can "github.com/samsamfire/gocanopen/v2/pkg/can"
+	_ "github.com/samsamfire/gocanopen/v2/pkg/can/all"
+	"github.com/samsamfire/gocanopen/v2/pkg/config"
+	"github.com/samsamfire/gocanopen/v2/pkg/nmt"
+	n "github.com/samsamfire/gocanopen/v2/pkg/node"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
+	"github.com/samsamfire/gocanopen/v2/pkg/sdo"
 )
 
 var (

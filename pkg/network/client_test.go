@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/samsamfire/gocanopen/pkg/od"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
 	"github.com/stretchr/testify/assert"
 )
 

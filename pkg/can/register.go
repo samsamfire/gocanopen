@@ -1,6 +1,6 @@
 package can
 
-import canopen "github.com/samsamfire/gocanopen"
+import canopen "github.com/samsamfire/gocanopen/v2"
 
 type NewInterfaceFunc func(channel string) (canopen.Bus, error)
 

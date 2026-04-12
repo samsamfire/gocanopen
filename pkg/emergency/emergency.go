@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"sync"
 
-	canopen "github.com/samsamfire/gocanopen"
-	"github.com/samsamfire/gocanopen/pkg/od"
+	canopen "github.com/samsamfire/gocanopen/v2"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
 )
 
 const EmergencyErrorStatusBits = 80

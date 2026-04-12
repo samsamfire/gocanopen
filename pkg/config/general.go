@@ -1,6 +1,6 @@
 package config
 
-import "github.com/samsamfire/gocanopen/pkg/od"
+import "github.com/samsamfire/gocanopen/v2/pkg/od"
 
 type Identity struct {
 	VendorId       uint32
