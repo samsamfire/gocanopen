@@ -83,6 +83,10 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 			} else {
 				pdo.Valid = false
 				rpdo.rxData = nil
+				if rpdo.timer != nil {
+					rpdo.timer.Stop()
+				}
+				rpdo.inTimeout = false
 				if err != nil {
 					return 0, od.ErrDevIncompat
 				}

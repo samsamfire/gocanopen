@@ -279,6 +279,40 @@ func TestRPDO(t *testing.T) {
 		time.Sleep(250 * time.Millisecond)
 		assert.Equal(t, 1, emcyCollector.Count(0x80+uint32(NodeIdTest)))
 	})
+
+	t.Run("no timeout emergency after disabling rpdo", func(t *testing.T) {
+		emcyCollector := &FrameCollector{}
+		_, err := otherNet.Subscribe(0x80+uint32(NodeIdTest), 0x7FF, false, emcyCollector)
+		assert.Nil(t, err)
+
+		c.DisablePDO(1)
+		err = c.WriteConfigurationPDO(1,
+			config.PDOConfigurationParameter{
+				CanId:            0x255,
+				TransmissionType: pdo.TransmissionTypeSyncEventHi,
+				InhibitTime:      0,
+				EventTimer:       200 * time.Millisecond,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(1)
+		assert.Nil(t, err)
+
+		// Send RPDO with value, this will enable timeout monitoring
+		err = otherNet.Send(canopen.Frame{ID: 0x255, DLC: 1, Data: [8]byte{0x33}})
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+
+		// Disable the PDO before the deadline elapses,
+		// no timeout EMCY should be produced
+		err = c.DisablePDO(1)
+		assert.Nil(t, err)
+		emcyCollector.Clear()
+		time.Sleep(400 * time.Millisecond)
+		assert.Equal(t, 0, emcyCollector.Count(0x80+uint32(NodeIdTest)))
+	})
 }
 
 func TestTPDO(t *testing.T) {

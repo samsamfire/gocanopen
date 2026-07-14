@@ -153,7 +153,7 @@ func (rpdo *RPDO) timeoutHandler() {
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
 
-	if !rpdo.isOperational {
+	if !rpdo.isOperational || !rpdo.pdo.Valid {
 		return
 	}
 
