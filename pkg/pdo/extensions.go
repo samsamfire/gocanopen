@@ -183,6 +183,13 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 			tpdo.txBuffer = canopen.NewFrame(canId, 0, uint8(pdo.dataLength))
 			pdo.Valid = valid
 			pdo.configuredId = uint16(canId)
+			// Event timer is one-shot and only re-armed after a send,
+			// so re-arm it here or transmission never resumes
+			if valid {
+				tpdo.restartEventTimerLocked()
+			} else if tpdo.timerEvent != nil {
+				tpdo.timerEvent.Stop()
+			}
 		}
 
 	case od.SubPdoTransmissionType:
@@ -193,9 +200,7 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		tpdo.syncCounter = SyncCounterReset
 		tpdo.transmissionType = transType
 		tpdo.timeLastSend = time.Now()
-		tpdo.mu.Unlock()
-		tpdo.restartEventTimer()
-		tpdo.mu.Lock()
+		tpdo.restartEventTimerLocked()
 		tpdo.pdo.logger.Debug("updated transmission type", "transType", tpdo.transmissionType)
 
 	case od.SubPdoInhibitTime:
@@ -216,9 +221,7 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		if tpdo.timerEvent != nil {
 			tpdo.timerEvent.Stop()
 		}
-		tpdo.mu.Unlock()
-		tpdo.restartEventTimer()
-		tpdo.mu.Lock()
+		tpdo.restartEventTimerLocked()
 		tpdo.pdo.logger.Debug("updated event time", "eventTimer", tpdo.timeEvent)
 
 	case od.SubPdoSyncStart:

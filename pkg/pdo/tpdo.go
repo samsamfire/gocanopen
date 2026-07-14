@@ -138,6 +138,7 @@ func (tpdo *TPDO) send() error {
 		_, err = streamer.Read(tpdo.txBuffer.Data[totalNbRead:])
 		if err != nil {
 			tpdo.pdo.logger.Warn("failed to send", "cobId", pdo.configuredId, "error", err)
+			tpdo.restartEventTimerLocked()
 			return err
 		}
 		streamer.DataOffset = mappedLength
@@ -149,9 +150,7 @@ func (tpdo *TPDO) send() error {
 	if err != nil {
 		tpdo.pdo.logger.Error("failed to send", "err", err)
 	}
-	tpdo.mu.Unlock()
-	tpdo.restartEventTimer()
-	tpdo.mu.Lock()
+	tpdo.restartEventTimerLocked()
 	return err
 }
 
@@ -229,7 +228,11 @@ func (tpdo *TPDO) OnStateChange(state uint8) {
 func (tpdo *TPDO) restartEventTimer() {
 	tpdo.mu.Lock()
 	defer tpdo.mu.Unlock()
+	tpdo.restartEventTimerLocked()
+}
 
+// Caller must hold tpdo.mu
+func (tpdo *TPDO) restartEventTimerLocked() {
 	if tpdo.timeEvent == 0 || !tpdo.isOperational {
 		return
 	}

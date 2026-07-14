@@ -452,6 +452,44 @@ func TestTPDO(t *testing.T) {
 		assert.Equal(t, 2, collector.Count(canId))
 	})
 
+	t.Run("event timer resumes after disable and re-enable", func(t *testing.T) {
+
+		c.DisablePDO(tpdo1)
+		collector.Clear()
+		err = c.WriteConfigurationPDO(tpdo1,
+			config.PDOConfigurationParameter{
+				CanId:            uint16(canId),
+				TransmissionType: pdo.TransmissionTypeSyncEventLo,
+				EventTimer:       200 * time.Millisecond,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(tpdo1)
+		assert.Nil(t, err)
+
+		// Check event timer is running
+		time.Sleep(300 * time.Millisecond)
+		assert.GreaterOrEqual(t, collector.Count(canId), 1)
+
+		// Disable via COB-ID valid bit only, wait longer than the event
+		// time so the pending one-shot timer fires while disabled
+		err = c.DisablePDO(tpdo1)
+		assert.Nil(t, err)
+		time.Sleep(100 * time.Millisecond)
+		collector.Clear()
+		time.Sleep(450 * time.Millisecond)
+		assert.Equal(t, 0, collector.Count(canId))
+
+		// Re-enable without touching the event timer,
+		// periodic transmission should resume
+		err = c.EnablePDO(tpdo1)
+		assert.Nil(t, err)
+		time.Sleep(450 * time.Millisecond)
+		assert.GreaterOrEqual(t, collector.Count(canId), 2)
+	})
+
 	t.Run("event timer with inhibit time", func(t *testing.T) {
 		c.DisablePDO(tpdo1)
 		collector.Clear()
