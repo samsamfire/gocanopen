@@ -553,4 +553,99 @@ func TestTPDO(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 		assert.Equal(t, 1, collector.Count(canId))
 	})
+
+	t.Run("event timer is ignored for synchronous transmission types", func(t *testing.T) {
+		// Reset SYNC producer state from previous subtests
+		err = c.WriteCommunicationPeriod(0)
+		assert.Nil(t, err)
+		err = c.WriteCounterOverflow(0)
+		assert.Nil(t, err)
+
+		c.DisablePDO(tpdo1)
+		collector.Clear()
+		err = c.WriteConfigurationPDO(tpdo1,
+			config.PDOConfigurationParameter{
+				CanId:            uint16(canId),
+				TransmissionType: 1, // Sync every cycle
+				EventTimer:       100 * time.Millisecond,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(tpdo1)
+		assert.Nil(t, err)
+
+		// No SYNC sent : the event timer must not produce transmissions
+		time.Sleep(400 * time.Millisecond)
+		assert.Equal(t, 0, collector.Count(canId))
+
+		// PDO is still sent on SYNC reception
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0})
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 1, collector.Count(canId))
+	})
+
+	t.Run("sync subscription follows transmission type changes", func(t *testing.T) {
+		c.DisablePDO(tpdo1)
+		collector.Clear()
+		err = c.WriteConfigurationPDO(tpdo1,
+			config.PDOConfigurationParameter{
+				CanId:            uint16(canId),
+				TransmissionType: pdo.TransmissionTypeSyncEventLo,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(tpdo1)
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		collector.Clear()
+
+		// Event-driven TPDO must not transmit on SYNC reception
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0})
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 0, collector.Count(canId))
+
+		// Switch back to synchronous cyclic at runtime,
+		// TPDO should transmit on SYNC again
+		err = c.WriteTransmissionType(tpdo1, 1)
+		assert.Nil(t, err)
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0})
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 1, collector.Count(canId))
+	})
+
+	t.Run("event driven tpdo 255 sends on event timer and sync reception", func(t *testing.T) {
+		c.DisablePDO(tpdo1)
+		collector.Clear()
+		err = c.WriteConfigurationPDO(tpdo1,
+			config.PDOConfigurationParameter{
+				CanId:            uint16(canId),
+				TransmissionType: pdo.TransmissionTypeSyncEventHi,
+				EventTimer:       300 * time.Millisecond,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(tpdo1)
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		collector.Clear()
+
+		// Sent on SYNC reception (also restarts the event timer)
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0})
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 1, collector.Count(canId))
+
+		// And also sent on event timer expiry (300ms after the SYNC send)
+		time.Sleep(450 * time.Millisecond)
+		assert.GreaterOrEqual(t, collector.Count(canId), 2)
+	})
 }

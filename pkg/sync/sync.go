@@ -136,6 +136,7 @@ func (sync *SYNC) Start() error {
 		rxCancel, err := sync.bm.Subscribe(sync.cobId, 0x7FF, false, sync)
 		sync.rxCancel = rxCancel
 		if err != nil {
+			sync.mu.Unlock()
 			return err
 		}
 	}
@@ -200,9 +201,12 @@ func (sync *SYNC) timerProducerHandler() {
 
 func (sync *SYNC) timerConsumerHandler() {
 	// This means that a timemout has occured
+	sync.mu.Lock()
 	sync.inTimeout = true
-	sync.emcy.Error(true, emergency.EmSyncTimeOut, emergency.ErrCommunication, uint32(sync.syncCyclePeriod.Microseconds()))
-	sync.logger.Warn("timeout error", "timeout", sync.syncCyclePeriod)
+	cyclePeriod := sync.syncCyclePeriod
+	sync.mu.Unlock()
+	sync.emcy.Error(true, emergency.EmSyncTimeOut, emergency.ErrCommunication, uint32(cyclePeriod.Microseconds()))
+	sync.logger.Warn("timeout error", "timeout", cyclePeriod)
 }
 
 func (sync *SYNC) send() {

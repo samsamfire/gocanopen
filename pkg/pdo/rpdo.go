@@ -63,8 +63,8 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 	rpdo.rxData = frame.Data[:]
 }
 
-func (rpdo *RPDO) syncHandler() {
-	for range rpdo.syncCh {
+func (rpdo *RPDO) syncHandler(syncCh chan uint8) {
+	for range syncCh {
 		rpdo.mu.Lock()
 		if rpdo.rxData != nil {
 			data := rpdo.rxData
@@ -88,9 +88,9 @@ func (rpdo *RPDO) Start() error {
 		}
 	}
 
-	if rpdo.synchronous && rpdo.sync != nil {
+	if rpdo.synchronous && rpdo.sync != nil && rpdo.syncCh == nil {
 		rpdo.syncCh = rpdo.sync.Subscribe()
-		go rpdo.syncHandler()
+		go rpdo.syncHandler(rpdo.syncCh)
 	}
 
 	return nil
