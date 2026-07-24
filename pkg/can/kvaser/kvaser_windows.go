@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"unsafe"
 
-	canopen "github.com/samsamfire/gocanopen"
-	"github.com/samsamfire/gocanopen/pkg/can"
+	canopen "github.com/samsamfire/gocanopen/v2"
+	can "github.com/samsamfire/gocanopen/v2/pkg/can"
 )
 
 // Dynamically load Kvaser's canlib32.dll
