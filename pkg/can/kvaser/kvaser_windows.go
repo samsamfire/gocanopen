@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -147,7 +148,7 @@ func (k *KvaserBus) Connect(args ...any) error {
 	if len(args) < 2 {
 		return ErrArgs
 	}
-	channel, ok := args[0].(int)
+	channel, ok := args[0].(string)
 	if !ok {
 		return ErrArgs
 	}
@@ -155,8 +156,11 @@ func (k *KvaserBus) Connect(args ...any) error {
 	if !ok {
 		return ErrArgs
 	}
-
-	err := k.Open(channel, flags)
+	channelNum, err := strconv.Atoi(channel)
+	if err != nil {
+		return ErrArgs
+	}
+	err = k.Open(channelNum, flags)
 	if err != nil {
 		return err
 	}
