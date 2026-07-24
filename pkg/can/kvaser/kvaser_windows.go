@@ -123,14 +123,20 @@ func NewKvaserError(code int) error {
 	return &KvaserError{Code: code, Description: cleanMsg}
 }
 
-func NewKvaserBus(name string) (canopen.Bus, error) {
-	bus := &KvaserBus{}
-	bus.timeoutRead = defaultReadTimeoutMs
-	bus.timeoutWrite = defaultWriteTimeoutMs
-	bus.logger = slog.Default()
+func NewKvaserBus(name string) (bus canopen.Bus, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("kvaser: failed to initialize canlib32.dll: %v", r)
+		}
+	}()
+
+	b := &KvaserBus{}
+	b.timeoutRead = defaultReadTimeoutMs
+	b.timeoutWrite = defaultWriteTimeoutMs
+	b.logger = slog.Default()
 
 	procInitializeLibrary.Call()
-	return bus, nil
+	return b, nil
 }
 
 // Open channel with specific flags
@@ -145,14 +151,14 @@ func (k *KvaserBus) Open(channel int, flags int) error {
 }
 
 func (k *KvaserBus) Connect(args ...any) error {
-	if len(args) < 2 {
+	if len(args) < 3 {
 		return ErrArgs
 	}
-	channel, ok := args[0].(string)
+	channel, ok := args[1].(string)
 	if !ok {
 		return ErrArgs
 	}
-	flags, ok := args[1].(int)
+	flags, ok := args[2].(int)
 	if !ok {
 		return ErrArgs
 	}
