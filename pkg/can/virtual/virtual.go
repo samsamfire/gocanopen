@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"sync"
@@ -22,6 +23,20 @@ func init() {
 	can.RegisterInterface("virtual", NewVirtualCanBus)
 	can.RegisterInterface("virtualcan", NewVirtualCanBus)
 }
+
+const (
+	// How long to wait for a new frame
+	pollTimeout = 200 * time.Millisecond
+	// How long to wait for the remaining bytes of a frame
+	frameTimeout = 1 * time.Second
+	// How long to wait before trying to take the lock again
+	lockRetryDelay = 1 * time.Millisecond
+	// Sanity check on the announced frame length, a serialized frame is 14 bytes
+	maxFrameLength = 64
+)
+
+// Returned when no message was received before the polling deadline
+var ErrNoMsg = errors.New("no message")
 
 type Bus struct {
 	logger        *slog.Logger
@@ -135,35 +150,40 @@ func (b *Bus) Subscribe(framehandler canopen.FrameListener) error {
 	return nil
 }
 
-// Receive new CAN message
+// Receive new CAN message. [ErrNoMsg] is returned when no message was received
+// before the polling deadline, which is not an error condition.
 func (b *Bus) Recv() (*canopen.Frame, error) {
 	if b.conn == nil {
 		return nil, fmt.Errorf("error : no active connection, abort receive")
 	}
-	_ = b.conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 	headerBytes := make([]byte, 4)
-	n, err := b.conn.Read(headerBytes)
-	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+
+	// Poll for the first byte of a frame. Nothing has been consumed from the
+	// stream yet, so a timeout here only means that no frame was received.
+	_ = b.conn.SetReadDeadline(time.Now().Add(pollTimeout))
+	if _, err := io.ReadFull(b.conn, headerBytes[:1]); err != nil {
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			return nil, ErrNoMsg
+		}
 		return nil, err
 	}
-	if n < 4 || err != nil {
-		return nil, fmt.Errorf("error deserializing : expected %v, got %v, err : %v", 4, n, err)
+
+	// The rest of the frame is already on its way, it is written in a single
+	// call. TCP can still split it accross segments, so it has to be read until
+	// complete.
+	_ = b.conn.SetReadDeadline(time.Now().Add(frameTimeout))
+	if _, err := io.ReadFull(b.conn, headerBytes[1:]); err != nil {
+		return nil, fmt.Errorf("error reading frame length : %w", err)
 	}
 	length := binary.BigEndian.Uint32(headerBytes)
+	if length > maxFrameLength {
+		return nil, fmt.Errorf("announced frame length %v exceeds %v", length, maxFrameLength)
+	}
 	frameBytes := make([]byte, length)
-	_ = b.conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
-	n, err = b.conn.Read(frameBytes)
-	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-		return nil, err
+	if _, err := io.ReadFull(b.conn, frameBytes); err != nil {
+		return nil, fmt.Errorf("error reading frame of length %v : %w", length, err)
 	}
-	if n != int(length) || err != nil {
-		return nil, fmt.Errorf("error deserializing : expected %v, got %v", length, n)
-	}
-	frame, err := deserializeFrame(frameBytes)
-	if err != nil {
-		return nil, err
-	}
-	return frame, err
+	return deserializeFrame(frameBytes)
 }
 
 // Handle incoming traffic
@@ -178,19 +198,20 @@ func (client *Bus) handleReception() {
 			return
 		default:
 			// Avoid blocking if lock is already taken (in particular for disconnect, subscribe, etc)
-			success := client.mu.TryLock()
-			if !success {
-				break
+			if !client.mu.TryLock() {
+				time.Sleep(lockRetryDelay)
+				continue
 			}
 			frame, err := client.Recv()
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				// No message received, this is OK
-			} else if err != nil {
+			switch {
+			case errors.Is(err, ErrNoMsg):
+				// No message received
+			case err != nil:
 				client.logger.Error("listening routine has closed because", "err", err)
 				client.errSubscriber = true
 				client.mu.Unlock()
 				return
-			} else if client.framehandler != nil {
+			case client.framehandler != nil:
 				client.framehandler.Handle(*frame)
 			}
 			client.mu.Unlock()
