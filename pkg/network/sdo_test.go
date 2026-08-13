@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/samsamfire/gocanopen/v2/pkg/sdo"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -46,6 +47,81 @@ func TestReaderWriter(t *testing.T) {
 	n, err = w.Write([]byte{0, 1})
 	assert.Nil(t, err)
 	assert.Equal(t, 2, n)
+}
+
+func TestTransferAfterTimeout(t *testing.T) {
+	network := CreateNetworkTest()
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	defer network.Disconnect()
+	node, err := network2.AddRemoteNode(NodeIdTest, nil)
+	assert.Nil(t, err)
+	client := node.SDOClient
+
+	// No server on this node id ==> transfer times out
+	buffer := make([]byte, 10)
+	_, err = client.ReadRaw(NodeIdTest+10, 0x2001, 0, buffer)
+	assert.Equal(t, sdo.AbortTimeout, err)
+
+	// Following transfers on an existing node should still work
+	for range 2 {
+		n, err := client.ReadRaw(NodeIdTest, 0x2001, 0, buffer)
+		assert.Nil(t, err)
+		assert.EqualValues(t, 1, n)
+	}
+	err = client.WriteRaw(NodeIdTest, 0x2001, 0, uint8(0), false)
+	assert.Nil(t, err)
+}
+
+const blockTransferString = "AStringCannotBeLongerThanTheDefaultValue"
+
+func TestBlockTransferAfterTimeout(t *testing.T) {
+	network := CreateNetworkTest()
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	defer network.Disconnect()
+	node, err := network2.AddRemoteNode(NodeIdTest, nil)
+	assert.Nil(t, err)
+	client := node.SDOClient
+	// Keep the test short, the timers are only checked relative to this
+	client.SetTimeout(200)
+	client.SetTimeoutBlockTransfer(200)
+	timeout := 200 * time.Millisecond
+
+	t.Run("block upload", func(t *testing.T) {
+		// No server on this node id ==> transfer times out
+		for range 2 {
+			start := time.Now()
+			_, err := client.ReadAll(NodeIdTest+10, 0x2009, 0)
+			assert.Equal(t, sdo.AbortTimeout, err)
+			assert.Greater(t, time.Since(start), timeout/2)
+		}
+		// Block uploads on an existing node should still work
+		for range 2 {
+			data, err := client.ReadAll(NodeIdTest, 0x2009, 0)
+			assert.Nil(t, err)
+			assert.EqualValues(t, blockTransferString, string(data))
+		}
+	})
+
+	t.Run("block download", func(t *testing.T) {
+		for range 2 {
+			start := time.Now()
+			w, err := client.NewRawWriter(NodeIdTest+10, 0x2009, 0, true, uint32(len(blockTransferString)))
+			assert.Nil(t, err)
+			_, err = w.Write([]byte(blockTransferString))
+			assert.Equal(t, sdo.AbortTimeout, err)
+			assert.Greater(t, time.Since(start), timeout/2)
+		}
+		// Block downloads on an existing node should still work
+		for range 2 {
+			w, err := client.NewRawWriter(NodeIdTest, 0x2009, 0, true, uint32(len(blockTransferString)))
+			assert.Nil(t, err)
+			n, err := w.Write([]byte(blockTransferString))
+			assert.Nil(t, err)
+			assert.Equal(t, len(blockTransferString), n)
+		}
+	})
 }
 
 func BenchmarkNodeStreamerWriter(b *testing.B) {
