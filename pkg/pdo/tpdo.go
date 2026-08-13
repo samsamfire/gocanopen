@@ -151,12 +151,16 @@ func (tpdo *TPDO) send() error {
 		mappedLength := streamer.DataOffset
 		streamer.DataOffset = 0
 		_, err = streamer.Read(tpdo.txBuffer.Data[totalNbRead:])
+		streamer.DataOffset = mappedLength
 		if err != nil {
-			tpdo.pdo.logger.Warn("failed to send", "cobId", pdo.configuredId, "error", err)
+			tpdo.pdo.logger.Warn("failed to read mapped object",
+				"cobId", pdo.configuredId,
+				"subindex", i+1,
+				"error", err,
+			)
 			tpdo.restartEventTimerLocked()
 			return err
 		}
-		streamer.DataOffset = mappedLength
 		totalNbRead += int(mappedLength)
 	}
 	tpdo.sendRequestAsyncEvent = false
