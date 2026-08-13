@@ -116,7 +116,7 @@ func (nmt *NMT) restartTimerProducer(duration time.Duration) {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
 
-	if nmt.stopped || nmt.periodProducer == 0 {
+	if nmt.stopped {
 		return
 	}
 
@@ -133,9 +133,14 @@ func (nmt *NMT) producerHandler() {
 	nmtStatePrev := nmt.operatingStatePrev
 	nmtInit := nmtState == StateInitializing
 	nmt.hbTxBuff.Data[0] = nmtState
+	periodProducer := nmt.periodProducer
+	frame := nmt.hbTxBuff
 	nmt.mu.Unlock()
 
-	_ = nmt.send(nmt.hbTxBuff)
+	// The boot-up message is mandatory
+	if nmtInit || periodProducer != 0 {
+		_ = nmt.send(frame)
+	}
 
 	nmt.mu.Lock()
 	if nmtStatePrev != nmtState || nmtInit {
@@ -160,7 +165,11 @@ func (nmt *NMT) producerHandler() {
 
 	nmt.operatingStatePrev = nmtState
 	nmt.mu.Unlock()
-	nmt.restartTimerProducer(nmt.periodProducer)
+
+	// Only keep the timer running for the cyclic heartbeat
+	if periodProducer != 0 {
+		nmt.restartTimerProducer(periodProducer)
+	}
 }
 
 func (nmt *NMT) send(frame canopen.Frame) error {
