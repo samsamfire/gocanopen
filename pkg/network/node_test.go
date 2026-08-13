@@ -433,22 +433,34 @@ func TestScan(t *testing.T) {
 	network2 := CreateNetworkEmptyTest()
 	defer network.Disconnect()
 	defer network2.Disconnect()
+
+	subscribers := network.BusManager.SubscriberCount()
 	scan, err := network.Scan(100)
 	assert.Len(t, scan, 0)
 	assert.Nil(t, err)
+	assert.Equal(t, subscribers, network.BusManager.SubscriberCount())
+
 	// Create some local nodes
 	for i := range 10 {
 		_, err := network.CreateLocalNode(uint8(i)+1, od.Default())
 		assert.Nil(t, err)
 	}
 	// Scan from local
+	subscribers = network.BusManager.SubscriberCount()
 	scan, err = network.Scan(100)
 	assert.Len(t, scan, 10)
 	assert.Nil(t, err)
-	// Scan from remote
+	assert.Equal(t, subscribers, network.BusManager.SubscriberCount())
+
+	// Scan from remote, twice, to make sure nothing accumulates
+	subscribers = network2.BusManager.SubscriberCount()
 	scan, err = network2.Scan(100)
 	assert.Len(t, scan, 10)
 	assert.Nil(t, err)
+	scan, err = network2.Scan(100)
+	assert.Len(t, scan, 10)
+	assert.Nil(t, err)
+	assert.Equal(t, subscribers, network2.BusManager.SubscriberCount())
 }
 
 func TestExport(t *testing.T) {

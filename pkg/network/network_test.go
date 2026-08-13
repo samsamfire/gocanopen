@@ -87,6 +87,10 @@ func TestAddRemoveNodes(t *testing.T) {
 		err = network.RemoveNode(NodeIdTest)
 		assert.Nil(t, err)
 		assert.Len(t, network.controllers, 0)
+		// The object dictionary of a removed node should not be kept around
+		assert.Len(t, network.odMap, 0)
+		_, err = network.GetOD(NodeIdTest)
+		assert.Equal(t, od.ErrOdMissing, err)
 	})
 	t.Run("add node", func(t *testing.T) {
 		// Test creating multiple nodes with same id

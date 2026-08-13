@@ -116,6 +116,17 @@ func (bm *BusManager) Subscribe(ident uint32, mask uint32, rtr bool, callback Fr
 	return cancel, nil
 }
 
+func (bm *BusManager) SubscriberCount() int {
+	bm.mu.Lock()
+	defer bm.mu.Unlock()
+
+	count := 0
+	for _, subs := range bm.listeners {
+		count += len(subs)
+	}
+	return count
+}
+
 // Get CAN error
 func (bm *BusManager) Error() uint16 {
 	bm.mu.Lock()
