@@ -189,6 +189,7 @@ func (rpdo *RPDO) copyDataToOd(data []byte) {
 			break
 		}
 
+		mappedLength := streamer.DataOffset
 		streamer.DataOffset = 0
 		if _, err := streamer.Write(data[offset:end]); err != nil {
 			rpdo.pdo.logger.Warn("failed to write to OD on RPDO reception",
@@ -197,7 +198,7 @@ func (rpdo *RPDO) copyDataToOd(data []byte) {
 			)
 		}
 
-		streamer.DataOffset = streamer.DataLength
+		streamer.DataOffset = mappedLength
 		offset = end
 	}
 }
