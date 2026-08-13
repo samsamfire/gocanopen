@@ -126,6 +126,7 @@ func writeEntry1019(stream *od.Stream, data []byte) (uint16, error) {
 	}
 	sync.txBuffer = canopen.NewFrame(sync.cobId, 0, nbBytes)
 	sync.counterOverflow = syncCounterOverflow
+	sync.counter = 0
 	sync.logger.Info("updating synchronous counter overflow", "overflow", syncCounterOverflow)
 	return od.WriteEntryDefault(stream, data)
 }

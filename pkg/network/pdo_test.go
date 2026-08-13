@@ -279,6 +279,40 @@ func TestRPDO(t *testing.T) {
 		time.Sleep(250 * time.Millisecond)
 		assert.Equal(t, 1, emcyCollector.Count(0x80+uint32(NodeIdTest)))
 	})
+
+	t.Run("no timeout emergency after disabling rpdo", func(t *testing.T) {
+		emcyCollector := &FrameCollector{}
+		_, err := otherNet.Subscribe(0x80+uint32(NodeIdTest), 0x7FF, false, emcyCollector)
+		assert.Nil(t, err)
+
+		c.DisablePDO(1)
+		err = c.WriteConfigurationPDO(1,
+			config.PDOConfigurationParameter{
+				CanId:            0x255,
+				TransmissionType: pdo.TransmissionTypeSyncEventHi,
+				InhibitTime:      0,
+				EventTimer:       200 * time.Millisecond,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(1)
+		assert.Nil(t, err)
+
+		// Send RPDO with value, this will enable timeout monitoring
+		err = otherNet.Send(canopen.Frame{ID: 0x255, DLC: 1, Data: [8]byte{0x33}})
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+
+		// Disable the PDO before the deadline elapses,
+		// no timeout EMCY should be produced
+		err = c.DisablePDO(1)
+		assert.Nil(t, err)
+		emcyCollector.Clear()
+		time.Sleep(400 * time.Millisecond)
+		assert.Equal(t, 0, emcyCollector.Count(0x80+uint32(NodeIdTest)))
+	})
 }
 
 func TestTPDO(t *testing.T) {
@@ -452,6 +486,44 @@ func TestTPDO(t *testing.T) {
 		assert.Equal(t, 2, collector.Count(canId))
 	})
 
+	t.Run("event timer resumes after disable and re-enable", func(t *testing.T) {
+
+		c.DisablePDO(tpdo1)
+		collector.Clear()
+		err = c.WriteConfigurationPDO(tpdo1,
+			config.PDOConfigurationParameter{
+				CanId:            uint16(canId),
+				TransmissionType: pdo.TransmissionTypeSyncEventLo,
+				EventTimer:       200 * time.Millisecond,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(tpdo1)
+		assert.Nil(t, err)
+
+		// Check event timer is running
+		time.Sleep(300 * time.Millisecond)
+		assert.GreaterOrEqual(t, collector.Count(canId), 1)
+
+		// Disable via COB-ID valid bit only, wait longer than the event
+		// time so the pending one-shot timer fires while disabled
+		err = c.DisablePDO(tpdo1)
+		assert.Nil(t, err)
+		time.Sleep(100 * time.Millisecond)
+		collector.Clear()
+		time.Sleep(450 * time.Millisecond)
+		assert.Equal(t, 0, collector.Count(canId))
+
+		// Re-enable without touching the event timer,
+		// periodic transmission should resume
+		err = c.EnablePDO(tpdo1)
+		assert.Nil(t, err)
+		time.Sleep(450 * time.Millisecond)
+		assert.GreaterOrEqual(t, collector.Count(canId), 2)
+	})
+
 	t.Run("event timer with inhibit time", func(t *testing.T) {
 		c.DisablePDO(tpdo1)
 		collector.Clear()
@@ -480,5 +552,100 @@ func TestTPDO(t *testing.T) {
 		// Wait another 200ms (total 350ms): inhibit time should have elapsed
 		time.Sleep(200 * time.Millisecond)
 		assert.Equal(t, 1, collector.Count(canId))
+	})
+
+	t.Run("event timer is ignored for synchronous transmission types", func(t *testing.T) {
+		// Reset SYNC producer state from previous subtests
+		err = c.WriteCommunicationPeriod(0)
+		assert.Nil(t, err)
+		err = c.WriteCounterOverflow(0)
+		assert.Nil(t, err)
+
+		c.DisablePDO(tpdo1)
+		collector.Clear()
+		err = c.WriteConfigurationPDO(tpdo1,
+			config.PDOConfigurationParameter{
+				CanId:            uint16(canId),
+				TransmissionType: 1, // Sync every cycle
+				EventTimer:       100 * time.Millisecond,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(tpdo1)
+		assert.Nil(t, err)
+
+		// No SYNC sent : the event timer must not produce transmissions
+		time.Sleep(400 * time.Millisecond)
+		assert.Equal(t, 0, collector.Count(canId))
+
+		// PDO is still sent on SYNC reception
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0})
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 1, collector.Count(canId))
+	})
+
+	t.Run("sync subscription follows transmission type changes", func(t *testing.T) {
+		c.DisablePDO(tpdo1)
+		collector.Clear()
+		err = c.WriteConfigurationPDO(tpdo1,
+			config.PDOConfigurationParameter{
+				CanId:            uint16(canId),
+				TransmissionType: pdo.TransmissionTypeSyncEventLo,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(tpdo1)
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		collector.Clear()
+
+		// Event-driven TPDO must not transmit on SYNC reception
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0})
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 0, collector.Count(canId))
+
+		// Switch back to synchronous cyclic at runtime,
+		// TPDO should transmit on SYNC again
+		err = c.WriteTransmissionType(tpdo1, 1)
+		assert.Nil(t, err)
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0})
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 1, collector.Count(canId))
+	})
+
+	t.Run("event driven tpdo 255 sends on event timer and sync reception", func(t *testing.T) {
+		c.DisablePDO(tpdo1)
+		collector.Clear()
+		err = c.WriteConfigurationPDO(tpdo1,
+			config.PDOConfigurationParameter{
+				CanId:            uint16(canId),
+				TransmissionType: pdo.TransmissionTypeSyncEventHi,
+				EventTimer:       300 * time.Millisecond,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(tpdo1)
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		collector.Clear()
+
+		// Sent on SYNC reception (also restarts the event timer)
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0})
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+		assert.Equal(t, 1, collector.Count(canId))
+
+		// And also sent on event timer expiry (300ms after the SYNC send)
+		time.Sleep(450 * time.Millisecond)
+		assert.GreaterOrEqual(t, collector.Count(canId), 2)
 	})
 }

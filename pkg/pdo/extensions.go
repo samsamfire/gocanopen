@@ -83,6 +83,10 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 			} else {
 				pdo.Valid = false
 				rpdo.rxData = nil
+				if rpdo.timer != nil {
+					rpdo.timer.Stop()
+				}
+				rpdo.inTimeout = false
 				if err != nil {
 					return 0, od.ErrDevIncompat
 				}
@@ -100,7 +104,7 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 			if synchronous {
 				if rpdo.sync != nil && rpdo.syncCh == nil {
 					rpdo.syncCh = rpdo.sync.Subscribe()
-					go rpdo.syncHandler()
+					go rpdo.syncHandler(rpdo.syncCh)
 				}
 			} else {
 				if rpdo.sync != nil && rpdo.syncCh != nil {
@@ -183,6 +187,13 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 			tpdo.txBuffer = canopen.NewFrame(canId, 0, uint8(pdo.dataLength))
 			pdo.Valid = valid
 			pdo.configuredId = uint16(canId)
+			// Event timer is one-shot and only re-armed after a send,
+			// so re-arm it here or transmission never resumes
+			if valid {
+				tpdo.restartEventTimerLocked()
+			} else if tpdo.timerEvent != nil {
+				tpdo.timerEvent.Stop()
+			}
 		}
 
 	case od.SubPdoTransmissionType:
@@ -190,12 +201,25 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		if transType > TransmissionTypeSync240 && transType < TransmissionTypeSyncEventLo {
 			return 0, od.ErrInvalidValue
 		}
+		// SYNC subscription & event timer must follow the transmission type.
+		// All types except event driven (254) are sent on SYNC
+		if transType != TransmissionTypeSyncEventLo {
+			if tpdo.sync != nil && tpdo.syncCh == nil {
+				tpdo.syncCh = tpdo.sync.Subscribe()
+				go tpdo.syncHandler(tpdo.syncCh)
+			}
+		} else if tpdo.sync != nil && tpdo.syncCh != nil {
+			tpdo.sync.Unsubscribe(tpdo.syncCh)
+			tpdo.syncCh = nil
+		}
+		// Event timer only applies to event driven types (254 / 255)
+		if transType < TransmissionTypeSyncEventLo && tpdo.timerEvent != nil {
+			tpdo.timerEvent.Stop()
+		}
 		tpdo.syncCounter = SyncCounterReset
 		tpdo.transmissionType = transType
 		tpdo.timeLastSend = time.Now()
-		tpdo.mu.Unlock()
-		tpdo.restartEventTimer()
-		tpdo.mu.Lock()
+		tpdo.restartEventTimerLocked()
 		tpdo.pdo.logger.Debug("updated transmission type", "transType", tpdo.transmissionType)
 
 	case od.SubPdoInhibitTime:
@@ -216,9 +240,7 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		if tpdo.timerEvent != nil {
 			tpdo.timerEvent.Stop()
 		}
-		tpdo.mu.Unlock()
-		tpdo.restartEventTimer()
-		tpdo.mu.Lock()
+		tpdo.restartEventTimerLocked()
 		tpdo.pdo.logger.Debug("updated event time", "eventTimer", tpdo.timeEvent)
 
 	case od.SubPdoSyncStart:

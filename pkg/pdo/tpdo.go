@@ -37,9 +37,24 @@ type TPDO struct {
 }
 
 // Process TPDOs on SYNC reception
-func (tpdo *TPDO) syncHandler() {
-	for range tpdo.syncCh {
+func (tpdo *TPDO) syncHandler(syncCh chan uint8) {
+	for range syncCh {
 		tpdo.mu.Lock()
+
+		// Event driven (254) TPDOs are not sent on SYNC, a SYNC event can
+		// still be buffered right after switching transmission type
+		if tpdo.transmissionType == TransmissionTypeSyncEventLo {
+			tpdo.mu.Unlock()
+			continue
+		}
+
+		// Event driven (255) TPDOs are sent on SYNC reception
+		// as well as on events
+		if tpdo.transmissionType == TransmissionTypeSyncEventHi {
+			tpdo.mu.Unlock()
+			_ = tpdo.send()
+			continue
+		}
 		isAsyclic := tpdo.transmissionType == TransmissionTypeSyncAcyclic
 
 		// Send synchronous acyclic tpdo
@@ -138,6 +153,7 @@ func (tpdo *TPDO) send() error {
 		_, err = streamer.Read(tpdo.txBuffer.Data[totalNbRead:])
 		if err != nil {
 			tpdo.pdo.logger.Warn("failed to send", "cobId", pdo.configuredId, "error", err)
+			tpdo.restartEventTimerLocked()
 			return err
 		}
 		streamer.DataOffset = mappedLength
@@ -149,9 +165,7 @@ func (tpdo *TPDO) send() error {
 	if err != nil {
 		tpdo.pdo.logger.Error("failed to send", "err", err)
 	}
-	tpdo.mu.Unlock()
-	tpdo.restartEventTimer()
-	tpdo.mu.Lock()
+	tpdo.restartEventTimerLocked()
 	return err
 }
 
@@ -189,9 +203,10 @@ func (tpdo *TPDO) SendAsync() {
 // Start relevant timers & sybscribe to SYNC messages
 func (tpdo *TPDO) Start() {
 	tpdo.mu.Lock()
-	if tpdo.transmissionType < TransmissionTypeSyncEventLo && tpdo.sync != nil && tpdo.syncCh == nil {
+	// All transmission types except event driven (254) are sent on SYNC
+	if tpdo.transmissionType != TransmissionTypeSyncEventLo && tpdo.sync != nil && tpdo.syncCh == nil {
 		tpdo.syncCh = tpdo.sync.Subscribe()
-		go tpdo.syncHandler()
+		go tpdo.syncHandler(tpdo.syncCh)
 	}
 	tpdo.mu.Unlock()
 
@@ -229,8 +244,15 @@ func (tpdo *TPDO) OnStateChange(state uint8) {
 func (tpdo *TPDO) restartEventTimer() {
 	tpdo.mu.Lock()
 	defer tpdo.mu.Unlock()
+	tpdo.restartEventTimerLocked()
+}
 
-	if tpdo.timeEvent == 0 || !tpdo.isOperational {
+// Caller must hold tpdo.mu
+func (tpdo *TPDO) restartEventTimerLocked() {
+	// Per CiA 301 the event timer only drives transmission
+	// for event-driven transmission types (254 / 255)
+	if tpdo.timeEvent == 0 || !tpdo.isOperational ||
+		tpdo.transmissionType < TransmissionTypeSyncEventLo {
 		return
 	}
 
