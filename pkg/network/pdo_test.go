@@ -7,6 +7,7 @@ import (
 
 	canopen "github.com/samsamfire/gocanopen/v2"
 	"github.com/samsamfire/gocanopen/v2/pkg/config"
+	"github.com/samsamfire/gocanopen/v2/pkg/nmt"
 	"github.com/samsamfire/gocanopen/v2/pkg/pdo"
 	"github.com/stretchr/testify/assert"
 )
@@ -647,5 +648,92 @@ func TestTPDO(t *testing.T) {
 		// And also sent on event timer expiry (300ms after the SYNC send)
 		time.Sleep(450 * time.Millisecond)
 		assert.GreaterOrEqual(t, collector.Count(canId), 2)
+	})
+
+	t.Run("no tpdo outside of operational", func(t *testing.T) {
+		// Any SYNC production would trigger transmissions of its own
+		err = c.ProducerDisableSYNC()
+		assert.Nil(t, err)
+		err = c.WriteCommunicationPeriod(0)
+		assert.Nil(t, err)
+
+		waitForState := func(state uint8) {
+			assert.Eventually(t, func() bool {
+				return local.NMT.GetInternalState() == state
+			}, 1*time.Second, 20*time.Millisecond)
+		}
+
+		// Event driven, so that only the application triggers a transmission
+		c.DisablePDO(tpdo1)
+		err = c.WriteConfigurationPDO(tpdo1,
+			config.PDOConfigurationParameter{
+				CanId:            uint16(canId),
+				TransmissionType: pdo.TransmissionTypeSyncEventLo,
+				InhibitTime:      0,
+				EventTimer:       0,
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(tpdo1)
+		assert.Nil(t, err)
+
+		// Operational, the application is allowed to trigger a transmission
+		waitForState(nmt.StateOperational)
+		time.Sleep(50 * time.Millisecond)
+		collector.Clear()
+		local.TPDOs[0].SendAsync()
+		time.Sleep(100 * time.Millisecond)
+		assert.Equal(t, 1, collector.Count(canId))
+
+		// Pre-operational, PDOs are not allowed on the bus anymore
+		err = otherNet.Command(NodeIdTest, nmt.CommandEnterPreOperational)
+		assert.Nil(t, err)
+		waitForState(nmt.StatePreOperational)
+		collector.Clear()
+		local.TPDOs[0].SendAsync()
+		time.Sleep(100 * time.Millisecond)
+		assert.Equal(t, 0, collector.Count(canId))
+
+		// Same for a synchronous TPDO receiving a SYNC in pre-operational
+		c.DisablePDO(tpdo1)
+		err = c.WriteConfigurationPDO(tpdo1,
+			config.PDOConfigurationParameter{
+				CanId:            uint16(canId),
+				TransmissionType: 1, // Sync every cycle
+				Mappings: []config.PDOMappingParameter{
+					{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				},
+			})
+		assert.Nil(t, err)
+		err = c.EnablePDO(tpdo1)
+		assert.Nil(t, err)
+		collector.Clear()
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0})
+		assert.Nil(t, err)
+		time.Sleep(100 * time.Millisecond)
+		assert.Equal(t, 0, collector.Count(canId))
+
+		// Stopped, still nothing
+		err = otherNet.Command(NodeIdTest, nmt.CommandEnterStopped)
+		assert.Nil(t, err)
+		waitForState(nmt.StateStopped)
+		collector.Clear()
+		local.TPDOs[0].SendAsync()
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0})
+		assert.Nil(t, err)
+		time.Sleep(100 * time.Millisecond)
+		assert.Equal(t, 0, collector.Count(canId))
+
+		// Back to operational, transmissions resume
+		err = otherNet.Command(NodeIdTest, nmt.CommandEnterOperational)
+		assert.Nil(t, err)
+		waitForState(nmt.StateOperational)
+		collector.Clear()
+		err = otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0})
+		assert.Nil(t, err)
+		time.Sleep(100 * time.Millisecond)
+		assert.Equal(t, 1, collector.Count(canId))
 	})
 }

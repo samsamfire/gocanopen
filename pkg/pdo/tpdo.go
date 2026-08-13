@@ -139,7 +139,7 @@ func (tpdo *TPDO) send() error {
 	defer tpdo.mu.Unlock()
 
 	pdo := tpdo.pdo
-	if !pdo.Valid {
+	if !pdo.Valid || !tpdo.isOperational {
 		return nil
 	}
 
