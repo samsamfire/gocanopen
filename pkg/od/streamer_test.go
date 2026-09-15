@@ -39,3 +39,24 @@ func TestStreamerCopy(t *testing.T) {
 	assert.Nil(t, err)
 	assert.EqualValues(t, 1, n)
 }
+
+func TestStreamerResetData(t *testing.T) {
+	od := Default()
+	entry := od.Index(0x1017)
+	assert.NotNil(t, entry)
+	streamer, err := NewStreamer(entry, 0, true)
+	assert.Nil(t, err)
+	assert.EqualValues(t, 2, streamer.DataLength)
+
+	// DataLength describes the same buffer as Data, so resetting one
+	// should never leave a stale length behind
+	streamer.ResetData(1, 1)
+	assert.EqualValues(t, 1, len(streamer.Data))
+	assert.EqualValues(t, 1, streamer.DataOffset)
+	assert.EqualValues(t, 1, streamer.DataLength)
+
+	streamer.ResetData(0, 0xFF)
+	assert.EqualValues(t, 0, len(streamer.Data))
+	assert.EqualValues(t, 0xFF, streamer.DataOffset)
+	assert.EqualValues(t, 0, streamer.DataLength)
+}

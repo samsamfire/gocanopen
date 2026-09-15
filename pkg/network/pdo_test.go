@@ -737,3 +737,63 @@ func TestTPDO(t *testing.T) {
 		assert.Equal(t, 1, collector.Count(canId))
 	})
 }
+
+// A PDO can be mapped with CiA-301 dummy entries used as padding.
+// Regression test : the streamer of a previously cleared mapping used to
+// keep a stale data length, which made the write of the number of mapped
+// objects fail with an "object cannot be mapped" abort.
+func TestTPDODummyMapping(t *testing.T) {
+	net := CreateNetworkTest()
+	otherNet := CreateNetworkEmptyTest()
+	defer net.Disconnect()
+	defer otherNet.Disconnect()
+
+	local, err := net.Local(NodeIdTest)
+	assert.Nil(t, err)
+
+	c := local.Configurator()
+	assert.Nil(t, c.ProducerDisableSYNC())
+	assert.Nil(t, c.WriteCommunicationPeriod(0))
+
+	tpdo1 := pdo.MaxRpdoNumber + 1
+	canId := uint32(0x180 + int(NodeIdTest))
+
+	collector := &FrameCollector{}
+	_, err = otherNet.Subscribe(canId, 0x7FF, false, collector)
+	assert.Nil(t, err)
+
+	assert.Nil(t, local.WriteAnyExact("UNSIGNED8 value", 0, uint8(0x42)))
+
+	c.DisablePDO(tpdo1)
+	// Clear first, so that every mapping slot starts empty
+	assert.Nil(t, c.ClearMappings(tpdo1))
+	err = c.WriteConfigurationPDO(tpdo1,
+		config.PDOConfigurationParameter{
+			CanId:            uint16(canId),
+			TransmissionType: 1, // Sync every cycle
+			Mappings: []config.PDOMappingParameter{
+				{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				// Dummy entries (UNSIGNED8 & UNSIGNED16) used as padding
+				{Index: 0x0005, Subindex: 0, LengthBits: 8},
+				{Index: 0x0006, Subindex: 0, LengthBits: 16},
+			},
+		})
+	assert.Nil(t, err)
+	assert.Nil(t, c.EnablePDO(tpdo1))
+
+	time.Sleep(100 * time.Millisecond)
+	collector.Clear()
+
+	// Send SYNC
+	assert.Nil(t, otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0}))
+	time.Sleep(100 * time.Millisecond)
+
+	frames := collector.GetFrames(canId)
+	assert.Len(t, frames, 1)
+	if len(frames) > 0 {
+		// 8 + 8 + 16 bits, only the first byte is a real object
+		assert.EqualValues(t, 4, frames[0].DLC)
+		assert.EqualValues(t, 0x42, frames[0].Data[0])
+		assert.EqualValues(t, [3]byte{}, [3]byte(frames[0].Data[1:4]))
+	}
+}
