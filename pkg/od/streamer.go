@@ -95,6 +95,7 @@ func (s *Streamer) HasAttribute(attribute uint8) bool {
 func (s *Streamer) ResetData(size uint32, offset uint32) {
 	s.Data = make([]byte, size)
 	s.DataOffset = offset
+	s.DataLength = size
 }
 
 func (s *Streamer) SetStream(stream Stream) {
