@@ -123,12 +123,12 @@ func ReadEntryReader(stream *Stream, data []byte) (uint16, error) {
 		stream.DataOffset = 0
 		return 0, ErrDevIncompat
 	}
-	// If first read, go back to initial point
-	if stream.DataOffset == 0 {
-		_, err := reader.Seek(0, io.SeekStart)
-		if err != nil {
-			return 0, ErrDevIncompat
-		}
+	// Synchronizing the reader with the actual stream offset. This is necessary
+	// if DataOffset is changed between calls for example moving backwards
+	// after a block transfer retry.
+	_, err := reader.Seek(int64(stream.DataOffset), io.SeekStart)
+	if err != nil {
+		return 0, ErrDevIncompat
 	}
 	// Read len(data) bytes
 	countReadInt, err := io.ReadFull(reader, data)
@@ -138,6 +138,7 @@ func ReadEntryReader(stream *Stream, data []byte) (uint16, error) {
 		stream.DataOffset += uint32(countReadInt)
 		return uint16(countReadInt), ErrPartial
 	case io.EOF, io.ErrUnexpectedEOF:
+		stream.DataOffset += uint32(countReadInt)
 		return uint16(countReadInt), nil
 	default:
 		return uint16(countReadInt), ErrDevIncompat
