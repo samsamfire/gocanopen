@@ -1226,7 +1226,7 @@ func NewSDOClient(
 	c.fifo = fifo.NewFifo(DefaultClientBufferSize + 2)
 	c.localBuffer = make([]byte, DefaultClientBufferSize+2)
 	c.SetTimeout(DefaultClientTimeout)
-	c.SetTimeoutBlockTransfer(DefaultClientTimeout)
+	c.SetTimeoutBlockTransfer(DefaultClientBlockTransferTimeout)
 	c.SetBlockMaxSize(BlockMaxSize)
 	c.SetProcessingPeriod(DefaultClientProcessPeriod)
 	rw := &sdoRawReadWriter{
