@@ -19,6 +19,8 @@ const (
 	DefaultClientTimeout       = 1_000
 	DefaultClientProcessPeriod = 10 * time.Millisecond
 	DefaultClientBufferSize    = 1_000
+	// Should be less than the the standard sdo client & server timeout
+	DefaultClientBlockTransferTimeout = 700
 
 	DefaultServerTimeout          = 1_000
 	ClientProtocolSwitchThreshold = 21
