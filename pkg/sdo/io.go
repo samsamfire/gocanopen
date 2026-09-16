@@ -59,9 +59,13 @@ func (client *SDOClient) NewRawWriter(nodeId uint8, index uint16, subindex uint8
 func (rw *sdoRawReadWriter) Read(b []byte) (n int, err error) {
 	client := rw.client
 	n = 0
+	last := time.Now()
 
 	for {
-		ret, err := client.upload(uint32(DefaultClientProcessPeriod.Microseconds()), false, nil, nil)
+		elapsed := time.Since(last)
+		last = time.Now()
+
+		ret, err := client.upload(uint32(elapsed.Microseconds()), false, nil, nil)
 		switch {
 		case err != nil:
 			return n, err
@@ -121,9 +125,13 @@ func (rw *sdoRawReadWriter) Write(b []byte) (n int, err error) {
 	if n < len(b) {
 		bufferPartial = true
 	}
+	last := time.Now()
 	for {
+		elapsed := time.Since(last)
+		last = time.Now()
+
 		ret, err := client.downloadMain(
-			uint32(DefaultClientProcessPeriod.Microseconds()),
+			uint32(elapsed.Microseconds()),
 			false,
 			bufferPartial,
 			&nUint32,
