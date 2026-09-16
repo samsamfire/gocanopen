@@ -60,54 +60,51 @@ func (s *SDOServer) rxUploadSubBlock(rx SDOMessage) error {
 		"raw", rx.raw,
 	)
 
-	// Check block size
-	s.blockSize = rx.raw[2]
-	if s.blockSize < 1 || s.blockSize > BlockMaxSize {
+	// Check block size requested for the next sub-block
+	blockSize := rx.raw[2]
+	if blockSize < 1 || blockSize > BlockMaxSize {
 		return AbortBlockSize
 	}
 
-	// If server acknowledges more than what was sent, error straight away
+	// If client acknowledges more than what was sent, error straight away
 	if ackseq > s.blockSequenceNb {
-		s.logger.Debug("[RX] server acked more than sent, will abort")
+		s.logger.Debug("[RX] client acked more than sent, will abort")
 		return AbortCmd
 	}
 
 	// Check client acknowledged all packets sent
 	if ackseq < s.blockSequenceNb {
-		// We go back to the last acknowledged packet
+		// We go back to the last acknowledged packet.
+		// Only the segments sent during the last sub-block can be un-acknowledged,
+		// i.e. segments ackseq+1 up to blockSequenceNb. All of them carry
+		// BlockSeqSize bytes, except potentially the last one.
+		nbFailed := uint32(s.blockSequenceNb-ackseq)*BlockSeqSize - uint32(s.blockNoData)
 		// Because some data might still be in buffer, we must first remove it
-		nbFailed := uint32(s.blockSize-ackseq)*BlockSeqSize - uint32(s.blockNoData)
 		nbPending := uint32(s.buf.Len())
 		nbBytes := nbFailed + nbPending
-		s.sizeTransferred -= uint32(nbFailed)
-		s.logger.Debug("server acked less than sent, will rewind & retransmit",
+		s.sizeTransferred -= nbFailed
+		s.logger.Debug("client acked less than sent, will rewind & retransmit",
 			"nBytes", nbBytes,
 			"nbFailed", nbFailed,
 			"nbPending", nbPending,
 		)
-		s.streamer.DataOffset -= (nbBytes)
+		s.streamer.DataOffset -= nbBytes
 		s.buf.Reset()
 
 		// Refill buffer with previous data without re-calculating CRC (already calculated before)
 		// This needs to be the exact size to not cause CRC errors
-		err := s.readObjectDictionary(nbBytes, int(nbBytes), false)
+		err := s.readObjectDictionaryExact(nbBytes)
 		if err != nil {
 			return err
 		}
+	}
 
-		// Refill buffer for next block and substract already added data in buffer
-		nbToRefill := max(0, uint32(s.blockSize)*BlockSeqSize-nbBytes)
-		err = s.readObjectDictionary(nbToRefill, -1, true)
-		if err != nil {
-			return err
-		}
+	s.blockSize = blockSize
 
-	} else {
-		// Refill buffer for next block
-		err := s.readObjectDictionary(uint32(s.blockSize)*BlockSeqSize, -1, true)
-		if err != nil {
-			return err
-		}
+	// Refill buffer for next block (can be no-op if already enough data)
+	err := s.readObjectDictionary(uint32(s.blockSize)*BlockSeqSize, true)
+	if err != nil {
+		return err
 	}
 
 	// No more data to be read
