@@ -232,6 +232,9 @@ func WriteEntryDefault(stream *Stream, data []byte) (uint16, error) {
 	count := len(data)
 	var err error
 
+	// Offset of this chunk, DataOffset is updated for the next call
+	offset := stream.DataOffset
+
 	// If writing already started or not enough space in buffer, read
 	// in several calls
 	if stream.DataOffset > 0 || dataLenToCopy > count {
@@ -252,11 +255,11 @@ func WriteEntryDefault(stream *Stream, data []byte) (uint16, error) {
 
 	// OD variable is smaller than the provided buffer
 	if dataLenToCopy < count ||
-		stream.DataOffset+uint32(dataLenToCopy) > uint32(len(stream.Data)) {
+		offset+uint32(dataLenToCopy) > uint32(len(stream.Data)) {
 		return 0, ErrDataLong
 	}
 
-	copy(stream.Data[stream.DataOffset:stream.DataOffset+uint32(dataLenToCopy)], data)
+	copy(stream.Data[offset:offset+uint32(dataLenToCopy)], data)
 	return uint16(dataLenToCopy), err
 }
 
