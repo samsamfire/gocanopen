@@ -191,6 +191,9 @@ func ReadEntryDefault(stream *Stream, data []byte) (uint16, error) {
 	count := len(data)
 	var err error
 
+	// Offset of this chunk, DataOffset is updated for the next call
+	offset := stream.DataOffset
+
 	// If reading already started or not enough space in buffer, read
 	// in several calls
 	if stream.DataOffset > 0 || dataLenToCopy > count {
@@ -207,7 +210,7 @@ func ReadEntryDefault(stream *Stream, data []byte) (uint16, error) {
 			stream.DataOffset = 0
 		}
 	}
-	copy(data, stream.Data[stream.DataOffset:stream.DataOffset+uint32(dataLenToCopy)])
+	copy(data, stream.Data[offset:offset+uint32(dataLenToCopy)])
 	return uint16(dataLenToCopy), err
 
 }
