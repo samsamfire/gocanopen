@@ -237,6 +237,59 @@ func TestSDODownloadBigVariable(t *testing.T) {
 	assert.Nil(t, err)
 	assert.True(t, bytes.Equal(expected, streamer.Data), "entry does not contain the downloaded data")
 }
+// dropOnceBus drops the first received frame matching match, to emulate
+// a single frame being lost on the bus
+type dropOnceBus struct {
+	canopen.Bus
+	match   func(frame canopen.Frame) bool
+	dropped atomic.Bool
+}
+
+type dropOnceListener struct {
+	bus      *dropOnceBus
+	upstream canopen.FrameListener
+}
+
+func (l *dropOnceListener) Handle(frame canopen.Frame) {
+	if l.bus.match(frame) && l.bus.dropped.CompareAndSwap(false, true) {
+		return
+	}
+	l.upstream.Handle(frame)
+}
+
+func (b *dropOnceBus) Subscribe(cb canopen.FrameListener) error {
+	return b.Bus.Subscribe(&dropOnceListener{bus: b, upstream: cb})
+}
+
+func createDropOnceNetworkTest(match func(frame canopen.Frame) bool) *Network {
+	canBus, _ := NewBus("virtual", "localhost:18888", 0)
+	bus := canBus.(*virtual.Bus)
+	bus.SetReceiveOwn(true)
+	network := NewNetwork(&dropOnceBus{Bus: bus, match: match})
+	if err := network.Connect(); err != nil {
+		panic(err)
+	}
+	return &network
+}
+
+// A block upload has to survive a lost segment, also when the entry is small
+// enough to be read in one go : the server rewinds its stream and re-transmits
+// the un-acknowledged segments.
+func TestSDOBlockUploadSmallEntryWithFrameLoss(t *testing.T) {
+	network := CreateNetworkTest()
+	defer network.Disconnect()
+	// Lose the second segment of the first sub-block
+	client := createDropOnceNetworkTest(func(frame canopen.Frame) bool {
+		return frame.ID == uint32(sdo.ServerServiceId)+uint32(NodeIdTest) && frame.Data[0] == 2
+	})
+	defer client.Disconnect()
+
+	// 0x2009 is 40 bytes, it fits inside the server buffer
+	received, err := client.ReadAll(NodeIdTest, 0x2009, 0)
+	assert.Nil(t, err)
+	assert.Equal(t, blockTransferString, string(received))
+}
+
 // An expedited download into a string entry : the null terminators that the
 // server adds should not be taken from the received frame
 func TestSDOExpeditedDownloadString(t *testing.T) {
