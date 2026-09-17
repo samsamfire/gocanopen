@@ -31,7 +31,10 @@ func (s *SDOServer) txUploadInitiate() {
 		"subindex", fmt.Sprintf("x%x", s.subindex),
 		"raw", s.txBuffer.Data,
 	)
-	s.txBuffer.Data[0] = byte(s.sizeIndicated&0b1) + 0x40
+	s.txBuffer.Data[0] = 0x40
+	if s.sizeIndicated > 0 {
+		s.txBuffer.Data[0] |= sizeIndicated
+	}
 	s.txBuffer.Data[1] = byte(s.index)
 	s.txBuffer.Data[2] = byte(s.index >> 8)
 	s.txBuffer.Data[3] = s.subindex
