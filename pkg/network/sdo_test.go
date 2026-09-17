@@ -2,9 +2,12 @@ package network
 
 import (
 	"io"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	canopen "github.com/samsamfire/gocanopen/v2"
+	"github.com/samsamfire/gocanopen/v2/pkg/can/virtual"
 	"github.com/samsamfire/gocanopen/v2/pkg/sdo"
 	"github.com/stretchr/testify/assert"
 )
@@ -135,5 +138,59 @@ func BenchmarkNodeStreamerWriter(b *testing.B) {
 		value, err := local.ReadUint(0x2007, 0)
 		assert.Nil(b, err)
 		assert.NotEqual(b, 0, value)
+	}
+}
+
+// lossyBus drops one frame every dropOneIn received frames, to emulate a real
+// CAN bus losing frames on a busy network.
+type lossyBus struct {
+	canopen.Bus
+	dropOneIn int32
+	counter   int32
+}
+
+type lossyListener struct {
+	bus      *lossyBus
+	upstream canopen.FrameListener
+}
+
+func (l *lossyListener) Handle(frame canopen.Frame) {
+	if atomic.AddInt32(&l.bus.counter, 1)%l.bus.dropOneIn == 0 {
+		return
+	}
+	l.upstream.Handle(frame)
+}
+
+func (b *lossyBus) Subscribe(cb canopen.FrameListener) error {
+	return b.Bus.Subscribe(&lossyListener{bus: b, upstream: cb})
+}
+
+func createLossyNetworkTest(dropOneIn int32) *Network {
+	canBus, _ := NewBus("virtual", "localhost:18888", 0)
+	bus := canBus.(*virtual.Bus)
+	bus.SetReceiveOwn(true)
+	network := NewNetwork(&lossyBus{Bus: bus, dropOneIn: dropOneIn})
+	if err := network.Connect(); err != nil {
+		panic(err)
+	}
+	return &network
+}
+
+// A block upload has to survive frames being lost on the bus : the server
+// rewinds its stream and re-transmits the un-acknowledged segments.
+func TestSDOBlockUploadWithFrameLoss(t *testing.T) {
+	network := CreateNetworkTest()
+	defer network.Disconnect()
+	client := createLossyNetworkTest(100)
+	defer client.Disconnect()
+
+	reference, err := network.ReadAll(NodeIdTest, 0x1021, 0)
+	assert.Nil(t, err)
+	assert.NotEmpty(t, reference)
+
+	for i := range 5 {
+		received, err := client.ReadAll(NodeIdTest, 0x1021, 0)
+		assert.Nil(t, err, "transfer %v failed", i)
+		assert.Equal(t, reference, received, "transfer %v returned corrupted data", i)
 	}
 }
