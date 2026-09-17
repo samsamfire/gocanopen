@@ -62,6 +62,24 @@ type SDOClient struct {
 	rxCancel                   func()
 }
 
+// Close releases the bus subscription taken by the client.
+// The client stays usable, it subscribes again on the next transfer.
+func (c *SDOClient) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.rxCancel != nil {
+		c.rxCancel()
+		c.rxCancel = nil
+	}
+	// Forget the server, otherwise the next transfer would take the "same server"
+	// shortcut of setupServer and leave the client without any subscription
+	c.cobIdClientToServer = 0
+	c.cobIdServerToClient = 0
+	c.valid = false
+	return nil
+}
+
 // Handle [SDOClient] related RX CAN frames
 func (c *SDOClient) Handle(frame canopen.Frame) {
 	c.mu.Lock()
