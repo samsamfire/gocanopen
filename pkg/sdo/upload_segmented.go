@@ -44,13 +44,15 @@ func (s *SDOServer) txUploadInitiate() {
 
 func (s *SDOServer) txUploadSegment() error {
 
-	unread := s.buf.Len()
-
 	// Refill buffer if needed
 	err := s.readObjectDictionary(BlockSeqSize, false)
 	if err != nil {
 		return err
 	}
+
+	// Buffer is read after the refill, otherwise a segment can be considered
+	// as being the last one because of a buffer boundary
+	unread := s.buf.Len()
 
 	// Add toggle bit
 	s.txBuffer.Data[0] = s.toggle
