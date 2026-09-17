@@ -1,13 +1,16 @@
 package network
 
 import (
+	"bytes"
 	"io"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	canopen "github.com/samsamfire/gocanopen/v2"
 	"github.com/samsamfire/gocanopen/v2/pkg/can/virtual"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
 	"github.com/samsamfire/gocanopen/v2/pkg/sdo"
 	"github.com/stretchr/testify/assert"
 )
@@ -216,6 +219,21 @@ func createNetworkBigEntriesTest(t *testing.T) *Network {
 	assert.Nil(t, err)
 	return network
 }
+
+// A segmented upload should not stop at the server buffer boundary
+func TestSDOUploadBigReader(t *testing.T) {
+	network := createNetworkBigEntriesTest(t)
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	defer network.Disconnect()
+
+	buffer := make([]byte, 4000)
+	n, err := network2.ReadRaw(NodeIdTest, 0x3001, 0, buffer)
+	assert.Nil(t, err)
+	assert.Equal(t, 3000, n)
+	assert.True(t, bytes.Equal([]byte(strings.Repeat("b", 3000)), buffer[:n]), "uploaded data does not match entry")
+}
+
 // A download into an entry that is bigger than the server buffer, the server
 // has to write it to the object dictionary in several chunks
 func TestSDODownloadBigVariable(t *testing.T) {
@@ -237,6 +255,7 @@ func TestSDODownloadBigVariable(t *testing.T) {
 	assert.Nil(t, err)
 	assert.True(t, bytes.Equal(expected, streamer.Data), "entry does not contain the downloaded data")
 }
+
 // dropOnceBus drops the first received frame matching match, to emulate
 // a single frame being lost on the bus
 type dropOnceBus struct {
