@@ -1,13 +1,16 @@
 package network
 
 import (
+	"bytes"
 	"io"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	canopen "github.com/samsamfire/gocanopen/v2"
 	"github.com/samsamfire/gocanopen/v2/pkg/can/virtual"
+	"github.com/samsamfire/gocanopen/v2/pkg/od"
 	"github.com/samsamfire/gocanopen/v2/pkg/sdo"
 	"github.com/stretchr/testify/assert"
 )
