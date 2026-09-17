@@ -44,7 +44,7 @@ func (s *SDOServer) txUploadSegment() error {
 	unread := s.buf.Len()
 
 	// Refill buffer if needed
-	err := s.readObjectDictionary(BlockSeqSize, -1, false)
+	err := s.readObjectDictionary(BlockSeqSize, false)
 	if err != nil {
 		return err
 	}
