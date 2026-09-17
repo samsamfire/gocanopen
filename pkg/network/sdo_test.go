@@ -219,6 +219,7 @@ func createNetworkBigEntriesTest(t *testing.T) *Network {
 	assert.Nil(t, err)
 	return network
 }
+
 // A segmented upload should not stop at the server buffer boundary
 func TestSDOUploadBigReader(t *testing.T) {
 	network := createNetworkBigEntriesTest(t)
