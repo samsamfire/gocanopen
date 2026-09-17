@@ -45,6 +45,12 @@ func (s *SDOServer) rxDownloadInitiate(rx SDOMessage) error {
 		"raw", s.txBuffer.Data,
 	)
 	sizeInOd := s.streamer.DataLength
+	// An expedited transfer carries at most 4 bytes of data, but up to two
+	// null terminators can be added when writing to a string entry.
+	// Those are taken from this zero initialized buffer and never from the frame.
+	var data [6]byte
+	copy(data[:], rx.raw[4:8])
+
 	nbToWrite := 4
 	// Determine number of bytes to write, depending on size flag
 	// either undetermined or 4-n
@@ -72,7 +78,7 @@ func (s *SDOServer) rxDownloadInitiate(rx SDOMessage) error {
 			return AbortDataShort
 		}
 	}
-	_, err := s.streamer.Write(rx.raw[4 : 4+nbToWrite])
+	_, err := s.streamer.Write(data[:nbToWrite])
 	if err != nil {
 		return ConvertOdToSdoAbort(err.(od.ODR))
 	}
