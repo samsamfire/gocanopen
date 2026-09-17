@@ -88,7 +88,10 @@ func (s *SDOServer) rxUploadSubBlock(rx SDOMessage) error {
 			"nbFailed", nbFailed,
 			"nbPending", nbPending,
 		)
-		s.streamer.DataOffset -= nbBytes
+		// Rewind to the last acknowledged byte. DataOffset is not decremented
+		// because it is back to 0 once an entry has been read entirely,
+		// e.g. for an entry small enough to be read in one go.
+		s.streamer.DataOffset = s.sizeTransferred
 		s.buf.Reset()
 
 		// Refill buffer with previous data without re-calculating CRC (already calculated before)
