@@ -194,3 +194,38 @@ func TestSDOBlockUploadWithFrameLoss(t *testing.T) {
 		assert.Equal(t, reference, received, "transfer %v returned corrupted data", i)
 	}
 }
+
+// Create a network with a local node whose object dictionary contains entries
+// that are bigger than the sdo server internal buffers
+func createNetworkBigEntriesTest(t *testing.T) *Network {
+	t.Helper()
+	odict := od.Default()
+	// Bigger than the server intermediate buffer
+	_, err := odict.AddVariableType(0x3000, "big variable", od.OCTET_STRING, od.AttributeSdoRw, strings.Repeat("a", 1500))
+	assert.Nil(t, err)
+	odict.AddReader(0x3001, "big reader", bytes.NewReader([]byte(strings.Repeat("b", 3000))))
+	// Even size, too big for an expedited transfer
+	_, err = odict.AddVariableType(0x3002, "medium variable", od.OCTET_STRING, od.AttributeSdoRw, "abcdefgh")
+	assert.Nil(t, err)
+	// Bigger than the server internal buffer
+	_, err = odict.AddVariableType(0x3003, "huge variable", od.OCTET_STRING, od.AttributeSdoRw, strings.Repeat("c", 3000))
+	assert.Nil(t, err)
+
+	network := CreateNetworkEmptyTest()
+	_, err = network.CreateLocalNode(NodeIdTest, odict)
+	assert.Nil(t, err)
+	return network
+}
+// An upload of an entry that is bigger than the server intermediate buffer
+func TestSDOUploadBigVariable(t *testing.T) {
+	network := createNetworkBigEntriesTest(t)
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	defer network.Disconnect()
+
+	buffer := make([]byte, 2000)
+	n, err := network2.ReadRaw(NodeIdTest, 0x3000, 0, buffer)
+	assert.Nil(t, err)
+	assert.Equal(t, 1500, n)
+	assert.True(t, bytes.Equal([]byte(strings.Repeat("a", 1500)), buffer[:n]), "uploaded data does not match entry")
+}
