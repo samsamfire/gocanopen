@@ -216,6 +216,27 @@ func createNetworkBigEntriesTest(t *testing.T) *Network {
 	assert.Nil(t, err)
 	return network
 }
+// A download into an entry that is bigger than the server buffer, the server
+// has to write it to the object dictionary in several chunks
+func TestSDODownloadBigVariable(t *testing.T) {
+	network := createNetworkBigEntriesTest(t)
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	defer network.Disconnect()
+
+	expected := []byte(strings.Repeat("d", 3000))
+	w, err := network2.NewRawWriter(NodeIdTest, 0x3003, 0, true, uint32(len(expected)))
+	assert.Nil(t, err)
+	n, err := w.Write(expected)
+	assert.Nil(t, err)
+	assert.Equal(t, len(expected), n)
+
+	local, err := network.Local(NodeIdTest)
+	assert.Nil(t, err)
+	streamer, err := local.GetOD().Streamer(0x3003, 0, true)
+	assert.Nil(t, err)
+	assert.True(t, bytes.Equal(expected, streamer.Data), "entry does not contain the downloaded data")
+}
 // An expedited download into a string entry : the null terminators that the
 // server adds should not be taken from the received frame
 func TestSDOExpeditedDownloadString(t *testing.T) {
