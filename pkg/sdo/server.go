@@ -262,31 +262,12 @@ func (s *SDOServer) writeObjectDictionary(crcOperation uint, crcClient crc.CRC16
 	return nil
 }
 
-// Read from OD into buffer & calculate CRC if needed
-// Depending on the transfer type, this might have to be called multiple times
-// countMin : threshold to refill data in buffer
-// countExact : number of bytes to read if != -1 exactly
-func (s *SDOServer) readObjectDictionary(countMin uint32, countExact int, calculateCRC bool) error {
-
-	// If we already have at least coutMin unread in the buffer
-	// We don't need to refill
-	if s.finished || (uint32(s.buf.Len()) >= countMin && countExact == -1) {
-		return nil
-	}
-
-	// Read from OD into an intermediate buffer, we are limited by the remaining space inside the buffer
-	// countExact can be used to control precisely how much bytes are read.
-	nbToRead := 0
-	if countExact == -1 {
-		nbToRead = min(len(s.intermediateBuf), s.buf.Cap()-s.buf.Len())
-	} else {
-		nbToRead = min(len(s.intermediateBuf), countExact)
-	}
+// Read a chunk of up to nbToRead bytes from the OD entry into the buffer.
+// stopAtNull limits the chunk to the first null terminator for string entries,
+// which is not wanted when restoring data that was already transferred.
+func (s *SDOServer) readChunk(nbToRead int, calculateCRC bool, stopAtNull bool) (int, error) {
 
 	countRd, err := s.streamer.Read(s.intermediateBuf[:nbToRead])
-	if countExact != -1 && countExact != countRd {
-		return AbortOutOfMem
-	}
 
 	if err != nil && err != od.ErrPartial {
 		s.state = stateAbort
@@ -295,11 +276,11 @@ func (s *SDOServer) readObjectDictionary(countMin uint32, countExact int, calcul
 			s.logger.Warn("unexpected error in server when reading", "err", err)
 			odr = od.ErrGeneral
 		}
-		return ConvertOdToSdoAbort(odr)
+		return 0, ConvertOdToSdoAbort(odr)
 	}
 
 	// Stop sending at null termination if string
-	if countRd > 0 && s.streamer.HasAttribute(od.AttributeStr) {
+	if stopAtNull && countRd > 0 && s.streamer.HasAttribute(od.AttributeStr) {
 		countStr := int(s.streamer.DataLength)
 		for i, v := range s.intermediateBuf {
 			if v == 0 {
@@ -317,6 +298,7 @@ func (s *SDOServer) readObjectDictionary(countMin uint32, countExact int, calcul
 			s.streamer.DataLength = s.sizeTransferred + uint32(countRd)
 		}
 	}
+
 	countWritten, err2 := s.buf.Write(s.intermediateBuf[:countRd])
 	if countWritten != countRd || err2 != nil {
 		s.logger.Error("failed to write to buffer the same amount as read",
@@ -324,24 +306,75 @@ func (s *SDOServer) readObjectDictionary(countMin uint32, countExact int, calcul
 			"countRead", countRd,
 			"err", err2,
 		)
-		return AbortDeviceIncompat
+		return 0, AbortDeviceIncompat
 	}
 
-	if err == od.ErrPartial {
-		s.finished = false
-		if uint32(countRd) < countMin {
-			s.state = stateAbort
-			s.errorExtraInfo = fmt.Errorf("buffer unread %v is less than the minimum count %v", s.buf.Len(), countMin)
-			return AbortDeviceIncompat
-		}
-	} else {
-		s.finished = true
-	}
+	s.finished = err != od.ErrPartial
 
 	if s.blockCRCEnabled && calculateCRC {
 		s.blockCRC.Block(s.intermediateBuf[:countRd])
 	}
 
+	return countRd, nil
+}
+
+// Read from OD into buffer & calculate CRC if needed
+// Depending on the transfer type, this might have to be called multiple times
+// countMin : minimum number of bytes that should be available inside the buffer
+func (s *SDOServer) readObjectDictionary(countMin uint32, calculateCRC bool) error {
+
+	// If we already have at least countMin unread in the buffer
+	// We don't need to refill
+	for !s.finished && uint32(s.buf.Len()) < countMin {
+
+		// Read from OD into an intermediate buffer, we are limited by the remaining space inside the buffer
+		nbToRead := min(len(s.intermediateBuf), s.buf.Cap()-s.buf.Len())
+		countRd := 0
+
+		if nbToRead > 0 {
+			var err error
+			countRd, err = s.readChunk(nbToRead, calculateCRC, true)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Nothing was read and the entry is not over : we will never reach countMin
+		if countRd == 0 && !s.finished {
+			s.state = stateAbort
+			s.errorExtraInfo = fmt.Errorf("buffer unread %v is less than the minimum count %v", s.buf.Len(), countMin)
+			return AbortDeviceIncompat
+		}
+	}
+
+	return nil
+}
+
+// Re-read exactly count bytes from the OD into the buffer.
+// This is used when a sub-block has to be re-transmitted : the stream has already
+// been rewound, so the exact same bytes need to be restored inside of the buffer.
+// CRC is never re-calculated here as it was already calculated on the first read.
+func (s *SDOServer) readObjectDictionaryExact(count uint32) error {
+
+	// We have rewound the stream, so there is necessarily data to read again
+	s.finished = false
+
+	for remaining := count; remaining > 0; {
+		// The intermediate buffer can be smaller than what needs to be restored,
+		// in which case we read in several iterations.
+		nbToRead := min(len(s.intermediateBuf), int(remaining))
+
+		countRd, err := s.readChunk(nbToRead, false, false)
+		if err != nil {
+			return err
+		}
+		if countRd != nbToRead {
+			s.state = stateAbort
+			s.errorExtraInfo = fmt.Errorf("re-read %v bytes but expected %v", countRd, nbToRead)
+			return AbortDeviceIncompat
+		}
+		remaining -= uint32(countRd)
+	}
 	return nil
 }
 
@@ -388,7 +421,7 @@ func (server *SDOServer) prepareRx() error {
 	server.finished = false
 
 	// Load data from OD now
-	err := server.readObjectDictionary(BlockSeqSize, -1, false)
+	err := server.readObjectDictionary(BlockSeqSize, false)
 	if err != nil && err != od.ErrPartial {
 		return err
 	}
