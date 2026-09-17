@@ -216,6 +216,22 @@ func createNetworkBigEntriesTest(t *testing.T) *Network {
 	assert.Nil(t, err)
 	return network
 }
+// An expedited download into a string entry : the null terminators that the
+// server adds should not be taken from the received frame
+func TestSDOExpeditedDownloadString(t *testing.T) {
+	network := CreateNetworkTest()
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	defer network.Disconnect()
+
+	// 0x2009 is a 40 byte VISIBLE_STRING, 4 bytes or less are sent expedited
+	err := network2.WriteRaw(NodeIdTest, 0x2009, 0, []byte("abcd"), false)
+	assert.Nil(t, err)
+	data, err := network2.ReadAll(NodeIdTest, 0x2009, 0)
+	assert.Nil(t, err)
+	assert.Equal(t, "abcd", string(data))
+}
+
 // An upload of an entry that is bigger than the server intermediate buffer
 func TestSDOUploadBigVariable(t *testing.T) {
 	network := createNetworkBigEntriesTest(t)
