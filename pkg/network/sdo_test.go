@@ -145,11 +145,24 @@ func BenchmarkNodeStreamerWriter(b *testing.B) {
 }
 
 // lossyBus drops one frame every dropOneIn received frames, to emulate a real
-// CAN bus losing frames on a busy network.
+// CAN bus losing frames on a busy network. Only sub block frames are droppable.
 type lossyBus struct {
 	canopen.Bus
-	dropOneIn int32
-	counter   int32
+	sdoTxCobId uint32
+	dropOneIn  int32
+	counter    atomic.Int32
+}
+
+// Whether the protocol is able to recover from this frame being lost.
+// CiA 301 only defines a retransmission mechanism for SDO sub-block segments
+//
+// The block upload initiate response and end response (both scs 6, so the three
+// upper bits of byte 0 set to 0b110) are not retransmitable
+func (b *lossyBus) recoverable(frame canopen.Frame) bool {
+	if frame.ID != b.sdoTxCobId {
+		return true
+	}
+	return frame.Data[0] != 0x80 && (frame.Data[0]&0xE0) != 0xC0
 }
 
 type lossyListener struct {
@@ -158,7 +171,7 @@ type lossyListener struct {
 }
 
 func (l *lossyListener) Handle(frame canopen.Frame) {
-	if atomic.AddInt32(&l.bus.counter, 1)%l.bus.dropOneIn == 0 {
+	if l.bus.recoverable(frame) && l.bus.counter.Add(1)%l.bus.dropOneIn == 0 {
 		return
 	}
 	l.upstream.Handle(frame)
@@ -168,23 +181,27 @@ func (b *lossyBus) Subscribe(cb canopen.FrameListener) error {
 	return b.Bus.Subscribe(&lossyListener{bus: b, upstream: cb})
 }
 
-func createLossyNetworkTest(dropOneIn int32) *Network {
+func createLossyNetworkTest(nodeId uint8, dropOneIn int32) *Network {
 	canBus, _ := NewBus("virtual", "localhost:18888", 0)
 	bus := canBus.(*virtual.Bus)
 	bus.SetReceiveOwn(true)
-	network := NewNetwork(&lossyBus{Bus: bus, dropOneIn: dropOneIn})
+	network := NewNetwork(&lossyBus{
+		Bus:        bus,
+		sdoTxCobId: uint32(sdo.ServerServiceId) + uint32(nodeId),
+		dropOneIn:  dropOneIn,
+	})
 	if err := network.Connect(); err != nil {
 		panic(err)
 	}
 	return &network
 }
 
-// A block upload has to survive frames being lost on the bus : the server
-// rewinds its stream and re-transmits the un-acknowledged segments.
+// A block upload has to survive sub-block segments being lost on the bus : the
+// server rewinds its stream and re-transmits the un-acknowledged ones.
 func TestSDOBlockUploadWithFrameLoss(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
-	client := createLossyNetworkTest(100)
+	client := createLossyNetworkTest(NodeIdTest, 100)
 	defer client.Disconnect()
 
 	reference, err := network.ReadAll(NodeIdTest, 0x1021, 0)
