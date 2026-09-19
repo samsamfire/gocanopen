@@ -266,3 +266,69 @@ func TestRPDOPartiallyMappedObject(t *testing.T) {
 	assert.Nil(t, err)
 	assert.EqualValues(t, 0xBB, valU8)
 }
+
+// RPDO that carries more bytes than are mapped is processed, the
+// surplus bytes being ignored. Too short frames are discarded.
+func TestRPDOOverlongFrame(t *testing.T) {
+	const rpdoCanId = 0x255
+	emcyCanId := 0x80 + uint32(NodeIdTest)
+
+	net := CreateNetworkTest()
+	otherNet := CreateNetworkEmptyTest()
+	defer net.Disconnect()
+	defer otherNet.Disconnect()
+
+	local, err := net.Local(NodeIdTest)
+	assert.Nil(t, err)
+
+	emcyCollector := &FrameCollector{}
+	_, err = otherNet.Subscribe(emcyCanId, 0x7FF, false, emcyCollector)
+	assert.Nil(t, err)
+
+	c := local.Configurator()
+	assert.Nil(t, c.ProducerDisableSYNC())
+	assert.Nil(t, c.WriteCommunicationPeriod(0))
+	assert.Nil(t, c.DisablePDO(1))
+	err = c.WriteConfigurationPDO(1,
+		config.PDOConfigurationParameter{
+			CanId:            rpdoCanId,
+			TransmissionType: pdo.TransmissionTypeSyncEventHi,
+			Mappings: []config.PDOMappingParameter{
+				{Index: 0x2005, Subindex: 0, LengthBits: 8},
+			},
+		})
+	assert.Nil(t, err)
+	assert.Nil(t, c.EnablePDO(1))
+	time.Sleep(100 * time.Millisecond)
+
+	assert.Nil(t, local.WriteAnyExact("UNSIGNED8 value", 0, uint8(0)))
+	emcyCollector.Clear()
+
+	// A single byte is mapped but the producer pads its frame up to 8 bytes
+	assert.Nil(t, otherNet.Send(canopen.Frame{
+		ID:   rpdoCanId,
+		DLC:  8,
+		Data: [8]byte{0x42, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+	}))
+	time.Sleep(100 * time.Millisecond)
+
+	val, err := local.ReadUint8("UNSIGNED8 value", 0)
+	assert.Nil(t, err)
+	assert.EqualValues(t, 0x42, val)
+
+	// The length error is still reported
+	frames := emcyCollector.GetFrames(emcyCanId)
+	assert.Len(t, frames, 1)
+	if len(frames) > 0 {
+		// ErrPdoLengthExc = 0x8220. Little endian : 20 82
+		assert.EqualValues(t, 0x20, frames[0].Data[0])
+		assert.EqualValues(t, 0x82, frames[0].Data[1])
+	}
+
+	// A frame that is too short is still discarded
+	assert.Nil(t, otherNet.Send(canopen.Frame{ID: rpdoCanId, DLC: 0}))
+	time.Sleep(100 * time.Millisecond)
+	val, err = local.ReadUint8("UNSIGNED8 value", 0)
+	assert.Nil(t, err)
+	assert.EqualValues(t, 0x42, val)
+}
