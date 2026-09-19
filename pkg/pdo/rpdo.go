@@ -124,18 +124,21 @@ func (rpdo *RPDO) Stop() {
 func (rpdo *RPDO) validateFrameLength(dlc uint8) bool {
 	expectedLength := uint8(rpdo.pdo.dataLength)
 
-	if dlc == expectedLength {
-		rpdo.pdo.emcy.Error(false, emergency.EmRPDOWrongLength, emergency.ErrNoError, 0)
+	// Frame is too short, report an error and discard it
+	if dlc < expectedLength {
+		rpdo.pdo.emcy.Error(true, emergency.EmRPDOWrongLength, emergency.ErrPdoLength, rpdo.pdo.dataLength)
+		return false
+	}
+
+	// Frame is too long, report an error but still process it,
+	// the surplus bytes are simply ignored
+	if dlc > expectedLength {
+		rpdo.pdo.emcy.Error(true, emergency.EmRPDOWrongLength, emergency.ErrPdoLengthExc, rpdo.pdo.dataLength)
 		return true
 	}
 
-	errorCode := emergency.ErrPdoLength
-	if dlc > expectedLength {
-		errorCode = emergency.ErrPdoLengthExc
-	}
-
-	rpdo.pdo.emcy.Error(true, emergency.EmRPDOWrongLength, uint16(errorCode), rpdo.pdo.dataLength)
-	return false
+	rpdo.pdo.emcy.Error(false, emergency.EmRPDOWrongLength, emergency.ErrNoError, 0)
+	return true
 }
 
 func (rpdo *RPDO) restartTimeoutTimer() {
