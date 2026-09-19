@@ -65,14 +65,18 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 			if canId == uint32(pdo.predefinedId) {
 				binary.LittleEndian.PutUint32(dataCopy, cobId&CobIdCanIdWithoutNodeIdMask)
 			}
-			if !valid {
-				canId = 0
-			}
+
+			// Cancel previous subscription if any
 			if rpdo.rxCancel != nil {
 				rpdo.rxCancel()
+				rpdo.rxCancel = nil
 			}
-			rxCancel, err := rpdo.bm.Subscribe(canId, 0x7FF, false, rpdo)
-			rpdo.rxCancel = rxCancel
+
+			var err error
+			if valid {
+				rpdo.rxCancel, err = rpdo.bm.Subscribe(canId, 0x7FF, false, rpdo)
+			}
+
 			if valid && err == nil {
 				pdo.Valid = true
 				pdo.configuredId = uint16(canId)
@@ -82,6 +86,7 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 				)
 			} else {
 				pdo.Valid = false
+				pdo.configuredId = 0
 				rpdo.rxData = nil
 				if rpdo.timer != nil {
 					rpdo.timer.Stop()

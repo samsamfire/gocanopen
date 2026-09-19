@@ -80,7 +80,8 @@ func (rpdo *RPDO) Start() error {
 	rpdo.mu.Lock()
 	defer rpdo.mu.Unlock()
 
-	if rpdo.rxCancel == nil {
+	// A disabled PDO has no can id to listen to
+	if rpdo.pdo.Valid && rpdo.rxCancel == nil {
 		rxCancel, err := rpdo.bm.Subscribe(uint32(rpdo.pdo.configuredId), 0x7FF, false, rpdo)
 		rpdo.rxCancel = rxCancel
 		if err != nil {
