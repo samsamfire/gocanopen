@@ -182,16 +182,18 @@ func (rpdo *RPDO) copyDataToOd(data []byte) {
 	for i := 0; i < int(pdo.nbMapped); i++ {
 		streamer := &pdo.streamers[i]
 
-		// Determine the slice of data for this object
-		end := offset + streamer.DataLength
+		// Determine the slice of data for this object, an object can be
+		// mapped partially i.e. mappedLength can be smaller than DataLength
+		mappedLength := streamer.DataOffset
+		end := offset + mappedLength
 		if end > uint32(len(data)) {
 			// Should not happen if dataLength is consistent with nbMapped/MaxPdoLength
 			break
 		}
 
-		mappedLength := streamer.DataOffset
 		streamer.DataOffset = 0
-		if _, err := streamer.Write(data[offset:end]); err != nil {
+		// A partially mapped object can be written partially so not an error
+		if _, err := streamer.Write(data[offset:end]); err != nil && err != od.ErrPartial {
 			rpdo.pdo.logger.Warn("failed to write to OD on RPDO reception",
 				"configured id", rpdo.pdo.configuredId,
 				"error", err,

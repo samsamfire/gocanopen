@@ -148,11 +148,20 @@ func (tpdo *TPDO) send() error {
 
 	for i := range pdo.nbMapped {
 		streamer := &pdo.streamers[i]
+		// An object can be mapped partially i.e. mappedLength can be smaller
+		// than DataLength, read only mapped part in the frame
 		mappedLength := streamer.DataOffset
+		end := totalNbRead + int(mappedLength)
+		if end > len(tpdo.txBuffer.Data) {
+			// Should not happen if dataLength is consistent with nbMapped/MaxPdoLength
+			break
+		}
+
 		streamer.DataOffset = 0
-		_, err = streamer.Read(tpdo.txBuffer.Data[totalNbRead:])
+		_, err = streamer.Read(tpdo.txBuffer.Data[totalNbRead:end])
 		streamer.DataOffset = mappedLength
-		if err != nil {
+		// A partially mapped object can be written partially so not an error
+		if err != nil && err != od.ErrPartial {
 			tpdo.pdo.logger.Warn("failed to read mapped object",
 				"cobId", pdo.configuredId,
 				"subindex", i+1,
@@ -161,7 +170,7 @@ func (tpdo *TPDO) send() error {
 			tpdo.restartEventTimerLocked()
 			return err
 		}
-		totalNbRead += int(mappedLength)
+		totalNbRead = end
 	}
 	tpdo.sendRequestAsyncEvent = false
 	tpdo.timeLastSend = time.Now()
