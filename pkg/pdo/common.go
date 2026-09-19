@@ -29,16 +29,17 @@ const (
 
 // Common to TPDO & RPDO
 type PDOCommon struct {
-	od           *od.ObjectDictionary
-	logger       *slog.Logger
-	emcy         *emergency.EMCY
-	streamers    [od.MaxMappedEntriesPdo]od.Streamer
-	Valid        bool
-	dataLength   uint32
-	nbMapped     uint8
-	IsRPDO       bool
-	predefinedId uint16
-	configuredId uint16
+	od            *od.ObjectDictionary
+	logger        *slog.Logger
+	emcy          *emergency.EMCY
+	streamers     [od.MaxMappedEntriesPdo]od.Streamer
+	Valid         bool
+	dataLength    uint32
+	nbMapped      uint8
+	nbMappingSubs uint8
+	IsRPDO        bool
+	predefinedId  uint16
+	configuredId  uint16
 }
 
 func (base *PDOCommon) attribute() uint8 {
@@ -164,6 +165,13 @@ func (pdo *PDOCommon) configureCobId(entry *od.Entry, predefinedIdent uint16, er
 	return canId, err
 }
 
+// Make a mapping slot unusable : no data and an offset that fails
+func invalidateStreamer(streamer *od.Streamer) {
+	streamer.ResetData(0, 0xFF)
+	streamer.SetReader(od.ReadEntryDisabled)
+	streamer.SetWriter(od.WriteEntryDisabled)
+}
+
 // Create and initialize a common PDO object
 func NewPDO(
 	odict *od.ObjectDictionary,
@@ -207,6 +215,8 @@ func NewPDO(
 		streamer := &pdo.streamers[i]
 		mapParam, err := entry.Uint32(uint8(i) + 1)
 		if err == od.ErrSubNotExist {
+			// No mapping sub entry in the OD for this slot, it can never be mapped
+			invalidateStreamer(streamer)
 			continue
 		}
 		if err != nil {
@@ -217,16 +227,30 @@ func NewPDO(
 			)
 			return nil, canopen.ErrOdParameters
 		}
+		pdo.nbMappingSubs++
 		err = pdo.configureMap(mapParam, uint32(i), isRPDO)
 		if err != nil {
 			// Init failed, but not critical
-			streamer.ResetData(0, 0xFF)
+			invalidateStreamer(streamer)
 			if *erroneoursMap == 0 {
 				*erroneoursMap = mapParam
 			}
 		}
 		if i < int(mappedObjectsCount) {
 			pdoDataLength += streamer.DataOffset
+		}
+	}
+
+	// More mapped objects than the OD declares mapping sub entries,
+	// the remaining ones do not exist and can not be used
+	if mappedObjectsCount > pdo.nbMappingSubs {
+		pdo.logger.Warn("more mapped objects than mapping sub entries",
+			"index", fmt.Sprintf("x%x", entry.Index),
+			"nbMapped", mappedObjectsCount,
+			"nbMappingSubs", pdo.nbMappingSubs,
+		)
+		if *erroneoursMap == 0 {
+			*erroneoursMap = 1
 		}
 	}
 

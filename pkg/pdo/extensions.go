@@ -353,8 +353,8 @@ func writeEntry16xxOr1Axx(stream *od.Stream, data []byte) (uint16, error) {
 	nbMapped := data[0]
 	pdoDataLength := uint32(0)
 
-	// Don't allow number greater than possible mapped objects
-	if nbMapped > od.MaxMappedEntriesPdo {
+	// Don't allow number greater than the number of mapping sub entries in OD
+	if nbMapped > pdo.nbMappingSubs {
 		return 0, od.ErrMapLen
 	}
 
