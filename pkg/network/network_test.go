@@ -9,6 +9,7 @@ import (
 
 	canopen "github.com/samsamfire/gocanopen/v2"
 	"github.com/samsamfire/gocanopen/v2/pkg/can/virtual"
+	"github.com/samsamfire/gocanopen/v2/pkg/config"
 	"github.com/samsamfire/gocanopen/v2/pkg/od"
 	"github.com/samsamfire/gocanopen/v2/pkg/pdo"
 	"github.com/samsamfire/gocanopen/v2/pkg/sdo"
@@ -166,4 +167,102 @@ func TestRPDONbMappedAboveDeclaredSubEntries(t *testing.T) {
 	val, err := local.ReadUint32("UNSIGNED32 value", 0)
 	assert.Nil(t, err)
 	assert.EqualValues(t, 0x44332211, val)
+}
+
+// Mapped object should be read with the mapped length and not with the object length.
+func TestTPDOPartiallyMappedObject(t *testing.T) {
+	net := CreateNetworkTest()
+	otherNet := CreateNetworkEmptyTest()
+	defer net.Disconnect()
+	defer otherNet.Disconnect()
+
+	local, err := net.Local(NodeIdTest)
+	assert.Nil(t, err)
+
+	tpdo1 := pdo.MaxRpdoNumber + 1
+	canId := uint32(0x180 + int(NodeIdTest))
+
+	collector := &FrameCollector{}
+	_, err = otherNet.Subscribe(canId, 0x7FF, false, collector)
+	assert.Nil(t, err)
+
+	assert.Nil(t, local.WriteAnyExact("UNSIGNED8 value", 0, uint8(0x42)))
+	assert.Nil(t, local.WriteAnyExact("UNSIGNED64 value", 0, uint64(0x1122334455667788)))
+
+	c := local.Configurator()
+	assert.Nil(t, c.ProducerDisableSYNC())
+	assert.Nil(t, c.WriteCommunicationPeriod(0))
+	assert.Nil(t, c.DisablePDO(tpdo1))
+	err = c.WriteConfigurationPDO(tpdo1,
+		config.PDOConfigurationParameter{
+			CanId:            uint16(canId),
+			TransmissionType: 1, // Sync every cycle
+			Mappings: []config.PDOMappingParameter{
+				{Index: 0x2005, Subindex: 0, LengthBits: 8},
+				// Only the first byte of the UNSIGNED64 is mapped, the object
+				// is bigger than the space left inside the frame
+				{Index: 0x201B, Subindex: 0, LengthBits: 8},
+			},
+		})
+	assert.Nil(t, err)
+	assert.Nil(t, c.EnablePDO(tpdo1))
+	time.Sleep(100 * time.Millisecond)
+	collector.Clear()
+
+	// Send SYNC
+	assert.Nil(t, otherNet.Send(canopen.Frame{ID: 0x80, DLC: 0}))
+	time.Sleep(100 * time.Millisecond)
+
+	frames := collector.GetFrames(canId)
+	assert.Len(t, frames, 1)
+	if len(frames) > 0 {
+		assert.EqualValues(t, 2, frames[0].DLC)
+		assert.EqualValues(t, 0x42, frames[0].Data[0])
+		// First byte of the UNSIGNED64
+		assert.EqualValues(t, 0x88, frames[0].Data[1])
+	}
+}
+
+func TestRPDOPartiallyMappedObject(t *testing.T) {
+	const rpdoCanId = 0x255
+
+	net := CreateNetworkTest()
+	otherNet := CreateNetworkEmptyTest()
+	defer net.Disconnect()
+	defer otherNet.Disconnect()
+
+	local, err := net.Local(NodeIdTest)
+	assert.Nil(t, err)
+
+	assert.Nil(t, local.WriteAnyExact("UNSIGNED32 value", 0, uint32(0)))
+	assert.Nil(t, local.WriteAnyExact("UNSIGNED8 value", 0, uint8(0)))
+
+	c := local.Configurator()
+	assert.Nil(t, c.ProducerDisableSYNC())
+	assert.Nil(t, c.WriteCommunicationPeriod(0))
+	assert.Nil(t, c.DisablePDO(1))
+	err = c.WriteConfigurationPDO(1,
+		config.PDOConfigurationParameter{
+			CanId:            rpdoCanId,
+			TransmissionType: pdo.TransmissionTypeSyncEventHi,
+			Mappings: []config.PDOMappingParameter{
+				// Only the first byte of the UNSIGNED32 is mapped
+				{Index: 0x2007, Subindex: 0, LengthBits: 8},
+				{Index: 0x2005, Subindex: 0, LengthBits: 8},
+			},
+		})
+	assert.Nil(t, err)
+	assert.Nil(t, c.EnablePDO(1))
+	time.Sleep(100 * time.Millisecond)
+
+	assert.Nil(t, otherNet.Send(canopen.Frame{ID: rpdoCanId, DLC: 2, Data: [8]byte{0xAA, 0xBB}}))
+	time.Sleep(100 * time.Millisecond)
+
+	// Each object gets the bytes that are mapped to it, and only those
+	valU32, err := local.ReadUint32("UNSIGNED32 value", 0)
+	assert.Nil(t, err)
+	assert.EqualValues(t, 0xAA, valU32)
+	valU8, err := local.ReadUint8("UNSIGNED8 value", 0)
+	assert.Nil(t, err)
+	assert.EqualValues(t, 0xBB, valU8)
 }
