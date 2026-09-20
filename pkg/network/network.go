@@ -258,11 +258,7 @@ func (network *Network) CreateLocalNode(nodeId uint8, odict any) (*n.LocalNode, 
 	}
 	// Add to network, launch routine for managing this node
 	// Automatically
-	controller, err := network.AddNode(node)
-	if err != nil {
-		return nil, err
-	}
-	err = controller.Start(context.Background())
+	err = network.addAndStartNode(node)
 	if err != nil {
 		return nil, err
 	}
@@ -317,15 +313,29 @@ func (network *Network) AddRemoteNode(nodeId uint8, odict any) (*n.RemoteNode, e
 
 	// Add to network, launch routine for managing this node
 	// Automatically
-	controller, err := network.AddNode(node)
-	if err != nil {
-		return nil, err
-	}
-	err = controller.Start(context.Background())
+	err = network.addAndStartNode(node)
 	if err != nil {
 		return nil, err
 	}
 	return node, nil
+}
+
+// Register a node and start its processing.
+func (network *Network) addAndStartNode(node n.Node) error {
+	controller, err := network.AddNode(node)
+	if err != nil {
+		_ = node.Stop()
+		return err
+	}
+	err = controller.Start(context.Background())
+	if err != nil {
+		network.mu.Lock()
+		delete(network.controllers, node.GetID())
+		network.mu.Unlock()
+		_ = node.Stop()
+		return err
+	}
+	return nil
 }
 
 // Add any node to the network and return a node controller which can be used

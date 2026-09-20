@@ -65,6 +65,9 @@ func (node *LocalNode) Stop() error {
 	if node.HBConsumer != nil {
 		node.HBConsumer.Stop()
 	}
+	for _, server := range node.SDOServers {
+		server.Stop()
+	}
 	return nil
 }
 
