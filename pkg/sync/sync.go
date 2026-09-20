@@ -171,6 +171,9 @@ func (sync *SYNC) resetTimers() {
 		if sync.timerProducer != nil {
 			sync.timerProducer.Stop()
 		}
+		if sync.timerConsumer != nil {
+			sync.timerConsumer.Stop()
+		}
 		return
 	}
 
