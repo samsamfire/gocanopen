@@ -426,6 +426,9 @@ func (emcy *EMCY) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) {
 // Set or reset an Error condition
 // Function adds a new Error to the history & Error will be processed by Process function
 func (emcy *EMCY) Error(setError bool, errorBit byte, errorCode uint16, infoCode uint32) {
+	if emcy == nil {
+		return
+	}
 	emcy.mu.Lock()
 	defer emcy.mu.Unlock()
 	index := errorBit >> 3
@@ -473,6 +476,9 @@ func (emcy *EMCY) Error(setError bool, errorBit byte, errorCode uint16, infoCode
 }
 
 func (emcy *EMCY) ErrorReport(errorBit byte, errorCode uint16, infoCode uint32) {
+	if emcy == nil {
+		return
+	}
 	emcy.logger.Info("report emergency",
 		"code description", getErrorCodeDescription(int(errorCode)),
 		"errorCode", errorCode,
@@ -483,6 +489,9 @@ func (emcy *EMCY) ErrorReport(errorBit byte, errorCode uint16, infoCode uint32) 
 }
 
 func (emcy *EMCY) ErrorReset(errorBit byte, infoCode uint32) {
+	if emcy == nil {
+		return
+	}
 	emcy.logger.Info("reset emergency",
 		"description", getErrorStatusDescription(errorBit),
 		"errorBit", errorBit,
