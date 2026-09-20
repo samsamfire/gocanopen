@@ -275,10 +275,18 @@ func TestRPDO(t *testing.T) {
 		err = otherNet.Send(canopen.Frame{ID: 0x255, DLC: 1, Data: [8]byte{0x33}})
 		assert.Nil(t, err)
 
-		// Should reset timeout monitoring, so no new EMCY after 200ms
+		// Reception resolves the timeout, which is reported with a no error
+		// emergency, then a new timeout is reported 200ms later
 		emcyCollector.Clear()
 		time.Sleep(250 * time.Millisecond)
-		assert.Equal(t, 1, emcyCollector.Count(0x80+uint32(NodeIdTest)))
+		frames = emcyCollector.GetFrames(0x80 + uint32(NodeIdTest))
+		assert.Len(t, frames, 2)
+		if len(frames) == 2 {
+			assert.EqualValues(t, 0, frames[0].Data[0])
+			assert.EqualValues(t, 0, frames[0].Data[1])
+			assert.EqualValues(t, 0x50, frames[1].Data[0])
+			assert.EqualValues(t, 0x82, frames[1].Data[1])
+		}
 	})
 
 	t.Run("no timeout emergency after disabling rpdo", func(t *testing.T) {
