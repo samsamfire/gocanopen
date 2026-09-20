@@ -201,16 +201,22 @@ func (tpdo *TPDO) SendAsync() {
 		return
 	}
 
-	// If inhibit, we must cancel any event timers
-	// and send only after the inhibit time is elapsed
-	remaining := time.Since(tpdo.timeLastSend) - tpdo.timeInhibit
+	// Inhibit time elapsed, send straight away
+	remaining := tpdo.timeInhibit - time.Since(tpdo.timeLastSend)
+	if remaining <= 0 {
+		tpdo.mu.Unlock()
+		_ = tpdo.send()
+		return
+	}
+
+	// Inhibit time is not elapsed yet. The request is not dropped, it is
+	// delayed until the end of the inhibit window.
 	if tpdo.timerEvent == nil {
-		tpdo.timerEvent = time.AfterFunc(max(0, remaining), tpdo.eventHandler)
+		tpdo.timerEvent = time.AfterFunc(remaining, tpdo.eventHandler)
 	} else {
-		tpdo.timerEvent.Reset(max(0, remaining))
+		tpdo.timerEvent.Reset(remaining)
 	}
 	tpdo.mu.Unlock()
-	_ = tpdo.send()
 }
 
 // Start relevant timers & sybscribe to SYNC messages
