@@ -38,7 +38,9 @@ type TPDO struct {
 
 // Process TPDOs on SYNC reception
 func (tpdo *TPDO) syncHandler(syncCh chan uint8) {
-	for range syncCh {
+	// The counter of the SYNC that generated this event, it can already
+	// have changed by the time this event is processed
+	for syncCounter := range syncCh {
 		tpdo.mu.Lock()
 
 		// Event driven (254) TPDOs are not sent on SYNC, a SYNC event can
@@ -78,7 +80,7 @@ func (tpdo *TPDO) syncHandler(syncCh chan uint8) {
 		switch tpdo.syncCounter {
 
 		case SyncCounterWaitForStart:
-			if tpdo.sync.Counter() == tpdo.syncStartValue {
+			if syncCounter == tpdo.syncStartValue {
 				tpdo.syncCounter = tpdo.transmissionType
 				tpdo.mu.Unlock()
 				_ = tpdo.send()

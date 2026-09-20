@@ -12,6 +12,10 @@ import (
 	"github.com/samsamfire/gocanopen/v2/pkg/od"
 )
 
+// Number of sync events that can be queued for a single subscriber.
+// A subscriber that is busy should not miss a sync cycle.
+const subscriberQueueSize = 16
+
 type SYNC struct {
 	bm               *canopen.BusManager
 	mu               s.Mutex
@@ -104,7 +108,7 @@ func (sync *SYNC) processError(error uint8) {
 func (sync *SYNC) Subscribe() chan uint8 {
 	sync.subMu.Lock()
 	defer sync.subMu.Unlock()
-	ch := make(chan uint8, 1)
+	ch := make(chan uint8, subscriberQueueSize)
 	sync.subscribers = append(sync.subscribers, ch)
 	return ch
 }
@@ -129,7 +133,9 @@ func (sync *SYNC) notifySubscribers() {
 		select {
 		case ch <- sync.counter:
 		default:
-			// Channel full, drop event
+			// A dropped event makes synchronous PDOs miss a cycle,
+			// it should not happen with a subscriber keeping up
+			sync.logger.Warn("subscriber is too slow, dropped sync event")
 		}
 	}
 }
