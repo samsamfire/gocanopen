@@ -449,10 +449,12 @@ func (emcy *EMCY) Error(setError bool, errorBit byte, errorCode uint16, infoCode
 		if errorStatusBitMasked != 0 {
 			return
 		}
+		emcy.errorStatusBits[index] |= byte(bitMask)
 	} else {
 		if errorStatusBitMasked == 0 {
 			return
 		}
+		emcy.errorStatusBits[index] &^= byte(bitMask)
 		errorCode = ErrNoError
 	}
 	errMsg := (uint32(errorBit) << 24) | uint32(errorCode)
