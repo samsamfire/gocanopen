@@ -71,11 +71,9 @@ func writeEntry1006(stream *od.Stream, data []byte) (uint16, error) {
 	cyclePeriodUs := binary.LittleEndian.Uint32(data)
 	sync.syncCyclePeriod = time.Duration(cyclePeriodUs) * time.Microsecond
 
-	if sync.syncCyclePeriod != 0 {
-		sync.mu.Unlock()
-		sync.resetTimers()
-		sync.mu.Lock()
-	}
+	sync.mu.Unlock()
+	sync.resetTimers()
+	sync.mu.Lock()
 	sync.logger.Info("updating communication cycle", "cyclePeriod", sync.syncCyclePeriod)
 	return od.WriteEntryDefault(stream, data)
 }
