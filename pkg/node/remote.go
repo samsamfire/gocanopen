@@ -53,6 +53,12 @@ func (node *RemoteNode) Stop() error {
 	if node.sync != nil {
 		node.sync.Stop()
 	}
+	for _, tpdo := range node.tpdos {
+		tpdo.Stop()
+	}
+	for _, rpdo := range node.rpdos {
+		rpdo.Stop()
+	}
 	return nil
 }
 
