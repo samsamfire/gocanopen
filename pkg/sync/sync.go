@@ -54,6 +54,11 @@ func (sync *SYNC) Handle(frame canopen.Frame) {
 		sync.counter = frame.Data[0]
 	}
 
+	// A valid SYNC clears any previous length error
+	if sync.emcy != nil {
+		sync.emcy.Error(false, emergency.EmSyncLength, emergency.ErrNoError, 0)
+	}
+
 	sync.timeLastRxTx = time.Now()
 	sync.rxToggle = !sync.rxToggle
 	sync.notifySubscribers()
