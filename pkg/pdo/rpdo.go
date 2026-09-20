@@ -127,14 +127,14 @@ func (rpdo *RPDO) validateFrameLength(dlc uint8) bool {
 
 	// Frame is too short, report an error and discard it
 	if dlc < expectedLength {
-		rpdo.pdo.emcy.Error(true, emergency.EmRPDOWrongLength, emergency.ErrPdoLength, rpdo.pdo.dataLength)
+		rpdo.pdo.emcy.Error(true, emergency.EmRPDOWrongLength, emergency.ErrPdoLength, uint32(dlc))
 		return false
 	}
 
 	// Frame is too long, report an error but still process it,
 	// the surplus bytes are simply ignored
 	if dlc > expectedLength {
-		rpdo.pdo.emcy.Error(true, emergency.EmRPDOWrongLength, emergency.ErrPdoLengthExc, rpdo.pdo.dataLength)
+		rpdo.pdo.emcy.Error(true, emergency.EmRPDOWrongLength, emergency.ErrPdoLengthExc, uint32(dlc))
 		return true
 	}
 
