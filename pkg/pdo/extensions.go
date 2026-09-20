@@ -42,6 +42,9 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 	switch stream.Subindex {
 
 	case od.SubPdoCobId:
+		if len(data) != 4 {
+			return 0, od.ErrTypeMismatch
+		}
 		cobId := binary.LittleEndian.Uint32(data)
 		canId := cobId & CobIdCanIdMask
 		valid := (cobId & CobIdValidBit) == 0
@@ -65,14 +68,18 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 			if canId == uint32(pdo.predefinedId) {
 				binary.LittleEndian.PutUint32(dataCopy, cobId&CobIdCanIdWithoutNodeIdMask)
 			}
-			if !valid {
-				canId = 0
-			}
+
+			// Cancel previous subscription if any
 			if rpdo.rxCancel != nil {
 				rpdo.rxCancel()
+				rpdo.rxCancel = nil
 			}
-			rxCancel, err := rpdo.bm.Subscribe(canId, 0x7FF, false, rpdo)
-			rpdo.rxCancel = rxCancel
+
+			var err error
+			if valid {
+				rpdo.rxCancel, err = rpdo.bm.Subscribe(canId, 0x7FF, false, rpdo)
+			}
+
 			if valid && err == nil {
 				pdo.Valid = true
 				pdo.configuredId = uint16(canId)
@@ -82,6 +89,7 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 				)
 			} else {
 				pdo.Valid = false
+				pdo.configuredId = 0
 				rpdo.rxData = nil
 				if rpdo.timer != nil {
 					rpdo.timer.Stop()
@@ -94,6 +102,9 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 		}
 
 	case od.SubPdoTransmissionType:
+		if len(data) != 1 {
+			return 0, od.ErrTypeMismatch
+		}
 		transType := data[0]
 		if transType > TransmissionTypeSync240 && transType < TransmissionTypeSyncEventLo {
 			return 0, od.ErrInvalidValue
@@ -124,6 +135,9 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 		return 0, od.ErrSubNotExist
 
 	case od.SubPdoEventTimer:
+		if len(data) != 2 {
+			return 0, od.ErrTypeMismatch
+		}
 		eventTimer := binary.LittleEndian.Uint16(data)
 		rpdo.timeoutRx = time.Duration(eventTimer) * time.Millisecond
 		if rpdo.timer != nil {
@@ -158,6 +172,9 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 	switch stream.Subindex {
 
 	case od.SubPdoCobId:
+		if len(data) != 4 {
+			return 0, od.ErrTypeMismatch
+		}
 		cobId := binary.LittleEndian.Uint32(data)
 		canId := cobId & CobIdCanIdMask
 		valid := (cobId & CobIdValidBit) == 0
@@ -197,6 +214,9 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		}
 
 	case od.SubPdoTransmissionType:
+		if len(data) != 1 {
+			return 0, od.ErrTypeMismatch
+		}
 		transType := data[0]
 		if transType > TransmissionTypeSync240 && transType < TransmissionTypeSyncEventLo {
 			return 0, od.ErrInvalidValue
@@ -226,6 +246,9 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		if pdo.Valid {
 			return 0, od.ErrInvalidValue
 		}
+		if len(data) != 2 {
+			return 0, od.ErrTypeMismatch
+		}
 		inhibitTime := binary.LittleEndian.Uint16(data)
 		tpdo.timeInhibit = time.Duration(inhibitTime) * 100 * time.Microsecond
 		tpdo.timeLastSend = time.Now()
@@ -235,6 +258,9 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		return 0, od.ErrSubNotExist
 
 	case od.SubPdoEventTimer:
+		if len(data) != 2 {
+			return 0, od.ErrTypeMismatch
+		}
 		eventTimer := binary.LittleEndian.Uint16(data)
 		tpdo.timeEvent = time.Duration(eventTimer) * 1000 * time.Microsecond
 		if tpdo.timerEvent != nil {
@@ -244,6 +270,9 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		tpdo.pdo.logger.Debug("updated event time", "eventTimer", tpdo.timeEvent)
 
 	case od.SubPdoSyncStart:
+		if len(data) != 1 {
+			return 0, od.ErrTypeMismatch
+		}
 		syncStart := data[0]
 		if pdo.Valid || syncStart > TransmissionTypeSync240 {
 			return 0, od.ErrInvalidValue
@@ -342,6 +371,9 @@ func writeEntry16xxOr1Axx(stream *od.Stream, data []byte) (uint16, error) {
 
 	// Change of a mapping parameter
 	if stream.Subindex != od.SubPdoNbMappings {
+		if len(data) != 4 {
+			return 0, od.ErrTypeMismatch
+		}
 		err := pdo.configureMap(binary.LittleEndian.Uint32(data), uint32(stream.Subindex)-1, pdo.IsRPDO)
 		if err != nil {
 			return 0, err
@@ -350,6 +382,9 @@ func writeEntry16xxOr1Axx(stream *od.Stream, data []byte) (uint16, error) {
 	}
 
 	// Change in number of mapped objects
+	if len(data) != 1 {
+		return 0, od.ErrTypeMismatch
+	}
 	nbMapped := data[0]
 	pdoDataLength := uint32(0)
 
