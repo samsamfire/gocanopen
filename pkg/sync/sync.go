@@ -215,13 +215,15 @@ func (sync *SYNC) timerConsumerHandler() {
 func (sync *SYNC) send() {
 	sync.mu.Lock()
 
-	sync.counter += 1
-	if sync.counter > sync.counterOverflow {
-		sync.counter = 1
+	if sync.counterOverflow != 0 {
+		sync.counter += 1
+		if sync.counter > sync.counterOverflow {
+			sync.counter = 1
+		}
+		sync.txBuffer.Data[0] = sync.counter
 	}
 	sync.timeLastRxTx = time.Now()
 	sync.rxToggle = !sync.rxToggle
-	sync.txBuffer.Data[0] = sync.counter
 	sync.mu.Unlock()
 	// When listening to own messages, this will trigger Handle to be called
 	// So make sure sync is unlocked before sending
