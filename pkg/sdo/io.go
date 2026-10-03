@@ -8,6 +8,10 @@ import (
 	"github.com/samsamfire/gocanopen/v2/pkg/od"
 )
 
+// Delay before re-sending a block segment that failed because the CAN
+// tx queue was full
+const txBusyRetryDelay = 500 * time.Microsecond
+
 type sdoRawReadWriter struct {
 	client *SDOClient
 }
@@ -69,19 +73,22 @@ func (rw *sdoRawReadWriter) Read(b []byte) (n int, err error) {
 		switch {
 		case err != nil:
 			return n, err
-		case ret == uploadDataFull:
-			// Fifo needs emptying
-			n += client.fifo.Read(b[n:], nil)
 		case ret == success:
 			// Read finished successfully, empty fifo one last time and return EOF
 			n += client.fifo.Read(b[n:], nil)
 			return n, io.EOF
+		case ret == uploadDataFull:
+			// Fifo needs emptying, then process again straight away
+			n += client.fifo.Read(b[n:], nil)
+			if n >= len(b) {
+				return n, nil
+			}
+		case ret == waitingLocalTransfer:
+			// Local transfer, nothing to wait for
+		default:
+			// Waiting for the server
+			client.waitEvent(ret)
 		}
-		// If no more space in buffer return
-		if n >= len(b) {
-			return n, err
-		}
-		time.Sleep(client.processingPeriod)
 	}
 }
 
@@ -140,16 +147,28 @@ func (rw *sdoRawReadWriter) Write(b []byte) (n int, err error) {
 		switch {
 		case err != nil:
 			return int(nUint32), err
-		case ret == blockDownloadInProgress && bufferPartial:
-			// Fill buffer whilst block download in progress
-			n += client.fifo.Write(b[n:], nil)
-			if n == len(b) {
-				bufferPartial = false
-			}
 		case ret == success:
 			return int(nUint32), err
+		case ret == blockDownloadInProgress:
+			// Fill buffer whilst block download in progress
+			if bufferPartial {
+				n += client.fifo.Write(b[n:], nil)
+				if n == len(b) {
+					bufferPartial = false
+				}
+			}
+			if client.processingPeriod > 0 {
+				time.Sleep(client.processingPeriod)
+			}
+		case ret == transmitBufferFull:
+			// CAN tx queue is full, give it some time to empty
+			time.Sleep(max(client.processingPeriod, txBusyRetryDelay))
+		case ret == waitingLocalTransfer:
+			// Local transfer, nothing to wait for
+		default:
+			// Waiting for the server
+			client.waitEvent(ret)
 		}
-		time.Sleep(client.processingPeriod)
 	}
 }
 

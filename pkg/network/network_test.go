@@ -42,8 +42,6 @@ func CreateNetworkTest() *Network {
 
 func TestReadEDS(t *testing.T) {
 	network := CreateNetworkTest()
-	network2 := CreateNetworkEmptyTest()
-	defer network2.Disconnect()
 	defer network.Disconnect()
 	_, err := network.CreateLocalNode(NodeIdTest+1, "../../testdata/test_zipped_format.eds")
 	assert.Nil(t, err)
@@ -59,6 +57,13 @@ func TestReadEDS(t *testing.T) {
 		assert.Nil(t, err)
 		assert.NotNil(t, od.Index(0x1021))
 	})
+
+	// Connect only after the reads above : network2 uses the same SDO channel
+	// and could otherwise still be receiving their frames when starting its own
+	// transfers.
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+
 	t.Run("local node zipped format remote", func(t *testing.T) {
 		od, err := network2.ReadEDS(NodeIdTest+1, od.DefaultEDSFormatHandler)
 		assert.Nil(t, err)

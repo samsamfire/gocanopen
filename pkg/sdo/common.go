@@ -16,9 +16,13 @@ var ErrInvalidArgs = errors.New("error in arguments")
 type internalState uint8
 
 const (
-	DefaultClientTimeout       = 1_000
+	DefaultClientTimeout = 1_000
+	// Deprecated: the client is event driven and no longer polls.
+	// Use [DefaultClientBlockPacing] / [SDOClient.SetProcessingPeriod].
 	DefaultClientProcessPeriod = 10 * time.Millisecond
-	DefaultClientBufferSize    = 1_000
+	// Default pacing between segments of a block download
+	DefaultClientBlockPacing = 0 * time.Millisecond
+	DefaultClientBufferSize  = 1_000
 	// Should be less than the the standard sdo client & server timeout
 	DefaultClientBlockTransferTimeout = 700
 

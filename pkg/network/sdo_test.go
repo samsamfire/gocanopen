@@ -201,12 +201,16 @@ func createLossyNetworkTest(nodeId uint8, dropOneIn int32) *Network {
 func TestSDOBlockUploadWithFrameLoss(t *testing.T) {
 	network := CreateNetworkTest()
 	defer network.Disconnect()
-	client := createLossyNetworkTest(NodeIdTest, 100)
-	defer client.Disconnect()
 
+	// Read the reference before the lossy client connects : it shares the
+	// same SDO channel and would otherwise still be receiving this burst of
+	// frames when starting its own transfer.
 	reference, err := network.ReadAll(NodeIdTest, 0x1021, 0)
 	assert.Nil(t, err)
 	assert.NotEmpty(t, reference)
+
+	client := createLossyNetworkTest(NodeIdTest, 100)
+	defer client.Disconnect()
 
 	for i := range 5 {
 		received, err := client.ReadAll(NodeIdTest, 0x1021, 0)
