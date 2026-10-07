@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-10-07
+
+### Changed
+
+- SDO : the client reacts as soon as a response arrives instead of polling, which speeds up transfers.
+- Kvaser : the third argument of Connect is now the bitrate.
+
+### Fixed
+
+- SDO : SetBlockMaxSize was ignored during block uploads, so devices that only support smaller blocks could not be read.
+- SDO : a read could lose the end of the data when the caller's buffer was too small, for example with io.ReadAll on Go 1.26. 
+- Kvaser : the bus always ran at 500 kbit/s whatever bitrate was requested; unsupported bitrates are now rejected.
+- Kvaser : sending a frame could be delayed by up to the read timeout, causing SDO block transfers to time out.
+
 
 ## [2.1.0] - 2026-09-20
 
