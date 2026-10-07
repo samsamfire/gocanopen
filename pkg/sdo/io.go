@@ -14,6 +14,8 @@ const txBusyRetryDelay = 500 * time.Microsecond
 
 type sdoRawReadWriter struct {
 	client *SDOClient
+	// Upload is finished, remaining data is only in the fifo
+	uploadDone bool
 }
 
 // Create a new raw SDO reader
@@ -62,6 +64,9 @@ func (client *SDOClient) NewRawWriter(nodeId uint8, index uint16, subindex uint8
 // Read bytes from remote node using sdo client
 func (rw *sdoRawReadWriter) Read(b []byte) (n int, err error) {
 	client := rw.client
+	if rw.uploadDone {
+		return rw.readRemaining(b)
+	}
 	n = 0
 	last := time.Now()
 
@@ -74,9 +79,10 @@ func (rw *sdoRawReadWriter) Read(b []byte) (n int, err error) {
 		case err != nil:
 			return n, err
 		case ret == success:
-			// Read finished successfully, empty fifo one last time and return EOF
-			n += client.fifo.Read(b[n:], nil)
-			return n, io.EOF
+			// Read finished successfully, empty fifo
+			rw.uploadDone = true
+			m, err := rw.readRemaining(b[n:])
+			return n + m, err
 		case ret == uploadDataFull:
 			// Fifo needs emptying, then process again straight away
 			n += client.fifo.Read(b[n:], nil)
@@ -90,6 +96,16 @@ func (rw *sdoRawReadWriter) Read(b []byte) (n int, err error) {
 			client.waitEvent(ret)
 		}
 	}
+}
+
+// Empty the fifo once the upload is finished. b may be too small to hold
+// everything left, so EOF is only returned once the fifo is empty.
+func (rw *sdoRawReadWriter) readRemaining(b []byte) (int, error) {
+	n := rw.client.fifo.Read(b, nil)
+	if rw.client.fifo.GetOccupied() > 0 {
+		return n, nil
+	}
+	return n, io.EOF
 }
 
 // Read a given index/subindex from node into data

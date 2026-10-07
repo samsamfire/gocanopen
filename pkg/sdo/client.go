@@ -763,6 +763,7 @@ func (c *SDOClient) uploadSetup(index uint16, subindex uint8, blockEnabled bool)
 	c.timeoutTimer = 0
 	c.timeoutTimerBlock = 0
 	c.fifo.Reset()
+	c.rw.uploadDone = false
 	if c.od != nil && c.nodeIdServer == c.nodeId {
 		c.streamer.SetReader(nil)
 		c.state = stateUploadLocalTransfer
