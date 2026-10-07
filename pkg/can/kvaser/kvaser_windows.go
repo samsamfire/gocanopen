@@ -34,6 +34,7 @@ var (
 	procReadWait            = canlib.NewProc("canReadWait")
 	procGetVersion          = canlib.NewProc("canGetVersion")
 	procGetNumberOfChannels = canlib.NewProc("canGetNumberOfChannels")
+	procIoCtl               = canlib.NewProc("canIoCtl")
 )
 
 const (
@@ -51,6 +52,8 @@ const (
 	canDRIVER_NORMAL = 4
 	canMSG_STD       = 2
 
+	canIOCTL_SET_LOCAL_TXECHO = 32
+
 	OpenExclusive         = 0x0008
 	OpenRequireExtended   = 0x0010
 	OpenAcceptVirtual     = 0x0020
@@ -61,7 +64,6 @@ const (
 	OpenCanFd             = 0x0400
 	OpenCanFdNonIso       = 0x0800
 	OpenInternalL         = 0x1000
-
 )
 
 var (
@@ -73,8 +75,14 @@ func init() {
 	can.RegisterInterface("kvaser", NewKvaserBus)
 }
 
+// KvaserBus drives one Kvaser channel through two CANlib handles: one that
+// the reception goroutine blocks on, and one that Send writes on. A CANlib
+// handle must not be used from several threads at once, and with a single
+// handle a Send could wait behind the blocking read for up to its timeout,
+// delaying e.g. an SDO block acknowledgement past the server's timeout.
 type KvaserBus struct {
-	handle       int
+	rxHandle     int
+	txHandle     int
 	logger       *slog.Logger
 	rxCallback   canopen.FrameListener
 	timeoutRead  int
@@ -135,14 +143,23 @@ func NewKvaserBus(name string) (bus canopen.Bus, err error) {
 	return b, nil
 }
 
-// Open channel with specific flags
+// Open the reception and transmission handles on a channel, with specific flags.
+// Both handles share the channel, so flags must not include OpenExclusive.
 func (k *KvaserBus) Open(channel int, flags int) error {
 	r1, _, _ := procOpenChannel.Call(uintptr(channel), uintptr(flags))
 	err := NewKvaserError(int(r1))
 	if err != nil {
 		return err
 	}
-	k.handle = int(r1)
+	k.rxHandle = int(r1)
+
+	r1, _, _ = procOpenChannel.Call(uintptr(channel), uintptr(flags))
+	err = NewKvaserError(int(r1))
+	if err != nil {
+		procClose.Call(uintptr(k.rxHandle))
+		return err
+	}
+	k.txHandle = int(r1)
 	return nil
 }
 
@@ -180,7 +197,7 @@ func (k *KvaserBus) Connect(args ...any) error {
 	}
 
 	r1, _, _ := procSetBusParams.Call(
-		uintptr(k.handle),
+		uintptr(k.rxHandle),
 		uintptr(uint32(bitrate)),
 		0, 0, 0, 0, 0,
 	)
@@ -189,7 +206,21 @@ func (k *KvaserBus) Connect(args ...any) error {
 		return err
 	}
 
-	r1, _, _ = procSetBusOutputControl.Call(uintptr(k.handle), uintptr(canDRIVER_NORMAL))
+	// Frames sent on the transmission handle would otherwise be echoed to the
+	// reception handle, and handled as if another node had sent them.
+	echo := byte(0)
+	r1, _, _ = procIoCtl.Call(
+		uintptr(k.rxHandle),
+		uintptr(canIOCTL_SET_LOCAL_TXECHO),
+		uintptr(unsafe.Pointer(&echo)),
+		1,
+	)
+	err = NewKvaserError(int(r1))
+	if err != nil {
+		return err
+	}
+
+	r1, _, _ = procSetBusOutputControl.Call(uintptr(k.txHandle), uintptr(canDRIVER_NORMAL))
 	err = NewKvaserError(int(r1))
 	if err != nil {
 		return err
@@ -217,13 +248,15 @@ func (k *KvaserBus) Disconnect() error {
 		k.wg.Wait()
 	}
 	k.Off()
-	r1, _, _ := procClose.Call(uintptr(k.handle))
-	return NewKvaserError(int(r1))
+	r1, _, _ := procClose.Call(uintptr(k.txHandle))
+	txErr := NewKvaserError(int(r1))
+	r1, _, _ = procClose.Call(uintptr(k.rxHandle))
+	return errors.Join(NewKvaserError(int(r1)), txErr)
 }
 
 func (k *KvaserBus) Send(frame canopen.Frame) error {
 	r1, _, _ := procWrite.Call(
-		uintptr(k.handle),
+		uintptr(k.txHandle),
 		uintptr(frame.ID),
 		uintptr(unsafe.Pointer(&frame.Data[0])),
 		uintptr(frame.DLC),
@@ -235,7 +268,7 @@ func (k *KvaserBus) Send(frame canopen.Frame) error {
 		return err
 	}
 
-	r1, _, _ = procWriteSync.Call(uintptr(k.handle), uintptr(k.timeoutWrite))
+	r1, _, _ = procWriteSync.Call(uintptr(k.txHandle), uintptr(k.timeoutWrite))
 	return NewKvaserError(int(r1))
 }
 
@@ -276,7 +309,7 @@ func (k *KvaserBus) Recv() (canopen.Frame, error) {
 	var time uint32
 
 	r1, _, _ := procReadWait.Call(
-		uintptr(k.handle),
+		uintptr(k.rxHandle),
 		uintptr(unsafe.Pointer(&id)),
 		uintptr(unsafe.Pointer(&data[0])),
 		uintptr(unsafe.Pointer(&dlc)),
@@ -295,16 +328,22 @@ func (k *KvaserBus) Recv() (canopen.Frame, error) {
 	return frame, nil
 }
 
-// Turn bus On
+// Turn bus On, on both handles
 func (k *KvaserBus) On() error {
-	r1, _, _ := procBusOn.Call(uintptr(k.handle))
+	r1, _, _ := procBusOn.Call(uintptr(k.rxHandle))
+	if err := NewKvaserError(int(r1)); err != nil {
+		return err
+	}
+	r1, _, _ = procBusOn.Call(uintptr(k.txHandle))
 	return NewKvaserError(int(r1))
 }
 
-// Turn bus Off
+// Turn bus Off, on both handles
 func (k *KvaserBus) Off() error {
-	r1, _, _ := procBusOff.Call(uintptr(k.handle))
-	return NewKvaserError(int(r1))
+	r1, _, _ := procBusOff.Call(uintptr(k.txHandle))
+	txErr := NewKvaserError(int(r1))
+	r1, _, _ = procBusOff.Call(uintptr(k.rxHandle))
+	return errors.Join(NewKvaserError(int(r1)), txErr)
 }
 
 // Get canlib version as a string X.Y
