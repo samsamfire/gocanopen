@@ -3,9 +3,11 @@ package network
 import (
 	"bytes"
 	"io"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	canopen "github.com/samsamfire/gocanopen/v2"
@@ -14,6 +16,39 @@ import (
 	"github.com/samsamfire/gocanopen/v2/pkg/sdo"
 	"github.com/stretchr/testify/assert"
 )
+
+// A reader with a buffer smaller than what is left in the client fifo when
+// the transfer finishes must still get every byte before EOF.
+func TestReaderSmallBuffer(t *testing.T) {
+	network := CreateNetworkTest()
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	defer network.Disconnect()
+
+	file, err := os.CreateTemp("", "filename")
+	assert.Nil(t, err)
+	data := make([]byte, 2000)
+	for i := range data {
+		data[i] = byte(i)
+	}
+	_, err = file.Write(data)
+	assert.Nil(t, err)
+	assert.Nil(t, file.Close())
+	local := network.controllers[NodeIdTest].GetNode()
+	local.GetOD().AddFile(0x3335, "File entry", file.Name(), os.O_RDONLY, os.O_RDONLY)
+
+	node, err := network2.AddRemoteNode(NodeIdTest, nil)
+	assert.Nil(t, err)
+	client := node.SDOClient
+
+	for _, block := range []bool{false, true} {
+		rw, err := client.NewRawReader(NodeIdTest, 0x3335, 0, block, 0)
+		assert.Nil(t, err)
+		read, err := io.ReadAll(iotest.OneByteReader(rw))
+		assert.Nil(t, err)
+		assert.Equal(t, data, read, "block %v", block)
+	}
+}
 
 func TestReaderWriter(t *testing.T) {
 	network := CreateNetworkTest()
