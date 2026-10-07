@@ -1167,8 +1167,8 @@ func (c *SDOClient) upload(
 			c.txBuffer.Data[3] = c.subindex
 			// Calculate number of block segments from free space
 			count := c.fifo.GetSpace() / BlockSeqSize
-			if count >= BlockMaxSize {
-				count = BlockMaxSize
+			if count >= c.blockMaxSize {
+				count = c.blockMaxSize
 			} else if count == 0 {
 				abortCode = AbortOutOfMem
 				c.state = stateAbort
@@ -1214,8 +1214,8 @@ func (c *SDOClient) upload(
 				}
 				// Calculate number of block segments from remaining space
 				count := c.fifo.GetSpace() / BlockSeqSize
-				if count >= BlockMaxSize {
-					count = BlockMaxSize
+				if count >= c.blockMaxSize {
+					count = c.blockMaxSize
 				} else if c.fifo.GetOccupied() > 0 {
 					ret = uploadDataFull
 					if transferShort {

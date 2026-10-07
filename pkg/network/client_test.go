@@ -2,9 +2,11 @@ package network
 
 import (
 	"os"
+	"sync"
 	"testing"
 	"time"
 
+	canopen "github.com/samsamfire/gocanopen/v2"
 	"github.com/samsamfire/gocanopen/v2/pkg/od"
 	"github.com/stretchr/testify/assert"
 )
@@ -116,4 +118,61 @@ func TestClientBlock(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, data, data2)
 	})
+}
+
+type blockSizeSpy struct {
+	mu    sync.Mutex
+	sizes []uint8
+}
+
+// Handle records the block size requested by the client in block upload
+// initiate (0xA4) and sub-block confirmation (0xA2) frames.
+func (s *blockSizeSpy) Handle(frame canopen.Frame) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	switch frame.Data[0] {
+	case 0xA4:
+		s.sizes = append(s.sizes, frame.Data[4])
+	case 0xA2:
+		s.sizes = append(s.sizes, frame.Data[2])
+	}
+}
+
+// Some devices only support small blocks : the block size set with
+// SetBlockMaxSize has to bound every block requested during an upload.
+func TestClientBlockUploadMaxSize(t *testing.T) {
+	network := CreateNetworkTest()
+	network2 := CreateNetworkEmptyTest()
+	defer network.Disconnect()
+	defer network2.Disconnect()
+
+	file, err := os.CreateTemp("", "filename")
+	assert.Nil(t, err)
+	data := make([]byte, 2000)
+	for i := range data {
+		data[i] = byte(i)
+	}
+	_, err = file.Write(data)
+	assert.Nil(t, err)
+	assert.Nil(t, file.Close())
+	node := network.controllers[NodeIdTest].GetNode()
+	node.GetOD().AddFile(0x3334, "File entry", file.Name(), os.O_RDONLY, os.O_RDONLY)
+
+	spy := &blockSizeSpy{}
+	cancel, err := network.Subscribe(0x600+uint32(NodeIdTest), 0x7FF, false, spy)
+	assert.Nil(t, err)
+	defer cancel()
+
+	network2.SetBlockMaxSize(30)
+	read, err := network2.ReadAll(NodeIdTest, 0x3334, 0)
+	assert.Nil(t, err)
+	assert.Equal(t, data, read)
+
+	spy.mu.Lock()
+	defer spy.mu.Unlock()
+	// 2000 bytes need several sub-blocks of 30 segments
+	assert.Greater(t, len(spy.sizes), 2)
+	for _, size := range spy.sizes {
+		assert.LessOrEqual(t, size, uint8(30))
+	}
 }
