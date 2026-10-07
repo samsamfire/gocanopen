@@ -62,10 +62,6 @@ const (
 	OpenCanFdNonIso       = 0x0800
 	OpenInternalL         = 0x1000
 
-	Bitrate125k = -4
-	Bitrate250k = -3
-	Bitrate500k = -2
-	Bitrate1M   = -1
 )
 
 var (
@@ -158,9 +154,21 @@ func (k *KvaserBus) Connect(args ...any) error {
 	if !ok {
 		return ErrArgs
 	}
-	flags, ok := args[2].(int)
+	bitrateHz, ok := args[2].(int)
 	if !ok {
 		return ErrArgs
+	}
+	bitrate, err := canlibBitrate(bitrateHz)
+	if err != nil {
+		return err
+	}
+	// Open flags are optional, after the bitrate
+	flags := 0
+	if len(args) > 3 {
+		flags, ok = args[3].(int)
+		if !ok {
+			return ErrArgs
+		}
 	}
 	channelNum, err := strconv.Atoi(channel)
 	if err != nil {
@@ -170,8 +178,6 @@ func (k *KvaserBus) Connect(args ...any) error {
 	if err != nil {
 		return err
 	}
-
-	bitrate := int32(Bitrate500k)
 
 	r1, _, _ := procSetBusParams.Call(
 		uintptr(k.handle),
