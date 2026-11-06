@@ -137,7 +137,6 @@ func (nmt *NMT) producerHandler() {
 		return
 	}
 	nmtState := nmt.operatingState
-	nmtStatePrev := nmt.operatingStatePrev
 	nmtInit := nmtState == StateInitializing
 	nmt.hbTxBuff.Data[0] = nmtState
 	periodProducer := nmt.periodProducer
@@ -150,33 +149,37 @@ func (nmt *NMT) producerHandler() {
 	}
 	nmt.txMu.Unlock()
 
-	nmt.mu.Lock()
-	if nmtStatePrev != nmtState || nmtInit {
-		nmt.logger.Info("nmt state changed", "previous", stateMap[nmtStatePrev], "new", stateMap[nmtState])
-		for _, callback := range nmt.callbacks {
-			callback(nmt.operatingState)
-		}
-	}
-
 	if nmtInit {
-		if nmt.control&StartupToOperational != 0 {
-			nmt.operatingState = StateOperational
-		} else {
-			nmt.operatingState = StatePreOperational
+		nmt.mu.Lock()
+		// A command may have been received in the meantime
+		if nmt.operatingState == StateInitializing {
+			if nmt.control&StartupToOperational != 0 {
+				nmt.setStateLocked(StateOperational)
+			} else {
+				nmt.setStateLocked(StatePreOperational)
+			}
 		}
-		nmt.logger.Info("automatically transitioning based on configuration", "state", stateMap[nmt.operatingState], "firstHeartbeat", nmt.firstHbTime)
 		nmt.mu.Unlock()
 		// Restart timer straight away to send new state
 		nmt.restartTimerProducer(0)
 		return
 	}
 
-	nmt.operatingStatePrev = nmtState
-	nmt.mu.Unlock()
-
 	// Only keep the timer running for the cyclic heartbeat
 	if periodProducer != 0 {
 		nmt.restartTimerProducer(periodProducer)
+	}
+}
+
+// Update the state and notify the callbacks straight away, so that
+// objects stop or start before the heartbeat is sent.
+// Caller must hold nmt.mu
+func (nmt *NMT) setStateLocked(state uint8) {
+	nmt.operatingStatePrev = nmt.operatingState
+	nmt.operatingState = state
+	nmt.logger.Info("nmt state changed", "previous", stateMap[nmt.operatingStatePrev], "new", stateMap[state])
+	for _, callback := range nmt.callbacks {
+		callback(state)
 	}
 }
 
@@ -207,6 +210,9 @@ func (nmt *NMT) Start() {
 	// Configure NMT specific tx/rx buffers
 	rxCancel, _ := nmt.bm.Subscribe(uint32(nmt.canIdNmtRx), 0x7FF, false, nmt)
 	nmt.rxCancel = rxCancel
+	if nmt.operatingState == StateInitializing {
+		nmt.setStateLocked(StateInitializing)
+	}
 	nmt.mu.Unlock()
 	nmt.restartTimerProducer(nmt.firstHbTime)
 }
@@ -214,9 +220,8 @@ func (nmt *NMT) Start() {
 // Reset internal NMT state machine
 func (nmt *NMT) Reset() {
 	nmt.mu.Lock()
-	nmt.operatingState = StateInitializing
-	nmt.operatingStatePrev = StateInitializing
 	nmt.reset = ResetNot
+	nmt.setStateLocked(StateInitializing)
 	nmt.mu.Unlock()
 	nmt.restartTimerProducer(nmt.firstHbTime)
 }
@@ -285,7 +290,7 @@ func (nmt *NMT) processCommand(command Command) {
 	}
 
 	if newState != nmt.operatingState {
-		nmt.operatingState = newState
+		nmt.setStateLocked(newState)
 		nmt.mu.Unlock()
 		// state change, so should send straight away
 		nmt.restartTimerProducer(0)
