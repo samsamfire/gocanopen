@@ -72,7 +72,7 @@ func (t *TIME) Start() error {
 		t.rxCancel = rxCancel
 	}
 
-	if t.isProducer {
+	if t.canProduce() {
 		if t.timerProducer == nil {
 			t.timerProducer = time.AfterFunc(t.timeProducer, t.timerProducerHandler)
 		} else {
@@ -107,12 +107,18 @@ func (t *TIME) Stop() {
 	)
 }
 
+// TIME is only produced in PRE-OPERATIONAL or OPERATIONAL.
+// Caller must hold t.mu
+func (t *TIME) canProduce() bool {
+	return !t.stopped && t.isProducer && t.isOperational
+}
+
 func (t *TIME) timerProducerHandler() {
 	t.txMu.Lock()
 	defer t.txMu.Unlock()
 
 	t.mu.Lock()
-	if t.stopped || !t.isProducer {
+	if !t.canProduce() {
 		t.mu.Unlock()
 		return
 	}
@@ -126,7 +132,7 @@ func (t *TIME) timerProducerHandler() {
 	}
 
 	t.mu.Lock()
-	if !t.stopped && t.isProducer && t.timerProducer != nil {
+	if t.canProduce() && t.timerProducer != nil {
 		t.timerProducer.Reset(t.timeProducer)
 	}
 	t.mu.Unlock()
