@@ -55,9 +55,12 @@ func (c *NodeProcessor) main(ctx context.Context) {
 			reset := c.node.ProcessMain(false, periodUs)
 			if reset == nmt.ResetComm {
 				c.logger.Info("reset comm has been requested")
-				// Currently nothing specific is done here.
-				// We could in the future "recreate" the node here.
-				break
+				// TODO : communication parameters should be restored here.
+				// Currently only NMT is restarted (boot-up is sent)
+				err := c.node.Reset()
+				if err != nil {
+					c.logger.Info("error occured during reset comm", "err", err)
+				}
 			}
 			if reset == nmt.ResetApp {
 				c.logger.Info("reset has been requested")
