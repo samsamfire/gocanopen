@@ -57,12 +57,15 @@ func (tpdo *TPDO) syncHandler(syncCh chan uint8) {
 			_ = tpdo.send()
 			continue
 		}
-		isAsyclic := tpdo.transmissionType == TransmissionTypeSyncAcyclic
 
-		// Send synchronous acyclic tpdo
-		if isAsyclic && tpdo.sendRequestAsyncEvent {
+		// Synchronous acyclic TPDOs are only sent if an event occured,
+		// the SYNC start value only applies to cyclic TPDOs
+		if tpdo.transmissionType == TransmissionTypeSyncAcyclic {
+			sendRequest := tpdo.sendRequestAsyncEvent
 			tpdo.mu.Unlock()
-			_ = tpdo.send()
+			if sendRequest {
+				_ = tpdo.send()
+			}
 			continue
 		}
 
