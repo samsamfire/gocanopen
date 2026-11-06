@@ -19,6 +19,7 @@ type TIME struct {
 	bm            *canopen.BusManager
 	logger        *slog.Logger
 	mu            sync.Mutex
+	txMu          sync.Mutex // Serializes producer sends with Stop
 	isConsumer    bool
 	isProducer    bool
 	timeInternal  time.Time
@@ -27,6 +28,7 @@ type TIME struct {
 	cobId         uint32
 	isOperational bool
 	rxCancel      func()
+	stopped       bool
 }
 
 // Handle [TIME] related RX CAN frames
@@ -60,6 +62,7 @@ func (t *TIME) OnStateChange(state uint8) {
 func (t *TIME) Start() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.stopped = false
 
 	if t.isConsumer && t.rxCancel == nil {
 		rxCancel, err := t.bm.Subscribe(t.cobId, 0x7FF, false, t)
@@ -85,8 +88,11 @@ func (t *TIME) Start() error {
 }
 
 func (t *TIME) Stop() {
+	t.txMu.Lock()
+	defer t.txMu.Unlock()
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.stopped = true
 	if t.timerProducer != nil {
 		t.timerProducer.Stop()
 	}
@@ -102,16 +108,28 @@ func (t *TIME) Stop() {
 }
 
 func (t *TIME) timerProducerHandler() {
+	t.txMu.Lock()
+	defer t.txMu.Unlock()
+
 	t.mu.Lock()
+	if t.stopped || !t.isProducer {
+		t.mu.Unlock()
+		return
+	}
 	frame := canopen.NewFrame(t.cobId, 0, 6)
-	buff := convertTimeToByte(t.timeInternal)
-	frame.Data = buff
+	frame.Data = convertTimeToByte(t.timeInternal)
 	t.mu.Unlock()
+
 	err := t.bm.Send(frame)
 	if err != nil {
 		t.logger.Warn("failed to send", "err", err)
 	}
-	_ = t.Start()
+
+	t.mu.Lock()
+	if !t.stopped && t.isProducer && t.timerProducer != nil {
+		t.timerProducer.Reset(t.timeProducer)
+	}
+	t.mu.Unlock()
 }
 
 // Sets the internal time

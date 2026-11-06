@@ -69,6 +69,7 @@ type NMT struct {
 	bm                 *canopen.BusManager
 	logger             *slog.Logger
 	mu                 sync.Mutex
+	txMu               sync.Mutex // Serializes heartbeat sends with Stop
 	emcy               *emergency.EMCY
 	operatingState     uint8
 	operatingStatePrev uint8
@@ -128,7 +129,13 @@ func (nmt *NMT) restartTimerProducer(duration time.Duration) {
 }
 
 func (nmt *NMT) producerHandler() {
+	nmt.txMu.Lock()
 	nmt.mu.Lock()
+	if nmt.stopped {
+		nmt.mu.Unlock()
+		nmt.txMu.Unlock()
+		return
+	}
 	nmtState := nmt.operatingState
 	nmtStatePrev := nmt.operatingStatePrev
 	nmtInit := nmtState == StateInitializing
@@ -141,6 +148,7 @@ func (nmt *NMT) producerHandler() {
 	if nmtInit || periodProducer != 0 {
 		_ = nmt.send(frame)
 	}
+	nmt.txMu.Unlock()
 
 	nmt.mu.Lock()
 	if nmtStatePrev != nmtState || nmtInit {
@@ -223,6 +231,8 @@ func (nmt *NMT) CheckResetAndClear() uint8 {
 
 // Stop NMT processing
 func (nmt *NMT) Stop() {
+	nmt.txMu.Lock()
+	defer nmt.txMu.Unlock()
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
 	nmt.stopped = true

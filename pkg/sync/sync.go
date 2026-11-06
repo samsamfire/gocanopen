@@ -19,6 +19,7 @@ const subscriberQueueSize = 16
 type SYNC struct {
 	bm               *canopen.BusManager
 	mu               s.Mutex
+	txMu             s.Mutex // Serializes producer sends with Stop
 	logger           *slog.Logger
 	subMu            s.Mutex
 	subscribers      []chan uint8
@@ -157,6 +158,8 @@ func (sync *SYNC) Start() error {
 }
 
 func (sync *SYNC) Stop() {
+	sync.txMu.Lock()
+	defer sync.txMu.Unlock()
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
 	sync.stopped = true
@@ -224,7 +227,15 @@ func (sync *SYNC) timerConsumerHandler() {
 }
 
 func (sync *SYNC) send() {
+	sync.txMu.Lock()
+	defer sync.txMu.Unlock()
+
 	sync.mu.Lock()
+
+	if sync.stopped || !sync.isProducer || !sync.isOperational || sync.syncCyclePeriod == 0 {
+		sync.mu.Unlock()
+		return
+	}
 
 	if sync.counterOverflow != 0 {
 		sync.counter += 1
@@ -235,10 +246,11 @@ func (sync *SYNC) send() {
 	}
 	sync.timeLastRxTx = time.Now()
 	sync.rxToggle = !sync.rxToggle
+	frame := sync.txBuffer
 	sync.mu.Unlock()
 	// When listening to own messages, this will trigger Handle to be called
 	// So make sure sync is unlocked before sending
-	err := sync.bm.Send(sync.txBuffer)
+	err := sync.bm.Send(frame)
 	if err != nil {
 		sync.logger.Error("failed to send", "err", err)
 	}
