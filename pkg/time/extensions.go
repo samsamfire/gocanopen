@@ -21,23 +21,23 @@ func writeEntry1012(stream *od.Stream, data []byte) (uint16, error) {
 	if (cobIdTimestamp&0x3FFFF800) != 0 || canopen.IsIDRestricted(canId) {
 		return 0, od.ErrInvalidValue
 	}
+	isProducer := (cobIdTimestamp & 0x40000000) != 0
+	isConsumer := (cobIdTimestamp & 0x80000000) != 0
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.isProducer = (cobIdTimestamp & 0x40000000) != 0
-	t.isConsumer = (cobIdTimestamp & 0x80000000) != 0
-	if t.isConsumer {
-		if t.rxCancel != nil {
-			t.rxCancel()
-		}
-		rxCancel, err := t.bm.Subscribe(t.cobId, 0x7FF, false, t)
-		t.rxCancel = rxCancel
-		if err != nil {
-			return 0, od.ErrDevIncompat
-		}
+	// CAN-ID can't change while TIME is in use
+	if canId != uint16(t.cobId) && (t.isProducer || t.isConsumer) && (isProducer || isConsumer) {
+		return 0, od.ErrInvalidValue
 	}
+	t.isProducer = isProducer
+	t.isConsumer = isConsumer
+	t.cobId = uint32(canId)
 	t.mu.Unlock()
 	t.Stop()
-	t.Start()
+	err := t.Start()
 	t.mu.Lock()
+	if err != nil {
+		return 0, od.ErrDevIncompat
+	}
 	return od.WriteEntryDefault(stream, data)
 }
