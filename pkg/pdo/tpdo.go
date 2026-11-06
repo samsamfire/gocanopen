@@ -238,6 +238,7 @@ func (tpdo *TPDO) Start() {
 func (tpdo *TPDO) Stop() {
 	tpdo.mu.Lock()
 	defer tpdo.mu.Unlock()
+	tpdo.isOperational = false
 
 	if tpdo.syncCh != nil && tpdo.sync != nil {
 		tpdo.sync.Unsubscribe(tpdo.syncCh)
