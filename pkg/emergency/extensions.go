@@ -152,7 +152,7 @@ func writeEntry1014(stream *od.Stream, data []byte) (uint16, error) {
 	} else {
 		currentCanId = em.producerIdent
 	}
-	newEnabled := (cobId&uint32(currentCanId)) == 0 && newCanId != 0
+	newEnabled := (cobId&0x80000000) == 0 && newCanId != 0
 	if cobId&0x7FFFF800 != 0 || canopen.IsIDRestricted(uint16(newCanId)) ||
 		(em.producerEnabled && newEnabled && newCanId != uint32(currentCanId)) {
 		return 0, od.ErrInvalidValue
