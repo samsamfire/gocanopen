@@ -219,11 +219,13 @@ func (sync *SYNC) timerProducerHandler() {
 func (sync *SYNC) timerConsumerHandler() {
 	// This means that a timemout has occured
 	sync.mu.Lock()
+	defer sync.mu.Unlock()
+	if sync.stopped || sync.isProducer || !sync.isOperational || sync.syncCyclePeriod == 0 {
+		return
+	}
 	sync.inTimeout = true
-	cyclePeriod := sync.syncCyclePeriod
-	sync.mu.Unlock()
-	sync.emcy.Error(true, emergency.EmSyncTimeOut, emergency.ErrCommunication, uint32(cyclePeriod.Microseconds()))
-	sync.logger.Warn("timeout error", "timeout", cyclePeriod)
+	sync.emcy.Error(true, emergency.EmSyncTimeOut, emergency.ErrCommunication, uint32(sync.syncCyclePeriod.Microseconds()))
+	sync.logger.Warn("timeout error", "timeout", sync.syncCyclePeriod)
 }
 
 func (sync *SYNC) send() {
