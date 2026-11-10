@@ -81,8 +81,9 @@ func init() {
 // handle a Send could wait behind the blocking read for up to its timeout,
 // delaying e.g. an SDO block acknowledgement past the server's timeout.
 type KvaserBus struct {
-	rxHandle     int
-	txHandle     int
+	rxHandle     int        // reception, owns the bus parameters
+	txHandle     int        // transmission
+	txMu         sync.Mutex // serializes use of txHandle: a CANlib handle must not be used from several threads
 	logger       *slog.Logger
 	rxCallback   canopen.FrameListener
 	timeoutRead  int
@@ -119,7 +120,7 @@ func NewKvaserError(code int) error {
 		uintptr(len(msg)),
 	)
 
-	if int(r1) < StatusOk {
+	if int(int32(r1)) < StatusOk {
 		return fmt.Errorf("unable to get description for error code %v", code)
 	}
 
@@ -147,19 +148,19 @@ func NewKvaserBus(name string) (bus canopen.Bus, err error) {
 // Both handles share the channel, so flags must not include OpenExclusive.
 func (k *KvaserBus) Open(channel int, flags int) error {
 	r1, _, _ := procOpenChannel.Call(uintptr(channel), uintptr(flags))
-	err := NewKvaserError(int(r1))
+	err := NewKvaserError(int(int32(r1)))
 	if err != nil {
 		return err
 	}
-	k.rxHandle = int(r1)
+	k.rxHandle = int(int32(r1))
 
 	r1, _, _ = procOpenChannel.Call(uintptr(channel), uintptr(flags))
-	err = NewKvaserError(int(r1))
+	err = NewKvaserError(int(int32(r1)))
 	if err != nil {
 		procClose.Call(uintptr(k.rxHandle))
 		return err
 	}
-	k.txHandle = int(r1)
+	k.txHandle = int(int32(r1))
 	return nil
 }
 
@@ -201,7 +202,7 @@ func (k *KvaserBus) Connect(args ...any) error {
 		uintptr(uint32(bitrate)),
 		0, 0, 0, 0, 0,
 	)
-	err = NewKvaserError(int(r1))
+	err = NewKvaserError(int(int32(r1)))
 	if err != nil {
 		return err
 	}
@@ -215,13 +216,13 @@ func (k *KvaserBus) Connect(args ...any) error {
 		uintptr(unsafe.Pointer(&echo)),
 		1,
 	)
-	err = NewKvaserError(int(r1))
+	err = NewKvaserError(int(int32(r1)))
 	if err != nil {
 		return err
 	}
 
 	r1, _, _ = procSetBusOutputControl.Call(uintptr(k.txHandle), uintptr(canDRIVER_NORMAL))
-	err = NewKvaserError(int(r1))
+	err = NewKvaserError(int(int32(r1)))
 	if err != nil {
 		return err
 	}
@@ -249,9 +250,9 @@ func (k *KvaserBus) Disconnect() error {
 	}
 	k.Off()
 	r1, _, _ := procClose.Call(uintptr(k.txHandle))
-	txErr := NewKvaserError(int(r1))
+	txErr := NewKvaserError(int(int32(r1)))
 	r1, _, _ = procClose.Call(uintptr(k.rxHandle))
-	return errors.Join(NewKvaserError(int(r1)), txErr)
+	return errors.Join(NewKvaserError(int(int32(r1))), txErr)
 }
 
 func (k *KvaserBus) Send(frame canopen.Frame) error {
@@ -263,13 +264,13 @@ func (k *KvaserBus) Send(frame canopen.Frame) error {
 		uintptr(canMSG_STD),
 	)
 
-	err := NewKvaserError(int(r1))
+	err := NewKvaserError(int(int32(r1)))
 	if err != nil {
 		return err
 	}
 
 	r1, _, _ = procWriteSync.Call(uintptr(k.txHandle), uintptr(k.timeoutWrite))
-	return NewKvaserError(int(r1))
+	return NewKvaserError(int(int32(r1)))
 }
 
 func (k *KvaserBus) Subscribe(callback canopen.FrameListener) error {
@@ -318,7 +319,7 @@ func (k *KvaserBus) Recv() (canopen.Frame, error) {
 		uintptr(k.timeoutRead),
 	)
 
-	err := NewKvaserError(int(r1))
+	err := NewKvaserError(int(int32(r1)))
 	if err != nil {
 		return canopen.Frame{}, err
 	}
@@ -331,19 +332,19 @@ func (k *KvaserBus) Recv() (canopen.Frame, error) {
 // Turn bus On, on both handles
 func (k *KvaserBus) On() error {
 	r1, _, _ := procBusOn.Call(uintptr(k.rxHandle))
-	if err := NewKvaserError(int(r1)); err != nil {
+	if err := NewKvaserError(int(int32(r1))); err != nil {
 		return err
 	}
 	r1, _, _ = procBusOn.Call(uintptr(k.txHandle))
-	return NewKvaserError(int(r1))
+	return NewKvaserError(int(int32(r1)))
 }
 
 // Turn bus Off, on both handles
 func (k *KvaserBus) Off() error {
 	r1, _, _ := procBusOff.Call(uintptr(k.txHandle))
-	txErr := NewKvaserError(int(r1))
+	txErr := NewKvaserError(int(int32(r1)))
 	r1, _, _ = procBusOff.Call(uintptr(k.rxHandle))
-	return errors.Join(NewKvaserError(int(r1)), txErr)
+	return errors.Join(NewKvaserError(int(int32(r1))), txErr)
 }
 
 // Get canlib version as a string X.Y
