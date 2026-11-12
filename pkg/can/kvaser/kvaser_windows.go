@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	canopen "github.com/samsamfire/gocanopen/v2"
@@ -35,11 +36,17 @@ var (
 	procGetVersion          = canlib.NewProc("canGetVersion")
 	procGetNumberOfChannels = canlib.NewProc("canGetNumberOfChannels")
 	procIoCtl               = canlib.NewProc("canIoCtl")
+	procReadStatus          = canlib.NewProc("canReadStatus")
+	procRequestChipStatus   = canlib.NewProc("canRequestChipStatus")
 )
 
 const (
 	defaultReadTimeoutMs  = 500
 	defaultWriteTimeoutMs = defaultReadTimeoutMs
+	// statePollPeriod is the minimum time between two reads of the channel
+	// state by the reception goroutine. A quiet bus reads it at most every
+	// defaultReadTimeoutMs, when canReadWait times out.
+	statePollPeriod = 500 * time.Millisecond
 )
 
 // Kvaser Constants (Mapped from canlib.h)
@@ -69,6 +76,8 @@ const (
 var (
 	ErrNoMsg = &KvaserError{Code: canERR_NOMSG, Description: "No message"}
 	ErrArgs  = errors.New("error in arguments")
+	// ErrNotConnected is returned when the bus holds no canlib handle.
+	ErrNotConnected = errors.New("kvaser bus not connected")
 )
 
 func init() {
@@ -80,10 +89,15 @@ func init() {
 // handle must not be used from several threads at once, and with a single
 // handle a Send could wait behind the blocking read for up to its timeout,
 // delaying e.g. an SDO block acknowledgement past the server's timeout.
+// The reception goroutine also reads the channel state on its handle, between
+// two reads, and State returns the last one.
 type KvaserBus struct {
-	rxHandle     int        // reception, owns the bus parameters
-	txHandle     int        // transmission
+	rxHandle     int        // reception and channel state, owns the bus parameters; -1 when not open
+	txHandle     int        // transmission; -1 when not open
 	txMu         sync.Mutex // serializes use of txHandle: a CANlib handle must not be used from several threads
+	stateMu      sync.Mutex // guards state and stateErr
+	state        canopen.BusState
+	stateErr     error
 	logger       *slog.Logger
 	rxCallback   canopen.FrameListener
 	timeoutRead  int
@@ -135,7 +149,8 @@ func NewKvaserBus(name string) (bus canopen.Bus, err error) {
 		}
 	}()
 
-	b := &KvaserBus{}
+	b := &KvaserBus{rxHandle: -1, txHandle: -1}
+	b.setState(canopen.BusStateDisconnected, ErrNotConnected)
 	b.timeoutRead = defaultReadTimeoutMs
 	b.timeoutWrite = defaultWriteTimeoutMs
 	b.logger = slog.Default()
@@ -145,8 +160,17 @@ func NewKvaserBus(name string) (bus canopen.Bus, err error) {
 }
 
 // Open the reception and transmission handles on a channel, with specific flags.
-// Both handles share the channel, so flags must not include OpenExclusive.
+// The handles share the channel, so flags must not include OpenExclusive.
 func (k *KvaserBus) Open(channel int, flags int) error {
+	// Send uses txHandle concurrently.
+	k.txMu.Lock()
+	defer k.txMu.Unlock()
+
+	return k.open(channel, flags)
+}
+
+// open is Open for callers holding txMu.
+func (k *KvaserBus) open(channel int, flags int) error {
 	r1, _, _ := procOpenChannel.Call(uintptr(channel), uintptr(flags))
 	err := NewKvaserError(int(int32(r1)))
 	if err != nil {
@@ -158,6 +182,7 @@ func (k *KvaserBus) Open(channel int, flags int) error {
 	err = NewKvaserError(int(int32(r1)))
 	if err != nil {
 		procClose.Call(uintptr(k.rxHandle))
+		k.rxHandle = -1
 		return err
 	}
 	k.txHandle = int(int32(r1))
@@ -192,19 +217,33 @@ func (k *KvaserBus) Connect(args ...any) error {
 	if err != nil {
 		return ErrArgs
 	}
-	err = k.Open(channelNum, flags)
-	if err != nil {
-		return err
+	// Send must not use txHandle while it is being opened, configured, or
+	// closed after a failed configuration.
+	k.txMu.Lock()
+	defer k.txMu.Unlock()
+
+	if err := k.open(channelNum, flags); err != nil {
+		return fmt.Errorf("open channel %d: %w", channelNum, err)
 	}
+	// Once opened, a failed configuration must release the handles, or the
+	// channel stays claimed.
+	connected := false
+	defer func() {
+		if !connected {
+			procClose.Call(uintptr(k.txHandle))
+			procClose.Call(uintptr(k.rxHandle))
+			k.txHandle = -1
+			k.rxHandle = -1
+		}
+	}()
 
 	r1, _, _ := procSetBusParams.Call(
 		uintptr(k.rxHandle),
 		uintptr(uint32(bitrate)),
 		0, 0, 0, 0, 0,
 	)
-	err = NewKvaserError(int(int32(r1)))
-	if err != nil {
-		return err
+	if err := NewKvaserError(int(int32(r1))); err != nil {
+		return fmt.Errorf("set bus params (%d bit/s): %w", bitrateHz, err)
 	}
 
 	// Frames sent on the transmission handle would otherwise be echoed to the
@@ -216,21 +255,21 @@ func (k *KvaserBus) Connect(args ...any) error {
 		uintptr(unsafe.Pointer(&echo)),
 		1,
 	)
-	err = NewKvaserError(int(int32(r1)))
-	if err != nil {
-		return err
+	if err := NewKvaserError(int(int32(r1))); err != nil {
+		return fmt.Errorf("disable local tx echo: %w", err)
 	}
 
 	r1, _, _ = procSetBusOutputControl.Call(uintptr(k.txHandle), uintptr(canDRIVER_NORMAL))
-	err = NewKvaserError(int(int32(r1)))
-	if err != nil {
-		return err
+	if err := NewKvaserError(int(int32(r1))); err != nil {
+		return fmt.Errorf("set bus output control: %w", err)
 	}
 
-	err = k.On()
-	if err != nil {
-		return err
+	if err := k.On(); err != nil {
+		return fmt.Errorf("bus on: %w", err)
 	}
+	connected = true
+	// The reception goroutine is not started yet: rxHandle is free.
+	k.pollState()
 
 	var ctx context.Context
 	ctx, k.cancel = context.WithCancel(context.Background())
@@ -248,14 +287,28 @@ func (k *KvaserBus) Disconnect() error {
 		k.cancel()
 		k.wg.Wait()
 	}
+	k.setState(canopen.BusStateDisconnected, ErrNotConnected)
+	k.txMu.Lock()
+	defer k.txMu.Unlock()
+	if k.txHandle < 0 && k.rxHandle < 0 {
+		return nil
+	}
 	k.Off()
 	r1, _, _ := procClose.Call(uintptr(k.txHandle))
 	txErr := NewKvaserError(int(int32(r1)))
 	r1, _, _ = procClose.Call(uintptr(k.rxHandle))
+	k.txHandle = -1
+	k.rxHandle = -1
 	return errors.Join(NewKvaserError(int(int32(r1))), txErr)
 }
 
 func (k *KvaserBus) Send(frame canopen.Frame) error {
+	k.txMu.Lock()
+	defer k.txMu.Unlock()
+	if k.txHandle < 0 {
+		return ErrNotConnected
+	}
+
 	r1, _, _ := procWrite.Call(
 		uintptr(k.txHandle),
 		uintptr(frame.ID),
@@ -278,20 +331,29 @@ func (k *KvaserBus) Subscribe(callback canopen.FrameListener) error {
 	return nil
 }
 
+// processIncoming receives the frames on rxHandle, and reads the channel state
+// between two reads, at most every statePollPeriod.
 func (k *KvaserBus) processIncoming(ctx context.Context) {
 	k.logger.Info("handling reception")
+	lastPoll := time.Now()
 	for {
 		select {
 		case <-ctx.Done():
 			k.logger.Info("exiting CAN bus reception, closed")
 			return
 		default:
+			if time.Since(lastPoll) >= statePollPeriod {
+				k.pollState()
+				lastPoll = time.Now()
+			}
 			frame, err := k.Recv()
 			if err != nil {
 				if errors.Is(err, ErrNoMsg) {
 					continue
 				}
 				k.logger.Error("listening routine has closed because", "err", err)
+				// Nothing reads the state anymore, e.g. the device was unplugged.
+				k.setState(canopen.BusStateDisconnected, err)
 				return
 			}
 			if k.rxCallback != nil {
@@ -329,7 +391,7 @@ func (k *KvaserBus) Recv() (canopen.Frame, error) {
 	return frame, nil
 }
 
-// Turn bus On, on both handles
+// Turn bus On, on all handles
 func (k *KvaserBus) On() error {
 	r1, _, _ := procBusOn.Call(uintptr(k.rxHandle))
 	if err := NewKvaserError(int(int32(r1))); err != nil {
@@ -339,7 +401,7 @@ func (k *KvaserBus) On() error {
 	return NewKvaserError(int(int32(r1)))
 }
 
-// Turn bus Off, on both handles
+// Turn bus Off, on all handles
 func (k *KvaserBus) Off() error {
 	r1, _, _ := procBusOff.Call(uintptr(k.txHandle))
 	txErr := NewKvaserError(int(int32(r1)))
@@ -361,4 +423,41 @@ func GetNbChannels() int {
 	var nb int32
 	procGetNumberOfChannels.Call(uintptr(unsafe.Pointer(&nb)))
 	return int(nb)
+}
+
+// pollState reads the channel state on rxHandle: only the reception goroutine,
+// or Connect before starting it, may call it. canReadStatus returns the last
+// state the device reported, and keeps answering once it is unplugged:
+// canRequestChipStatus asks the device for a new report, read on the next
+// poll, and fails once it is unplugged.
+func (k *KvaserBus) pollState() {
+	r1, _, _ := procRequestChipStatus.Call(uintptr(k.rxHandle))
+	if err := NewKvaserError(int(int32(r1))); err != nil {
+		k.setState(canopen.BusStateDisconnected, fmt.Errorf("request chip status: %w", err))
+		return
+	}
+	var flags uint32
+	r1, _, _ = procReadStatus.Call(uintptr(k.rxHandle), uintptr(unsafe.Pointer(&flags)))
+	if err := NewKvaserError(int(int32(r1))); err != nil {
+		k.setState(canopen.BusStateUnknown, fmt.Errorf("read status: %w", err))
+		return
+	}
+	k.logger.Debug("canReadStatus", "flags", fmt.Sprintf("0x%08x", flags))
+	k.setState(statusToState(flags), nil)
+}
+
+func (k *KvaserBus) setState(state canopen.BusState, err error) {
+	k.stateMu.Lock()
+	defer k.stateMu.Unlock()
+	k.state = state
+	k.stateErr = err
+}
+
+// State returns the state of the channel last read by the reception goroutine,
+// at most statePollPeriod or a read timeout old. It is BusStateDisconnected
+// once the device is unplugged or the bus disconnected.
+func (k *KvaserBus) State() (canopen.BusState, error) {
+	k.stateMu.Lock()
+	defer k.stateMu.Unlock()
+	return k.state, k.stateErr
 }
