@@ -23,6 +23,7 @@ var (
 	canlib = syscall.NewLazyDLL("canlib32.dll")
 
 	procInitializeLibrary   = canlib.NewProc("canInitializeLibrary")
+	procUnloadLibrary       = canlib.NewProc("canUnloadLibrary")
 	procGetErrorText        = canlib.NewProc("canGetErrorText")
 	procOpenChannel         = canlib.NewProc("canOpenChannel")
 	procSetBusParams        = canlib.NewProc("canSetBusParams")
@@ -142,6 +143,8 @@ func NewKvaserError(code int) error {
 	return &KvaserError{Code: code, Description: cleanMsg}
 }
 
+// NewKvaserBus reloads canlib, which closes every open Kvaser channel: create
+// the buses while none is connected.
 func NewKvaserBus(name string) (bus canopen.Bus, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -155,6 +158,9 @@ func NewKvaserBus(name string) (bus canopen.Bus, err error) {
 	b.timeoutWrite = defaultWriteTimeoutMs
 	b.logger = slog.Default()
 
+	// Reload canlib so that it lists the channels again: an adapter plugged in
+	// after canlib was initialized can only be opened then.
+	procUnloadLibrary.Call()
 	procInitializeLibrary.Call()
 	return b, nil
 }
