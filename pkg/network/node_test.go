@@ -1,6 +1,7 @@
 package network
 
 import (
+	"encoding/binary"
 	"fmt"
 	"testing"
 	"time"
@@ -426,6 +427,34 @@ func TestTimeSynchronization(t *testing.T) {
 		timeDiff := slaveNode.TIME.InternalTime().Sub(masterNode.TIME.InternalTime())
 		assert.InDelta(t, 0, timeDiff.Milliseconds(), 50)
 	}
+}
+
+func TestTimeProducerAdvances(t *testing.T) {
+	network := CreateNetworkTest()
+	otherNet := CreateNetworkEmptyTest()
+	defer network.Disconnect()
+	defer otherNet.Disconnect()
+
+	collector := &FrameCollector{}
+	rxCancel, err := otherNet.Subscribe(0x100, 0x7FF, false, collector)
+	assert.Nil(t, err)
+	defer rxCancel()
+
+	local, err := network.Local(NodeIdTest)
+	assert.Nil(t, err)
+	local.TIME.SetProducerInterval(100 * time.Millisecond)
+	assert.Nil(t, local.Configurator().ProducerEnableTIME())
+
+	assert.Eventually(t, func() bool { return collector.Count(0x100) >= 3 }, 2*time.Second, 20*time.Millisecond)
+	frames := collector.GetFrames(0x100)
+	first, last := frames[0], frames[len(frames)-1]
+	timeOf := func(f [8]byte) time.Duration {
+		days := time.Duration(binary.LittleEndian.Uint16(f[4:6]))
+		ms := time.Duration(binary.LittleEndian.Uint32(f[0:4]) & 0x0FFFFFFF)
+		return days*24*time.Hour + ms*time.Millisecond
+	}
+	// A frozen producer would send the same timestamp in every frame
+	assert.GreaterOrEqual(t, timeOf(last.Data)-timeOf(first.Data), 150*time.Millisecond)
 }
 
 func TestScan(t *testing.T) {
