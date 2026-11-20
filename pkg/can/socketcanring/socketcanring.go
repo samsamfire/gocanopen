@@ -43,6 +43,7 @@ type CANFrame struct {
 // of read data, with low requirements on latency.
 // It uses regular socket for sending
 type Bus struct {
+	channel       string
 	txFd          int
 	rxFd          int
 	rxCallback    canopen.FrameListener
@@ -136,6 +137,7 @@ func NewBus(channel string) (canopen.Bus, error) {
 	}
 
 	return &Bus{
+		channel:       channel,
 		txFd:          txFd,
 		rxFd:          rxFd,
 		ringBuffer:    data,
@@ -270,4 +272,10 @@ func htons(v uint16) uint16 {
 	data := make([]byte, 2)
 	binary.BigEndian.PutUint16(data, v)
 	return *(*uint16)(unsafe.Pointer(&data[0]))
+}
+
+// State returns the state of the CAN interface, from its up flag only: see
+// can.LinkState.
+func (b *Bus) State() (canopen.BusState, error) {
+	return can.LinkState(b.channel)
 }
