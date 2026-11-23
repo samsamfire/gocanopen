@@ -14,6 +14,7 @@ const (
 
 // statusToState maps canReadStatus flags to a bus state. Several flags can be
 // set at once (e.g. error active with frames pending): the most severe wins.
+// The overrun flags are latched: pollState clears them once reported.
 func statusToState(flags uint32) canopen.BusState {
 	switch {
 	case flags&canSTAT_BUS_OFF != 0:

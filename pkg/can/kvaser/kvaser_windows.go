@@ -60,7 +60,8 @@ const (
 	canDRIVER_NORMAL = 4
 	canMSG_STD       = 2
 
-	canIOCTL_SET_LOCAL_TXECHO = 32
+	canIOCTL_CLEAR_ERROR_COUNTERS = 5
+	canIOCTL_SET_LOCAL_TXECHO     = 32
 
 	OpenExclusive         = 0x0008
 	OpenRequireExtended   = 0x0010
@@ -459,7 +460,18 @@ func (k *KvaserBus) pollState() {
 		return
 	}
 	k.logger.Debug("canReadStatus", "flags", fmt.Sprintf("0x%08x", flags))
-	k.setState(statusToState(flags), nil)
+	state := statusToState(flags)
+	k.setState(state, nil)
+	if state == canopen.BusStateHwOverflow {
+		// The overrun flags stay latched until cleared: clear them so that the
+		// next poll reports error active again unless a new overrun occurred.
+		// The error counters are cleared too, but they are below the warning
+		// limit here, or the state would be more severe than an overflow.
+		r1, _, _ = procIoCtl.Call(uintptr(k.rxHandle), uintptr(canIOCTL_CLEAR_ERROR_COUNTERS), 0, 0)
+		if err := NewKvaserError(int(int32(r1))); err != nil {
+			k.logger.Warn("unable to clear the overrun flags", "err", err)
+		}
+	}
 }
 
 func (k *KvaserBus) setState(state canopen.BusState, err error) {
