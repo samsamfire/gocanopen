@@ -23,7 +23,7 @@ var (
 	canlib = syscall.NewLazyDLL("canlib32.dll")
 
 	procInitializeLibrary   = canlib.NewProc("canInitializeLibrary")
-	procUnloadLibrary       = canlib.NewProc("canUnloadLibrary")
+	procEnumHardwareEx      = canlib.NewProc("canEnumHardwareEx")
 	procGetErrorText        = canlib.NewProc("canGetErrorText")
 	procOpenChannel         = canlib.NewProc("canOpenChannel")
 	procSetBusParams        = canlib.NewProc("canSetBusParams")
@@ -143,8 +143,9 @@ func NewKvaserError(code int) error {
 	return &KvaserError{Code: code, Description: cleanMsg}
 }
 
-// NewKvaserBus reloads canlib, which closes every open Kvaser channel: create
-// the buses while none is connected.
+// NewKvaserBus asks canlib to list the channels again, so that an adapter
+// plugged in since canlib was initialized can be opened. The open channels
+// are not affected, but the channel numbers may change.
 func NewKvaserBus(name string) (bus canopen.Bus, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -158,10 +159,19 @@ func NewKvaserBus(name string) (bus canopen.Bus, err error) {
 	b.timeoutWrite = defaultWriteTimeoutMs
 	b.logger = slog.Default()
 
-	// Reload canlib so that it lists the channels again: an adapter plugged in
-	// after canlib was initialized can only be opened then.
-	procUnloadLibrary.Call()
+	// canInitializeLibrary does nothing after the first call: re-enumerate
+	// the channels so that adapters plugged in since are listed. Unloading
+	// the library would do it too, but would close every open channel.
 	procInitializeLibrary.Call()
+	if err := procEnumHardwareEx.Find(); err != nil {
+		b.logger.Warn("kvaser: canEnumHardwareEx not available, adapters plugged in after start-up are not listed; update canlib", "err", err)
+		return b, nil
+	}
+	var nbChannels int32
+	r1, _, _ := procEnumHardwareEx.Call(uintptr(unsafe.Pointer(&nbChannels)))
+	if err := NewKvaserError(int(int32(r1))); err != nil {
+		b.logger.Warn("kvaser: unable to re-enumerate the channels", "err", err)
+	}
 	return b, nil
 }
 
