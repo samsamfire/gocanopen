@@ -66,9 +66,9 @@ func (entry *hbConsumerEntry) Handle(frame canopen.Frame) {
 	if event != EventNone && consumer.eventCallback != nil {
 		consumer.eventCallback(
 			event,
-			entry.nodeId,
 			uint8(entry.odIndex+1),
-			nmt.StateInitializing,
+			entry.nodeId,
+			entry.nmtState,
 		)
 	}
 
@@ -77,8 +77,8 @@ func (entry *hbConsumerEntry) Handle(frame canopen.Frame) {
 	if nmtChanged && consumer.eventCallback != nil {
 		consumer.eventCallback(
 			EventChanged,
-			entry.nodeId,
 			uint8(entry.odIndex+1),
+			entry.nodeId,
 			entry.nmtState,
 		)
 	}
@@ -175,8 +175,8 @@ func (entry *hbConsumerEntry) timeoutHandler() {
 	if eventType != 0 && parent.eventCallback != nil {
 		parent.eventCallback(
 			EventTimeout,
-			entry.nodeId,
 			uint8(entry.odIndex+1),
+			entry.nodeId,
 			nmt.StateUnknown,
 		)
 	}

@@ -141,3 +141,45 @@ func TestHeartbeatEventCallback(t *testing.T) {
 		assert.Equal(t, 1, eventHandler.NbEventChanged())
 	})
 }
+
+// Callback arguments should follow [heartbeat.HBEventCallback]
+func TestHeartbeatEventCallbackArguments(t *testing.T) {
+	network := CreateNetworkEmptyTest()
+	defer network.Disconnect()
+	consumer, err := network.CreateLocalNode(0x23, od.Default())
+	assert.Nil(t, err)
+
+	type event struct{ event, index, nodeId, nmtState uint8 }
+	var mu sync.Mutex
+	events := []event{}
+	consumer.HBConsumer.OnEvent(func(e uint8, index uint8, nodeId uint8, nmtState uint8) {
+		mu.Lock()
+		defer mu.Unlock()
+		events = append(events, event{e, index, nodeId, nmtState})
+	})
+	// Monitor node 0x22 in the 3rd entry
+	err = consumer.Configurator().WriteMonitoredNode(3, 0x22, 300*time.Millisecond)
+	assert.Nil(t, err)
+	_, err = network.CreateLocalNode(0x22, od.Default())
+	assert.Nil(t, err)
+
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, e := range events {
+			if e.event == heartbeat.EventStarted {
+				return true
+			}
+		}
+		return false
+	}, 1*time.Second, 20*time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	for _, e := range events {
+		assert.Equal(t, uint8(3), e.index)
+		assert.Equal(t, uint8(0x22), e.nodeId)
+		if e.event == heartbeat.EventStarted {
+			assert.Equal(t, nmt.StateOperational, e.nmtState)
+		}
+	}
+}
