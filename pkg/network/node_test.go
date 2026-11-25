@@ -129,6 +129,20 @@ func TestCreateLocalNode(t *testing.T) {
 	assert.Equal(t, ErrIdRange, err)
 }
 
+// Node ids go from 1 to 127
+func TestCreateLocalNodeIdRange(t *testing.T) {
+	network := CreateNetworkEmptyTest()
+	defer network.Disconnect()
+	_, err := network.CreateLocalNode(0, od.Default())
+	assert.Equal(t, ErrIdRange, err)
+	_, err = network.CreateLocalNode(128, od.Default())
+	assert.Equal(t, ErrIdRange, err)
+	_, err = network.CreateLocalNode(127, od.Default())
+	assert.Nil(t, err)
+	_, err = network.AddRemoteNode(127, od.Default())
+	assert.Equal(t, ErrIdConflict, err)
+}
+
 func TestNodeReadAnyExact(t *testing.T) {
 	network := CreateNetworkTest()
 	networkRemote := CreateNetworkEmptyTest()

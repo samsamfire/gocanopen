@@ -31,7 +31,7 @@ var (
 
 const (
 	nodeIdMin = uint8(1)
-	nodeIdMax = uint8(126)
+	nodeIdMax = uint8(127)
 )
 
 // A Network is the main object of this package
