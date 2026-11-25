@@ -23,6 +23,7 @@ type SDOServer struct {
 	od                  *od.ObjectDictionary
 	nodeId              uint8
 	nmtOk               bool
+	nmtStopped          bool
 	rx                  chan SDOMessage
 	rxCancel            func()
 	streamer            *od.Streamer
@@ -55,7 +56,8 @@ func (s *SDOServer) Handle(frame canopen.Frame) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if frame.DLC != 8 {
+	// SDO is not available in STOPPED, requests must not be executed later
+	if frame.DLC != 8 || s.nmtStopped {
 		return
 	}
 	rx := SDOMessage{}
@@ -126,6 +128,17 @@ func (s *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 			if s.state != stateIdle {
 				s.txAbort(AbortTimeout)
 			}
+		}
+	}
+}
+
+// Discard any received frame that has not been processed yet
+func (s *SDOServer) drainRx() {
+	for {
+		select {
+		case <-s.rx:
+		default:
+			return
 		}
 	}
 }
@@ -484,6 +497,10 @@ func (server *SDOServer) OnNmtStateChange(nmtState uint8) {
 		server.nmtOk = true
 	} else {
 		server.nmtOk = false
+	}
+	server.nmtStopped = nmtState == nmt.StateStopped
+	if server.nmtStopped {
+		server.drainRx()
 	}
 }
 

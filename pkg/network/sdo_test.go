@@ -12,6 +12,7 @@ import (
 
 	canopen "github.com/samsamfire/gocanopen/v2"
 	"github.com/samsamfire/gocanopen/v2/pkg/can/virtual"
+	"github.com/samsamfire/gocanopen/v2/pkg/nmt"
 	"github.com/samsamfire/gocanopen/v2/pkg/od"
 	"github.com/samsamfire/gocanopen/v2/pkg/sdo"
 	"github.com/stretchr/testify/assert"
@@ -449,4 +450,35 @@ func TestSDOSegmentedDownloadNoSizeAfterUpload(t *testing.T) {
 	n, err := w.Write([]byte("12345678"))
 	assert.Nil(t, err)
 	assert.Equal(t, 8, n)
+}
+
+// SDO requests received in STOPPED should be discarded, and not
+// executed once the node leaves STOPPED
+func TestSDORequestsInStoppedDiscarded(t *testing.T) {
+	network := CreateNetworkTest()
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	defer network.Disconnect()
+	network2.SetTimeout(200)
+
+	local, err := network.Local(NodeIdTest)
+	assert.Nil(t, err)
+	before, err := local.ReadUint32(uint16(0x2007), 0)
+	assert.Nil(t, err)
+
+	assert.Nil(t, network2.Command(NodeIdTest, nmt.CommandEnterStopped))
+	assert.Eventually(t, func() bool {
+		return local.NMT.GetInternalState() == nmt.StateStopped
+	}, 1*time.Second, 20*time.Millisecond)
+	err = network2.WriteRaw(NodeIdTest, 0x2007, 0, before+1, false)
+	assert.Equal(t, sdo.AbortTimeout, err)
+
+	assert.Nil(t, network2.Command(NodeIdTest, nmt.CommandEnterPreOperational))
+	assert.Eventually(t, func() bool {
+		return local.NMT.GetInternalState() == nmt.StatePreOperational
+	}, 1*time.Second, 20*time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
+	after, err := local.ReadUint32(uint16(0x2007), 0)
+	assert.Nil(t, err)
+	assert.Equal(t, before, after)
 }
