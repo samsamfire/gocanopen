@@ -230,3 +230,14 @@ func TestSyncProducerOwnTPDO(t *testing.T) {
 		network.Disconnect()
 	}
 }
+
+// A SYNC object added with od.AddSYNC should be configurable as producer
+func TestSyncAddedToOD(t *testing.T) {
+	odict := od.Default()
+	odict.AddSYNC()
+	network := CreateNetworkEmptyTest()
+	defer network.Disconnect()
+	local, err := network.CreateLocalNode(NodeIdTest, odict)
+	assert.Nil(t, err)
+	assert.Nil(t, local.Configurator().ProducerEnableSYNC())
+}

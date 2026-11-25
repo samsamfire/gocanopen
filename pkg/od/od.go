@@ -141,7 +141,7 @@ func (od *ObjectDictionary) AddTPDO(tpdoNb uint16) error {
 // This adds objects 0x1005, 0x1006, 0x1007 & 0x1019 to the OD.
 // By default, SYNC is added with producer disabled and can id of 0x80
 func (od *ObjectDictionary) AddSYNC() {
-	_, _ = od.AddVariableType(0x1005, "COB-ID SYNC message", UNSIGNED32, AttributeSdoRw, "0x80000080") // Disabled with standard cob-id
+	_, _ = od.AddVariableType(0x1005, "COB-ID SYNC message", UNSIGNED32, AttributeSdoRw, "0x80") // Producer disabled with standard cob-id
 	_, _ = od.AddVariableType(0x1006, "Communication cycle period", UNSIGNED32, AttributeSdoRw, "0x0")
 	_, _ = od.AddVariableType(0x1007, "Synchronous window length", UNSIGNED32, AttributeSdoRw, "0x0")
 	_, _ = od.AddVariableType(0x1019, "Synchronous counter overflow value", UNSIGNED8, AttributeSdoRw, "0x0")
