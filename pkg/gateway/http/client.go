@@ -17,7 +17,7 @@ type GatewayClient struct {
 	logger            *slog.Logger
 	baseURL           string
 	apiVersion        string
-	currentSequenceNb int
+	currentSequenceNb uint32
 	networkId         int
 }
 

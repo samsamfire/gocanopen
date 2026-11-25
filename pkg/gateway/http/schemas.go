@@ -11,7 +11,7 @@ import (
 
 type GatewayResponse interface {
 	GetError() error
-	GetSequenceNb() int
+	GetSequenceNb() uint32
 }
 
 // HTTP response base
@@ -22,24 +22,24 @@ type GatewayResponseBase struct {
 	Response string `json:"response"`
 }
 
-func NewResponseBase(sequence int, response string) *GatewayResponseBase {
+func NewResponseBase(sequence uint32, response string) *GatewayResponseBase {
 	return &GatewayResponseBase{
-		Sequence: strconv.Itoa(sequence),
+		Sequence: strconv.FormatUint(uint64(sequence), 10),
 		Response: response,
 	}
 }
 
-func NewResponseError(sequence int, error error) []byte {
+func NewResponseError(sequence uint32, error error) []byte {
 	gwErr, ok := error.(*GatewayError)
 	if !ok {
 		gwErr = ErrGwRequestNotProcessed // Apparently no "internal error"
 	}
-	jData, _ := json.Marshal(map[string]string{"sequence": strconv.Itoa(sequence), "response": gwErr.Error()})
+	jData, _ := json.Marshal(map[string]string{"sequence": strconv.FormatUint(uint64(sequence), 10), "response": gwErr.Error()})
 	return jData
 }
 
-func NewResponseSuccess(sequence int) []byte {
-	jData, _ := json.Marshal(map[string]string{"sequence": strconv.Itoa(sequence), "response": "OK"})
+func NewResponseSuccess(sequence uint32) []byte {
+	jData, _ := json.Marshal(map[string]string{"sequence": strconv.FormatUint(uint64(sequence), 10), "response": "OK"})
 	return jData
 }
 
@@ -61,9 +61,9 @@ func (resp *GatewayResponseBase) GetError() error {
 	return NewGatewayError(int(errorCode))
 }
 
-func (resp *GatewayResponseBase) GetSequenceNb() int {
-	sequence, _ := strconv.Atoi(resp.Sequence)
-	return sequence
+func (resp *GatewayResponseBase) GetSequenceNb() uint32 {
+	sequence, _ := strconv.ParseUint(resp.Sequence, 10, 32)
+	return uint32(sequence)
 }
 
 // HTTP request to the server

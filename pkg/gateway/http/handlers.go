@@ -48,7 +48,7 @@ func (g *GatewayServer) newRequestFromRaw(r *http.Request) (*GatewayRequest, err
 		g.logger.Error("api version is not supported", "version", apiVersion)
 		return nil, ErrGwRequestNotSupported
 	}
-	sequence, err := strconv.Atoi(match[2])
+	sequence, err := strconv.ParseUint(match[2], 10, 64)
 	if err != nil || sequence > MAX_SEQUENCE_NB {
 		g.logger.Error("error processing sequence number", "sequence", match[2])
 		return nil, ErrGwSyntaxError
@@ -111,7 +111,7 @@ func (g *GatewayServer) handleRequest(w http.ResponseWriter, raw *http.Request) 
 		route, ok = g.routes[firstCommand]
 		if !ok {
 			g.logger.Debug("no handler found", "command", req.command, "firstCommand", firstCommand)
-			w.Write(NewResponseError(int(req.sequence), ErrGwRequestNotSupported))
+			w.Write(NewResponseError(req.sequence, ErrGwRequestNotSupported))
 			return
 		}
 	}
@@ -119,12 +119,12 @@ func (g *GatewayServer) handleRequest(w http.ResponseWriter, raw *http.Request) 
 	dw := doneWriter{ResponseWriter: w, done: false}
 	err = route(dw, req)
 	if err != nil {
-		w.Write(NewResponseError(int(req.sequence), err))
+		w.Write(NewResponseError(req.sequence, err))
 		return
 	}
 	if !dw.done {
 		// No response specific command has been given, reply with default success
-		dw.Write(NewResponseSuccess(int(req.sequence)))
+		dw.Write(NewResponseSuccess(req.sequence))
 		return
 	}
 }
@@ -172,13 +172,13 @@ func (g *GatewayServer) handlerSDORead(w doneWriter, req *GatewayRequest, comman
 
 	n, err := g.ReadSDO(uint8(req.nodeId), uint16(index), uint8(subindex))
 	if err != nil {
-		w.Write(NewResponseError(int(req.sequence), err))
+		w.Write(NewResponseError(req.sequence, err))
 		return nil
 	}
 	buf := g.Buffer()[:n]
 	slices.Reverse(buf)
 	resp := SDOReadResponse{
-		GatewayResponseBase: NewResponseBase(int(req.sequence), "OK"),
+		GatewayResponseBase: NewResponseBase(req.sequence, "OK"),
 		Data:                "0x" + hex.EncodeToString(buf),
 		Length:              n,
 	}
@@ -223,7 +223,7 @@ func (g *GatewayServer) handlerSDOWrite(w doneWriter, req *GatewayRequest, comma
 	}
 	err = g.WriteSDO(uint8(req.nodeId), uint16(index), uint8(subindex), sdoWrite.Value, datatype)
 	if err != nil {
-		w.Write(NewResponseError(int(req.sequence), err))
+		w.Write(NewResponseError(req.sequence, err))
 		return nil
 	}
 	return nil
@@ -250,7 +250,7 @@ func (g *GatewayServer) handleGetVersion(w doneWriter, req *GatewayRequest) erro
 		return ErrGwRequestNotProcessed
 	}
 	resp := VersionInfo{
-		GatewayResponseBase: NewResponseBase(int(req.sequence), "OK"),
+		GatewayResponseBase: NewResponseBase(req.sequence, "OK"),
 		GatewayVersion:      &version,
 	}
 	respRaw, err := json.Marshal(resp)
@@ -272,7 +272,7 @@ func (g *GatewayServer) handleSetDefaultNetwork(w doneWriter, req *GatewayReques
 		return ErrGwSyntaxError
 	}
 	g.SetDefaultNetworkId(uint16(networkId))
-	respRaw := NewResponseSuccess(int(req.sequence))
+	respRaw := NewResponseSuccess(req.sequence)
 	w.Write(respRaw)
 	return nil
 }
@@ -288,7 +288,7 @@ func (g *GatewayServer) handleSetDefaultNode(w doneWriter, req *GatewayRequest) 
 		return ErrGwSyntaxError
 	}
 	g.SetDefaultNodeId(uint8(nodeId))
-	respRaw := NewResponseSuccess(int(req.sequence))
+	respRaw := NewResponseSuccess(req.sequence)
 	w.Write(respRaw)
 	return nil
 }
