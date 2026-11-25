@@ -8,6 +8,8 @@ import (
 )
 
 func (s *SDOServer) rxDownloadInitiate(rx SDOMessage) error {
+	// Size can be left over from a previous transfer
+	s.sizeIndicated = 0
 
 	// Segmented transfer type
 	if !rx.IsExpedited() {

@@ -433,3 +433,20 @@ func TestSDOSegmentedDownloadBiggerThanFifo(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, expected, streamer.Data)
 }
+
+// A segmented download without size indication should not be checked
+// against the size of a previous transfer
+func TestSDOSegmentedDownloadNoSizeAfterUpload(t *testing.T) {
+	network := createNetworkBigEntriesTest(t)
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	defer network.Disconnect()
+
+	_, err := network2.ReadUint32(NodeIdTest, 0x2007, 0)
+	assert.Nil(t, err)
+	w, err := network2.NewRawWriter(NodeIdTest, 0x3002, 0, false, 0)
+	assert.Nil(t, err)
+	n, err := w.Write([]byte("12345678"))
+	assert.Nil(t, err)
+	assert.Equal(t, 8, n)
+}
