@@ -27,6 +27,7 @@ type RPDO struct {
 	timeoutRx     time.Duration
 	timer         *time.Timer
 	inTimeout     bool
+	lengthError   bool
 	isOperational bool
 	rxCancel      func()
 	syncCh        chan uint8
@@ -115,6 +116,7 @@ func (rpdo *RPDO) Stop() {
 
 	rpdo.rxData = nil
 	rpdo.clearTimeout()
+	rpdo.setLengthError(false, emergency.ErrNoError, 0)
 }
 
 // Clear timeout state and the corresponding error, if any
@@ -133,19 +135,30 @@ func (rpdo *RPDO) validateFrameLength(dlc uint8) bool {
 
 	// Frame is too short, report an error and discard it
 	if dlc < expectedLength {
-		rpdo.pdo.emcy.Error(true, emergency.EmRPDOWrongLength, emergency.ErrPdoLength, uint32(dlc))
+		rpdo.setLengthError(true, emergency.ErrPdoLength, dlc)
 		return false
 	}
 
 	// Frame is too long, report an error but still process it,
 	// the surplus bytes are simply ignored
 	if dlc > expectedLength {
-		rpdo.pdo.emcy.Error(true, emergency.EmRPDOWrongLength, emergency.ErrPdoLengthExc, uint32(dlc))
+		rpdo.setLengthError(true, emergency.ErrPdoLengthExc, dlc)
 		return true
 	}
 
-	rpdo.pdo.emcy.Error(false, emergency.EmRPDOWrongLength, emergency.ErrNoError, 0)
+	rpdo.setLengthError(false, emergency.ErrNoError, 0)
 	return true
+}
+
+// The length error is shared by all RPDOs, only report changes of this RPDO
+// so that a correct RPDO does not clear the error of another one.
+// Caller must hold rpdo.mu
+func (rpdo *RPDO) setLengthError(set bool, errorCode uint16, dlc uint8) {
+	if set == rpdo.lengthError {
+		return
+	}
+	rpdo.lengthError = set
+	rpdo.pdo.emcy.Error(set, emergency.EmRPDOWrongLength, errorCode, uint32(dlc))
 }
 
 func (rpdo *RPDO) restartTimeoutTimer() {

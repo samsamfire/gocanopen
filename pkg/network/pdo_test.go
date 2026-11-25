@@ -885,3 +885,49 @@ func TestRPDOTimeoutClearedOnNmtChange(t *testing.T) {
 	local.NMT.SendInternalCommand(uint8(nmt.CommandEnterPreOperational))
 	assert.False(t, local.EMCY.IsError(emergency.EmRPDOTimeOut))
 }
+
+// A correct RPDO should not clear the length error of another RPDO,
+// which would otherwise generate an EMCY for every received frame
+func TestRPDOLengthErrorShared(t *testing.T) {
+	network := CreateNetworkTest()
+	defer network.Disconnect()
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	local, err := network.Local(NodeIdTest)
+	assert.Nil(t, err)
+	assert.Eventually(t, func() bool {
+		return local.NMT.GetInternalState() == nmt.StateOperational
+	}, 1*time.Second, 10*time.Millisecond)
+	c := local.Configurator()
+	assert.Nil(t, c.ProducerDisableSYNC())
+	assert.Nil(t, c.WriteCommunicationPeriod(0))
+	for i, canId := range []uint16{0x255, 0x256} {
+		assert.Nil(t, c.WriteConfigurationPDO(uint16(i+1), config.PDOConfigurationParameter{
+			CanId:            canId,
+			TransmissionType: 254,
+			Mappings:         []config.PDOMappingParameter{{Index: 0x2006, Subindex: 0, LengthBits: 16}},
+		}))
+		assert.Nil(t, c.EnablePDO(uint16(i+1)))
+	}
+	emcyId := uint32(emergency.ServiceId) + uint32(NodeIdTest)
+	collector := &FrameCollector{}
+	cancel, err := network2.Subscribe(emcyId, 0x7FF, false, collector)
+	assert.Nil(t, err)
+	defer cancel()
+
+	// RPDO 1 is always too short, RPDO 2 is correct
+	for range 5 {
+		assert.Nil(t, network2.Send(canopen.Frame{ID: 0x255, DLC: 1}))
+		assert.Nil(t, network2.Send(canopen.Frame{ID: 0x256, DLC: 2}))
+		time.Sleep(20 * time.Millisecond)
+	}
+	time.Sleep(100 * time.Millisecond)
+	assert.Len(t, collector.GetFrames(emcyId), 1)
+	assert.True(t, local.EMCY.IsError(emergency.EmRPDOWrongLength))
+
+	// RPDO 1 is correct again
+	assert.Nil(t, network2.Send(canopen.Frame{ID: 0x255, DLC: 2}))
+	assert.Eventually(t, func() bool {
+		return !local.EMCY.IsError(emergency.EmRPDOWrongLength)
+	}, 1*time.Second, 10*time.Millisecond)
+}
