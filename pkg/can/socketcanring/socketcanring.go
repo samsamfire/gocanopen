@@ -3,6 +3,7 @@
 package socketcanring
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -56,7 +57,24 @@ type Bus struct {
 	pollingPeriod time.Duration
 	ringBuffer    []byte
 	ringReq       unix.TpacketReq
+	ownMu         sync.Mutex
+	receiveOwn    bool
+	ownPending    []ownFrame // Sent frames whose echo has not been received yet
 }
+
+// The RX ring receives every frame of the interface, including the echo of
+// the frames sent by this bus. They are recognized by comparing with the
+// frames sent, echoes are received in the same order as sent.
+type ownFrame struct {
+	frame canopen.Frame
+	sent  time.Time
+}
+
+const (
+	// An echo is expected well before this, e.g. echo disabled for the interface
+	ownEchoTimeout = time.Second
+	ownPendingMax  = 256
+)
 
 func NewBus(channel string) (canopen.Bus, error) {
 	iface, err := net.InterfaceByName(channel)
@@ -203,6 +221,8 @@ func (b *Bus) Disconnect() error {
 }
 
 func (b *Bus) Send(frame canopen.Frame) error {
+	// Before sending, the echo could otherwise be received first
+	b.addOwnFrame(frame)
 	canFrame := &CANFrame{}
 	canFrame.ID = frame.ID
 	canFrame.Len = frame.DLC
@@ -211,6 +231,7 @@ func (b *Bus) Send(frame canopen.Frame) error {
 	rawData := (*(*[16]byte)(unsafe.Pointer(canFrame)))[:]
 	n, err := unix.Write(b.txFd, rawData)
 	if err != nil {
+		b.removeOwnFrame(frame)
 		return err
 	}
 	if n != len(rawData) {
@@ -258,7 +279,7 @@ func (b *Bus) processIncoming(ctx context.Context) {
 				canopenFrame.DLC = canFrame.Len
 				canopenFrame.Data = canFrame.Data
 
-				if b.rxCallback != nil {
+				if b.rxCallback != nil && !b.isOwnEcho(canopenFrame) {
 					b.rxCallback.Handle(canopenFrame)
 				}
 			}
@@ -284,13 +305,61 @@ func (b *Bus) Subscribe(rxCallback canopen.FrameListener) error {
 	return nil
 }
 
+// Enable reception of the frames sent by this bus. Disabled by default.
 func (b *Bus) SetReceiveOwn(enabled bool) error {
-	enabledInt := 0
-	if enabled {
-		enabledInt = 1
+	b.ownMu.Lock()
+	defer b.ownMu.Unlock()
+	b.receiveOwn = enabled
+	b.ownPending = nil
+	return nil
+}
+
+// Remember a sent frame, to recognize its echo
+func (b *Bus) addOwnFrame(frame canopen.Frame) {
+	b.ownMu.Lock()
+	defer b.ownMu.Unlock()
+	if b.receiveOwn {
+		return
 	}
-	// Apply to TX socket (AF_CAN)
-	return unix.SetsockoptInt(b.txFd, unix.SOL_CAN_RAW, unix.CAN_RAW_RECV_OWN_MSGS, enabledInt)
+	// Forget the frames whose echo never came
+	now := time.Now()
+	for len(b.ownPending) > 0 &&
+		(len(b.ownPending) >= ownPendingMax || now.Sub(b.ownPending[0].sent) > ownEchoTimeout) {
+		b.ownPending = b.ownPending[1:]
+	}
+	b.ownPending = append(b.ownPending, ownFrame{frame: frame, sent: now})
+}
+
+// Forget the last occurrence of a frame that could not be sent
+func (b *Bus) removeOwnFrame(frame canopen.Frame) {
+	b.ownMu.Lock()
+	defer b.ownMu.Unlock()
+	for i := len(b.ownPending) - 1; i >= 0; i-- {
+		if sameFrame(b.ownPending[i].frame, frame) {
+			b.ownPending = append(b.ownPending[:i], b.ownPending[i+1:]...)
+			return
+		}
+	}
+}
+
+// Whether a received frame is the echo of a frame sent by this bus
+func (b *Bus) isOwnEcho(frame canopen.Frame) bool {
+	b.ownMu.Lock()
+	defer b.ownMu.Unlock()
+	for i, own := range b.ownPending {
+		if sameFrame(own.frame, frame) {
+			// Echoes come in order, the ones before were lost
+			b.ownPending = b.ownPending[i+1:]
+			return true
+		}
+	}
+	return false
+}
+
+// Compare frames as on the wire
+func sameFrame(a canopen.Frame, b canopen.Frame) bool {
+	length := min(int(a.DLC), len(a.Data))
+	return a.ID == b.ID && a.DLC == b.DLC && bytes.Equal(a.Data[:length], b.Data[:length])
 }
 
 func (b *Bus) SetFilters(filters []unix.CanFilter) error {

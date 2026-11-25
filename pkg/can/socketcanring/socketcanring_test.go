@@ -78,3 +78,27 @@ func TestReceiveAndReconnect(t *testing.T) {
 	assert.Len(t, frames, 2)
 	assert.Equal(t, uint32(0x124), frames[len(frames)-1].ID)
 }
+
+// Frames sent by the bus should only be received if enabled
+func TestReceiveOwn(t *testing.T) {
+	bus := newBusOrSkip(t)
+	listener := &frameListener{}
+	assert.Nil(t, bus.Subscribe(listener))
+	assert.Nil(t, bus.Connect())
+	defer bus.Disconnect()
+
+	for range 10 {
+		assert.Nil(t, bus.Send(canopen.Frame{ID: 0x111, DLC: 1, Data: [8]byte{0x11}}))
+	}
+	sendRaw(t, 0x111, 0x11)
+	time.Sleep(100 * time.Millisecond)
+	// Only the frame from another socket, even if identical
+	assert.Len(t, listener.Frames(), 1)
+
+	assert.Nil(t, bus.(*Bus).SetReceiveOwn(true))
+	assert.Nil(t, bus.Send(canopen.Frame{ID: 0x222, DLC: 1}))
+	time.Sleep(100 * time.Millisecond)
+	frames := listener.Frames()
+	assert.Len(t, frames, 2)
+	assert.Equal(t, uint32(0x222), frames[len(frames)-1].ID)
+}
