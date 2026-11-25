@@ -60,6 +60,8 @@ type Bus struct {
 	ownMu         sync.Mutex
 	receiveOwn    bool
 	ownPending    []ownFrame // Sent frames whose echo has not been received yet
+	filters       []unix.CanFilter
+	filtersSet    bool
 }
 
 // The RX ring receives every frame of the interface, including the echo of
@@ -279,7 +281,7 @@ func (b *Bus) processIncoming(ctx context.Context) {
 				canopenFrame.DLC = canFrame.Len
 				canopenFrame.Data = canFrame.Data
 
-				if b.rxCallback != nil && !b.isOwnEcho(canopenFrame) {
+				if b.rxCallback != nil && !b.isOwnEcho(canopenFrame) && b.accept(canopenFrame) {
 					b.rxCallback.Handle(canopenFrame)
 				}
 			}
@@ -362,9 +364,34 @@ func sameFrame(a canopen.Frame, b canopen.Frame) bool {
 	return a.ID == b.ID && a.DLC == b.DLC && bytes.Equal(a.Data[:length], b.Data[:length])
 }
 
+// Add some filtering to CAN bus, like CAN_RAW_FILTER : a frame is received if it
+// matches at least one filter. The ring receives all the frames, so filtering
+// is done by the bus.
 func (b *Bus) SetFilters(filters []unix.CanFilter) error {
-	// Apply to TX socket only, does not affect AF_PACKET RX
-	return unix.SetsockoptCanRawFilter(b.rxFd, unix.SOL_CAN_RAW, unix.CAN_RAW_FILTER, filters)
+	b.ownMu.Lock()
+	defer b.ownMu.Unlock()
+	b.filters = filters
+	b.filtersSet = true
+	return nil
+}
+
+// Whether a received frame passes the filters
+func (b *Bus) accept(frame canopen.Frame) bool {
+	b.ownMu.Lock()
+	defer b.ownMu.Unlock()
+	if !b.filtersSet {
+		return true
+	}
+	for _, filter := range b.filters {
+		match := frame.ID&filter.Mask == filter.Id&filter.Mask&^unix.CAN_INV_FILTER
+		if filter.Id&unix.CAN_INV_FILTER != 0 {
+			match = !match
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }
 
 // Update polling period for RX

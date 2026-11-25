@@ -102,3 +102,29 @@ func TestReceiveOwn(t *testing.T) {
 	assert.Len(t, frames, 2)
 	assert.Equal(t, uint32(0x222), frames[len(frames)-1].ID)
 }
+
+// Only the frames matching a filter should be received
+func TestFilters(t *testing.T) {
+	bus := newBusOrSkip(t)
+	listener := &frameListener{}
+	assert.Nil(t, bus.Subscribe(listener))
+	assert.Nil(t, bus.Connect())
+	defer bus.Disconnect()
+
+	assert.Nil(t, bus.(*Bus).SetFilters([]unix.CanFilter{{Id: 0x50, Mask: 0x7FF}}))
+	sendRaw(t, 0x100, 0)
+	sendRaw(t, 0x50, 0)
+	time.Sleep(100 * time.Millisecond)
+	frames := listener.Frames()
+	assert.Len(t, frames, 1)
+	assert.Equal(t, uint32(0x50), frames[0].ID)
+
+	// Inverted filter
+	assert.Nil(t, bus.(*Bus).SetFilters([]unix.CanFilter{{Id: 0x50 | unix.CAN_INV_FILTER, Mask: 0x7FF}}))
+	sendRaw(t, 0x50, 0)
+	sendRaw(t, 0x100, 0)
+	time.Sleep(100 * time.Millisecond)
+	frames = listener.Frames()
+	assert.Len(t, frames, 2)
+	assert.Equal(t, uint32(0x100), frames[len(frames)-1].ID)
+}
