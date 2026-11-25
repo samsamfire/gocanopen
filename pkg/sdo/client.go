@@ -1009,7 +1009,7 @@ func (c *SDOClient) upload(
 				if (response.raw[0] & 0xF9) == 0xC0 {
 					c.blockCRCEnabled = response.IsCRCEnabled()
 					if (response.raw[0] & 0x02) != 0 {
-						c.sizeIndicated = uint32(response.GetBlockSize())
+						c.sizeIndicated = response.SizeIndicated()
 					}
 					c.state = stateUploadBlkInitiateReq2
 					c.logger.Debug("[RX] block upload init",
@@ -1041,7 +1041,7 @@ func (c *SDOClient) upload(
 						)
 					} else {
 						if (response.raw[0] & 0x01) != 0 {
-							c.sizeIndicated = uint32(response.GetBlockSize())
+							c.sizeIndicated = response.SizeIndicated()
 						}
 						c.toggle = 0x00
 						c.state = stateUploadSegmentReq

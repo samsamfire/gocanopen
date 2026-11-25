@@ -394,3 +394,16 @@ func TestSDOUploadBigVariable(t *testing.T) {
 	assert.Equal(t, 1500, n)
 	assert.True(t, bytes.Equal([]byte(strings.Repeat("a", 1500)), buffer[:n]), "uploaded data does not match entry")
 }
+
+// Size indicated by the server on a block upload is 32 bits, it should
+// not be truncated to its lower byte
+func TestSDOBlockUploadSizeIndicated(t *testing.T) {
+	network := createNetworkBigEntriesTest(t)
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	defer network.Disconnect()
+
+	data, err := network2.ReadAll(NodeIdTest, 0x3000, 0)
+	assert.Nil(t, err)
+	assert.Equal(t, []byte(strings.Repeat("a", 1500)), data)
+}
