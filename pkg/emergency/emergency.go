@@ -282,7 +282,7 @@ func (emcy *EMCY) Handle(frame canopen.Frame) {
 	// Ignore sync messages and only accept 8 bytes size
 	if emcy == nil || emcy.rxCallback == nil ||
 		frame.ID == 0x80 ||
-		len(frame.Data) != 8 {
+		frame.DLC != 8 {
 		return
 	}
 	errorCode := binary.LittleEndian.Uint16(frame.Data[0:2])

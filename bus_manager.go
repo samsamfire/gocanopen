@@ -77,38 +77,50 @@ func (bm *BusManager) Process() error {
 	return nil
 }
 
-// Subscribe to a specific CAN ID
+// Subscribe to a specific CAN ID, or to all the CAN IDs matching ident
+// on the bits set in mask (e.g. 0x80 with mask 0x780 matches 0x80 to 0xFF)
 // Returns a cancel func to remove subscription
 func (bm *BusManager) Subscribe(ident uint32, mask uint32, rtr bool, callback FrameListener) (cancel func(), err error) {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
 
-	if int(ident) >= len(bm.listeners) {
+	if ident > MaxCanId {
 		return nil, errors.New("array-based manager only supports Standard 11-bit IDs")
 	}
 
-	idx := ident
+	// Offset by 2048 for RTR frames
+	offset := uint32(0)
 	if rtr {
-		// Offset by 2048 for RTR frames
-		idx += MaxCanId + 1
+		offset = MaxCanId + 1
+	}
+	mask &= MaxCanId
+	indexes := []uint32{}
+	for id := uint32(0); id <= MaxCanId; id++ {
+		if id&mask == ident&mask {
+			indexes = append(indexes, id+offset)
+		}
 	}
 
 	bm.nextSubId++
 	subId := bm.nextSubId
-	bm.listeners[idx] = append(bm.listeners[idx], subscriber{
-		id:       subId,
-		callback: callback,
-	})
+	for _, idx := range indexes {
+		bm.listeners[idx] = append(bm.listeners[idx], subscriber{
+			id:       subId,
+			callback: callback,
+		})
+	}
 
 	cancel = func() {
 		bm.mu.Lock()
 		defer bm.mu.Unlock()
 
-		subs := bm.listeners[idx]
-		for i, sub := range subs {
-			if sub.id == subId {
-				bm.listeners[idx] = append(subs[:i], subs[i+1:]...)
-				return
+		for _, idx := range indexes {
+			subs := bm.listeners[idx]
+			for i, sub := range subs {
+				if sub.id == subId {
+					bm.listeners[idx] = append(subs[:i], subs[i+1:]...)
+					break
+				}
 			}
 		}
 	}
