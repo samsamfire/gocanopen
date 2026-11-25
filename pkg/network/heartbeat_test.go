@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/samsamfire/gocanopen/v2/pkg/emergency"
 	"github.com/samsamfire/gocanopen/v2/pkg/heartbeat"
 	"github.com/samsamfire/gocanopen/v2/pkg/nmt"
 	"github.com/samsamfire/gocanopen/v2/pkg/od"
@@ -182,4 +183,29 @@ func TestHeartbeatEventCallbackArguments(t *testing.T) {
 			assert.Equal(t, nmt.StateOperational, e.nmtState)
 		}
 	}
+}
+
+// A heartbeat timeout should raise the heartbeat consumer error, which is
+// cleared once the heartbeat is received again
+func TestHeartbeatTimeoutError(t *testing.T) {
+	network := CreateNetworkEmptyTest()
+	defer network.Disconnect()
+	consumer, err := network.CreateLocalNode(0x23, od.Default())
+	assert.Nil(t, err)
+	producer, err := network.CreateLocalNode(0x22, od.Default())
+	assert.Nil(t, err)
+	assert.Nil(t, producer.Configurator().WriteHeartbeatPeriod(20*time.Millisecond))
+	assert.Nil(t, consumer.Configurator().WriteMonitoredNode(1, 0x22, 100*time.Millisecond))
+	time.Sleep(minDelayHeartbeat)
+
+	assert.Nil(t, producer.Configurator().WriteHeartbeatPeriod(0))
+	assert.Eventually(t, func() bool {
+		return consumer.EMCY.IsError(emergency.EmHeartbeatConsumer)
+	}, 1*time.Second, 20*time.Millisecond)
+	assert.False(t, consumer.EMCY.IsError(emergency.EmHBConsumerRemoteReset))
+
+	assert.Nil(t, producer.Configurator().WriteHeartbeatPeriod(20*time.Millisecond))
+	assert.Eventually(t, func() bool {
+		return !consumer.EMCY.IsError(emergency.EmHeartbeatConsumer)
+	}, 1*time.Second, 20*time.Millisecond)
 }

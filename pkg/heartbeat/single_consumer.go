@@ -165,7 +165,7 @@ func (entry *hbConsumerEntry) timeoutHandler() {
 	// Check timeout
 	if entry.hbState == HeartbeatActive {
 		// Timeout is expired
-		parent.emcy.ErrorReport(emergency.EmHBConsumerRemoteReset, emergency.ErrHeartbeat, uint32(entry.odIndex))
+		parent.emcy.ErrorReport(emergency.EmHeartbeatConsumer, emergency.ErrHeartbeat, uint32(entry.odIndex))
 		entry.nmtState = nmt.StateUnknown
 		entry.hbState = HeartbeatTimeout
 		eventType = EventTimeout
