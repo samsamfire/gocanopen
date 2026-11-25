@@ -48,6 +48,11 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 		cobId := binary.LittleEndian.Uint32(data)
 		canId := cobId & CobIdCanIdMask
 		valid := (cobId & CobIdValidBit) == 0
+		// Like at startup and when reading, the predefined can id without
+		// node id means the predefined can id
+		if canId != 0 && canId == uint32(pdo.predefinedId&CanIdWithoutNodeIdMask) {
+			canId = uint32(pdo.predefinedId)
+		}
 
 		rpdo.pdo.logger.Debug("updating cob-id",
 			"valid", valid,
@@ -178,6 +183,11 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 		cobId := binary.LittleEndian.Uint32(data)
 		canId := cobId & CobIdCanIdMask
 		valid := (cobId & CobIdValidBit) == 0
+		// Like at startup and when reading, the predefined can id without
+		// node id means the predefined can id
+		if canId != 0 && canId == uint32(pdo.predefinedId&CanIdWithoutNodeIdMask) {
+			canId = uint32(pdo.predefinedId)
+		}
 
 		tpdo.pdo.logger.Debug("updating cob-id",
 			"valid", valid,

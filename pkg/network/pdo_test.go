@@ -805,3 +805,54 @@ func TestTPDODummyMapping(t *testing.T) {
 		assert.EqualValues(t, [3]byte{}, [3]byte(frames[0].Data[1:4]))
 	}
 }
+
+// Writing the predefined can id without node id (e.g. 0x200) is the same
+// as writing the predefined can id (e.g. 0x200 + node id)
+func TestPDOBaseCanId(t *testing.T) {
+	network := CreateNetworkTest()
+	defer network.Disconnect()
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	local, err := network.Local(NodeIdTest)
+	assert.Nil(t, err)
+	assert.Eventually(t, func() bool {
+		return local.NMT.GetInternalState() == nmt.StateOperational
+	}, 1*time.Second, 10*time.Millisecond)
+	c := local.Configurator()
+
+	predefined := uint32(0x200) + uint32(NodeIdTest)
+	for i, write := range []func() error{
+		// Written while disabled, then enabled
+		func() error {
+			err := c.WriteConfigurationPDO(1, config.PDOConfigurationParameter{
+				CanId:            0x200,
+				TransmissionType: 254,
+				Mappings:         []config.PDOMappingParameter{{Index: 0x2005, Subindex: 0, LengthBits: 8}},
+			})
+			if err != nil {
+				return err
+			}
+			return c.EnablePDO(1)
+		},
+		// Written directly as valid
+		func() error {
+			if err := c.DisablePDO(1); err != nil {
+				return err
+			}
+			return network.WriteRaw(NodeIdTest, 0x1400, 1, uint32(0x200), false)
+		},
+	} {
+		assert.Nil(t, write())
+		cobId, err := c.ReadCobIdPDO(1)
+		assert.Nil(t, err)
+		assert.Equal(t, predefined, cobId)
+		assert.Nil(t, c.EnablePDO(1))
+
+		assert.Nil(t, local.WriteAnyExact(0x2005, 0, uint8(0)))
+		assert.Nil(t, network2.Send(canopen.Frame{ID: predefined, DLC: 1, Data: [8]byte{0xAA}}))
+		assert.Eventually(t, func() bool {
+			value, _ := local.ReadUint8(uint16(0x2005), 0)
+			return value == 0xAA
+		}, 500*time.Millisecond, 10*time.Millisecond, "case %d", i)
+	}
+}
