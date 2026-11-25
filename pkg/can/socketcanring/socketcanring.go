@@ -5,6 +5,7 @@ package socketcanring
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -45,8 +46,9 @@ type CANFrame struct {
 // It uses regular socket for sending
 type Bus struct {
 	channel       string
-	txFd          int
-	rxFd          int
+	ifindex       int
+	txFd          int // -1 when closed
+	rxFd          int // -1 when closed
 	rxCallback    canopen.FrameListener
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
@@ -61,16 +63,31 @@ func NewBus(channel string) (canopen.Bus, error) {
 	if err != nil {
 		return nil, err
 	}
+	bus := &Bus{
+		channel:       channel,
+		ifindex:       iface.Index,
+		txFd:          -1,
+		rxFd:          -1,
+		logger:        slog.Default(),
+		pollingPeriod: 10 * time.Millisecond,
+	}
+	if err := bus.open(); err != nil {
+		return nil, err
+	}
+	return bus, nil
+}
 
+// Create the TX socket and the RX ring buffer
+func (b *Bus) open() error {
 	// Setup TX Socket (Standard AF_CAN)
 	txFd, err := unix.Socket(unix.AF_CAN, unix.SOCK_RAW, unix.CAN_RAW)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create TX socket: %v", err)
+		return fmt.Errorf("failed to create TX socket: %v", err)
 	}
-	addrCan := &unix.SockaddrCAN{Ifindex: iface.Index}
+	addrCan := &unix.SockaddrCAN{Ifindex: b.ifindex}
 	if err := unix.Bind(txFd, addrCan); err != nil {
 		unix.Close(txFd)
-		return nil, fmt.Errorf("failed to bind TX socket: %v", err)
+		return fmt.Errorf("failed to bind TX socket: %v", err)
 	}
 
 	// Setup RX Socket (AF_PACKET)
@@ -78,14 +95,14 @@ func NewBus(channel string) (canopen.Bus, error) {
 	rxFd, err := unix.Socket(unix.AF_PACKET, unix.SOCK_RAW, int(htons(unix.ETH_P_CAN)))
 	if err != nil {
 		unix.Close(txFd)
-		return nil, fmt.Errorf("failed to create RX socket: %v", err)
+		return fmt.Errorf("failed to create RX socket: %v", err)
 	}
 
 	// Set Packet Version to V2, the frame headers are parsed as unix.Tpacket2Hdr
 	if err := unix.SetsockoptInt(rxFd, unix.SOL_PACKET, unix.PACKET_VERSION, unix.TPACKET_V2); err != nil {
 		unix.Close(rxFd)
 		unix.Close(txFd)
-		return nil, fmt.Errorf("failed to set TPACKET_V2: %v", err)
+		return fmt.Errorf("failed to set TPACKET_V2: %v", err)
 	}
 
 	// Set Packet Reserve (matches tcpdump)
@@ -93,7 +110,7 @@ func NewBus(channel string) (canopen.Bus, error) {
 	if err := unix.SetsockoptInt(rxFd, unix.SOL_PACKET, unix.PACKET_RESERVE, 4); err != nil {
 		unix.Close(rxFd)
 		unix.Close(txFd)
-		return nil, fmt.Errorf("failed to set PACKET_RESERVE: %v", err)
+		return fmt.Errorf("failed to set PACKET_RESERVE: %v", err)
 	}
 
 	// Ring Parameters
@@ -112,7 +129,7 @@ func NewBus(channel string) (canopen.Bus, error) {
 	if err := unix.SetsockoptTpacketReq(rxFd, unix.SOL_PACKET, unix.PACKET_RX_RING, &req); err != nil {
 		unix.Close(rxFd)
 		unix.Close(txFd)
-		return nil, fmt.Errorf("failed to set PACKET_RX_RING (req=%+v): %v", req, err)
+		return fmt.Errorf("failed to set PACKET_RX_RING (req=%+v): %v", req, err)
 	}
 
 	// Memory map
@@ -121,34 +138,50 @@ func NewBus(channel string) (canopen.Bus, error) {
 	if err != nil {
 		unix.Close(rxFd)
 		unix.Close(txFd)
-		return nil, fmt.Errorf("failed to mmap: %v", err)
+		return fmt.Errorf("failed to mmap: %v", err)
 	}
 
 	// Bind RX Socket
 	sll := &unix.SockaddrLinklayer{
 		Protocol: htons(ETH_P_CAN),
-		Ifindex:  iface.Index,
+		Ifindex:  b.ifindex,
 	}
 
 	if err := unix.Bind(rxFd, sll); err != nil {
 		unix.Munmap(data)
 		unix.Close(rxFd)
 		unix.Close(txFd)
-		return nil, fmt.Errorf("failed to bind RX socket: %v", err)
+		return fmt.Errorf("failed to bind RX socket: %v", err)
 	}
 
-	return &Bus{
-		channel:       channel,
-		txFd:          txFd,
-		rxFd:          rxFd,
-		ringBuffer:    data,
-		ringReq:       req,
-		logger:        slog.Default(),
-		pollingPeriod: 10 * time.Millisecond,
-	}, nil
+	b.txFd = txFd
+	b.rxFd = rxFd
+	b.ringBuffer = data
+	b.ringReq = req
+	return nil
 }
 
+// Close the sockets and release the ring buffer
+func (b *Bus) close() error {
+	if b.rxFd < 0 {
+		return nil
+	}
+	errUnmap := unix.Munmap(b.ringBuffer)
+	errRx := unix.Close(b.rxFd)
+	errTx := unix.Close(b.txFd)
+	b.ringBuffer = nil
+	b.rxFd = -1
+	b.txFd = -1
+	return errors.Join(errUnmap, errRx, errTx)
+}
+
+// The bus can be connected again after a disconnection
 func (b *Bus) Connect(args ...any) error {
+	if b.rxFd < 0 {
+		if err := b.open(); err != nil {
+			return err
+		}
+	}
 	var ctx context.Context
 	ctx, b.cancel = context.WithCancel(context.Background())
 	b.wg.Add(1)
@@ -159,17 +192,14 @@ func (b *Bus) Connect(args ...any) error {
 	return nil
 }
 
+// This stops reception and closes the sockets
 func (b *Bus) Disconnect() error {
-	if b.cancel == nil {
-		return nil
+	if b.cancel != nil {
+		b.cancel()
+		b.wg.Wait()
+		b.cancel = nil
 	}
-	b.cancel()
-	b.wg.Wait()
-
-	unix.Munmap(b.ringBuffer)
-	unix.Close(b.rxFd)
-	unix.Close(b.txFd)
-	return nil
+	return b.close()
 }
 
 func (b *Bus) Send(frame canopen.Frame) error {

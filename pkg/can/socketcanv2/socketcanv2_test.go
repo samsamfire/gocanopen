@@ -137,3 +137,22 @@ func TestFilterNoReception(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	assert.Len(t, listener.frames, 0)
 }
+
+// The bus should still receive frames after being disconnected and connected again
+func TestReconnect(t *testing.T) {
+	skipCIorNoVcan(t)
+	other := createSocketCanBus()
+	defer other.Disconnect()
+	sock, err := NewBus("vcan0")
+	assert.Nil(t, err)
+	listener := &frameListener{frames: make([]canopen.Frame, 0)}
+	assert.Nil(t, sock.Subscribe(listener))
+	assert.Nil(t, sock.Connect())
+	assert.Nil(t, sock.Disconnect())
+	assert.Nil(t, sock.Connect())
+	defer sock.Disconnect()
+
+	assert.Nil(t, other.Send(canopen.NewFrame(0x100, 0, 8)))
+	time.Sleep(100 * time.Millisecond)
+	assert.Len(t, listener.frames, 1)
+}

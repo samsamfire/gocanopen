@@ -35,7 +35,10 @@ type CANframe struct {
 
 type Bus struct {
 	channel    string
-	fd         int
+	ifindex    int
+	fd         int // -1 when closed
+	receiveOwn bool
+	filters    []unix.CanFilter
 	rxCallback canopen.FrameListener
 	cancel     context.CancelFunc
 	wg         sync.WaitGroup
@@ -73,25 +76,63 @@ func NewBus(channel string) (canopen.Bus, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	fd, err := unix.Socket(unix.AF_CAN, unix.SOCK_RAW, unix.CAN_RAW)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create CAN socket : %v", err)
-	}
-	err = unix.SetsockoptTimeval(fd, unix.SOL_SOCKET, unix.SO_RCVTIMEO, &defaultTimeVal)
-	if err != nil {
-		return nil, fmt.Errorf("failed to set read timeout %v", err)
-	}
-	addr := &unix.SockaddrCAN{Ifindex: iface.Index}
-	if err := unix.Bind(fd, addr); err != nil {
+	socketcan := &Bus{channel: channel, ifindex: iface.Index, fd: -1, logger: slog.Default()}
+	if err := socketcan.open(); err != nil {
 		return nil, err
 	}
-	socketcan := &Bus{channel: channel, fd: fd, logger: slog.Default()}
 	return socketcan, nil
 }
 
+// Create and bind the CAN socket, then apply the options that were set
+func (b *Bus) open() error {
+	fd, err := unix.Socket(unix.AF_CAN, unix.SOCK_RAW, unix.CAN_RAW)
+	if err != nil {
+		return fmt.Errorf("failed to create CAN socket : %v", err)
+	}
+	err = unix.SetsockoptTimeval(fd, unix.SOL_SOCKET, unix.SO_RCVTIMEO, &defaultTimeVal)
+	if err != nil {
+		unix.Close(fd)
+		return fmt.Errorf("failed to set read timeout %v", err)
+	}
+	addr := &unix.SockaddrCAN{Ifindex: b.ifindex}
+	if err := unix.Bind(fd, addr); err != nil {
+		unix.Close(fd)
+		return err
+	}
+	b.fd = fd
+	if b.receiveOwn {
+		if err := b.SetReceiveOwn(true); err != nil {
+			b.close()
+			return err
+		}
+	}
+	if b.filters != nil {
+		if err := b.SetFilters(b.filters); err != nil {
+			b.close()
+			return err
+		}
+	}
+	return nil
+}
+
+// Close the CAN socket
+func (b *Bus) close() error {
+	if b.fd < 0 {
+		return nil
+	}
+	err := unix.Close(b.fd)
+	b.fd = -1
+	return err
+}
+
 // "Connect" implementation of Bus interface
+// The bus can be connected again after a disconnection
 func (b *Bus) Connect(...any) error {
+	if b.fd < 0 {
+		if err := b.open(); err != nil {
+			return err
+		}
+	}
 	var ctx context.Context
 	ctx, b.cancel = context.WithCancel(context.Background())
 	b.wg.Add(1)
@@ -103,13 +144,14 @@ func (b *Bus) Connect(...any) error {
 }
 
 // "Disconnect" implementation of Bus interface
+// This stops reception and closes the CAN socket
 func (b *Bus) Disconnect() error {
-	if b.cancel == nil {
-		return nil
+	if b.cancel != nil {
+		b.cancel()
+		b.wg.Wait()
+		b.cancel = nil
 	}
-	b.cancel()
-	b.wg.Wait()
-	return nil
+	return b.close()
 }
 
 // "Send" implementation of Bus interface
@@ -204,7 +246,12 @@ func (b *Bus) Subscribe(rxCallback canopen.FrameListener) error {
 }
 
 // Enable own reception on the bus. CAN be useful when testing for example
+// The option is kept if the bus is connected again.
 func (b *Bus) SetReceiveOwn(enabled bool) error {
+	b.receiveOwn = enabled
+	if b.fd < 0 {
+		return nil
+	}
 	enabledInt := 0
 	if enabled {
 		enabledInt = 1
@@ -214,7 +261,12 @@ func (b *Bus) SetReceiveOwn(enabled bool) error {
 }
 
 // Add some filtering to CAN bus
+// The filters are kept if the bus is connected again.
 func (b *Bus) SetFilters(filters []unix.CanFilter) error {
+	b.filters = filters
+	if b.fd < 0 {
+		return nil
+	}
 	b.logger.Info("setting option 'CAN_RAW_FILTER'", "fd", b.fd, "filters", filters)
 	return unix.SetsockoptCanRawFilter(b.fd, unix.SOL_CAN_RAW, unix.CAN_RAW_FILTER, filters)
 }
