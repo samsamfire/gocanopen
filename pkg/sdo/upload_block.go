@@ -143,6 +143,13 @@ func (s *SDOServer) txUploadBlockInitiate() {
 }
 
 func (s *SDOServer) txUploadBlockSubBlock() error {
+	// The end of the entry might only be known after trying to read more,
+	// (e.g. a reader) it is needed to flag the last segment
+	if !s.finished && s.buf.Len() <= BlockSeqSize {
+		if err := s.readObjectDictionary(BlockSeqSize+1, true); err != nil {
+			return err
+		}
+	}
 	s.blockSequenceNb += 1
 	s.txBuffer.Data[0] = s.blockSequenceNb
 

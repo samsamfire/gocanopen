@@ -560,3 +560,22 @@ func TestSDOBlockDownloadSubBlockEdgeSegmentLost(t *testing.T) {
 		network.Disconnect()
 	}
 }
+
+// A block upload of an entry whose end is only known once it has been read
+// (e.g. a reader) should flag the last segment, even if it ends a sub-block
+func TestSDOBlockUploadReaderSubBlockBoundary(t *testing.T) {
+	payload := bytes.Repeat([]byte("0123456789"), 700)
+	odict := od.Default()
+	odict.AddReader(0x3001, "reader", bytes.NewReader(payload))
+	network := CreateNetworkEmptyTest()
+	defer network.Disconnect()
+	_, err := network.CreateLocalNode(NodeIdTest, odict)
+	assert.Nil(t, err)
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+
+	network2.SetBlockMaxSize(100)
+	data, err := network2.ReadAll(NodeIdTest, 0x3001, 0)
+	assert.Nil(t, err)
+	assert.Equal(t, payload, data)
+}
