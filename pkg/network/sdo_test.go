@@ -407,3 +407,29 @@ func TestSDOBlockUploadSizeIndicated(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, []byte(strings.Repeat("a", 1500)), data)
 }
+
+// A segmented download bigger than the client fifo should refill
+// the fifo instead of sending empty segments forever
+func TestSDOSegmentedDownloadBiggerThanFifo(t *testing.T) {
+	network := createNetworkBigEntriesTest(t)
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	defer network.Disconnect()
+
+	expected := []byte(strings.Repeat("d", 3000))
+	done := make(chan error, 1)
+	go func() {
+		done <- network2.WriteRaw(NodeIdTest, 0x3003, 0, expected, false)
+	}()
+	select {
+	case err := <-done:
+		assert.Nil(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("segmented download did not finish")
+	}
+	local, err := network.Local(NodeIdTest)
+	assert.Nil(t, err)
+	streamer, err := local.GetOD().Streamer(0x3003, 0, true)
+	assert.Nil(t, err)
+	assert.Equal(t, expected, streamer.Data)
+}

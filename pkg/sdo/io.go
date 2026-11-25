@@ -150,6 +150,13 @@ func (rw *sdoRawReadWriter) Write(b []byte) (n int, err error) {
 	}
 	last := time.Now()
 	for {
+		// Refill fifo whilst download is in progress
+		if bufferPartial {
+			n += client.fifo.Write(b[n:], nil)
+			if n == len(b) {
+				bufferPartial = false
+			}
+		}
 		elapsed := time.Since(last)
 		last = time.Now()
 
@@ -166,13 +173,6 @@ func (rw *sdoRawReadWriter) Write(b []byte) (n int, err error) {
 		case ret == success:
 			return int(nUint32), err
 		case ret == blockDownloadInProgress:
-			// Fill buffer whilst block download in progress
-			if bufferPartial {
-				n += client.fifo.Write(b[n:], nil)
-				if n == len(b) {
-					bufferPartial = false
-				}
-			}
 			if client.processingPeriod > 0 {
 				time.Sleep(client.processingPeriod)
 			}
