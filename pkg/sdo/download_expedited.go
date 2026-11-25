@@ -82,7 +82,12 @@ func (s *SDOServer) rxDownloadInitiate(rx SDOMessage) error {
 	}
 	_, err := s.streamer.Write(data[:nbToWrite])
 	if err != nil {
-		return ConvertOdToSdoAbort(err.(od.ODR))
+		odr, ok := err.(od.ODR)
+		if !ok {
+			s.logger.Warn("unexpected error in server on expedited download", "error", err)
+			odr = od.ErrGeneral
+		}
+		return ConvertOdToSdoAbort(odr)
 	}
 	s.state = stateDownloadInitiateRsp
 	s.finished = true

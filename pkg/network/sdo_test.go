@@ -2,6 +2,7 @@ package network
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -481,4 +482,25 @@ func TestSDORequestsInStoppedDiscarded(t *testing.T) {
 	after, err := local.ReadUint32(uint16(0x2007), 0)
 	assert.Nil(t, err)
 	assert.Equal(t, before, after)
+}
+
+// A custom writer can return any error, it should result in an abort
+// and not crash the sdo server
+func TestSDOExpeditedDownloadCustomError(t *testing.T) {
+	odict := od.Default()
+	odict.Index(0x2007).AddExtension(nil, od.ReadEntryDefault, func(stream *od.Stream, data []byte) (uint16, error) {
+		return 0, errors.New("value refused by application")
+	})
+	network := CreateNetworkEmptyTest()
+	defer network.Disconnect()
+	local, err := network.CreateLocalNode(NodeIdTest, odict)
+	assert.Nil(t, err)
+	assert.Eventually(t, func() bool {
+		return local.NMT.GetInternalState() == nmt.StateOperational
+	}, 1*time.Second, 20*time.Millisecond)
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+
+	err = network2.WriteRaw(NodeIdTest, 0x2007, 0, uint32(1), false)
+	assert.Equal(t, sdo.AbortGeneral, err)
 }
