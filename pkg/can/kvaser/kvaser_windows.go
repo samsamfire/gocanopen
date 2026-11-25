@@ -58,7 +58,6 @@ const (
 	StatusOk         = 0
 	canERR_NOMSG     = -2
 	canDRIVER_NORMAL = 4
-	canMSG_STD       = 2
 
 	canIOCTL_CLEAR_ERROR_COUNTERS = 5
 	canIOCTL_SET_LOCAL_TXECHO     = 32
@@ -326,12 +325,13 @@ func (k *KvaserBus) Send(frame canopen.Frame) error {
 		return ErrNotConnected
 	}
 
+	id, flags := toCanlibId(frame.ID)
 	r1, _, _ := procWrite.Call(
 		uintptr(k.txHandle),
-		uintptr(frame.ID),
+		uintptr(id),
 		uintptr(unsafe.Pointer(&frame.Data[0])),
 		uintptr(frame.DLC),
-		uintptr(canMSG_STD),
+		uintptr(flags),
 	)
 
 	err := NewKvaserError(int(int32(r1)))
@@ -403,7 +403,7 @@ func (k *KvaserBus) Recv() (canopen.Frame, error) {
 		return canopen.Frame{}, err
 	}
 
-	frame := canopen.NewFrame(uint32(id), 0, uint8(dlc))
+	frame := canopen.NewFrame(fromCanlibId(uint32(id), flags), 0, uint8(dlc))
 	frame.Data = data
 	return frame, nil
 }
