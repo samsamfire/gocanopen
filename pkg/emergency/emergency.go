@@ -261,7 +261,6 @@ type EMCY struct {
 	mu              sync.Mutex
 	nodeId          byte
 	errorStatusBits [EmergencyErrorStatusBits / 8]byte
-	errorRegister   *byte
 	canErrorOld     uint16
 	txBuffer        canopen.Frame
 	fifo            []emfifo
@@ -364,13 +363,7 @@ func (emcy *EMCY) Process(nmtIsPreOrOperational bool, timeDifferenceUs uint32) {
 		}
 		emcy.mu.Lock()
 	}
-	errorRegister := ErrRegGeneric |
-		ErrRegCurrent |
-		ErrRegVoltage |
-		ErrRegTemperature |
-		ErrRegCommunication |
-		ErrRegDevProfile |
-		ErrRegManufacturer
+	errorRegister := emcy.errorRegisterLocked()
 
 	if !nmtIsPreOrOperational {
 		return
@@ -519,12 +512,31 @@ func (emcy *EMCY) IsError(errorBit byte) bool {
 }
 
 func (emcy *EMCY) GetErrorRegister() byte {
-	if emcy == nil || emcy.errorRegister == nil {
+	if emcy == nil {
 		return 0
 	}
 	emcy.mu.Lock()
 	defer emcy.mu.Unlock()
-	return *emcy.errorRegister
+	return emcy.errorRegisterLocked()
+}
+
+// Error register (0x1001) calculated from the error status bits,
+// informative errors are not reported. Caller must hold emcy.mu
+func (emcy *EMCY) errorRegisterLocked() byte {
+	var errorRegister byte
+	// Communication errors, critical
+	if emcy.errorStatusBits[2] != 0 || emcy.errorStatusBits[3] != 0 {
+		errorRegister |= ErrRegCommunication
+	}
+	// Manufacturer specific errors, critical
+	if emcy.errorStatusBits[8] != 0 || emcy.errorStatusBits[9] != 0 {
+		errorRegister |= ErrRegManufacturer
+	}
+	// Generic error is set on any error
+	if emcy.errorStatusBits[5] != 0 || errorRegister != 0 {
+		errorRegister |= ErrRegGeneric
+	}
+	return errorRegister
 }
 
 func (emcy *EMCY) ProducerEnabled() bool {
@@ -562,8 +574,7 @@ func NewEMCY(
 		logger = slog.Default()
 	}
 	emcy := &EMCY{bm: bm, logger: logger.With("service", "[EMCY]")}
-	// TODO handle error register ptr
-	// emergency.errorRegister
+	entry1001.AddExtension(emcy, readEntry1001, od.WriteEntryDisabled)
 	fifoSize := entry1003.SubCount()
 	emcy.fifo = make([]emfifo, fifoSize)
 

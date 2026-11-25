@@ -46,6 +46,19 @@ func writeEntryStatusBits(stream *od.Stream, data []byte) (uint16, error) {
 	return uint16(countWriteLocal), nil
 }
 
+// [EMCY] read error register
+func readEntry1001(stream *od.Stream, data []byte) (uint16, error) {
+	if stream == nil || stream.Subindex != 0 || len(data) < 1 {
+		return 0, od.ErrDevIncompat
+	}
+	em, ok := stream.Object.(*EMCY)
+	if !ok {
+		return 0, od.ErrDevIncompat
+	}
+	data[0] = em.GetErrorRegister()
+	return 1, nil
+}
+
 // [EMCY] read emergency history
 func readEntry1003(stream *od.Stream, data []byte) (uint16, error) {
 	if stream == nil || data == nil ||
