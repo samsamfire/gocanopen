@@ -181,3 +181,23 @@ func TestNmt(t *testing.T) {
 	})
 
 }
+
+// A state change callback should be able to use the NMT object
+func TestNmtCallbackUsesNmt(t *testing.T) {
+	network := CreateNetworkTest()
+	defer network.Disconnect()
+	local, err := network.Local(NodeIdTest)
+	assert.Nil(t, err)
+
+	states := make(chan uint8, 10)
+	local.NMT.AddStateChangeCallback(func(state uint8) {
+		states <- local.NMT.GetInternalState()
+	})
+	go local.NMT.SendInternalCommand(uint8(nmt.CommandEnterPreOperational))
+	select {
+	case state := <-states:
+		assert.Equal(t, nmt.StatePreOperational, state)
+	case <-time.After(1 * time.Second):
+		t.Fatal("state change callback blocked")
+	}
+}

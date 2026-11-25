@@ -70,6 +70,7 @@ type NMT struct {
 	logger             *slog.Logger
 	mu                 sync.Mutex
 	txMu               sync.Mutex // Serializes heartbeat sends with Stop
+	callbackMu         sync.Mutex // Serializes state change notifications
 	emcy               *emergency.EMCY
 	operatingState     uint8
 	operatingStatePrev uint8
@@ -154,12 +155,13 @@ func (nmt *NMT) producerHandler() {
 		// A command may have been received in the meantime
 		if nmt.operatingState == StateInitializing {
 			if nmt.control&StartupToOperational != 0 {
-				nmt.setStateLocked(StateOperational)
+				nmt.setStateAndUnlock(StateOperational)
 			} else {
-				nmt.setStateLocked(StatePreOperational)
+				nmt.setStateAndUnlock(StatePreOperational)
 			}
+		} else {
+			nmt.mu.Unlock()
 		}
-		nmt.mu.Unlock()
 		// Restart timer straight away to send new state
 		nmt.restartTimerProducer(0)
 		return
@@ -173,12 +175,21 @@ func (nmt *NMT) producerHandler() {
 
 // Update the state and notify the callbacks straight away, so that
 // objects stop or start before the heartbeat is sent.
-// Caller must hold nmt.mu
-func (nmt *NMT) setStateLocked(state uint8) {
+// Caller must hold nmt.mu, it is released before calling the callbacks
+// so that they can use the NMT object.
+func (nmt *NMT) setStateAndUnlock(state uint8) {
 	nmt.operatingStatePrev = nmt.operatingState
 	nmt.operatingState = state
 	nmt.logger.Info("nmt state changed", "previous", stateMap[nmt.operatingStatePrev], "new", stateMap[state])
+	callbacks := make([]func(nmtState uint8), 0, len(nmt.callbacks))
 	for _, callback := range nmt.callbacks {
+		callbacks = append(callbacks, callback)
+	}
+	// Taken before releasing nmt.mu, so that notifications are in order
+	nmt.callbackMu.Lock()
+	defer nmt.callbackMu.Unlock()
+	nmt.mu.Unlock()
+	for _, callback := range callbacks {
 		callback(state)
 	}
 }
@@ -211,9 +222,10 @@ func (nmt *NMT) Start() {
 	rxCancel, _ := nmt.bm.Subscribe(uint32(nmt.canIdNmtRx), 0x7FF, false, nmt)
 	nmt.rxCancel = rxCancel
 	if nmt.operatingState == StateInitializing {
-		nmt.setStateLocked(StateInitializing)
+		nmt.setStateAndUnlock(StateInitializing)
+	} else {
+		nmt.mu.Unlock()
 	}
-	nmt.mu.Unlock()
 	nmt.restartTimerProducer(nmt.firstHbTime)
 }
 
@@ -221,8 +233,7 @@ func (nmt *NMT) Start() {
 func (nmt *NMT) Reset() {
 	nmt.mu.Lock()
 	nmt.reset = ResetNot
-	nmt.setStateLocked(StateInitializing)
-	nmt.mu.Unlock()
+	nmt.setStateAndUnlock(StateInitializing)
 	nmt.restartTimerProducer(nmt.firstHbTime)
 }
 
@@ -262,7 +273,6 @@ func (nmt *NMT) SendInternalCommand(command uint8) {
 
 func (nmt *NMT) processCommand(command Command) {
 	nmt.mu.Lock()
-	defer nmt.mu.Unlock()
 
 	newState := nmt.operatingState
 
@@ -270,6 +280,7 @@ func (nmt *NMT) processCommand(command Command) {
 
 	switch command {
 	case CommandEmpty:
+		nmt.mu.Unlock()
 		return
 	case CommandEnterOperational:
 		newState = StateOperational
@@ -282,20 +293,22 @@ func (nmt *NMT) processCommand(command Command) {
 
 	case CommandResetNode:
 		nmt.reset = ResetApp
+		nmt.mu.Unlock()
 		return
 
 	case CommandResetCommunication:
 		nmt.reset = ResetComm
+		nmt.mu.Unlock()
 		return
 	}
 
-	if newState != nmt.operatingState {
-		nmt.setStateLocked(newState)
+	if newState == nmt.operatingState {
 		nmt.mu.Unlock()
-		// state change, so should send straight away
-		nmt.restartTimerProducer(0)
-		nmt.mu.Lock()
+		return
 	}
+	nmt.setStateAndUnlock(newState)
+	// state change, so should send straight away
+	nmt.restartTimerProducer(0)
 }
 
 // Send an NMT command to the network
@@ -315,6 +328,8 @@ func (nmt *NMT) SendCommand(command Command, nodeId uint8) error {
 
 // Add a callback func to be called on NMT state change
 // It returns a cancel func that can be used to remove the callback
+// The callback can use the NMT object, but should not change the NMT state
+// synchronously.
 func (nmt *NMT) AddStateChangeCallback(callback func(nmtState uint8)) (cancel func()) {
 	nmt.mu.Lock()
 	defer nmt.mu.Unlock()
