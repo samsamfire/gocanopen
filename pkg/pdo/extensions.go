@@ -214,6 +214,7 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 			tpdo.txBuffer = canopen.NewFrame(canId, 0, uint8(pdo.dataLength))
 			pdo.Valid = valid
 			pdo.configuredId = uint16(canId)
+			tpdo.syncCounter = SyncCounterReset
 			// Event timer is one-shot and only re-armed after a send,
 			// so re-arm it here or transmission never resumes
 			if valid {
@@ -288,6 +289,7 @@ func writeEntry18xx(stream *od.Stream, data []byte) (uint16, error) {
 			return 0, od.ErrInvalidValue
 		}
 		tpdo.syncStartValue = syncStart
+		tpdo.syncCounter = SyncCounterReset
 		tpdo.pdo.logger.Debug("updated sync start timer", "syncStart", syncStart)
 
 	}

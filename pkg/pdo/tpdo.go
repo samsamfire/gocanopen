@@ -227,6 +227,8 @@ func (tpdo *TPDO) SendAsync() {
 // Start relevant timers & sybscribe to SYNC messages
 func (tpdo *TPDO) Start() {
 	tpdo.mu.Lock()
+	// Wait again for the SYNC start value, if used
+	tpdo.syncCounter = SyncCounterReset
 	// All transmission types except event driven (254) are sent on SYNC
 	if tpdo.transmissionType != TransmissionTypeSyncEventLo && tpdo.sync != nil && tpdo.syncCh == nil {
 		tpdo.syncCh = tpdo.sync.Subscribe()

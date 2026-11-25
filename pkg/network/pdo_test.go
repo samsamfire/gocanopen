@@ -931,3 +931,52 @@ func TestRPDOLengthErrorShared(t *testing.T) {
 		return !local.EMCY.IsError(emergency.EmRPDOWrongLength)
 	}, 1*time.Second, 10*time.Millisecond)
 }
+
+// A synchronous TPDO should be sent for the first time on the SYNC
+// matching the SYNC start value, also after an NMT change
+func TestTPDOSyncStartValue(t *testing.T) {
+	network := CreateNetworkTest()
+	defer network.Disconnect()
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	local, err := network.Local(NodeIdTest)
+	assert.Nil(t, err)
+	c := local.Configurator()
+	assert.Nil(t, c.ProducerDisableSYNC())
+	assert.Nil(t, c.WriteCommunicationPeriod(0))
+	assert.Nil(t, c.WriteCounterOverflow(20))
+	tpdoNb := pdo.MaxRpdoNumber + 1
+	assert.Nil(t, c.WriteConfigurationPDO(tpdoNb, config.PDOConfigurationParameter{
+		CanId:            0x1B0,
+		TransmissionType: 4,
+		Mappings:         []config.PDOMappingParameter{{Index: 0x2005, Subindex: 0, LengthBits: 8}},
+	}))
+	assert.Nil(t, c.WriteSyncStart(tpdoNb, 10))
+	assert.Nil(t, c.EnablePDO(tpdoNb))
+	collector := &FrameCollector{}
+	cancel, err := network2.Subscribe(0x1B0, 0x7FF, false, collector)
+	assert.Nil(t, err)
+	defer cancel()
+
+	counter := uint8(0)
+	firstSent := func() uint8 {
+		collector.Clear()
+		for range 20 {
+			counter = counter%20 + 1
+			assert.Nil(t, network2.Send(canopen.Frame{ID: 0x80, DLC: 1, Data: [8]byte{counter}}))
+			time.Sleep(15 * time.Millisecond)
+			if collector.Count(0x1B0) > 0 {
+				return counter
+			}
+		}
+		return 0
+	}
+	// Some SYNC already received before the start value
+	counter = 2
+	assert.Equal(t, uint8(10), firstSent())
+
+	local.NMT.SendInternalCommand(uint8(nmt.CommandEnterPreOperational))
+	local.NMT.SendInternalCommand(uint8(nmt.CommandEnterOperational))
+	counter = 12
+	assert.Equal(t, uint8(10), firstSent())
+}
