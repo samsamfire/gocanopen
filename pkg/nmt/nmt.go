@@ -74,7 +74,6 @@ type NMT struct {
 	emcy               *emergency.EMCY
 	operatingState     uint8
 	operatingStatePrev uint8
-	internalCommand    Command
 	nodeId             uint8
 	control            uint16
 	timerProducer      *time.Timer
@@ -314,16 +313,20 @@ func (nmt *NMT) processCommand(command Command) {
 // Send an NMT command to the network
 func (nmt *NMT) SendCommand(command Command, nodeId uint8) error {
 	nmt.mu.Lock()
-	defer nmt.mu.Unlock()
+	ownNodeId := nmt.nodeId
+	frame := nmt.nmtTxBuff
+	nmt.mu.Unlock()
+
+	// Send NMT command, unlocked as it can be received back
+	frame.Data[0] = uint8(command)
+	frame.Data[1] = nodeId
+	err := nmt.send(frame)
 
 	// Also apply to node if concerned
-	if nodeId == 0 || nodeId == nmt.nodeId {
-		nmt.internalCommand = command
+	if nodeId == 0 || nodeId == ownNodeId {
+		nmt.processCommand(command)
 	}
-	// Send NMT command
-	nmt.nmtTxBuff.Data[0] = uint8(command)
-	nmt.nmtTxBuff.Data[1] = nodeId
-	return nmt.send(nmt.nmtTxBuff)
+	return err
 }
 
 // Add a callback func to be called on NMT state change

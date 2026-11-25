@@ -4,8 +4,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/samsamfire/gocanopen/v2/pkg/can/virtual"
 	"github.com/samsamfire/gocanopen/v2/pkg/heartbeat"
 	"github.com/samsamfire/gocanopen/v2/pkg/nmt"
+	"github.com/samsamfire/gocanopen/v2/pkg/node"
 	"github.com/samsamfire/gocanopen/v2/pkg/od"
 	"github.com/samsamfire/gocanopen/v2/pkg/sdo"
 	"github.com/stretchr/testify/assert"
@@ -199,5 +201,42 @@ func TestNmtCallbackUsesNmt(t *testing.T) {
 		assert.Equal(t, nmt.StatePreOperational, state)
 	case <-time.After(1 * time.Second):
 		t.Fatal("state change callback blocked")
+	}
+}
+
+// A command sent by a node should also apply to itself when concerned
+func TestNmtSendCommand(t *testing.T) {
+	for _, receiveOwn := range []bool{false, true} {
+		canBus, err := NewBus("virtual", "localhost:18888", 0)
+		assert.Nil(t, err)
+		canBus.(*virtual.Bus).SetReceiveOwn(receiveOwn)
+		network := NewNetwork(canBus)
+		assert.Nil(t, network.Connect())
+		network2 := CreateNetworkEmptyTest()
+		local, err := network.CreateLocalNode(NodeIdTest, od.Default())
+		assert.Nil(t, err)
+		other, err := network2.CreateLocalNode(NodeIdTest+1, od.Default())
+		assert.Nil(t, err)
+		for _, node := range []*node.LocalNode{local, other} {
+			assert.Eventually(t, func() bool {
+				return node.NMT.GetInternalState() == nmt.StateOperational
+			}, 1*time.Second, 10*time.Millisecond)
+		}
+
+		done := make(chan error, 1)
+		go func() { done <- local.NMT.SendCommand(nmt.CommandEnterPreOperational, 0) }()
+		select {
+		case err := <-done:
+			assert.Nil(t, err)
+		case <-time.After(1 * time.Second):
+			t.Fatalf("SendCommand blocked, receiveOwn %v", receiveOwn)
+		}
+		for _, node := range []*node.LocalNode{local, other} {
+			assert.Eventually(t, func() bool {
+				return node.NMT.GetInternalState() == nmt.StatePreOperational
+			}, 1*time.Second, 10*time.Millisecond, "receiveOwn %v", receiveOwn)
+		}
+		network2.Disconnect()
+		network.Disconnect()
 	}
 }
