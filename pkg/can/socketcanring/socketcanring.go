@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -21,7 +22,6 @@ import (
 // Constants for AF_PACKET Ring Buffer
 const (
 	ETH_P_CAN        = 0x000C // EtherType for CAN
-	TPACKET_V1       = 1
 	TP_STATUS_USER   = 1
 	TP_STATUS_COPY   = 2
 	TP_STATUS_KERNEL = 0
@@ -74,18 +74,18 @@ func NewBus(channel string) (canopen.Bus, error) {
 	}
 
 	// Setup RX Socket (AF_PACKET)
-	// Using ETH_P_ALL to ensure protocol setup doesn't interfere
+	// Only CAN frames are received
 	rxFd, err := unix.Socket(unix.AF_PACKET, unix.SOCK_RAW, int(htons(unix.ETH_P_CAN)))
 	if err != nil {
 		unix.Close(txFd)
 		return nil, fmt.Errorf("failed to create RX socket: %v", err)
 	}
 
-	// Set Packet Version to V1 (matches tcpdump)
-	if err := unix.SetsockoptInt(rxFd, unix.SOL_PACKET, unix.PACKET_VERSION, TPACKET_V1); err != nil {
+	// Set Packet Version to V2, the frame headers are parsed as unix.Tpacket2Hdr
+	if err := unix.SetsockoptInt(rxFd, unix.SOL_PACKET, unix.PACKET_VERSION, unix.TPACKET_V2); err != nil {
 		unix.Close(rxFd)
 		unix.Close(txFd)
-		return nil, fmt.Errorf("failed to set TPACKET_V1: %v", err)
+		return nil, fmt.Errorf("failed to set TPACKET_V2: %v", err)
 	}
 
 	// Set Packet Reserve (matches tcpdump)
@@ -209,12 +209,13 @@ func (b *Bus) processIncoming(ctx context.Context) {
 				offset = 0
 			}
 
-			// Read V1 Header
-			headerBuf := b.ringBuffer[offset : offset+int(unsafe.Sizeof(unix.TpacketHdr{}))]
-			hdr := (*unix.TpacketHdr)(unsafe.Pointer(&headerBuf[0]))
+			// Read V2 Header
+			headerBuf := b.ringBuffer[offset : offset+int(unsafe.Sizeof(unix.Tpacket2Hdr{}))]
+			hdr := (*unix.Tpacket2Hdr)(unsafe.Pointer(&headerBuf[0]))
 
 			// If Kernel owns the frame, we are caught up. Stop sweeping.
-			if uint64(hdr.Status)&uint64(unix.TP_STATUS_USER) == 0 {
+			// Status is shared with the kernel, access it atomically
+			if atomic.LoadUint32(&hdr.Status)&unix.TP_STATUS_USER == 0 {
 				break
 			}
 
@@ -233,7 +234,7 @@ func (b *Bus) processIncoming(ctx context.Context) {
 			}
 
 			// Return ownership to Kernel
-			hdr.Status = unix.TP_STATUS_KERNEL
+			atomic.StoreUint32(&hdr.Status, unix.TP_STATUS_KERNEL)
 
 			// Move to next frame immediately
 			frameIdx = (frameIdx + 1) % totalFrames
