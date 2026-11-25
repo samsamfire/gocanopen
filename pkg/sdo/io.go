@@ -116,10 +116,15 @@ func (client *SDOClient) ReadRaw(nodeId uint8, index uint16, subindex uint8, dat
 		return 0, err
 	}
 	n, err := r.Read(data)
-	if err != nil && err != io.EOF {
+	if err == io.EOF {
+		return n, nil
+	}
+	if err != nil {
 		return n, err
 	}
-	return n, nil
+	// More data is available than what data can hold
+	client.abortTransfer(AbortDataLong)
+	return n, AbortDataLong
 }
 
 // Read everything from a given index/subindex from node and return all bytes

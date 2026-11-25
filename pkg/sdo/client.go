@@ -754,6 +754,19 @@ func (c *SDOClient) abort(abortCode Abort) {
 	_ = c.send(c.txBuffer)
 }
 
+// Abort the on-going transfer if any, the client is then ready
+// for a new transfer
+func (c *SDOClient) abortTransfer(abortCode Abort) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.state != stateIdle &&
+		c.state != stateUploadLocalTransfer &&
+		c.state != stateDownloadLocalTransfer {
+		c.abort(abortCode)
+	}
+	c.state = stateIdle
+}
+
 /////////////////////////////////////
 ////////////SDO UPLOAD///////////////
 /////////////////////////////////////

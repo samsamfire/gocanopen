@@ -579,3 +579,22 @@ func TestSDOBlockUploadReaderSubBlockBoundary(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, payload, data)
 }
+
+// Reading into a buffer smaller than the entry should fail, abort the
+// transfer and not prevent the next transfers
+func TestSDOReadRawBufferTooSmall(t *testing.T) {
+	network := createNetworkBigEntriesTest(t)
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	defer network.Disconnect()
+
+	buffer := make([]byte, 10)
+	_, err := network2.ReadRaw(NodeIdTest, 0x3003, 0, buffer)
+	assert.Equal(t, sdo.AbortDataLong, err)
+	// Expedited transfer, the whole value is already received
+	_, err = network2.ReadUint8(NodeIdTest, 0x2007, 0)
+	assert.Equal(t, sdo.AbortDataLong, err)
+	// Next transfer is not affected
+	_, err = network2.ReadUint32(NodeIdTest, 0x2007, 0)
+	assert.Nil(t, err)
+}
