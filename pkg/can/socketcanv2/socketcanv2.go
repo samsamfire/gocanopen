@@ -11,6 +11,7 @@ import (
 	"os"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	canopen "github.com/samsamfire/gocanopen/v2"
@@ -45,6 +46,9 @@ type Bus struct {
 	wg         sync.WaitGroup
 	logger     *slog.Logger
 }
+
+// Socket receive timeout, unix.Timeval fields depend on the architecture
+var DefaultTimeVal = unix.NsecToTimeval(int64(100 * time.Millisecond))
 
 // Create a new SocketCAN bus. This expects the CAN channel to be up.
 // e.g. running "ip a" should show can0 or something similar.
