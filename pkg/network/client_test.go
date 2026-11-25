@@ -2,12 +2,14 @@ package network
 
 import (
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	canopen "github.com/samsamfire/gocanopen/v2"
 	"github.com/samsamfire/gocanopen/v2/pkg/od"
+	"github.com/samsamfire/gocanopen/v2/pkg/sdo"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -41,6 +43,37 @@ func TestSDOReadWriteLocal(t *testing.T) {
 	val2, err := client.ReadUint64(0x55, 0x201B, 0x0)
 	assert.Nil(t, err)
 	assert.EqualValues(t, 8989, val2)
+}
+
+// Local transfers should check length and handle strings like remote transfers
+func TestSDOWriteLocalLength(t *testing.T) {
+	odict := od.Default()
+	_, err := odict.AddVariableType(0x3004, "huge string", od.VISIBLE_STRING, od.AttributeSdoRw|od.AttributeStr, strings.Repeat("c", 3000))
+	assert.Nil(t, err)
+	network := CreateNetworkEmptyTest()
+	defer network.Disconnect()
+	localNode, err := network.CreateLocalNode(0x55, odict)
+	assert.Nil(t, err)
+	client := localNode.SDOclients[0]
+
+	// Too short for an UNSIGNED32
+	err = client.WriteRaw(0x55, 0x2007, 0x0, uint8(0xAA), false)
+	assert.Equal(t, sdo.AbortDataShort, err)
+
+	// Shorter string than the OD entry
+	err = client.WriteRaw(0x55, 0x2009, 0x0, "abc", false)
+	assert.Nil(t, err)
+	value, err := localNode.ReadString(uint16(0x2009), 0)
+	assert.Nil(t, err)
+	assert.Equal(t, "abc", value)
+
+	// String that fills the whole client buffer
+	expected := strings.Repeat("e", 1000)
+	err = client.WriteRaw(0x55, 0x3004, 0x0, expected, false)
+	assert.Nil(t, err)
+	value, err = localNode.ReadString(uint16(0x3004), 0)
+	assert.Nil(t, err)
+	assert.Equal(t, expected, value)
 }
 
 var result uint64

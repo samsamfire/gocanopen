@@ -568,7 +568,8 @@ func (c *SDOClient) downloadLocal(bufferPartial bool) (ret uint8, abortCode erro
 	if c.streamer.Writer() == nil {
 		return
 	}
-	count := c.fifo.Read(c.localBuffer, nil)
+	// Keep room for up to two null terminators (strings)
+	count := c.fifo.Read(c.localBuffer[:len(c.localBuffer)-2], nil)
 	c.sizeTransferred += uint32(count)
 	// No data error
 	if count == 0 {
@@ -584,14 +585,14 @@ func (c *SDOClient) downloadLocal(bufferPartial bool) (ret uint8, abortCode erro
 	} else if !bufferPartial {
 		odVarSize := c.streamer.DataLength
 		// Special case for strings where the downloaded data may be shorter (nul character can be omitted)
-		if c.streamer.HasAttribute(od.AttributeStr) && odVarSize == 0 || c.sizeTransferred < uint32(odVarSize) {
-			count += 1
+		if c.streamer.HasAttribute(od.AttributeStr) && (odVarSize == 0 || c.sizeTransferred < odVarSize) {
 			c.localBuffer[count] = 0
-			c.sizeTransferred += 1
+			count++
+			c.sizeTransferred++
 			if odVarSize == 0 || odVarSize > c.sizeTransferred {
-				count += 1
 				c.localBuffer[count] = 0
-				c.sizeTransferred += 1
+				count++
+				c.sizeTransferred++
 			}
 			c.streamer.DataLength = c.sizeTransferred
 		} else if odVarSize == 0 {
