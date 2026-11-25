@@ -288,7 +288,8 @@ func (v *Variable) PutBytes(value []byte) error {
 		}
 		return ErrDataShort
 	}
-	v.value = value
+	// Copy, streamers created before (e.g. PDO mappings) share the same slice
+	copy(v.value, value)
 	return nil
 }
 

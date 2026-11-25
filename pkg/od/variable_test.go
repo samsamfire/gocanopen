@@ -85,3 +85,27 @@ func TestEncodeEmpty(t *testing.T) {
 		}
 	}
 }
+
+// PutBytes should update the value seen by existing streamers (e.g. PDOs)
+// and should not keep a reference to the caller's buffer
+func TestPutBytesKeepsStreamers(t *testing.T) {
+	odict := NewOD()
+	entry, err := odict.AddVariableType(0x2000, "var", UNSIGNED16, AttributeSdoRw, "0x1111")
+	assert.Nil(t, err)
+	variable, err := entry.SubIndex(0)
+	assert.Nil(t, err)
+	streamer, err := odict.Streamer(0x2000, 0, false)
+	assert.Nil(t, err)
+
+	value := []byte{0x22, 0x22}
+	assert.Nil(t, variable.PutBytes(value))
+	value[0] = 0x99
+
+	buffer := make([]byte, 2)
+	_, err = streamer.Read(buffer)
+	assert.Nil(t, err)
+	assert.Equal(t, []byte{0x22, 0x22}, buffer)
+	v, err := variable.Uint16()
+	assert.Nil(t, err)
+	assert.Equal(t, uint16(0x2222), v)
+}
