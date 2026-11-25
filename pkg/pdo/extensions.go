@@ -99,7 +99,7 @@ func writeEntry14xx(stream *od.Stream, data []byte) (uint16, error) {
 				if rpdo.timer != nil {
 					rpdo.timer.Stop()
 				}
-				rpdo.inTimeout = false
+				rpdo.clearTimeout()
 				if err != nil {
 					return 0, od.ErrDevIncompat
 				}

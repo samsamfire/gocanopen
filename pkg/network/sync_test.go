@@ -9,6 +9,8 @@ import (
 	canopen "github.com/samsamfire/gocanopen/v2"
 	"github.com/samsamfire/gocanopen/v2/pkg/can/virtual"
 	"github.com/samsamfire/gocanopen/v2/pkg/config"
+	"github.com/samsamfire/gocanopen/v2/pkg/emergency"
+	"github.com/samsamfire/gocanopen/v2/pkg/nmt"
 	"github.com/samsamfire/gocanopen/v2/pkg/od"
 	"github.com/samsamfire/gocanopen/v2/pkg/pdo"
 	"github.com/stretchr/testify/assert"
@@ -240,4 +242,20 @@ func TestSyncAddedToOD(t *testing.T) {
 	local, err := network.CreateLocalNode(NodeIdTest, odict)
 	assert.Nil(t, err)
 	assert.Nil(t, local.Configurator().ProducerEnableSYNC())
+}
+
+// A SYNC timeout error should be cleared when leaving operational states
+func TestSyncTimeoutClearedOnNmtChange(t *testing.T) {
+	network := CreateNetworkTest()
+	defer network.Disconnect()
+	local, err := network.Local(NodeIdTest)
+	assert.Nil(t, err)
+	c := local.Configurator()
+	assert.Nil(t, c.ProducerDisableSYNC())
+	assert.Nil(t, c.WriteCommunicationPeriod(100*time.Millisecond))
+	assert.Eventually(t, func() bool {
+		return local.EMCY.IsError(emergency.EmSyncTimeOut)
+	}, 1*time.Second, 10*time.Millisecond)
+	local.NMT.SendInternalCommand(uint8(nmt.CommandEnterStopped))
+	assert.False(t, local.EMCY.IsError(emergency.EmSyncTimeOut))
 }

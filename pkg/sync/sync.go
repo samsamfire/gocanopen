@@ -90,6 +90,9 @@ func (sync *SYNC) OnStateChange(state uint8) {
 	sync.mu.Lock()
 	sync.isOperational = operational
 	if !operational {
+		if sync.inTimeout {
+			sync.emcy.Error(false, emergency.EmSyncTimeOut, 0, 0)
+		}
 		sync.inTimeout = false
 		sync.counter = 0
 	}

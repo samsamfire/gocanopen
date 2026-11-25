@@ -49,10 +49,7 @@ func (rpdo *RPDO) Handle(frame canopen.Frame) {
 
 	// Timeout timer logic, if enabled
 	rpdo.restartTimeoutTimer()
-	if rpdo.inTimeout {
-		rpdo.pdo.emcy.ErrorReset(emergency.EmRPDOTimeOut, 0)
-		rpdo.inTimeout = false
-	}
+	rpdo.clearTimeout()
 
 	// If async, copy data to OD straight away
 	if !rpdo.synchronous {
@@ -117,6 +114,15 @@ func (rpdo *RPDO) Stop() {
 	}
 
 	rpdo.rxData = nil
+	rpdo.clearTimeout()
+}
+
+// Clear timeout state and the corresponding error, if any
+// Caller must hold rpdo.mu
+func (rpdo *RPDO) clearTimeout() {
+	if rpdo.inTimeout {
+		rpdo.pdo.emcy.ErrorReset(emergency.EmRPDOTimeOut, 0)
+	}
 	rpdo.inTimeout = false
 }
 

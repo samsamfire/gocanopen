@@ -7,6 +7,7 @@ import (
 
 	canopen "github.com/samsamfire/gocanopen/v2"
 	"github.com/samsamfire/gocanopen/v2/pkg/config"
+	"github.com/samsamfire/gocanopen/v2/pkg/emergency"
 	"github.com/samsamfire/gocanopen/v2/pkg/nmt"
 	"github.com/samsamfire/gocanopen/v2/pkg/pdo"
 	"github.com/stretchr/testify/assert"
@@ -855,4 +856,32 @@ func TestPDOBaseCanId(t *testing.T) {
 			return value == 0xAA
 		}, 500*time.Millisecond, 10*time.Millisecond, "case %d", i)
 	}
+}
+
+// An RPDO timeout error should be cleared when the RPDO is stopped
+func TestRPDOTimeoutClearedOnNmtChange(t *testing.T) {
+	network := CreateNetworkTest()
+	defer network.Disconnect()
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	local, err := network.Local(NodeIdTest)
+	assert.Nil(t, err)
+	assert.Eventually(t, func() bool {
+		return local.NMT.GetInternalState() == nmt.StateOperational
+	}, 1*time.Second, 10*time.Millisecond)
+	c := local.Configurator()
+	assert.Nil(t, c.WriteConfigurationPDO(1, config.PDOConfigurationParameter{
+		CanId:            0x255,
+		TransmissionType: 254,
+		EventTimer:       100 * time.Millisecond,
+		Mappings:         []config.PDOMappingParameter{{Index: 0x2005, Subindex: 0, LengthBits: 8}},
+	}))
+	assert.Nil(t, c.EnablePDO(1))
+
+	assert.Nil(t, network2.Send(canopen.Frame{ID: 0x255, DLC: 1}))
+	assert.Eventually(t, func() bool {
+		return local.EMCY.IsError(emergency.EmRPDOTimeOut)
+	}, 1*time.Second, 10*time.Millisecond)
+	local.NMT.SendInternalCommand(uint8(nmt.CommandEnterPreOperational))
+	assert.False(t, local.EMCY.IsError(emergency.EmRPDOTimeOut))
 }
