@@ -12,6 +12,7 @@ import (
 
 var ErrWrongClientReturnValue = errors.New("wrong client return value")
 var ErrInvalidArgs = errors.New("error in arguments")
+var ErrTransferDone = errors.New("transfer already finished, create a new writer")
 
 type internalState uint8
 

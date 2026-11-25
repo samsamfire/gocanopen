@@ -16,6 +16,8 @@ type sdoRawReadWriter struct {
 	client *SDOClient
 	// Upload is finished, remaining data is only in the fifo
 	uploadDone bool
+	// Download is finished, nothing more can be written
+	downloadDone bool
 }
 
 // Create a new raw SDO reader
@@ -138,13 +140,14 @@ func (client *SDOClient) ReadAll(nodeId uint8, index uint16, subindex uint8) ([]
 }
 
 // Implements io.Writer interface
-// Write bytes from remote node using sdo client
-// Writing in several iterations is only possible in block transfers
-// as in regular small transfers, client state machine starts processing
-// internal fifo as soon a we call downloadMain. This means that for small
-// transfers, exact size should be written.
+// Write bytes to remote node using sdo client
+// The whole value should be written in a single call : the transfer
+// is finished when Write returns, further calls return [ErrTransferDone].
 func (rw *sdoRawReadWriter) Write(b []byte) (n int, err error) {
 	client := rw.client
+	if rw.downloadDone {
+		return 0, ErrTransferDone
+	}
 
 	// Fill fifo buffer
 	nUint32 := uint32(0)
@@ -173,9 +176,8 @@ func (rw *sdoRawReadWriter) Write(b []byte) (n int, err error) {
 			false,
 		)
 		switch {
-		case err != nil:
-			return int(nUint32), err
-		case ret == success:
+		case err != nil, ret == success:
+			rw.downloadDone = true
 			return int(nUint32), err
 		case ret == blockDownloadInProgress:
 			if client.processingPeriod > 0 {

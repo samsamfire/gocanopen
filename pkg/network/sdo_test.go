@@ -598,3 +598,24 @@ func TestSDOReadRawBufferTooSmall(t *testing.T) {
 	_, err = network2.ReadUint32(NodeIdTest, 0x2007, 0)
 	assert.Nil(t, err)
 }
+
+// The transfer is finished after a Write, writing again should
+// fail instead of silently dropping the data
+func TestSDOWriterSecondWrite(t *testing.T) {
+	network := createNetworkBigEntriesTest(t)
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	defer network.Disconnect()
+
+	expected := []byte(strings.Repeat("d", 3000))
+	for _, block := range []bool{false, true} {
+		w, err := network2.NewRawWriter(NodeIdTest, 0x3003, 0, block, 0)
+		assert.Nil(t, err)
+		n, err := w.Write(expected)
+		assert.Nil(t, err)
+		assert.Equal(t, len(expected), n)
+		n, err = w.Write(expected)
+		assert.Equal(t, sdo.ErrTransferDone, err, "block %v", block)
+		assert.Equal(t, 0, n)
+	}
+}

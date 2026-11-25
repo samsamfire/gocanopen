@@ -225,6 +225,7 @@ func (c *SDOClient) downloadSetup(index uint16, subindex uint8, sizeIndicated ui
 	c.timeoutTimer = 0
 	c.timeoutTimerBlock = 0
 	c.fifo.Reset()
+	c.rw.downloadDone = false
 
 	// Select transfer type
 	switch {
