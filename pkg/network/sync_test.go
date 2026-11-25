@@ -7,7 +7,10 @@ import (
 	"time"
 
 	canopen "github.com/samsamfire/gocanopen/v2"
+	"github.com/samsamfire/gocanopen/v2/pkg/can/virtual"
+	"github.com/samsamfire/gocanopen/v2/pkg/config"
 	"github.com/samsamfire/gocanopen/v2/pkg/od"
+	"github.com/samsamfire/gocanopen/v2/pkg/pdo"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -182,4 +185,48 @@ func TestSyncConsumer(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		assert.Contains(t, logBuf.String(), "reception error")
 	})
+}
+
+// A SYNC producer should process its own synchronous TPDOs once per SYNC,
+// whether or not it receives its own frames back
+func TestSyncProducerOwnTPDO(t *testing.T) {
+	for _, receiveOwn := range []bool{false, true} {
+		canBus, err := NewBus("virtual", "localhost:18888", 0)
+		assert.Nil(t, err)
+		canBus.(*virtual.Bus).SetReceiveOwn(receiveOwn)
+		network := NewNetwork(canBus)
+		assert.Nil(t, network.Connect())
+		otherNet := CreateNetworkEmptyTest()
+
+		local, err := network.CreateLocalNode(NodeIdTest, od.Default())
+		assert.Nil(t, err)
+		c := local.Configurator()
+		assert.Nil(t, c.ProducerDisableSYNC())
+		assert.Nil(t, c.WriteCommunicationPeriod(0))
+		tpdoNb := pdo.MaxRpdoNumber + 1
+		assert.Nil(t, c.WriteConfigurationPDO(tpdoNb, config.PDOConfigurationParameter{
+			CanId:            0x1B0,
+			TransmissionType: 1,
+			Mappings:         []config.PDOMappingParameter{{Index: 0x2002, Subindex: 0, LengthBits: 8}},
+		}))
+		assert.Nil(t, c.EnablePDO(tpdoNb))
+
+		collector := &FrameCollector{}
+		cancel, err := otherNet.Subscribe(0, 0, false, collector)
+		assert.Nil(t, err)
+		assert.Nil(t, c.WriteCommunicationPeriod(50*time.Millisecond))
+		assert.Nil(t, c.ProducerEnableSYNC())
+		time.Sleep(500 * time.Millisecond)
+		assert.Nil(t, c.ProducerDisableSYNC())
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+
+		nbSync := collector.Count(0x80)
+		nbTpdo := collector.Count(0x1B0)
+		assert.GreaterOrEqual(t, nbSync, 5, "receiveOwn %v", receiveOwn)
+		assert.Equal(t, nbSync, nbTpdo, "receiveOwn %v", receiveOwn)
+
+		otherNet.Disconnect()
+		network.Disconnect()
+	}
 }

@@ -46,6 +46,12 @@ func (sync *SYNC) Handle(frame canopen.Frame) {
 	sync.mu.Lock()
 	defer sync.mu.Unlock()
 
+	// A producer already handles its own SYNC when sending it,
+	// this can be our own frame received back
+	if sync.isProducer {
+		return
+	}
+
 	if sync.counterOverflow == 0 {
 		if frame.DLC != 0 {
 			sync.processError(frame.DLC | 0x40)
@@ -66,7 +72,7 @@ func (sync *SYNC) Handle(frame canopen.Frame) {
 
 	sync.timeLastRxTx = time.Now()
 	sync.rxToggle = !sync.rxToggle
-	sync.notifySubscribers()
+	sync.notifySubscribers(sync.counter)
 
 	// Check if we have any "timeouts"
 	if sync.inTimeout {
@@ -127,12 +133,12 @@ func (sync *SYNC) Unsubscribe(ch chan uint8) {
 	}
 }
 
-func (sync *SYNC) notifySubscribers() {
+func (sync *SYNC) notifySubscribers(counter uint8) {
 	sync.subMu.Lock()
 	defer sync.subMu.Unlock()
 	for _, ch := range sync.subscribers {
 		select {
-		case ch <- sync.counter:
+		case ch <- counter:
 		default:
 			// A dropped event makes synchronous PDOs miss a cycle,
 			// it should not happen with a subscriber keeping up
@@ -249,6 +255,7 @@ func (sync *SYNC) send() {
 	sync.timeLastRxTx = time.Now()
 	sync.rxToggle = !sync.rxToggle
 	frame := sync.txBuffer
+	counter := sync.counter
 	sync.mu.Unlock()
 	// When listening to own messages, this will trigger Handle to be called
 	// So make sure sync is unlocked before sending
@@ -256,6 +263,8 @@ func (sync *SYNC) send() {
 	if err != nil {
 		sync.logger.Error("failed to send", "err", err)
 	}
+	// Own synchronous PDOs are processed after the SYNC is sent
+	sync.notifySubscribers(counter)
 }
 
 func (sync *SYNC) Counter() uint8 {
