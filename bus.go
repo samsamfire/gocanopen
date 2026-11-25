@@ -14,6 +14,12 @@ const (
 	CanSffMask          uint32 = 0x000007FF
 )
 
+// Flags inside of [Frame.ID], same as SocketCAN
+const (
+	CanEffFlag uint32 = 0x80000000 // Extended (29 bit) frame
+	CanErrFlag uint32 = 0x20000000 // Error frame
+)
+
 // A CAN Bus interface
 type Bus interface {
 	Connect(...any) error                   // Connect to the CAN bus

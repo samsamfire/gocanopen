@@ -34,13 +34,18 @@ type BusManager struct {
 // [listener.Handle] should not be blocking !
 func (bm *BusManager) Handle(frame Frame) {
 
-	canId := frame.ID & MaxCanId
-	if canId >= LookupArraySize {
+	// CANopen only uses standard frames, extended and error frames
+	// must not be mistaken for a standard frame with the same lower bits
+	if frame.ID&(CanEffFlag|CanErrFlag) != 0 {
 		return
+	}
+	idx := frame.ID & MaxCanId
+	if frame.ID&CanRtrFlag != 0 {
+		idx += MaxCanId + 1
 	}
 
 	bm.mu.Lock()
-	listeners := bm.listeners[canId]
+	listeners := bm.listeners[idx]
 	bm.mu.Unlock()
 
 	for _, sub := range listeners {
