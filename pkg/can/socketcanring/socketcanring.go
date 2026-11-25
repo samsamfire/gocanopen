@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"sync"
@@ -179,8 +180,11 @@ func (b *Bus) Send(frame canopen.Frame) error {
 
 	rawData := (*(*[16]byte)(unsafe.Pointer(canFrame)))[:]
 	n, err := unix.Write(b.txFd, rawData)
-	if n != 16 || err != nil {
+	if err != nil {
 		return err
+	}
+	if n != len(rawData) {
+		return io.ErrShortWrite
 	}
 	return nil
 }
