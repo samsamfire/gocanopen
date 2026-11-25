@@ -105,7 +105,7 @@ func writeEntry1280(stream *od.Stream, data []byte) (uint16, error) {
 			(valid && canopen.IsIDRestricted(canId)) {
 			return 0, od.ErrInvalidValue
 		}
-		err := client.setupServer(cobId, client.cobIdClientToServer, client.nodeIdServer)
+		err := client.setupServer(client.cobIdClientToServer, cobId, client.nodeIdServer)
 		if err != nil {
 			return 0, od.ErrDevIncompat
 		}
