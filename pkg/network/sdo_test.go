@@ -504,3 +504,30 @@ func TestSDOExpeditedDownloadCustomError(t *testing.T) {
 	err = network2.WriteRaw(NodeIdTest, 0x2007, 0, uint32(1), false)
 	assert.Equal(t, sdo.AbortGeneral, err)
 }
+
+// A block download with the size indicated should survive a lost segment,
+// re-transmitted segments should not be counted twice
+func TestSDOBlockDownloadSizeIndicatedWithFrameLoss(t *testing.T) {
+	odict := od.Default()
+	_, err := odict.AddVariableType(0x3003, "huge variable", od.OCTET_STRING, od.AttributeSdoRw, strings.Repeat("c", 3000))
+	assert.Nil(t, err)
+	// Server looses the 5th segment of the first sub-block
+	network := createDropOnceNetworkTest(func(frame canopen.Frame) bool {
+		return frame.ID == uint32(sdo.ClientServiceId)+uint32(NodeIdTest) && frame.Data[0] == 5
+	})
+	defer network.Disconnect()
+	_, err = network.CreateLocalNode(NodeIdTest, odict)
+	assert.Nil(t, err)
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+
+	expected := []byte(strings.Repeat("d", 3000))
+	w, err := network2.NewRawWriter(NodeIdTest, 0x3003, 0, true, uint32(len(expected)))
+	assert.Nil(t, err)
+	n, err := w.Write(expected)
+	assert.Nil(t, err)
+	assert.Equal(t, len(expected), n)
+	raw, err := odict.Index(0x3003).SubIndex(0)
+	assert.Nil(t, err)
+	assert.Equal(t, expected, raw.Bytes())
+}

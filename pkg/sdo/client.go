@@ -376,6 +376,12 @@ func (c *SDOClient) downloadMain(
 
 				if response.GetNumberOfSegments() < c.blockSequenceNb {
 					c.logger.Error("not all segments transferred successfully")
+					// Un-acknowledged segments will be sent again, don't count them twice
+					unacked := uint32(c.blockSequenceNb-response.GetNumberOfSegments()) * BlockSeqSize
+					if c.finished {
+						unacked -= uint32(c.blockNoData)
+					}
+					c.sizeTransferred -= unacked
 					c.fifo.AltBegin(int(response.raw[1]) * BlockSeqSize)
 					c.finished = false
 
