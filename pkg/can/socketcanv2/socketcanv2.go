@@ -37,6 +37,7 @@ type CANframe struct {
 }
 
 type Bus struct {
+	channel    string
 	f          *os.File
 	fd         int
 	rxCallback canopen.FrameListener
@@ -66,7 +67,7 @@ func NewBus(channel string) (canopen.Bus, error) {
 	if err := unix.Bind(fd, addr); err != nil {
 		return nil, err
 	}
-	socketcan := &Bus{fd: fd, logger: slog.Default()}
+	socketcan := &Bus{channel: channel, fd: fd, logger: slog.Default()}
 	return socketcan, nil
 }
 
@@ -163,4 +164,10 @@ func (b *Bus) SetReceiveOwn(enabled bool) error {
 func (b *Bus) SetFilters(filters []unix.CanFilter) error {
 	b.logger.Info("setting option 'CAN_RAW_FILTER'", "fd", b.fd, "filters", filters)
 	return unix.SetsockoptCanRawFilter(b.fd, unix.SOL_CAN_RAW, unix.CAN_RAW_FILTER, filters)
+}
+
+// State returns the state of the CAN interface, from its up flag only: see
+// can.LinkState.
+func (b *Bus) State() (canopen.BusState, error) {
+	return can.LinkState(b.channel)
 }
