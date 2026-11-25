@@ -1300,7 +1300,10 @@ func NewSDOClient(
 	c.streamer = &od.Streamer{}
 	c.fifo = fifo.NewFifo(DefaultClientBufferSize + 2)
 	c.localBuffer = make([]byte, DefaultClientBufferSize+2)
-	c.SetTimeout(DefaultClientTimeout)
+	if timeoutMs == 0 {
+		timeoutMs = DefaultClientTimeout
+	}
+	c.SetTimeout(timeoutMs)
 	c.SetTimeoutBlockTransfer(DefaultClientBlockTransferTimeout)
 	c.SetBlockMaxSize(BlockMaxSize)
 	c.SetProcessingPeriod(DefaultClientBlockPacing)

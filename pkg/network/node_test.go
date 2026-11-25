@@ -462,7 +462,7 @@ func TestScan(t *testing.T) {
 	network2 := CreateNetworkEmptyTest()
 	defer network.Disconnect()
 	defer network2.Disconnect()
-	scan, err := network.Scan(100)
+	scan, err := network.Scan(1000)
 	assert.Len(t, scan, 0)
 	assert.Nil(t, err)
 	// Create some local nodes
@@ -471,13 +471,24 @@ func TestScan(t *testing.T) {
 		assert.Nil(t, err)
 	}
 	// Scan from local
-	scan, err = network.Scan(100)
+	scan, err = network.Scan(1000)
 	assert.Len(t, scan, 10)
 	assert.Nil(t, err)
 	// Scan from remote
-	scan, err = network2.Scan(100)
+	scan, err = network2.Scan(1000)
 	assert.Len(t, scan, 10)
 	assert.Nil(t, err)
+}
+
+// Scan should not wait longer than the given timeout for absent nodes
+func TestScanTimeout(t *testing.T) {
+	network := CreateNetworkEmptyTest()
+	defer network.Disconnect()
+	start := time.Now()
+	scan, err := network.Scan(100)
+	assert.Nil(t, err)
+	assert.Len(t, scan, 0)
+	assert.Less(t, time.Since(start), 500*time.Millisecond)
 }
 
 func TestExport(t *testing.T) {
