@@ -165,7 +165,7 @@ func (b *Bus) processIncoming(ctx context.Context) {
 				uintptr(b.fd),
 				uintptr(unsafe.Pointer(&mmsgs[0])),
 				uintptr(msgBatchSize),
-				0, // Flags: 0 means "Wait for full batch or timeout"
+				unix.MSG_WAITFORONE, // Return as soon as at least one frame is received
 				uintptr(unsafe.Pointer(&ts)),
 				0,
 			)
