@@ -531,3 +531,32 @@ func TestSDOBlockDownloadSizeIndicatedWithFrameLoss(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, expected, raw.Bytes())
 }
+
+// A block download should survive losing the first or the last segment of a
+// sub-block : the server acknowledges the last segment received after a timeout
+func TestSDOBlockDownloadSubBlockEdgeSegmentLost(t *testing.T) {
+	for _, seqno := range []uint8{1, sdo.BlockMaxSize} {
+		odict := od.Default()
+		_, err := odict.AddVariableType(0x3003, "huge variable", od.OCTET_STRING, od.AttributeSdoRw, strings.Repeat("c", 3000))
+		assert.Nil(t, err)
+		network := createDropOnceNetworkTest(func(frame canopen.Frame) bool {
+			return frame.ID == uint32(sdo.ClientServiceId)+uint32(NodeIdTest) && frame.Data[0] == seqno
+		})
+		_, err = network.CreateLocalNode(NodeIdTest, odict)
+		assert.Nil(t, err)
+		network2 := CreateNetworkEmptyTest()
+
+		expected := []byte(strings.Repeat("d", 3000))
+		w, err := network2.NewRawWriter(NodeIdTest, 0x3003, 0, true, 0)
+		assert.Nil(t, err)
+		n, err := w.Write(expected)
+		assert.Nil(t, err, "segment %v lost", seqno)
+		assert.Equal(t, len(expected), n, "segment %v lost", seqno)
+		raw, err := odict.Index(0x3003).SubIndex(0)
+		assert.Nil(t, err)
+		assert.Equal(t, expected, raw.Bytes(), "segment %v lost", seqno)
+
+		network2.Disconnect()
+		network.Disconnect()
+	}
+}

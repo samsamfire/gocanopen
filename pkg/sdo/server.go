@@ -100,6 +100,12 @@ func (s *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 			}
 		}
 
+		// While receiving a sub-block, a shorter timeout is used to detect lost segments
+		waitTimeout := timeout
+		if s.state == stateDownloadBlkSubblockReq {
+			waitTimeout = time.Duration(s.blockTimeout) * time.Microsecond
+		}
+
 		select {
 		case rx := <-s.rx:
 
@@ -124,8 +130,15 @@ func (s *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 				s.txAbort(err)
 			}
 
-		case <-time.After(timeout):
-			if s.state != stateIdle {
+		case <-time.After(waitTimeout):
+			if s.state == stateDownloadBlkSubblockReq {
+				// Segments were lost, acknowledge the last one received
+				// so that the client re-transmits the next ones
+				s.state = stateDownloadBlkSubblockRsp
+				if err := s.processOutgoing(); err != nil {
+					s.txAbort(err)
+				}
+			} else if s.state != stateIdle {
 				s.txAbort(AbortTimeout)
 			}
 		}
