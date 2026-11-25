@@ -261,9 +261,12 @@ func (config *NodeConfigurator) ClearMappings(pdoNb uint16) error {
 	if err != nil {
 		return err
 	}
-	// Then clear entries
+	// Then clear entries, there can be less than [od.MaxMappedEntriesPdo]
 	for i := range od.MaxMappedEntriesPdo {
 		err := config.client.WriteRaw(config.nodeId, pdoMappingIndex, i+1, uint32(0), false)
+		if err == sdo.AbortSubUnknown {
+			break
+		}
 		if err != nil {
 			return err
 		}

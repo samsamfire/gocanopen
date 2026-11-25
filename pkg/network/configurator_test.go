@@ -229,3 +229,19 @@ func TestGeneralObjects(t *testing.T) {
 		ManufacturerSoftwareVersion: "v1.1.2r",
 	}, manufInfo)
 }
+
+// PDOs can have less mapping entries than the maximum
+func TestPDOConfiguratorFewMappingEntries(t *testing.T) {
+	network := CreateNetworkShortMappingTest(4)
+	defer network.Disconnect()
+	local, err := network.Local(NodeIdTest)
+	assert.Nil(t, err)
+	c := local.Configurator()
+	assert.Nil(t, c.ClearMappings(1))
+	err = c.WriteConfigurationPDO(1, config.PDOConfigurationParameter{
+		CanId:            0x255,
+		TransmissionType: 254,
+		Mappings:         []config.PDOMappingParameter{{Index: 0x2005, Subindex: 0, LengthBits: 8}},
+	})
+	assert.Nil(t, err)
+}
