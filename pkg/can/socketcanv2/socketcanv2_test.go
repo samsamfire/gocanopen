@@ -4,6 +4,7 @@ package socketcanv2
 
 import (
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -55,11 +56,26 @@ func TestDisconnect(t *testing.T) {
 }
 
 type frameListener struct {
+	mu     sync.Mutex
 	frames []canopen.Frame
 }
 
 func (f *frameListener) Handle(frame canopen.Frame) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.frames = append(f.frames, frame)
+}
+
+func (f *frameListener) Frames() []canopen.Frame {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]canopen.Frame{}, f.frames...)
+}
+
+func (f *frameListener) Clear() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.frames = nil
 }
 
 func TestSendReceive(t *testing.T) {
@@ -69,19 +85,19 @@ func TestSendReceive(t *testing.T) {
 	defer can0.Disconnect()
 	defer can1.Disconnect()
 
-	listener := &frameListener{frames: make([]canopen.Frame, 0)}
+	listener := &frameListener{}
 	can1.Subscribe(listener)
 	for range 500 {
 		can0.Send(canopen.NewFrame(0x100, 0, 8))
 	}
 	time.Sleep(100 * time.Millisecond)
-	assert.Len(t, listener.frames, 500)
+	assert.Len(t, listener.Frames(), 500)
 
 }
 
 func TestSendReceiveWithReceiveOwn(t *testing.T) {
 	skipCIorNoVcan(t)
-	listener := &frameListener{frames: make([]canopen.Frame, 0)}
+	listener := &frameListener{}
 	sock, err := NewBus("vcan0")
 	assert.Nil(t, err)
 	err = sock.Connect()
@@ -98,17 +114,17 @@ func TestSendReceiveWithReceiveOwn(t *testing.T) {
 	err = socketcanbus.SetReceiveOwn(true)
 	assert.Nil(t, err)
 	time.Sleep(100 * time.Millisecond)
-	assert.Len(t, listener.frames, 0)
+	assert.Len(t, listener.Frames(), 0)
 
 	for range 500 {
 		err := sock.Send(canopen.NewFrame(0x122, 0, 8))
 		assert.Nil(t, err)
 	}
 	time.Sleep(100 * time.Millisecond)
-	assert.Len(t, listener.frames, 500)
+	assert.Len(t, listener.Frames(), 500)
 
 	// Disable own reception
-	listener.frames = make([]canopen.Frame, 0)
+	listener.Clear()
 	err = socketcanbus.SetReceiveOwn(false)
 	assert.Nil(t, err)
 
@@ -117,7 +133,7 @@ func TestSendReceiveWithReceiveOwn(t *testing.T) {
 		assert.Nil(t, err)
 	}
 	time.Sleep(100 * time.Millisecond)
-	assert.Len(t, listener.frames, 0)
+	assert.Len(t, listener.Frames(), 0)
 }
 
 func TestFilterNoReception(t *testing.T) {
@@ -127,7 +143,7 @@ func TestFilterNoReception(t *testing.T) {
 	defer can0.Disconnect()
 	defer can1.Disconnect()
 
-	listener := &frameListener{frames: make([]canopen.Frame, 0)}
+	listener := &frameListener{}
 	can1.Subscribe(listener)
 	err := can1.SetFilters([]unix.CanFilter{{Id: 0x50, Mask: 0x7FF}})
 	assert.Nil(t, err)
@@ -135,7 +151,7 @@ func TestFilterNoReception(t *testing.T) {
 		can0.Send(canopen.NewFrame(0x100, 0, 8))
 	}
 	time.Sleep(100 * time.Millisecond)
-	assert.Len(t, listener.frames, 0)
+	assert.Len(t, listener.Frames(), 0)
 }
 
 // The bus should still receive frames after being disconnected and connected again
@@ -145,7 +161,7 @@ func TestReconnect(t *testing.T) {
 	defer other.Disconnect()
 	sock, err := NewBus("vcan0")
 	assert.Nil(t, err)
-	listener := &frameListener{frames: make([]canopen.Frame, 0)}
+	listener := &frameListener{}
 	assert.Nil(t, sock.Subscribe(listener))
 	assert.Nil(t, sock.Connect())
 	assert.Nil(t, sock.Disconnect())
@@ -154,5 +170,5 @@ func TestReconnect(t *testing.T) {
 
 	assert.Nil(t, other.Send(canopen.NewFrame(0x100, 0, 8)))
 	time.Sleep(100 * time.Millisecond)
-	assert.Len(t, listener.frames, 1)
+	assert.Len(t, listener.Frames(), 1)
 }
