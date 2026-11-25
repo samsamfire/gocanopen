@@ -1340,6 +1340,17 @@ func NewSDOClient(
 	return c, nil
 }
 
+// Close removes the client subscription to the CAN bus.
+// The client should not be used afterwards.
+func (c *SDOClient) Close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.rxCancel != nil {
+		c.rxCancel()
+		c.rxCancel = nil
+	}
+}
+
 // Set read / write to local OD
 // This is equivalent as reading with a node id set to 0
 func (c *SDOClient) SetNoId() {

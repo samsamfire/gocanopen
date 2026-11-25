@@ -439,6 +439,7 @@ func (network *Network) Scan(timeoutMs uint32) (map[uint8]NodeInformation, error
 		nodeId := uint8(i + 1)
 		go func(client *sdo.SDOClient) {
 			defer wg.Done()
+			defer client.Close()
 			config := config.NewNodeConfigurator(nodeId, network.logger, client)
 			identity, err := config.ReadIdentity()
 			if err != nil {
