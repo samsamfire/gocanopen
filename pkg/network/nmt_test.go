@@ -99,7 +99,7 @@ func TestNmt(t *testing.T) {
 		}, 1*time.Second, 20*time.Millisecond)
 	})
 
-	t.Run("reset comm when stopped", func(t *testing.T) {
+	t.Run("reset comm when stopped re-initialises", func(t *testing.T) {
 		local, err := net1.CreateLocalNode(NodeIdTest, od.Default())
 		assert.Nil(t, err)
 		defer net1.RemoveNode(NodeIdTest)
@@ -111,11 +111,37 @@ func TestNmt(t *testing.T) {
 			return state == nmt.StateStopped
 		}, 1*time.Second, 20*time.Millisecond)
 
-		// Reset comm, should not influence the nmt state
+		// Reset comm re-initialises the node from any state (CiA 301) : it goes
+		// through initialisation (boot-up) then ends up in the same state as
+		// after power-on, i.e. operational as the default OD starts by itself
+		states := make(chan uint8, 10)
+		cancel := local.NMT.AddStateChangeCallback(func(state uint8) {
+			select {
+			case states <- state:
+			default:
+			}
+		})
+		defer cancel()
+
 		err = net2.Command(NodeIdTest, nmt.CommandResetCommunication)
 		assert.Nil(t, err)
-		time.Sleep(1 * time.Second)
-		assert.Equal(t, nmt.StateStopped, local.NMT.GetInternalState())
+
+		var seen []uint8
+		timeout := time.After(1 * time.Second)
+	collect:
+		for {
+			select {
+			case state := <-states:
+				seen = append(seen, state)
+				if state == nmt.StateOperational {
+					break collect
+				}
+			case <-timeout:
+				break collect
+			}
+		}
+		assert.Equal(t, []uint8{nmt.StateInitializing, nmt.StateOperational}, seen)
+		assert.Equal(t, nmt.StateOperational, local.NMT.GetInternalState())
 	})
 
 	t.Run("boot up with heartbeat producer disabled", func(t *testing.T) {
