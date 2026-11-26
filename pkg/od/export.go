@@ -1,12 +1,12 @@
 package od
 
 import (
+	"bytes"
+	"encoding/hex"
 	"fmt"
-	"io"
-	"sort"
-	"strconv"
-
-	"gopkg.in/ini.v1"
+	"os"
+	"slices"
+	"strings"
 )
 
 // Export OD inside of an EDS file
@@ -16,129 +16,103 @@ import (
 // work for this library.
 func ExportEDS(odict *ObjectDictionary, defaultValues bool, filename string) error {
 	if defaultValues {
-		r := odict.NewReaderSeeker()
-		buffer, err := io.ReadAll(r)
-		if err != nil {
-			return fmt.Errorf("failed to read OD raw data %v", err)
-		}
-		i, err := ini.Load(buffer)
-		if err != nil {
-			return fmt.Errorf("failed to load .INI %v", err)
-		}
-		return i.SaveTo(filename)
+		return os.WriteFile(filename, odict.rawOd, 0o644)
 	}
-	eds := ini.Empty()
 
-	// Sort map keys to export indexes, for lowest to highest
-	indexes := make([]int, 0)
+	// Export indexes from lowest to highest
+	indexes := make([]uint16, 0, len(odict.entriesByIndexValue))
 	for index := range odict.entriesByIndexValue {
-		indexes = append(indexes, int(index))
+		indexes = append(indexes, index)
 	}
-	sort.Ints(indexes)
+	slices.Sort(indexes)
 
+	buf := &bytes.Buffer{}
 	for _, index := range indexes {
-		entry := odict.entriesByIndexValue[uint16(index)]
+		entry := odict.entriesByIndexValue[index]
 
-		if entry.SubCount() == 1 {
-			// Add entry for single objects (VAR,DOMAIN,...)
-			variable, ok := entry.object.(*Variable)
-			if !ok {
-				return fmt.Errorf("[OD] expecting a variable type at %x", index)
-			}
-			section, err := eds.NewSection(strconv.FormatUint(uint64(index), 16))
-			if err != nil {
-				return err
-			}
-			err = populateSection(section, uint16(index), variable, entry.ObjectType)
-			if err != nil {
+		switch object := entry.object.(type) {
+		case *Variable:
+			// Single objects (VAR,DOMAIN,...)
+			fmt.Fprintf(buf, "[%04X]\n", index)
+			if err := writeVariable(buf, index, object, entry.ObjectType); err != nil {
 				return fmt.Errorf("[OD] error populating section index at %x : %v", index, err)
 			}
-		} else {
-			// Add entry for multi objects (RECORD,ARRAY,...)
-			variables, ok := entry.object.(*VariableList)
-			if !ok {
-				return fmt.Errorf("[OD] expecting a variable list type at %x", index)
-			}
-			// Create header section
-			section, err := eds.NewSection(strconv.FormatUint(uint64(index), 16))
-			if err != nil {
-				return err
-			}
-			err = populateHeaderSection(section, entry.Name, variables.objectType, uint8(entry.SubCount()))
-			if err != nil {
-				return err
-			}
-			// Add all subsections, ordered
-			for i, variable := range variables.Variables {
-				section, err = eds.NewSection(strconv.FormatUint(uint64(index), 16) + "sub" + strconv.FormatUint(uint64(i), 16))
-				if err != nil {
-					return err
-				}
-				err = populateSection(section, uint16(index), variable, ObjectTypeVAR)
-				if err != nil {
-					return fmt.Errorf("[OD] error populating section index at %x|%x : %v", index, i, err)
+
+		case *VariableList:
+			// Multi objects (RECORD,ARRAY,...)
+			// Header section e.g.
+			// [1A03]
+			// ParameterName=TPDO mapping parameter
+			// ObjectType=0x9
+			// SubNumber=0x9
+			subNumber := 0
+			for _, variable := range object.Variables {
+				if variable != nil {
+					subNumber++
 				}
 			}
+			fmt.Fprintf(buf, "[%04X]\nParameterName=%s\nObjectType=0x%X\nSubNumber=0x%X\n\n",
+				index, entry.Name, object.objectType, subNumber)
+
+			for _, variable := range object.Variables {
+				if variable == nil {
+					continue
+				}
+				fmt.Fprintf(buf, "[%04Xsub%X]\n", index, variable.SubIndex)
+				if err := writeVariable(buf, index, variable, ObjectTypeVAR); err != nil {
+					return fmt.Errorf("[OD] error populating section index at %x|%x : %v", index, variable.SubIndex, err)
+				}
+			}
+
+		default:
+			return fmt.Errorf("[OD] unexpected object type %T at %x", object, index)
 		}
 	}
-	return eds.SaveTo(filename)
+	return os.WriteFile(filename, buf.Bytes(), 0o644)
 }
 
-// Populate section with relevant information for a variable type
-func populateSection(section *ini.Section, index uint16, variable *Variable, objectType uint8) error {
-	_, err := section.NewKey("ParameterName", variable.Name)
+// Write a section with relevant information for a variable type
+func writeVariable(buf *bytes.Buffer, index uint16, variable *Variable, objectType uint8) error {
+	variable.mu.Lock()
+	defer variable.mu.Unlock()
+
+	value, err := encodeValueString(index, variable.value, variable.DataType)
 	if err != nil {
 		return err
 	}
-	_, err = section.NewKey("ObjectType", "0x"+strconv.FormatUint(uint64(objectType), 16))
-	if err != nil {
-		return err
+	pdoMapping := 0
+	if variable.Attribute&AttributeTrpdo != 0 {
+		pdoMapping = 1
 	}
-	_, err = section.NewKey("DataType", "0x"+strconv.FormatUint(uint64(variable.DataType), 16))
-	if err != nil {
-		return err
-	}
-	_, err = section.NewKey("AccessType", DecodeAttribute(variable.Attribute))
-	if err != nil {
-		return err
-	}
-	var decoded string
-	if index >= AreaCommunicationProfileStart && index <= AreaCommunicationProfileEnd {
-		// Write values as hex strings, facilitates reading
-		decoded, err = DecodeToString(variable.value, variable.DataType, 16)
-		if variable.DataType != VISIBLE_STRING && variable.DataType != UNICODE_STRING {
-			decoded = "0x" + decoded
+	fmt.Fprintf(buf, "ParameterName=%s\nObjectType=0x%X\nDataType=0x%04X\nAccessType=%s\nPDOMapping=%d\nDefaultValue=%s\n",
+		variable.Name, objectType, variable.DataType, DecodeAttribute(variable.Attribute), pdoMapping, value)
+
+	if variable.lowLimit != nil {
+		if limit, err := encodeValueString(index, variable.lowLimit, variable.DataType); err == nil {
+			fmt.Fprintf(buf, "LowLimit=%s\n", limit)
 		}
-
-	} else {
-		decoded, err = DecodeToString(variable.value, variable.DataType, 10)
 	}
-	if err != nil {
-		return err
+	if variable.highLimit != nil {
+		if limit, err := encodeValueString(index, variable.highLimit, variable.DataType); err == nil {
+			fmt.Fprintf(buf, "HighLimit=%s\n", limit)
+		}
 	}
-	_, err = section.NewKey("DefaultValue", decoded)
-	return err
-}
-
-// Populate section with relevant information for beginning of RECORD/ARRAY type.
-// Special section for multi sub entries
-// e.g.
-// [1A03]
-// ParameterName=TPDO mapping parameter
-// ObjectType=0x9
-// SubNumber=0x9
-func populateHeaderSection(section *ini.Section, name string, objectType uint8, count uint8) error {
-	_, err := section.NewKey("ParameterName", name)
-	if err != nil {
-		return err
-	}
-	_, err = section.NewKey("ObjectType", "0x"+strconv.FormatUint(uint64(objectType), 16))
-	if err != nil {
-		return err
-	}
-	_, err = section.NewKey("SubNumber", "0x"+strconv.FormatUint(uint64(count), 16))
-	if err != nil {
-		return err
-	}
+	buf.WriteByte('\n')
 	return nil
+}
+
+func encodeValueString(index uint16, data []byte, dataType uint8) (string, error) {
+	switch dataType {
+	case BOOLEAN, UNSIGNED8, UNSIGNED16, UNSIGNED32, UNSIGNED64:
+		if index >= AreaCommunicationProfileStart && index <= AreaCommunicationProfileEnd {
+			// Write values as hex strings, facilitates reading
+			decoded, err := DecodeToString(data, dataType, 16)
+			return "0x" + decoded, err
+		}
+	case OCTET_STRING:
+		return strings.ToUpper(hex.EncodeToString(data)), nil
+	case DOMAIN:
+		return "", nil
+	}
+	return DecodeToString(data, dataType, 10)
 }
