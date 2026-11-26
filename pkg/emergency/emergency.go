@@ -424,6 +424,12 @@ func (emcy *EMCY) Error(setError bool, errorBit byte, errorCode uint16, infoCode
 	if emcy == nil {
 		return
 	}
+	emcy.error(setError, errorBit, errorCode, infoCode)
+}
+
+// Set or reset an error bit, an emergency message is only queued if the
+// bit actually changes. Returns whether it changed.
+func (emcy *EMCY) error(setError bool, errorBit byte, errorCode uint16, infoCode uint32) bool {
 	emcy.mu.Lock()
 	defer emcy.mu.Unlock()
 	index := errorBit >> 3
@@ -442,12 +448,12 @@ func (emcy *EMCY) Error(setError bool, errorBit byte, errorCode uint16, infoCode
 	// If error is already set or not don't do anything
 	if setError {
 		if errorStatusBitMasked != 0 {
-			return
+			return false
 		}
 		emcy.errorStatusBits[index] |= byte(bitMask)
 	} else {
 		if errorStatusBitMasked == 0 {
-			return
+			return false
 		}
 		emcy.errorStatusBits[index] &^= byte(bitMask)
 		errorCode = ErrNoError
@@ -470,10 +476,15 @@ func (emcy *EMCY) Error(setError bool, errorBit byte, errorCode uint16, infoCode
 			}
 		}
 	}
+	return true
 }
 
 func (emcy *EMCY) ErrorReport(errorBit byte, errorCode uint16, infoCode uint32) {
 	if emcy == nil {
+		return
+	}
+	// Only log when an emergency is actually sent, i.e. the error was not already set
+	if !emcy.error(true, errorBit, errorCode, infoCode) {
 		return
 	}
 	emcy.logger.Info("report emergency",
@@ -482,11 +493,14 @@ func (emcy *EMCY) ErrorReport(errorBit byte, errorCode uint16, infoCode uint32) 
 		"bit description", getErrorStatusDescription(errorBit),
 		"infoCode", infoCode,
 	)
-	emcy.Error(true, errorBit, errorCode, infoCode)
 }
 
 func (emcy *EMCY) ErrorReset(errorBit byte, infoCode uint32) {
 	if emcy == nil {
+		return
+	}
+	// Only log when the error was actually set
+	if !emcy.error(false, errorBit, ErrNoError, infoCode) {
 		return
 	}
 	emcy.logger.Info("reset emergency",
@@ -494,7 +508,6 @@ func (emcy *EMCY) ErrorReset(errorBit byte, infoCode uint32) {
 		"errorBit", errorBit,
 		"infoCode", infoCode,
 	)
-	emcy.Error(false, errorBit, ErrNoError, infoCode)
 }
 
 func (emcy *EMCY) IsError(errorBit byte) bool {
