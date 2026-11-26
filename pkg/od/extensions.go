@@ -68,6 +68,13 @@ func ReadEntryFileObject(stream *Stream, data []byte) (uint16, error) {
 			return 0, ErrDevIncompat
 		}
 	} else {
+		// The file is closed once the end is reached, but a reader can still
+		// go back to an earlier offset, e.g. SDO block upload retransmission
+		if fileObject.File == nil {
+			if err := fileObject.open(fileObject.ReadMode); err != nil {
+				return 0, ErrDevIncompat
+			}
+		}
 		// Re-adjust file cursor depending on datoffset
 		_, err := fileObject.File.Seek(int64(stream.DataOffset), 0)
 		if err != nil {

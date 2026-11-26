@@ -492,18 +492,20 @@ def test_sdo_block_upload_retransmit_forever(node: canopen.RemoteNode, monkeypat
     counter = 0
     done = False
     data = bytes()
-    with pytest.raises(SdoCommunicationError):
-        while stream._done != True:
-            # Mess up sequence number in order to trigger retransmit
-            if not done and stream._ackseq >= 120:
-                # Patch read function fake a wrong block to trigger retransmit
-                stream.sdo_client.responses.get()
-                stream.sdo_client.responses.put(
-                    bytes([80, 255, 255, 255, 255, 255, 255, 255])
-                )
-            counter += 1
-            data += stream.read(7)
-        stream.close()
+    # Every block is messed up, the server must keep re-transmitting
+    # (without crashing) until the whole data is received
+    while stream._done != True:
+        # Mess up sequence number in order to trigger retransmit
+        if not done and stream._ackseq >= 120:
+            # Patch read function fake a wrong block to trigger retransmit
+            stream.sdo_client.responses.get()
+            stream.sdo_client.responses.put(
+                bytes([80, 255, 255, 255, 255, 255, 255, 255])
+            )
+        counter += 1
+        data += stream.read(7)
+    stream.close()
+    assert data == STRING_BINARY
 
 
 @pytest.mark.parametrize("nb_lines", [i for i in range(1, 120)])

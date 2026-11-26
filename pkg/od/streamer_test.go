@@ -158,3 +158,26 @@ func TestFileObjectAbortedTransferClosesFile(t *testing.T) {
 	_, err = second.Stat()
 	assert.ErrorIs(t, err, os.ErrClosed)
 }
+
+// A reader can go back to an earlier offset after the end of the file was
+// reached (e.g. SDO block upload retransmission)
+func TestFileObjectRewindAfterEnd(t *testing.T) {
+	path := t.TempDir() + "/file.bin"
+	content := []byte("0123456789abcdefghij")
+	assert.Nil(t, os.WriteFile(path, content, 0o644))
+	od := NewOD()
+	od.AddFile(0x2000, "file", path, os.O_RDONLY, os.O_RDONLY)
+
+	streamer, err := od.Streamer(0x2000, 0, false)
+	assert.Nil(t, err)
+	buf := make([]byte, 30)
+	n, err := streamer.Read(buf)
+	assert.Nil(t, err)
+	assert.Equal(t, len(content), n)
+
+	// Rewind to offset 5 and read again
+	streamer.DataOffset = 5
+	n, err = streamer.Read(buf)
+	assert.Nil(t, err)
+	assert.Equal(t, content[5:], buf[:n])
+}
