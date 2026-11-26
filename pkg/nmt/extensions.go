@@ -9,7 +9,7 @@ import (
 
 // [NMT] update heartbeat period
 func writeEntry1017(stream *od.Stream, data []byte) (uint16, error) {
-	if stream.Subindex != 0 || data == nil || len(data) != 2 || stream == nil {
+	if stream == nil || stream.Subindex != 0 || data == nil || len(data) != 2 {
 		return 0, od.ErrDevIncompat
 	}
 	nmt, ok := stream.Object.(*NMT)

@@ -9,13 +9,16 @@ import (
 
 // [HBConsumer] update heartbeat consumer
 func writeEntry1016(stream *od.Stream, data []byte) (uint16, error) {
+	if stream == nil {
+		return 0, od.ErrDevIncompat
+	}
 	consumer, ok := stream.Object.(*HBConsumer)
 	if !ok {
 		return 0, od.ErrDevIncompat
 	}
 	consumer.mu.Lock()
 
-	if stream == nil || stream.Subindex < 1 ||
+	if stream.Subindex < 1 ||
 		int(stream.Subindex) > len(consumer.entries) ||
 		len(data) != 4 {
 		consumer.mu.Unlock()
