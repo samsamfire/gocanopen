@@ -21,7 +21,7 @@ type doneWriter struct {
 }
 
 // Handle a [GatewayRequest] according to CiA 309-5
-type GatewayRequestHandler func(w doneWriter, req *GatewayRequest) error
+type GatewayRequestHandler func(w *doneWriter, req *GatewayRequest) error
 
 func (w *doneWriter) WriteHeader(status int) {
 	w.done = true
@@ -63,6 +63,7 @@ func (g *GatewayServer) newRequestFromRaw(r *http.Request) (*GatewayRequest, err
 	nodeInt, err := parseNodeOrNetworkParam(nodeStr)
 	if err != nil || nodeInt == 0 || nodeInt > 127 {
 		g.logger.Error("error processing node param", "param", nodeStr)
+		return nil, ErrGwUnsupportedNode
 	}
 
 	// Unmarshall request body
@@ -116,7 +117,8 @@ func (g *GatewayServer) handleRequest(w http.ResponseWriter, raw *http.Request) 
 		}
 	}
 	// Process the actual command
-	dw := doneWriter{ResponseWriter: w, done: false}
+	// Passed by pointer so that writes done by the handler are seen here
+	dw := &doneWriter{ResponseWriter: w, done: false}
 	err = route(dw, req)
 	if err != nil {
 		w.Write(NewResponseError(req.sequence, err))
@@ -131,7 +133,7 @@ func (g *GatewayServer) handleRequest(w http.ResponseWriter, raw *http.Request) 
 
 // Create a handler for processing NMT request
 func createNmtHandler(bg *gateway.BaseGateway, command nmt.Command) GatewayRequestHandler {
-	return func(w doneWriter, req *GatewayRequest) error {
+	return func(w *doneWriter, req *GatewayRequest) error {
 		switch req.nodeId {
 		case TOKEN_DEFAULT, TOKEN_NONE:
 			return bg.NMTCommand(bg.DefaultNodeId(), command)
@@ -145,13 +147,13 @@ func createNmtHandler(bg *gateway.BaseGateway, command nmt.Command) GatewayReque
 
 // Can be used for specifying some routes that can be implemented in CiA 309
 // But are not in this gateway
-func handlerNotSupported(w doneWriter, req *GatewayRequest) error {
+func handlerNotSupported(w *doneWriter, req *GatewayRequest) error {
 	return ErrGwRequestNotSupported
 }
 
 // Handle a read
 // This includes different type of handlers : SDO, PDO, ...
-func (g *GatewayServer) handlerRead(w doneWriter, req *GatewayRequest) error {
+func (g *GatewayServer) handlerRead(w *doneWriter, req *GatewayRequest) error {
 	matchSDO := regSDO.FindStringSubmatch(req.command)
 	if len(matchSDO) >= 2 {
 		return g.handlerSDORead(w, req, matchSDO)
@@ -163,7 +165,7 @@ func (g *GatewayServer) handlerRead(w doneWriter, req *GatewayRequest) error {
 	return ErrGwSyntaxError
 }
 
-func (g *GatewayServer) handlerSDORead(w doneWriter, req *GatewayRequest, commands []string) error {
+func (g *GatewayServer) handlerSDORead(w *doneWriter, req *GatewayRequest, commands []string) error {
 	index, subindex, err := parseSdoCommand(commands[1:])
 	if err != nil {
 		g.logger.Error("unable to parse SDO command", "err", err)
@@ -192,7 +194,7 @@ func (g *GatewayServer) handlerSDORead(w doneWriter, req *GatewayRequest, comman
 
 // Handle a write
 // This includes different type of handlers : SDO, PDO, ...
-func (g *GatewayServer) handleWrite(w doneWriter, req *GatewayRequest) error {
+func (g *GatewayServer) handleWrite(w *doneWriter, req *GatewayRequest) error {
 	matchSDO := regSDO.FindStringSubmatch(req.command)
 	if len(matchSDO) >= 2 {
 		return g.handlerSDOWrite(w, req, matchSDO)
@@ -204,7 +206,7 @@ func (g *GatewayServer) handleWrite(w doneWriter, req *GatewayRequest) error {
 	return ErrGwSyntaxError
 }
 
-func (g *GatewayServer) handlerSDOWrite(w doneWriter, req *GatewayRequest, commands []string) error {
+func (g *GatewayServer) handlerSDOWrite(w *doneWriter, req *GatewayRequest, commands []string) error {
 	index, subindex, err := parseSdoCommand(commands[1:])
 	if err != nil {
 		g.logger.Error("unable to parse SDO command", "err", err)
@@ -230,7 +232,7 @@ func (g *GatewayServer) handlerSDOWrite(w doneWriter, req *GatewayRequest, comma
 }
 
 // Update SDO client timeout
-func (g *GatewayServer) handleSDOTimeout(w doneWriter, req *GatewayRequest) error {
+func (g *GatewayServer) handleSDOTimeout(w *doneWriter, req *GatewayRequest) error {
 
 	var sdoTimeout SDOSetTimeoutRequest
 	err := json.Unmarshal(req.parameters, &sdoTimeout)
@@ -244,7 +246,7 @@ func (g *GatewayServer) handleSDOTimeout(w doneWriter, req *GatewayRequest) erro
 	return g.SetSDOTimeout(uint32(sdoTimeoutInt))
 }
 
-func (g *GatewayServer) handleGetVersion(w doneWriter, req *GatewayRequest) error {
+func (g *GatewayServer) handleGetVersion(w *doneWriter, req *GatewayRequest) error {
 	version, err := g.GetVersion()
 	if err != nil {
 		return ErrGwRequestNotProcessed
@@ -261,7 +263,7 @@ func (g *GatewayServer) handleGetVersion(w doneWriter, req *GatewayRequest) erro
 	return nil
 }
 
-func (g *GatewayServer) handleSetDefaultNetwork(w doneWriter, req *GatewayRequest) error {
+func (g *GatewayServer) handleSetDefaultNetwork(w *doneWriter, req *GatewayRequest) error {
 	var defaultNetwork SetDefaultNetOrNode
 	err := json.Unmarshal(req.parameters, &defaultNetwork)
 	if err != nil {
@@ -277,14 +279,14 @@ func (g *GatewayServer) handleSetDefaultNetwork(w doneWriter, req *GatewayReques
 	return nil
 }
 
-func (g *GatewayServer) handleSetDefaultNode(w doneWriter, req *GatewayRequest) error {
+func (g *GatewayServer) handleSetDefaultNode(w *doneWriter, req *GatewayRequest) error {
 	var defaultNode SetDefaultNetOrNode
 	err := json.Unmarshal(req.parameters, &defaultNode)
 	if err != nil {
 		return ErrGwSyntaxError
 	}
 	nodeId, err := strconv.ParseUint(defaultNode.Value, 0, 64)
-	if err != nil || nodeId > 0xFF || nodeId == 0 {
+	if err != nil || nodeId > 127 || nodeId == 0 {
 		return ErrGwSyntaxError
 	}
 	g.SetDefaultNodeId(uint8(nodeId))

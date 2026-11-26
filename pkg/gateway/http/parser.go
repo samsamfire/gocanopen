@@ -27,7 +27,7 @@ func parseSdoCommand(command []string) (index uint64, subindex uint64, err error
 	if e != nil {
 		return 0, 0, ErrGwSyntaxError
 	}
-	if index > 0xFFFF || subindex > 0xFF {
+	if index > 0xFFFF || subIndex > 0xFF {
 		return 0, 0, ErrGwSyntaxError
 	}
 	return index, subIndex, nil
