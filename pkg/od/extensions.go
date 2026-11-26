@@ -29,6 +29,27 @@ func NewFileObject(path string, logger *slog.Logger, writeMode int, readMode int
 		ReadMode:  readMode}
 }
 
+// Open the file, closing any file left open by a previous
+// transfer that was aborted before reaching the end
+func (fileObject *FileObject) open(flag int) error {
+	_ = fileObject.closeFile()
+	file, err := os.OpenFile(fileObject.FilePath, flag, 0644)
+	if err != nil {
+		return err
+	}
+	fileObject.File = file
+	return nil
+}
+
+func (fileObject *FileObject) closeFile() error {
+	if fileObject.File == nil {
+		return nil
+	}
+	err := fileObject.File.Close()
+	fileObject.File = nil
+	return err
+}
+
 // [SDO] Custom function for reading a file like object
 func ReadEntryFileObject(stream *Stream, data []byte) (uint16, error) {
 	if stream == nil || data == nil || stream.Subindex != 0 || stream.Object == nil {
@@ -42,7 +63,7 @@ func ReadEntryFileObject(stream *Stream, data []byte) (uint16, error) {
 	if stream.DataOffset == 0 {
 		var err error
 		fileObject.logger.Info("opening file for reading", "path", fileObject.FilePath)
-		fileObject.File, err = os.OpenFile(fileObject.FilePath, fileObject.ReadMode, 0644)
+		err = fileObject.open(fileObject.ReadMode)
 		if err != nil {
 			return 0, ErrDevIncompat
 		}
@@ -61,12 +82,12 @@ func ReadEntryFileObject(stream *Stream, data []byte) (uint16, error) {
 		return uint16(countReadInt), ErrPartial
 	case io.EOF, io.ErrUnexpectedEOF:
 		fileObject.logger.Info("finished reading", "path", fileObject.FilePath)
-		err := fileObject.File.Close()
+		err := fileObject.closeFile()
 		return uint16(countReadInt), err
 	default:
 		// unexpected error
 		fileObject.logger.Warn("error reading", "path", fileObject.FilePath, "err", err)
-		_ = fileObject.File.Close()
+		_ = fileObject.closeFile()
 		return uint16(countReadInt), ErrDevIncompat
 	}
 }
@@ -84,7 +105,7 @@ func WriteEntryFileObject(stream *Stream, data []byte) (uint16, error) {
 	if stream.DataOffset == 0 {
 		var err error
 		fileObject.logger.Info("opening file for writing", "path", fileObject.FilePath)
-		fileObject.File, err = os.OpenFile(fileObject.FilePath, fileObject.WriteMode, 0644)
+		err = fileObject.open(fileObject.WriteMode)
 		if err != nil {
 			return 0, ErrDevIncompat
 		}
@@ -101,14 +122,14 @@ func WriteEntryFileObject(stream *Stream, data []byte) (uint16, error) {
 		stream.DataOffset += uint32(countWrittenInt)
 		if stream.DataLength == stream.DataOffset {
 			fileObject.logger.Info("finished writing", "path", fileObject.FilePath)
-			err := fileObject.File.Close()
+			err := fileObject.closeFile()
 			return uint16(countWrittenInt), err
 		} else {
 			return uint16(countWrittenInt), ErrPartial
 		}
 	} else {
 		fileObject.logger.Warn("error writing", "path", fileObject.FilePath, "err", err)
-		_ = fileObject.File.Close()
+		_ = fileObject.closeFile()
 		return uint16(countWrittenInt), ErrDevIncompat
 	}
 }

@@ -3,6 +3,7 @@ package od
 import (
 	"bytes"
 	"io"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -119,4 +120,41 @@ func TestStreamerDomainWithoutExtension(t *testing.T) {
 	assert.Equal(t, ErrUnsuppAccess, err)
 	_, err = streamer.Write(make([]byte, 10))
 	assert.Equal(t, ErrUnsuppAccess, err)
+}
+
+func TestFileObjectAbortedTransferClosesFile(t *testing.T) {
+	path := t.TempDir() + "/file.bin"
+	assert.Nil(t, os.WriteFile(path, make([]byte, 100), 0o644))
+	od := NewOD()
+	od.AddFile(0x2000, "file", path, os.O_RDONLY, os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
+
+	// Start a read but never finish it (e.g. SDO transfer aborted)
+	streamer, err := od.Streamer(0x2000, 0, false)
+	assert.Nil(t, err)
+	_, err = streamer.Read(make([]byte, 10))
+	assert.Equal(t, ErrPartial, err)
+	first := streamer.Object.(*FileObject).File
+
+	// A new transfer must close the previous file
+	streamer, err = od.Streamer(0x2000, 0, false)
+	assert.Nil(t, err)
+	_, err = streamer.Read(make([]byte, 10))
+	assert.Equal(t, ErrPartial, err)
+	_, err = first.Stat()
+	assert.ErrorIs(t, err, os.ErrClosed)
+
+	// Same for writes
+	streamer, err = od.Streamer(0x2000, 0, false)
+	assert.Nil(t, err)
+	_, err = streamer.Write(make([]byte, 10))
+	assert.Equal(t, ErrPartial, err)
+	second := streamer.Object.(*FileObject).File
+	_, err = second.Stat()
+	assert.Nil(t, err)
+	streamer, err = od.Streamer(0x2000, 0, false)
+	assert.Nil(t, err)
+	_, err = streamer.Write(make([]byte, 10))
+	assert.Equal(t, ErrPartial, err)
+	_, err = second.Stat()
+	assert.ErrorIs(t, err, os.ErrClosed)
 }
