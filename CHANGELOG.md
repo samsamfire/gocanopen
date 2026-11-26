@@ -5,6 +5,100 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-11-26
+
+### Added
+
+- Bus : `BusStateReader` to read the CAN controller state, implemented by the socketcan and Kvaser drivers.
+- OD : `Parse` accepts an `io.Reader`, sections in any order, case insensitive keys, comments, BOM and CRLF.
+
+### Changed
+
+- OD : `Parse` and `ParseV2` are now a single parser, about 16x faster than the previous `Parse`.
+- OD : a malformed EDS returns an error with its line number instead of panicking or being silently misread.
+- OD : OCTET_STRING default values are read as hexadecimal.
+- OD : signed values can be given in hexadecimal, REAL values as raw hexadecimal bits.
+- OD : `gopkg.in/ini.v1` is no longer a dependency.
+- NMT : reset communication re-initialises the node and sends a boot-up instead of being ignored.
+- NMT : state changes are notified immediately instead of at the next heartbeat.
+- Emergency : report and reset are only logged when an emergency is actually sent.
+- Gateway : an invalid node id is rejected with error 107.
+
+### Deprecated
+
+- OD : `ParseV2`, use `Parse`.
+
+### Removed
+
+- OD : `NewVariableFromSection`.
+
+### Fixed
+
+- OD : a missing array sub-index returned a nil variable instead of `ErrSubNotExist`.
+- OD : `ParseV2` ignored LowLimit and HighLimit.
+- OD : EDS export wrote read-only entries as rw and dropped PDOMapping, limits and negative INTEGER8 values.
+- OD : EDS export failed on a record with a single sub-index.
+- OD : a DOMAIN entry without extension returned an unusable streamer.
+- OD : `PutBytes` detached the variable from its streamers.
+- OD : a file entry leaked a file descriptor when a transfer was aborted.
+- OD : a file entry could not rewind after its end, aborting block upload retransmissions.
+- SDO : the server never aborted a stalled block download.
+- SDO : a lost sub-block acknowledgement duplicated data during a block upload.
+- SDO : the server ignored errors in the middle of a block upload sub-block.
+- SDO : block download counted re-transmitted segments twice.
+- SDO : block download stalled when the first or last segment of a sub-block was lost.
+- SDO : block upload of a reader ending on a sub-block boundary aborted.
+- SDO : block upload size indication was truncated to one byte.
+- SDO : segmented download bigger than the client fifo never finished.
+- SDO : the server used the size indicated by a previous transfer.
+- SDO : requests received in STOPPED were executed later.
+- SDO : server crash on a custom writer error in an expedited download.
+- SDO : wrong length checks and panic in local download.
+- SDO : `WriteRaw` ignored `forceSegmented`.
+- SDO : `ReadRaw` silently truncated data and left the transfer open.
+- SDO : a second `Write` on a writer was silently dropped.
+- SDO : the client ignored the timeout given at creation.
+- SDO : client COB-IDs were swapped when writing 0x1280 sub 2.
+- SDO : `Network.Scan` leaked the subscriptions of its clients.
+- PDO : TPDO SYNC start value was ignored when written or after an NMT change.
+- PDO : SYNC start value was applied to synchronous acyclic TPDOs.
+- PDO : a correct RPDO cleared the length error of another RPDO.
+- PDO : writing the base COB-ID gave a different COB-ID on read.
+- PDO : `ClearMappings` failed on PDOs with less than 8 mapping entries.
+- PDO : TPDOs were sent after `Stop`.
+- SYNC : the producer never triggered its own synchronous PDOs.
+- SYNC : a SYNC added with `AddSYNC` could not be enabled as producer.
+- SYNC : RPDO and SYNC timeout errors were never cleared after an NMT change.
+- SYNC : timeout was raised after `Stop`.
+- TIME : the producer did not send the current UTC time.
+- TIME : COB-ID changes written to 0x1012 were not applied.
+- TIME : produced outside of PRE-OPERATIONAL and OPERATIONAL.
+- NMT : `SendCommand` deadlocked with loopback and was not applied to the own node.
+- NMT : deadlock when a state change callback used the NMT object.
+- NMT : SYNC, TIME and heartbeat frames were sent after `Stop`.
+- Node : node id 127 was rejected.
+- Heartbeat : consumer callback had node id and index swapped.
+- Heartbeat : a timeout raised the remote reset error instead of the timeout error.
+- Heartbeat : writing 0x1016 or 0x1017 with a nil stream panicked.
+- Emergency : error register was constant in EMCY frames and 0x1001 always read 0.
+- Emergency : EMCY was sent while the producer was disabled in 0x1014.
+- Emergency : remote EMCY were never received, the subscription mask was ignored.
+- Bus : extended and RTR frames were routed to standard frame subscribers.
+- Gateway : responses contained the body twice.
+- Gateway : the sub-index bound check tested the wrong variable.
+- Gateway : did not compile on 32 bit and could return negative sequence numbers.
+- Drivers : socketcan drivers leaked or broke their socket on `Disconnect`, reconnecting did not work.
+- Drivers : socketcan drivers reported a short write as success.
+- Drivers : socketcanv3 delayed received frames by up to 100 ms.
+- Drivers : socketcanring parsed TPACKET_V2 frames as TPACKET_V1, all ids were wrong.
+- Drivers : socketcanring received its own frames.
+- Drivers : socketcanring filters were applied to the wrong socket and never worked.
+- Drivers : socketcan drivers did not compile on some architectures.
+- Drivers : Kvaser ignored extended, RTR and error frame flags.
+- Drivers : Kvaser status codes were not sign-extended.
+- Drivers : Kvaser did not list adapters plugged in after start-up.
+- Drivers : Kvaser never cleared the latched overrun flags once reported.
+
 ## [2.1.1] - 2026-10-07
 
 ### Changed
@@ -79,4 +173,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Non regression tests for chunked object dictionary access, PDO mapping, SYNC and lossy SDO transfers.
 
+[2.2.0]: https://github.com/samsamfire/gocanopen/compare/v2.1.1...v2.2.0
+[2.1.1]: https://github.com/samsamfire/gocanopen/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/samsamfire/gocanopen/compare/v2.0.1...v2.1.0
