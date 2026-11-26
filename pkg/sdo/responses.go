@@ -38,7 +38,8 @@ func (s *SDOServer) processOutgoing() error {
 		if err != nil {
 			return err
 		}
-		s.processOutgoing()
+		// Send the next segment, an error there must abort the transfer too
+		return s.processOutgoing()
 
 	case stateUploadBlkEndSreq:
 		s.txUploadBlockEnd()
