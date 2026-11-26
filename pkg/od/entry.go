@@ -7,8 +7,6 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-
-	"gopkg.in/ini.v1"
 )
 
 // An Entry object is the main building block of an [ObjectDictionary].
@@ -37,7 +35,7 @@ type Entry struct {
 // Create a new [Entry]
 func NewEntry(logger *slog.Logger, index uint16, name string, object any, objectType uint8) *Entry {
 	return &Entry{
-		logger:     logger.With("index", fmt.Sprintf("x%x", index), "name", name),
+		logger:     logger,
 		Index:      index,
 		Name:       name,
 		object:     object,
@@ -100,31 +98,6 @@ func (entry *Entry) SubIndex(subIndex any) (v *Variable, e error) {
 
 }
 
-// Add a member to Entry, this is only possible for Record/Array objects
-func (entry *Entry) addSectionMember(section *ini.Section, name string, nodeId uint8, subIndex uint8) error {
-	record, ok := entry.object.(*VariableList)
-	if !ok {
-		return fmt.Errorf("cannot add member to type : %T", record)
-	}
-	variable, err := NewVariableFromSection(section, name, nodeId, entry.Index, subIndex)
-	if err != nil {
-		return err
-	}
-	switch entry.ObjectType {
-
-	case ObjectTypeARRAY:
-		record.Variables[subIndex] = variable
-		record.subEntriesNameMap[name] = subIndex
-
-	case ObjectTypeRECORD:
-		record.Variables = append(record.Variables, variable)
-		record.subEntriesNameMap[name] = subIndex
-	default:
-		return fmt.Errorf("add member not supported for ObjectType : %v", entry.ObjectType)
-	}
-	return nil
-}
-
 // Add an extension to an OD entry
 // This allows an OD entry to perform custom behaviour on read or on write.
 // Some extensions are already defined in this package for defined CiA entries
@@ -132,7 +105,7 @@ func (entry *Entry) addSectionMember(section *ini.Section, name string, nodeId u
 // Implementation of the default StreamReader & StreamWriter for a regular OD entry
 // can be found here [ReadEntryDefault] & [WriteEntryDefault].
 func (entry *Entry) AddExtension(object any, read StreamReader, write StreamWriter) {
-	entry.logger.Debug("added extension",
+	entry.log().Debug("added extension",
 		"read", getFunctionName(read),
 		"write", getFunctionName(write),
 	)
@@ -151,7 +124,7 @@ func (entry *Entry) SubCount() int {
 		return len(object.Variables)
 	default:
 		// This is not normal
-		entry.logger.Error("invalid entry", "type", fmt.Sprintf("%T", entry))
+		entry.log().Error("invalid entry", "type", fmt.Sprintf("%T", entry))
 		return 1
 	}
 }
@@ -274,6 +247,15 @@ func (entry *Entry) WriteExactly(subIndex uint8, b []byte, origin bool) error {
 	_, err = streamer.Write(b)
 	return err
 
+}
+
+// Logger with entry context, only built when actually logging
+func (entry *Entry) log() *slog.Logger {
+	logger := entry.logger
+	if logger == nil {
+		logger = _logger
+	}
+	return logger.With("index", fmt.Sprintf("x%x", entry.Index), "name", entry.Name)
 }
 
 // Returns last part of function name

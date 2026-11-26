@@ -123,7 +123,7 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (Streamer, error) {
 			streamer.DataOffset = 0
 			streamer.Subindex = subIndex
 			streamer.mu = &object.mu
-			entry.logger.Warn("no extension has been specified for this domain object")
+			entry.log().Warn("no extension has been specified for this domain object")
 			return Streamer{}, nil
 		}
 		streamer.Attribute = object.Attribute
@@ -142,7 +142,7 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (Streamer, error) {
 		streamer.mu = &variable.mu
 
 	default:
-		entry.logger.Error("error, unknown type",
+		entry.log().Error("error, unknown type",
 			"type", fmt.Sprintf("%T", object),
 		)
 		return Streamer{}, ErrDevIncompat

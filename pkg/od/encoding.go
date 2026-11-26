@@ -4,16 +4,47 @@ import (
 	"encoding/binary"
 	"math"
 	"strconv"
+	"strings"
 )
 
-// EncodeFromString value from EDS into bytes respecting canopen datatype
+// EncodeFromString value from EDS into bytes respecting canopen datatype.
+// Numbers can be decimal, hexadecimal (0x) or octal (leading 0).
+// offset is added to integer values (used for $NODEID).
 func EncodeFromString(value string, datatype uint8, offset uint8) ([]byte, error) {
+	size, err := encodedSize(value, datatype)
+	if err != nil {
+		return nil, err
+	}
+	data := make([]byte, size)
+	return data, encodeInto(data, value, datatype, offset)
+}
 
-	var data []byte
-	var err error
-	var parsedInt int64
-	var parsedUint uint64
+// Number of bytes needed to encode value with the given datatype
+func encodedSize(value string, datatype uint8) (int, error) {
+	switch datatype {
+	case BOOLEAN, UNSIGNED8, INTEGER8:
+		return 1, nil
+	case UNSIGNED16, INTEGER16:
+		return 2, nil
+	case UNSIGNED32, INTEGER32, REAL32:
+		return 4, nil
+	case UNSIGNED64, INTEGER64, REAL64:
+		return 8, nil
+	case VISIBLE_STRING, OCTET_STRING:
+		if value == "" {
+			// Treat empty string as a 0 value
+			return 1, nil
+		}
+		return len(value), nil
+	case DOMAIN:
+		return 0, nil
+	default:
+		return 0, ErrTypeMismatch
+	}
+}
 
+// Encode value into data, data must be of size [encodedSize]
+func encodeInto(data []byte, value string, datatype uint8, offset uint8) error {
 	if value == "" {
 		// Treat empty string as a 0 value
 		value = "0"
@@ -21,66 +52,98 @@ func EncodeFromString(value string, datatype uint8, offset uint8) ([]byte, error
 
 	switch datatype {
 	case BOOLEAN, UNSIGNED8:
-		parsedUint, err = strconv.ParseUint(value, 0, 8)
-		data = []byte{byte(uint8(parsedUint + uint64(offset)))}
+		parsed, err := strconv.ParseUint(value, 0, 8)
+		data[0] = uint8(parsed + uint64(offset))
+		return err
 
 	case INTEGER8:
-		parsedInt, err = strconv.ParseInt(value, 0, 8)
-		data = []byte{byte(parsedInt + int64(offset))}
+		parsed, err := parseInt(value, 8)
+		data[0] = byte(parsed + int64(offset))
+		return err
 
 	case UNSIGNED16:
-		parsedUint, err = strconv.ParseUint(value, 0, 16)
-		data = make([]byte, 2)
-		binary.LittleEndian.PutUint16(data, uint16(parsedUint+uint64(offset)))
+		parsed, err := strconv.ParseUint(value, 0, 16)
+		binary.LittleEndian.PutUint16(data, uint16(parsed+uint64(offset)))
+		return err
 
 	case INTEGER16:
-		parsedInt, err = strconv.ParseInt(value, 0, 16)
-		data = make([]byte, 2)
-		binary.LittleEndian.PutUint16(data, uint16(parsedInt+int64(offset)))
+		parsed, err := parseInt(value, 16)
+		binary.LittleEndian.PutUint16(data, uint16(parsed+int64(offset)))
+		return err
 
 	case UNSIGNED32:
-		parsedUint, err = strconv.ParseUint(value, 0, 32)
-		data = make([]byte, 4)
-		binary.LittleEndian.PutUint32(data, uint32(parsedUint+uint64(offset)))
+		parsed, err := strconv.ParseUint(value, 0, 32)
+		binary.LittleEndian.PutUint32(data, uint32(parsed+uint64(offset)))
+		return err
 
 	case INTEGER32:
-		parsedInt, err = strconv.ParseInt(value, 0, 32)
-		data = make([]byte, 4)
-		binary.LittleEndian.PutUint32(data, uint32(parsedInt+int64(offset)))
-
-	case REAL32:
-		var parsedFloat float64
-		parsedFloat, err = strconv.ParseFloat(value, 32)
-		data = make([]byte, 4)
-		binary.LittleEndian.PutUint32(data, math.Float32bits(float32(parsedFloat)))
+		parsed, err := parseInt(value, 32)
+		binary.LittleEndian.PutUint32(data, uint32(parsed+int64(offset)))
+		return err
 
 	case UNSIGNED64:
-		parsedUint, err = strconv.ParseUint(value, 0, 64)
-		data = make([]byte, 8)
-		binary.LittleEndian.PutUint64(data, parsedUint+uint64(offset))
+		parsed, err := strconv.ParseUint(value, 0, 64)
+		binary.LittleEndian.PutUint64(data, parsed+uint64(offset))
+		return err
 
 	case INTEGER64:
-		parsedInt, err = strconv.ParseInt(value, 0, 64)
-		data = make([]byte, 8)
-		binary.LittleEndian.PutUint64(data, uint64(parsedInt+int64(offset)))
+		parsed, err := parseInt(value, 64)
+		binary.LittleEndian.PutUint64(data, uint64(parsed+int64(offset)))
+		return err
+
+	case REAL32:
+		if isRawHex(value) {
+			parsed, err := strconv.ParseUint(value, 0, 32)
+			binary.LittleEndian.PutUint32(data, uint32(parsed))
+			return err
+		}
+		parsed, err := strconv.ParseFloat(value, 32)
+		binary.LittleEndian.PutUint32(data, math.Float32bits(float32(parsed)))
+		return err
 
 	case REAL64:
-		var parsedFloat float64
-		parsedFloat, err = strconv.ParseFloat(value, 64)
-		data = make([]byte, 8)
-		binary.LittleEndian.PutUint64(data, math.Float64bits(parsedFloat))
+		if isRawHex(value) {
+			parsed, err := strconv.ParseUint(value, 0, 64)
+			binary.LittleEndian.PutUint64(data, parsed)
+			return err
+		}
+		parsed, err := strconv.ParseFloat(value, 64)
+		binary.LittleEndian.PutUint64(data, math.Float64bits(parsed))
+		return err
 
 	case VISIBLE_STRING, OCTET_STRING:
-		return []byte(value), nil
+		copy(data, value)
+		return nil
 
 	case DOMAIN:
-		return []byte{}, nil
+		return nil
 
 	default:
-		return nil, ErrTypeMismatch
-
+		return ErrTypeMismatch
 	}
-	return data, err
+}
+
+// Parse a signed integer. Hexadecimal values are also accepted
+// as their two's complement representation e.g. 0xFFFF for INTEGER16 is -1
+func parseInt(value string, bitSize int) (int64, error) {
+	parsed, err := strconv.ParseInt(value, 0, bitSize)
+	if err != nil && isHex(value) {
+		unsigned, errU := strconv.ParseUint(value, 0, bitSize)
+		if errU == nil {
+			return int64(unsigned), nil
+		}
+	}
+	return parsed, err
+}
+
+func isHex(value string) bool {
+	return len(value) > 2 && value[0] == '0' && (value[1] == 'x' || value[1] == 'X')
+}
+
+// Hexadecimal value without exponent, i.e. raw IEEE 754 bits
+// and not a Go hexadecimal float (0x1p-2)
+func isRawHex(value string) bool {
+	return isHex(value) && !strings.ContainsAny(value, "pP.")
 }
 
 // Encode from generic type
@@ -355,7 +418,7 @@ func DecodeToType(data []byte, dataType uint8) (v any, e error) {
 	case BOOLEAN, UNSIGNED8:
 		return uint64(data[0]), nil
 	case INTEGER8:
-		return int64(data[0]), nil
+		return int64(int8(data[0])), nil
 	case UNSIGNED16:
 		return uint64(binary.LittleEndian.Uint16(data)), nil
 	case INTEGER16:
@@ -437,7 +500,7 @@ func DecodeToString(data []byte, dataType uint8, base int) (v string, e error) {
 	case BOOLEAN, UNSIGNED8:
 		return strconv.FormatUint(uint64(data[0]), base), nil
 	case INTEGER8:
-		return strconv.FormatInt(int64(data[0]), base), nil
+		return strconv.FormatInt(int64(int8(data[0])), base), nil
 	case UNSIGNED16:
 		return strconv.FormatUint(uint64(binary.LittleEndian.Uint16(data)), base), nil
 	case INTEGER16:
@@ -465,19 +528,22 @@ func DecodeToString(data []byte, dataType uint8, base int) (v string, e error) {
 	}
 }
 
-// Decode the attribute in function of the of attribute type and pdo mapping for EDS entry
+// Decode the attribute in function of the of attribute type and pdo mapping for EDS entry.
+// accessType is case insensitive, unknown values default to "rw".
 func EncodeAttribute(accessType string, pdoMapping bool, dataType uint8) uint8 {
 
 	var attribute uint8
 
-	switch accessType {
-	case "rw":
+	switch {
+	case accessType == "rw":
 		attribute = AttributeSdoRw
-	case "ro", "const":
+	case accessType == "ro", accessType == "const",
+		strings.EqualFold(accessType, "ro"), strings.EqualFold(accessType, "const"):
 		attribute = AttributeSdoR
-	case "wo":
+	case strings.EqualFold(accessType, "wo"):
 		attribute = AttributeSdoW
 	default:
+		// "rw", "rwr", "rww"
 		attribute = AttributeSdoRw
 	}
 	if pdoMapping {
@@ -489,14 +555,12 @@ func EncodeAttribute(accessType string, pdoMapping bool, dataType uint8) uint8 {
 	return attribute
 }
 
-// Encode attribute
+// DecodeAttribute returns the EDS access type of an attribute
 func DecodeAttribute(attribute uint8) string {
-	switch {
-	case attribute&AttributeSdoRw > 0:
-		return "rw"
-	case attribute&AttributeSdoR > 0:
+	switch attribute & AttributeSdoRw {
+	case AttributeSdoR:
 		return "ro"
-	case attribute&AttributeSdoW > 0:
+	case AttributeSdoW:
 		return "wo"
 	default:
 		return "rw"

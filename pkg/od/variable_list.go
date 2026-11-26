@@ -16,10 +16,14 @@ func (rec *VariableList) GetSubObject(subindex uint8) (*Variable, error) {
 		if subindex >= uint8(subEntriesCount) {
 			return nil, ErrSubNotExist
 		}
+		// Array sub-indexes not defined inside of EDS are nil
+		if rec.Variables[subindex] == nil {
+			return nil, ErrSubNotExist
+		}
 		return rec.Variables[subindex], nil
 	}
 	for i, variable := range rec.Variables {
-		if variable.SubIndex == subindex {
+		if variable != nil && variable.SubIndex == subindex {
 			return rec.Variables[i], nil
 		}
 	}
@@ -68,6 +72,10 @@ func (rec *VariableList) AddSubObject(
 		}
 		rec.subEntriesNameMap[name] = subindex
 		rec.Variables[subindex] = variable
+		// Array sub-indexes not defined inside of EDS are nil
+		if rec.Variables[subindex] == nil {
+			return nil, ErrSubNotExist
+		}
 		return rec.Variables[subindex], nil
 	}
 	variable, err := NewVariable(subindex, name, datatype, attribute, value)

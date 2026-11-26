@@ -28,11 +28,11 @@ func (od *ObjectDictionary) NewReaderSeeker() io.ReadSeeker {
 func (od *ObjectDictionary) addEntry(entry *Entry) {
 	_, entryIndexValueExists := od.entriesByIndexValue[entry.Index]
 	if entryIndexValueExists {
-		entry.logger.Warn("overwritting entry")
+		entry.log().Warn("overwritting entry")
 	}
 	od.entriesByIndexValue[entry.Index] = entry
 	od.entriesByIndexName[entry.Name] = entry
-	entry.logger.Debug("adding entry", "objectType", OBJ_NAME_MAP[entry.ObjectType])
+	entry.log().Debug("adding entry", "objectType", OBJ_NAME_MAP[entry.ObjectType])
 }
 
 // Add a variable type entry to OD with given variable, existing entry will be
@@ -74,14 +74,14 @@ func (od *ObjectDictionary) AddVariableList(index uint16, name string, varList *
 func (od *ObjectDictionary) AddFile(index uint16, indexName string, filePath string, readMode int, writeMode int) {
 	f := NewFileObject(filePath, od.logger, writeMode, readMode)
 	entry, _ := od.AddVariableType(index, indexName, DOMAIN, AttributeSdoRw, "") // Cannot error
-	entry.logger.Info("adding extension file i/o", "path", filePath)
+	entry.log().Info("adding extension file i/o", "path", filePath)
 	entry.AddExtension(f, ReadEntryFileObject, WriteEntryFileObject)
 }
 
 // AddReader adds an io.Reader object, of type DOMAIN to OD
 func (od *ObjectDictionary) AddReader(index uint16, indexName string, reader io.Reader) {
 	entry, _ := od.AddVariableType(index, indexName, DOMAIN, AttributeSdoR, "") // Cannot error
-	entry.logger.Info("adding extension reader")
+	entry.log().Info("adding extension reader")
 	entry.AddExtension(reader, ReadEntryReader, WriteEntryDisabled)
 }
 
