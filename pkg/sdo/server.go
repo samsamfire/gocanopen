@@ -80,6 +80,9 @@ func (s *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 	s.logger.Info("starting sdo server processing")
 
 	timeout := time.Duration(s.timeoutTimeUs) * time.Microsecond
+	// Time of the last received frame, used to abort a block download
+	// that keeps timing out, as each sub-block timeout restarts the wait
+	lastRx := time.Now()
 
 	for {
 		s.mu.Lock()
@@ -108,6 +111,7 @@ func (s *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 
 		select {
 		case rx := <-s.rx:
+			lastRx = time.Now()
 
 			s.mu.Lock()
 			nmtOk := s.nmtOk
@@ -131,7 +135,10 @@ func (s *SDOServer) Process(ctx context.Context) (state uint8, err error) {
 			}
 
 		case <-time.After(waitTimeout):
-			if s.state == stateDownloadBlkSubblockReq {
+			if s.state == stateDownloadBlkSubblockReq && time.Since(lastRx) >= timeout {
+				// Nothing received for the whole SDO timeout, client is gone
+				s.txAbort(AbortTimeout)
+			} else if s.state == stateDownloadBlkSubblockReq {
 				// Segments were lost, acknowledge the last one received
 				// so that the client re-transmits the next ones
 				s.state = stateDownloadBlkSubblockRsp
