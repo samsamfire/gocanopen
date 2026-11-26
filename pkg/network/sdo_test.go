@@ -671,3 +671,56 @@ func TestSDOWriteRawForceSegmented(t *testing.T) {
 		assert.EqualValues(t, 0x12345678, value)
 	}
 }
+
+// A block upload should survive the client acknowledgement of a full
+// sub-block being lost : the server must not re-transmit segments that the
+// client already received, otherwise data is duplicated
+func TestSDOBlockUploadSubBlockAckLost(t *testing.T) {
+	odict := od.Default()
+	expected := make([]byte, 3000)
+	for i := range expected {
+		expected[i] = byte(i)
+	}
+	_, err := odict.AddVariableType(0x3003, "huge variable", od.OCTET_STRING, od.AttributeSdoRw, string(expected))
+	assert.Nil(t, err)
+	// Server looses the first acknowledgement of a full sub-block
+	network := createDropOnceNetworkTest(func(frame canopen.Frame) bool {
+		return frame.ID == uint32(sdo.ClientServiceId)+uint32(NodeIdTest) &&
+			frame.Data[0] == 0xA2 && frame.Data[1] == sdo.BlockMaxSize
+	})
+	defer network.Disconnect()
+	_, err = network.CreateLocalNode(NodeIdTest, odict)
+	assert.Nil(t, err)
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+
+	received, err := network2.ReadAll(NodeIdTest, 0x3003, 0)
+	assert.Nil(t, err)
+	assert.Equal(t, expected, received)
+}
+
+// A block upload should survive losing the first segment of a sub-block :
+// the following segments are received, so the client acknowledges nothing
+// and the server re-transmits the whole sub-block
+func TestSDOBlockUploadSubBlockFirstSegmentLost(t *testing.T) {
+	odict := od.Default()
+	expected := make([]byte, 3000)
+	for i := range expected {
+		expected[i] = byte(i)
+	}
+	_, err := odict.AddVariableType(0x3003, "huge variable", od.OCTET_STRING, od.AttributeSdoRw, string(expected))
+	assert.Nil(t, err)
+	network := CreateNetworkEmptyTest()
+	defer network.Disconnect()
+	_, err = network.CreateLocalNode(NodeIdTest, odict)
+	assert.Nil(t, err)
+	// Client looses the first segment of the first sub-block
+	client := createDropOnceNetworkTest(func(frame canopen.Frame) bool {
+		return frame.ID == uint32(sdo.ServerServiceId)+uint32(NodeIdTest) && frame.Data[0] == 1
+	})
+	defer client.Disconnect()
+
+	received, err := client.ReadAll(NodeIdTest, 0x3003, 0)
+	assert.Nil(t, err)
+	assert.Equal(t, expected, received)
+}

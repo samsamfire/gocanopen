@@ -60,7 +60,12 @@ type SDOClient struct {
 	blockCRCEnabled            bool
 	blockDataUploadLast        [BlockSeqSize]byte
 	blockCRC                   crc.CRC16
-	rxCancel                   func()
+	// Block upload : whether any segment was received in the current sub-block,
+	// and the acknowledgement sent for the previous one, if any
+	blockSegmentSeen bool
+	blockAckPrev     uint8
+	blockAckPrevSet  bool
+	rxCancel         func()
 }
 
 // Handle [SDOClient] related RX CAN frames
@@ -77,6 +82,7 @@ func (c *SDOClient) Handle(frame canopen.Frame) {
 		} else if c.state == stateUploadBlkSubblockSreq {
 			state := stateUploadBlkSubblockSreq
 			seqno := frame.Data[0] & 0x7F
+			c.blockSegmentSeen = true
 			c.timeoutTimer = 0
 			c.timeoutTimerBlock = 0
 			// Checks on the Sequence number
@@ -1216,6 +1222,8 @@ func (c *SDOClient) upload(
 			c.timeoutTimer = 0
 			c.timeoutTimerBlock = 0
 			c.blockSequenceNb = 0
+			c.blockSegmentSeen = false
+			c.blockAckPrevSet = false
 			c.blockCRC = crc.CRC16(0)
 			c.state = stateUploadBlkSubblockSreq
 			c.rxNew = false
@@ -1224,6 +1232,14 @@ func (c *SDOClient) upload(
 		case stateUploadBlkSubblockCrsp:
 			c.txBuffer.Data[0] = 0xA2
 			c.txBuffer.Data[1] = c.blockSequenceNb
+			// Sub-block timeout without receiving a single segment : most likely the
+			// server never got our previous acknowledgement and is still waiting for it.
+			// Acknowledging 0 would make it re-transmit the previous sub-block, which
+			// was already received, so send the previous acknowledgement again.
+			if c.blockSequenceNb == 0 && !c.blockSegmentSeen && c.blockAckPrevSet && !c.finished {
+				c.txBuffer.Data[1] = c.blockAckPrev
+				c.logger.Warn("no segment received, repeating previous acknowledgement", "ackseq", c.blockAckPrev)
+			}
 			transferShort := c.blockSequenceNb != c.blockSize
 			seqnoStart := c.blockSequenceNb
 			if c.finished {
@@ -1246,8 +1262,11 @@ func (c *SDOClient) upload(
 					}
 					break
 				}
+				c.blockAckPrev = c.txBuffer.Data[1]
+				c.blockAckPrevSet = true
 				c.blockSize = uint8(count)
 				c.blockSequenceNb = 0
+				c.blockSegmentSeen = false
 				c.state = stateUploadBlkSubblockSreq
 				c.rxNew = false
 			}
