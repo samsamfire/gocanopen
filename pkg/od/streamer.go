@@ -124,7 +124,7 @@ func NewStreamer(entry *Entry, subIndex uint8, origin bool) (Streamer, error) {
 			streamer.Subindex = subIndex
 			streamer.mu = &object.mu
 			entry.log().Warn("no extension has been specified for this domain object")
-			return Streamer{}, nil
+			return streamer, nil
 		}
 		streamer.Attribute = object.Attribute
 		streamer.Data = object.value

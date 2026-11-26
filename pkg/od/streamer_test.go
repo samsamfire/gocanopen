@@ -107,3 +107,16 @@ func TestWriteEntryDefaultChunked(t *testing.T) {
 	assert.Equal(t, 500, n)
 	assert.True(t, bytes.Equal(secondChunk, streamer.Data[1000:]), "second chunk should follow the first one")
 }
+
+func TestStreamerDomainWithoutExtension(t *testing.T) {
+	od := NewOD()
+	_, err := od.AddVariableType(0x2000, "domain", DOMAIN, AttributeSdoRw, "")
+	assert.Nil(t, err)
+	streamer, err := od.Streamer(0x2000, 0, false)
+	assert.Nil(t, err)
+	// Domain without extension is disabled, it must not panic
+	_, err = streamer.Read(make([]byte, 10))
+	assert.Equal(t, ErrUnsuppAccess, err)
+	_, err = streamer.Write(make([]byte, 10))
+	assert.Equal(t, ErrUnsuppAccess, err)
+}
