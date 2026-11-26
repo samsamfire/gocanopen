@@ -226,6 +226,7 @@ func (c *SDOClient) downloadSetup(index uint16, subindex uint8, sizeIndicated ui
 	c.timeoutTimerBlock = 0
 	c.fifo.Reset()
 	c.rw.downloadDone = false
+	c.rw.forceSegmented = false
 
 	// Select transfer type
 	switch {
@@ -504,7 +505,7 @@ func (c *SDOClient) downloadInitiate(forceSegmented bool) error {
 	c.txBuffer.Data[3] = c.subindex
 
 	count := uint32(c.fifo.GetOccupied())
-	if (c.sizeIndicated == 0 && count <= 4) || (c.sizeIndicated > 0 && c.sizeIndicated <= 4) && !forceSegmented {
+	if ((c.sizeIndicated == 0 && count <= 4) || (c.sizeIndicated > 0 && c.sizeIndicated <= 4)) && !forceSegmented {
 		c.txBuffer.Data[0] |= 0x02
 		// Check length
 		if count == 0 || (c.sizeIndicated > 0 && c.sizeIndicated != count) {

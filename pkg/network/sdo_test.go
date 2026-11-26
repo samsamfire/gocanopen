@@ -619,3 +619,55 @@ func TestSDOWriterSecondWrite(t *testing.T) {
 		assert.Equal(t, 0, n)
 	}
 }
+
+// Records the command byte of SDO client requests
+type sdoRequestSpy struct {
+	commands chan byte
+}
+
+func (s *sdoRequestSpy) Handle(frame canopen.Frame) {
+	select {
+	case s.commands <- frame.Data[0]:
+	default:
+	}
+}
+
+// WriteRaw with forceSegmented must not use an expedited transfer
+func TestSDOWriteRawForceSegmented(t *testing.T) {
+	network := CreateNetworkTest()
+	network2 := CreateNetworkEmptyTest()
+	defer network2.Disconnect()
+	defer network.Disconnect()
+
+	spy := &sdoRequestSpy{commands: make(chan byte, 100)}
+	cancel, err := network2.Subscribe(0x600+uint32(NodeIdTest), 0x7FF, false, spy)
+	assert.Nil(t, err)
+	defer cancel()
+
+	firstCommand := func() byte {
+		select {
+		case command := <-spy.commands:
+			return command
+		case <-time.After(time.Second):
+			t.Fatal("no SDO request seen")
+			return 0
+		}
+	}
+	drain := func() {
+		for len(spy.commands) > 0 {
+			<-spy.commands
+		}
+	}
+
+	for _, force := range []bool{false, true} {
+		drain()
+		err = network2.WriteRaw(NodeIdTest, 0x2007, 0, uint32(0x12345678), force)
+		assert.Nil(t, err)
+		// Download initiate : bit 1 is the expedited flag
+		expedited := firstCommand()&0x02 != 0
+		assert.Equal(t, !force, expedited, "forceSegmented=%v", force)
+		value, err := network2.ReadUint32(NodeIdTest, 0x2007, 0)
+		assert.Nil(t, err)
+		assert.EqualValues(t, 0x12345678, value)
+	}
+}

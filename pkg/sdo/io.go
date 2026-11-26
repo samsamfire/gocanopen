@@ -18,6 +18,8 @@ type sdoRawReadWriter struct {
 	uploadDone bool
 	// Download is finished, nothing more can be written
 	downloadDone bool
+	// Use a segmented transfer even if data fits in an expedited one
+	forceSegmented bool
 }
 
 // Create a new raw SDO reader
@@ -173,7 +175,7 @@ func (rw *sdoRawReadWriter) Write(b []byte) (n int, err error) {
 			false,
 			bufferPartial,
 			&nUint32,
-			false,
+			rw.forceSegmented,
 		)
 		switch {
 		case err != nil, ret == success:
@@ -198,7 +200,6 @@ func (rw *sdoRawReadWriter) Write(b []byte) (n int, err error) {
 // Write a given index/subindex from node into data
 // This is blocking
 func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, data any, forceSegmented bool) error {
-	_ = forceSegmented
 	encoded, err := od.EncodeFromTypeExact(data)
 	if err != nil {
 		return err
@@ -207,6 +208,7 @@ func (client *SDOClient) WriteRaw(nodeId uint8, index uint16, subindex uint8, da
 	if err != nil {
 		return err
 	}
+	client.rw.forceSegmented = forceSegmented
 	_, err = w.Write(encoded)
 	return err
 }
